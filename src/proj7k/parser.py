@@ -54,6 +54,9 @@ def parse_osu_7k(content_or_path: str) -> Beatmap7K:
         with open(content_or_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     else:
+        # If it looks like a path (e.g. ends with .osu or single line) but doesn't exist
+        if content_or_path.endswith(".osu") or "\n" not in content_or_path:
+            raise FileNotFoundError(f"Beatmap file not found: {content_or_path}")
         content = content_or_path
 
     lines = content.splitlines()
@@ -110,7 +113,7 @@ def parse_osu_7k(content_or_path: str) -> Beatmap7K:
                 time_val = float(parts[2])
                 type_flag = int(parts[3])
                 
-                # Column formula for mania: floor(x * columns / 512)
+                # Column formula for mania: floor(x * 7 / 512)
                 col = int(math.floor(x_val * 7.0 / 512.0))
                 col = max(0, min(6, col))
 
@@ -140,7 +143,6 @@ def parse_osu_7k(content_or_path: str) -> Beatmap7K:
     if cs_val != 7:
         raise ValueError(f"Expected 7K (CircleSize 7), but found {cs_val}K")
 
-    # Sort timing points and hit objects by time
     timing_points.sort(key=lambda tp: tp.time)
     hit_objects.sort(key=lambda ho: ho.time)
 

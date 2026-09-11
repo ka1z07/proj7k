@@ -4,8 +4,8 @@ import sys
 from typing import List, Optional
 
 from proj7k.parser import parse_osu_7k
-from proj7k.renderer import RenderOptions, render_slice
-from proj7k.window import extract_time_window
+from proj7k.renderer import RenderOptions, ScrollDirection, render_slice
+from proj7k.window import extract_measure_window, extract_time_window
 
 
 def parse_timestamp(ts_str: str) -> float:
@@ -41,8 +41,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         description="proj7k-slice: Generate high-definition vertical scroll slices from 7k osu! beatmaps."
     )
     parser.add_argument("--osu", required=True, help="Path to .osu beatmap file (must be 7K)")
-    parser.add_argument("--start", required=True, help="Start time (e.g. '12000', '01:23.500', '15.2s')")
-    parser.add_argument("--end", required=True, help="End time (e.g. '18000', '01:29.500', '21.2s')")
+    parser.add_argument("--start", help="Start time (e.g. '12000', '01:23.500', '15.2s')")
+    parser.add_argument("--end", help="End time (e.g. '18000', '01:29.500', '21.2s')")
+    parser.add_argument(
+        "-m", "--measure", help="Measure range to slice (e.g. '12-16' or 'M12-M16')"
+    )
     parser.add_argument("-o", "--output", help="Output PNG image path (default: slice_<start>_<end>.png)")
     parser.add_argument(
         "--pps", "--scale", dest="pps", type=float, default=400.0, help="Vertical scale in pixels per second (default: 400.0)"
@@ -54,40 +57,48 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
-    if not os.path.exists(args.osu):
-        print(f"Error: File not found: {args.osu}", file=sys.stderr)
-        return 1
-
-    start_ms = parse_timestamp(args.start)
-    end_ms = parse_timestamp(args.end)
-
-    if start_ms > end_ms:
-        start_ms, end_ms = end_ms, start_ms
-
     try:
         beatmap = parse_osu_7k(args.osu)
     except Exception as e:
         print(f"Error parsing .osu file: {e}", file=sys.stderr)
         return 1
 
-    window = extract_time_window(beatmap, start_ms, end_ms)
+    # Check if measure range was provided
+    if args.measure:
+        m_str = args.measure.strip().upper().replace("M", "")
+        if "-" in m_str:
+            parts = m_str.split("-", 1)
+            start_m = int(parts[0])
+            end_m = int(parts[1])
+        else:
+            start_m = int(m_str)
+            end_m = start_m + 1
+        window = extract_measure_window(beatmap, start_m, end_m)
+    elif args.start and args.end:
+        start_ms = parse_timestamp(args.start)
+        end_ms = parse_timestamp(args.end)
+        window = extract_time_window(beatmap, start_ms, end_ms)
+    else:
+        print("Error: Either --measure (-m) or both --start and --end must be provided.", file=sys.stderr)
+        return 1
 
+    scroll_dir = ScrollDirection.UP if args.direction == "up" else ScrollDirection.DOWN
     opts = RenderOptions(
         pixels_per_second=args.pps,
         column_width=args.col_width,
-        scroll_direction=args.direction,
+        scroll_direction=scroll_dir,
     )
     img = render_slice(window, opts)
 
     out_path = args.output
     if not out_path:
-        out_path = f"slice_{int(start_ms)}_{int(end_ms)}.png"
+        out_path = f"slice_{int(window.start_ms)}_{int(window.end_ms)}.png"
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     img.save(out_path, format="PNG")
 
     print(
-        f"Generated slice: {start_ms:.0f}ms -> {end_ms:.0f}ms "
+        f"Generated slice: {window.start_ms:.0f}ms -> {window.end_ms:.0f}ms "
         f"({len(window.hit_objects)} notes, {len(window.barlines)} barlines) -> {out_path}"
     )
     return 0
