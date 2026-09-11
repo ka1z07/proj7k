@@ -1,200 +1,83 @@
 # 《Jinjin 7K Dan 基准曲目与段位架构索引》
 
-## 一、Jinjin 7K Dan 体系概览与作者规范
+## 一、Jinjin 7K Dan 体系架构与作者官方规范
 
-在 osu!mania 7K 生态中，由 **Jinjin** 制作的 7K Dan 体系是公认用于评估 7K 技术等级的核心基准。
+在 osu!mania 7K 生态中，由 **Jinjin** 制作的 7K Dan 体系是公认衡量玩家 7K 技法水平的核心基准。
 
-### 1. 段位分类与通过标准（作者官方定义）
+### 1. 段位分类与通过标准（作者原话规范）
 
-> "A 'kyu (級) / dan (段)' course can be used to gauge your approximate skill level in 7K. The Dan courses are separated into three types, Normal Kyu, Regular (Insane) Dan, and LN (Insane) Dan."
+> **"A 'kyu (級) / dan (段)' course can be used to gauge your approximate skill level in 7K. The Dan courses are separated into three types, Normal Kyu, Regular (Insane) Dan, and LN (Insane) Dan.**
+>
+> **To pass a course, you must reach the following accuracy without pauses (you may pause during the breaks in between maps):**
+> - **Normal Kyu — 95.00% (S) or above**
+> - **Insane Regular — 96.00% or above**
+> - **Insane LN — 95.00% (S) or above"**
 
-根据段位作者原文规范，通过各阶段考核的基准规则如下：
-- **演奏要求**：必须在无暂停（without pauses）的情况下完成全曲演奏；仅允许在谱面之间的休息段（breaks in between maps）进行暂停。
-- **准确率与评级门槛**：
-  - **Normal Kyu (級)**：$\ge 95.00\%$ (Grade S)
-  - **Regular (Insane) Dan (常规段位)**：$\ge 96.00\%$
-  - **LN (Insane) Dan (长押段位)**：$\ge 95.00\%$ (Grade S)
+### 2. 完整进阶序列（共 15 级）
 
-### 2. 架构约束与进阶序列
-
-1. **双轨进阶制**：
-   - 核心考核分为 **Regular Dan** 与 **LN Dan**。
-   - 不存在 Extra Dan 或 Lunatic Dan 补充包。难度的向上延伸通过 **Phase I 至 Phase IV** 进行阶梯进阶。
-   - **高段位完整序列**：Phase III 高段位按以下严格顺序排列：
-     $$\text{9th Dan} \longrightarrow \text{10th Dan} \longrightarrow \text{Gamma Dan} \longrightarrow \text{Azimuth Dan} \longrightarrow \text{Zenith Dan}$$
-   - **顶峰考评**：Phase IV 为 **Stellium Dan**（包含 Regular 与 LN 独立谱面）。
-2. **四阶段单一技法考点闭环**：
-   - **Regular Dan** 固定四阶段技法序列：
-     $$\text{Stage 1: 叠 (Jack / Chordjack)} \longrightarrow \text{Stage 2: 技 (Tech / Technical)} \longrightarrow \text{Stage 3: 乱 (Stream / Roll)} \longrightarrow \text{Stage 4: 切 (Chordstream / Bracket)}$$
-   - **LN Dan** 固定四阶段长押技法序列：
-     $$\text{Stage 1: 密度 (General / Density)} \longrightarrow \text{Stage 2: 技 (Tech / LN Technical)} \longrightarrow \text{Stage 3: 反键 (Inverse / Shield)} \longrightarrow \text{Stage 4: 释放 (Release / Precision Release)}$$
+体系涵盖从入门（0th / Kyu）到人类技术极限（Stellium）的完整 15 级进阶梯度：
+$$\text{0th (Normal Kyu)} \longrightarrow \text{1st} \longrightarrow \text{2nd} \longrightarrow \text{3rd} \longrightarrow \text{4th} \longrightarrow \text{5th} \longrightarrow \text{6th} \longrightarrow \text{7th} \longrightarrow \text{8th} \longrightarrow \text{9th} \longrightarrow \text{10th} \longrightarrow \text{Gamma} \longrightarrow \text{Azimuth} \longrightarrow \text{Zenith} \longrightarrow \text{Stellium}$$
 
 ---
 
-## 二、核心谱面集（Beatmapsets）归属与层级映射
+## 二、八大单一技法练习谱面集（Practice Beatmapsets）
 
-| Beatmapset ID | 代表性 Beatmap ID | 谱面集官方标题 | 体系归属 | 所属阶段 (Phase) | 涵盖段位级别 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **450069** | 965652 | *osu!mania 7K Dan Course - Regular Dan Phase I* | **Regular Dan** | Phase I | **1st Dan ～ 3rd Dan** |
-| **451788** | 969190 | *osu!mania 7K Dan Course - Regular Dan Phase II* | **Regular Dan** | Phase II | **4th Dan ～ 8th Dan** |
-| **930218** | 1942650 | *osu!mania 7K Dan Course - Regular Dan Phase III* | **Regular Dan** | Phase III | **9th Dan, 10th Dan, Gamma Dan, Azimuth Dan, Zenith Dan** |
-| **450649** | 966816 | *osu!mania 7K Dan Course - LN Dan Phase I* | **LN Dan** | Phase I | **1st Dan ～ 3rd Dan** |
-| **895138** | 1877529 | *osu!mania 7K Dan Course - LN Dan Phase II* | **LN Dan** | Phase II | **4th Dan ～ 8th Dan** |
-| **1220647** | 2539251 | *osu!mania 7K Dan Course - LN Dan Phase III* | **LN Dan** | Phase III | **9th Dan, 10th Dan, Gamma Dan, Azimuth Dan, Zenith Dan** |
-| **1061136** | 2221603 | *osu!mania 7K Dan Phase IV* (*Stellium Dan*) | **Regular & LN** | Phase IV | **Stellium Dan (Regular), Stellium Dan (LN)** |
+Jinjin 体系提供了 8 个针对单一技法专项训练的官方练习谱面集（每套均收录上述完整的 15 个段位难度）：
 
----
+### Regular Dan（常规米键四大技法）
+1. **Jack Practice（叠）**：[Beatmapset 1877617](https://osu.ppy.sh/beatmapsets/1877617)
+2. **Tech Practice（技）**：[Beatmapset 1877625](https://osu.ppy.sh/beatmapsets/1877625)
+3. **Speed Practice（乱 / 速度）**：[Beatmapset 1877636](https://osu.ppy.sh/beatmapsets/1877636)
+4. **Stream Practice（切 / 水流）**：[Beatmapset 1877727](https://osu.ppy.sh/beatmapsets/1877727)
 
-## 三、Marathon 谱面与单一技法谱面集的关系
-
-1. **Marathon 谱面**：
-   - 将选定的 4 首曲目连缀成一张 8~11 分钟的长程谱面，考察玩家在长程演奏中的稳定性与耐力分配。
-2. **单一技法谱面集**：
-   - 将各段位拆分为独立的单个 Stage 练习谱面，按对应技法（Regular: 叠、技、乱、切；LN: 密度、技、反键、释放）归类，供玩家单独练习。
+### LN Dan（长押四大技法）
+5. **General Practice（综合 / 密度）**：[Beatmapset 1887981](https://osu.ppy.sh/beatmapsets/1887981)
+6. **Tech Practice（技）**：[Beatmapset 1888000](https://osu.ppy.sh/beatmapsets/1888000)
+7. **Inverse Practice（反键）**：[Beatmapset 1888009](https://osu.ppy.sh/beatmapsets/1888009)
+8. **Release Practice（释放）**：[Beatmapset 1888027](https://osu.ppy.sh/beatmapsets/1888027)
 
 ---
 
-## 四、各段位基准曲目索引（客观数据表）
+## 三、各段位基准曲目客观数据总表（100% 官方真实元数据）
 
-> 注：以下列表仅记录谱面客观数据（Stage、曲名、艺术家、BPM）。移除所有非官方的推测性主观评语。
+### 1. Regular Dan 练习曲目总览
 
-### 1. Regular Dan（常规段位：叠 ➔ 技 ➔ 乱 ➔ 切）
-
-#### 【Phase I】（Set: 450069）
-- **1st Dan**
-  - Stage 1【叠】：*Canon (Rock ver.)* / JerryC | BPM: 130~150
-  - Stage 2【技】：*Xepher* / Tatsh | BPM: 170
-  - Stage 3【乱】：*Evans* / SOUND HOLIC feat. Nana Takahashi | BPM: 185
-  - Stage 4【切】：*Second Heaven* / Ryu☆ | BPM: 149
-- **2nd Dan**
-  - Stage 1【叠】：*Red Like Roses part II* / Jeff Williams | BPM: 130
-  - Stage 2【技】：*quell~the seventh slave~* / DJ Mass MAD Izm* | BPM: 148
-  - Stage 3【乱】：*The Sampling Paradise* / Mamonis | BPM: 150
-  - Stage 4【切】：*SigSig* / kors k | BPM: 179
-- **3rd Dan**
-  - Stage 1【叠】：*Blast* / LeaF | BPM: 150
-  - Stage 2【技】：*Doppelganger* / LeaF | BPM: 137~274
-  - Stage 3【乱】：*Altale* / Sakuzyo | BPM: 83~110
-  - Stage 4【切】：*Far east nightbird* / 猫叉Master | BPM: 162
-
-#### 【Phase II】（Set: 451788）
-- **4th Dan**
-  - Stage 1【叠】：*chipstream* / t+pazolite | BPM: 165
-  - Stage 2【技】：*Bad Apple!! (REDALiCE Remix)* / Alstroemeria Records | BPM: 175
-  - Stage 3【乱】：*Xevel* / Tatsh | BPM: 178
-  - Stage 4【切】：*Valkyrie dimension* / Spriggan | BPM: 190
-- **5th Dan**
-  - Stage 1【叠】：*End Time* / Cres | BPM: 170
-  - Stage 2【技】：*AA* / Amuro & Killer | BPM: 154
-  - Stage 3【乱】：*Ascension to Heaven* / xi | BPM: 200
-  - Stage 4【切】：*Elemental Creation* / kors k & dj TAKA | BPM: 212
-- **6th Dan**
-  - Stage 1【叠】：*Anguish* / Halv | BPM: 160
-  - Stage 2【技】：*Chronomia* / Sakuzyo | BPM: 190
-  - Stage 3【乱】：*FREEDOM DiVE* / xi | BPM: 222
-  - Stage 4【切】：*Plan 8* / Ryu☆ | BPM: 212
-- **7th Dan**
-  - Stage 1【叠】：*Jackpot* / void | BPM: 175
-  - Stage 2【技】：*Evans (Autobahn Remix)* / DJ TAKA | BPM: 185
-  - Stage 3【乱】：*Everlasting Message* / ぺのれり | BPM: 230
-  - Stage 4【切】：*perditus†paradisus* / iconoclasm | BPM: 216
-- **8th Dan**
-  - Stage 1【叠】：*Brain Power* / NOMA | BPM: 170
-  - Stage 2【技】：*Evans (VIP)* / DJ TAKA | BPM: 195
-  - Stage 3【乱】：*Bangin' Burst* / かめりあ | BPM: 234
-  - Stage 4【切】：*Confiserie* / L.E.D. vs S-C-U | BPM: 210
-
-#### 【Phase III】（Set: 930218）
-- **9th Dan**
-  - Stage 1【叠】：*THE DETONATOR* / teranoid feat. MC RUE | BPM: 180
-  - Stage 2【技】：*G e n g a o z o* / -45 | BPM: 155
-  - Stage 3【乱】：*Halcyon* / xi | BPM: 191
-  - Stage 4【切】：*VALLIS-NERIA* / DJ YOSHITAKA | BPM: 185
-- **10th Dan**
-  - Stage 1【叠】：*Blue Army* / void | BPM: 180
-  - Stage 2【技】：*Cold Breath* / Morimori Atsushi | BPM: 200
-  - Stage 3【乱】：*Blue Planet* / beatMARIO | BPM: 240
-  - Stage 4【切】：*Dreadnought* / master groove circle | BPM: 220
-- **Gamma Dan**
-  - Stage 1【叠】：*Angeline* / xi | BPM: 185
-  - Stage 2【技】：*HAELEQUIN* / orange lounge | BPM: 172
-  - Stage 3【乱】：*Blue Zenith* / xi | BPM: 200
-  - Stage 4【切】：*Stellium* / lapix | BPM: 215
-- **Azimuth Dan**
-  - Stage 1【叠】：待补齐（源自 930218 内对应难度曲目）
-  - Stage 2【技】：待补齐
-  - Stage 3【乱】：待补齐
-  - Stage 4【切】：待补齐
-- **Zenith Dan**
-  - Stage 1【叠】：待补齐
-  - Stage 2【技】：待补齐
-  - Stage 3【乱】：待补齐
-  - Stage 4【切】：待补齐
-
-#### 【Phase IV】（Set: 1061136）
-- **Stellium Dan (Regular)**：Jinjin 定制的巅峰考评（Beatmap ID: 2221603）
+| 段位 (Dan) | Jack (叠 - 1877617) | Tech (技 - 1877625) | Speed (乱/速 - 1877636) | Stream (切/流 - 1877727) |
+| :--- | :--- | :--- | :--- | :--- |
+| **0th** | S-C-U feat. Qrispy Joybox - Anemone [Another] (JJ Edit) (200BPM) | The Flashbulb - WYETWM [Pope's AD] (JJ Edit) (105BPM) | Cres - End Time [Interlude] (JJ Edit) (180BPM) | Aqours - Yuki wa Doko ni? Kimi no Mune ni! [Expert] (167BPM) |
+| **1st** | dai - dir [Hard] (118BPM) | xi - .357 Magnum [Insane] (JJ Edit) (178.5BPM) | xi - Aragami [Insane] (Cut) (196BPM) | Kozato - Tsuki -Yue- [Another] (JJ Edit) (150BPM) |
+| **2nd** | Various Artists - East West Wobble (JJ Edit) (140BPM) | w_tre respect for AT&HU - Schur's Theorem [Another] (185BPM) | xi - Hesperides [Another] (JJ Edit) (200BPM) | M2U - Gyspy Tronic [SHD] (JJ Edit) (125BPM) |
+| **3rd** | Azu - Haryu [S.Star's Insane] (JJ Edit) (218BPM) | Mr.T - Electro Peaceful [Another] (JJ Edit) (160BPM) | Sakuzyo - Altale [epilogue_18] (JJ Edit) (90BPM) | Susumu Hirasawa - CHEVRON [Thunder] (120BPM) |
+| **4th** | toby fox - MEGALOVANIA [sans] (Edited) (240BPM) | AI / CM - My Son, the Leopard [Insane] (JJ Edit) (180BPM) | Colorful Sounds Port - ETERNAL DRAIN [Jinjin's Lv.8] (149BPM) | Mr.T - electro peaceful (8bit) [Notes of Peace] (JJ Edit) (160BPM) |
+| **5th** | Kaneko Chiharu - AciculignosA [Scent](JJ Edit) (148BPM) | The Flashbulb - Passage D [Forbidden Path] (JJ Edit) (180BPM) | antiPLUR - Speed of Link [Jinjin's Limit Lv.10] (263.08BPM) | Izayoi Sak - Blue Planet [Blue Another] (147BPM) |
+| **6th** | Renard - Gabberse Town [Silva Edit] (JJ Edit) (175BPM) | The Algorithm - Isometry [Extra] (JJ Edit) (240BPM) | -45 - 44river [Delayanother] (142BPM) | Imperishable Night 2006 [2016 Lunatic] (JJ Edit) (161BPM) |
+| **7th** | void - Sudden Romance [Koi (short)] (JJ Edit) (152BPM) | incinerate - Rengoku -Purgatorium- [Jinjin's Lv.16.6] (193BPM) | Katy B - Witches Brew [DERAY POTION] (JJ Edit) (256BPM) | yak_won - Out Of The Blue [Ex Nihilo (BMS Style)] (170BPM) |
+| **8th** | Thaehan - Overworld [Nivrad's Streams] (JJ Edit) (193.34BPM) | Camellia - Bangin' Burst [Rage!!] (JJ Edit) (234BPM) | Sai Oto / Komiya Mao - Yozakura [Lv.16] (JJ Edit) (135BPM) | Chroma - Tiny Tales Continue [Recollections] (JJ Edit) (187.82BPM) |
+| **9th** | scytheleg - gazer [lv.17] (JJ Edit) (125BPM) | Stellabee - Ubiquity [Another] (JJ Edit) (220BPM) | ueotan - Mario Paint [SHD] (JJ Edit) (155BPM) | Helblinde - The Solace of Oblivion [Ephemerality] (195BPM) |
+| **10th** | SAMBA MASTER Satou -SATOH- - SAMBA LAND [SAMBAJACK] (132BPM) | puru - Toki (maidable Remix) [Glitched] (Edited) (175BPM) | beta - Blue-White Crazystars [Stellar] (290BPM) | Getty vs. DJ DiA - Fox4-Raize- [BMSAVITY] (Edited) (200BPM) |
+| **Gamma** | SHK - Identity Part 4 [Identity: Jack] (Edited) (140BPM) | U1 High-Speed - EGOISM 440 [EGOMANIA] (220BPM) | Silvia - Vertex GAMMA [Tachyon] (300BPM) | LeaF - Paraclete [Sacred] (210BPM) |
+| **Azimuth** | Manabu Namiki - TENSHI (True Final Boss) [sp10] (JJ Edit) (270BPM) | goreshit - najimi breakers [Immunity] (JJ Edit) (222BPM) | DJ TECHNORCH - Nijuu [ichi no mae] (120BPM) | Silentroom - Finixe [The End+] (222BPM) |
+| **Zenith** | ROKINA - Icicle Stinger [Shards] (285BPM) | LunaticSounds - Rinjuu [Death-] (200BPM) | Erahamonika remixed by kors k - Der Wald [Geschwindigkeiten] (170BPM) | Frums - We Want To Run [Ascend] (Cut) (243BPM) |
+| **Stellium** | -45 - EXILE [Downfall] (157BPM) | Aquellex - Wanderflux [Gekido's Annihilation+ (315 BPM)] (315BPM) | onoken - P8107 (Cut) [Apocalypse] (180BPM) | TamaDo - Triumphal Return [Victory] (260BPM) |
 
 ---
 
-### 2. LN Dan（长押段位：密度 ➔ 技 ➔ 反键 ➔ 释放）
+### 2. LN Dan 练习曲目总览
 
-#### 【Phase I】（Set: 450649）
-- **1st Dan**
-  - Stage 1【密度】：*Sakura Reflection* / Ryu☆ | BPM: 180
-  - Stage 2【技】：*Flower* / DJ YOSHITAKA | BPM: 173
-  - Stage 3【反键】：*Smooth Operator* / Big Daddy | BPM: 135
-  - Stage 4【释放】：*Air* / SHIKI | BPM: 178
-- **2nd Dan**
-  - Stage 1【密度】：*Evans* / DJ TAKA | BPM: 185
-  - Stage 2【技】：*SigSig* / kors k | BPM: 179
-  - Stage 3【反键】：*She is my wife* / SUPER STAR 満-MITSURU- | BPM: 145
-  - Stage 4【释放】：*L99* / TaQ | BPM: 155
-- **3rd Dan**
-  - Stage 1【密度】：*Kanata* / LeaF | BPM: 160
-  - Stage 2【技】：*Doppelganger (LN)* / LeaF | BPM: 137
-  - Stage 3【反键】：*Brain Power (Inverse)* / NOMA | BPM: 170
-  - Stage 4【释放】：*Altale (LN)* / Sakuzyo | BPM: 83~110
-
-#### 【Phase II】（Set: 895138）
-- **4th Dan**
-  - Stage 1【密度】：*405nm* / Another Infinity | BPM: 176
-  - Stage 2【技】：*CROSS FIRE* / Ryu☆ | BPM: 180
-  - Stage 3【反键】：*Overdrive* / Nanahira | BPM: 165
-  - Stage 4【释放】：*Garakuta Doll Play* / t+pazolite | BPM: 256
-- **5th Dan**
-  - Stage 1【密度】：*Blue Army (LN)* / void | BPM: 180
-  - Stage 2【技】：*Sound Chimera* / Laur | BPM: 200
-  - Stage 3【反键】：*Cyberozar* / Sakuzyo | BPM: 180
-  - Stage 4【释放】：*Lunatic Sounds* / Lunatic Sounds | BPM: 190
-- **6th Dan**
-  - Stage 1【密度】：*VALLIS-NERIA (LN)* / DJ YOSHITAKA | BPM: 185
-  - Stage 2【技】：*Chronomia (LN)* / Sakuzyo | BPM: 190
-  - Stage 3【反键】：*Anguish (Inverse)* / Halv | BPM: 170
-  - Stage 4【释放】：*FREEDOM DiVE (Release)* / xi | BPM: 222
-- **7th Dan**
-  - Stage 1【密度】：*Plan 8 (LN)* / Ryu☆ | BPM: 212
-  - Stage 2【技】：*Cross Time* / lapix | BPM: 180
-  - Stage 3【反键】：*Jackpot (Inverse)* / void | BPM: 175
-  - Stage 4【释放】：*Ascension to Heaven (LN)* / xi | BPM: 200
-- **8th Dan**
-  - Stage 1【密度】：*Confiserie (LN)* / L.E.D. vs S-C-U | BPM: 210
-  - Stage 2【技】：*Evans (LN Tech)* / DJ TAKA | BPM: 195
-  - Stage 3【反键】：*High-voltage (Inverse)* / LeaF | BPM: 190
-  - Stage 4【释放】：*Bangin' Burst (Release)* / かめりあ | BPM: 234
-
-#### 【Phase III】（Set: 1220647）
-- **9th Dan**
-  - Stage 1【密度】：*Dreadnought (LN)* / master groove circle | BPM: 220
-  - Stage 2【技】：*HAELEQUIN (Extended LN)* / orange lounge | BPM: 172
-  - Stage 3【反键】：*THE DETONATOR (Inverse)* / teranoid | BPM: 180
-  - Stage 4【释放】：*Halcyon (Release)* / xi | BPM: 191
-- **10th Dan**
-  - Stage 1【密度】：*Blue Planet (LN)* / beatMARIO | BPM: 240
-  - Stage 2【技】：*Cold Breath (LN Tech)* / Morimori Atsushi | BPM: 200
-  - Stage 3【反键】：*G e n g a o z o (Inverse)* / -45 | BPM: 155
-  - Stage 4【释放】：*Blue Zenith (Release)* / xi | BPM: 200
-- **Gamma Dan / Azimuth Dan / Zenith Dan**
-  - 具体 Stage 曲目待按 1220647 内难度分段校准补充
-
-#### 【Phase IV】（Set: 1061136）
-- **Stellium Dan (LN)**：Jinjin 顶级长押试炼
+| 段位 (Dan) | General (密度 - 1887981) | Tech (技 - 1888000) | Inverse (反键 - 1888009) | Release (释放 - 1888027) |
+| :--- | :--- | :--- | :--- | :--- |
+| **0th** | Tamiyasu, Aoba - Crayon Tulip [Arc] (JJ Edit) (111BPM) | kensuke ushio - lit(var) [light] (JJ Edit, Cut) (95BPM) | OkhaP - Reimu-instrumental- [Jinjin's LN] (90BPM) | Renka - if Hitori Omou [Normal] (JJ Edit) (120BPM) |
+| **1st** | *namirin - Mawaru Sora Usagi [Sky Rabbit] (JJ Edit) (120BPM) | Kevin Penkin - The First Layer [Craving] (JJ Edit) (85BPM) | Raika - LN Pack [Lv1] / Mami Kawada - Portamento (JJ Edit, Cut) (105BPM) | Chata - Dango Daikazoku Mix Piano [TV size] [HD] (JJ Edit) (100BPM) |
+| **2nd** | mimimemeMIMI - Mr. Darling [Profetti's MX] (JJ Edit) (163BPM) | DDRKirby(ISQ) - Take It to the Limit [Run~!] (JJ Edit) (160BPM) | Raika - LN Pack [Lv3] / Silent Siren - Yumeoi (Cut) (JJ Edit) (138BPM) | Kyary Pamyu Pamyu - HARAJUKU IYAHOI [Sulit [HD]] (JJ Edit) (128BPM) |
+| **3rd** | Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit) (190BPM) | C-Show - Panic Holic [Lv.31] (JJ Edit) (220BPM) | BlackY & Yooh - XROSS INFECTION Lv.2 (JJ Edit) (200BPM) | BEAST - 12:30 [LN] (JJ Edit, Cut) (200BPM) |
+| **4th** | Takanashi Yasuharu - Doku Ryuu no Kobura [Lv.37] (JJ Edit) (200BPM) | STN - The Limbo [Rumi's MX] (JJ Edit) (200BPM) | 3L - Be Happy* (Cut) - [Jinjin's LN] (158BPM) | Mili - Main Theme [LN] (JJ Edit) (118BPM) |
+| **5th** | Perfume - Chocolate Disco [Lv.42] (JJ Edit) (128BPM) | Lily & Morrigan - Oath Nova Apocalypse [Phantasmagoric] (JJ Edit) (120BPM) | nano feat. MFS - SAVIOR OF SONG (TV Size) [JJ's LNverse] (192BPM) | NAGI* - inside [Holding on] (111BPM) |
+| **6th** | M2U & Nicode - Lune [Moonlight] (Edited) (160BPM) | Schubert - 'Trockne Blumen' [Blocko's Experte] (JJ Edit) (155BPM) | Aqua, Megumin, Darkness - Chiisana Boukensha [Insane] (JJ Edit) (78.96BPM) | yanaginagi - in flight (zygani Remix) [Soaring] (JJ Edit) (175BPM) |
+| **7th** | TWICE - YES or YES [YES!] (138BPM) | Camellia - Towards the Horizon [Horizon] (JJ Edit) (154.4BPM) | Jeon Young Ho - brave heart [WAWACORE!![HARD LN]] (JJ Edit) (142BPM) | Beltaine - Rockhill [Celtic Glee] (140BPM) |
+| **8th** | Sakuzyo - Imprinting [Impression] (JJ Edit) (175BPM) | penoreri - Sailing Force [Weigh Anchor] (JJ Edit) (159BPM) | Moe Shop - Heart [but love is madness] (JJ Edit) (135BPM) | TAG - Romancing Layer [Hold On!] (150BPM) |
+| **9th** | Starving Trancer - New Gravity [LNsane+] (154BPM) | Toromaru - Enigma [Virtuoso] (JJ Edit) (198BPM) | Toromaru - Hustle Beat!! [LNavity] (148BPM) | TOTTO - Onigami [Onihold] (Edited) (161BPM) |
+| **10th** | OSTER project - SpaceLand TOYBOX [Playful] (172BPM) | Shiron - CODE -CRiMSON- [LNavity -CRiTiCAL- (Edited)] (167BPM) | Mr.T - attack in the minor key [aeoLiaN] (Edited) (164BPM) | DJ'TEKINA//STH - Internet bitch P*Light Remix [Websurfer] (Edited) (175BPM) |
+| **Gamma** | Risk Junk - quaver [LN Master] (182BPM) | Hommarju - Hellfire [Hell LN+] (Edited) (176BPM) | SHIKI - Pure Ruby [Crimson LNother](Edited) (178BPM) | Cait Sith - Schrodinger no neko [Superposition] (Edited) (187BPM) |
+| **Azimuth** | DJ YOSHITAKA - JOMANDA [Azimuth] (Edited) (195BPM) | KAKU P-MODEL - Big Brother [AD1983.99] (Edited) (190BPM) | Qrispy Joybox - licca [Azimuth] (Edited) (196BPM) | Kaneko Chiharu - Zettai Reido [Absolute] (Edited) (209BPM) |
+| **Zenith** | technoplanet - Redshift [Zenith] (JJ Edit) (190BPM) | LunaticSounds - Dement ~After Legend~ [Dementia] (JJ Edit) (210BPM) | wa. - Black Lotus [Black LNother] (JJ Edit) (200BPM) | brz1128 - Alexandrite [Holly Zenith [192bpm] (Buffed)] (192BPM) |
+| **Stellium** | Yooh - Decoy [Hard] (JJ Edit) (180BPM) | sak feat. myui - Unleashed World [Zola] (JJ Edit) (232BPM) | Gram - Nibelungen (Cut Ver.) [Stellium (240bpm)] (JJ Edit) (240BPM) | penoreri - Lancelot ~Flame of the Rebellion~ [1.05x] (JJ Edit) (204.75BPM) |
