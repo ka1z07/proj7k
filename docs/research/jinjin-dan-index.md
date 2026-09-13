@@ -2,27 +2,28 @@
 
 ## 一、Jinjin 7K Dan 体系架构与作者官方规范
 
-在 osu!mania 7K 生态中，由 **Jinjin** 制作的 7K Dan 体系是公认衡量玩家 7K 技法水平的核心基准。
+在 osu!mania 7K 生态中，由 **Jinjin** 制作的 7K Dan 体系是公认衡量玩家 7K 技法水平的核心基准。体系严格分为 **Regular (Insane) Dan** 与 **LN (Insane) Dan** 两大独立轨道。
 
-### 1. 段位分类与通过标准（作者原话规范）
+### 1. 段位通过标准（作者原话规范）
 
-> **"A 'kyu (級) / dan (段)' course can be used to gauge your approximate skill level in 7K. The Dan courses are separated into three types, Normal Kyu, Regular (Insane) Dan, and LN (Insane) Dan.**
->
+根据段位作者原文规范，通过各阶段考核的标准如下：
+
 > **To pass a course, you must reach the following accuracy without pauses (you may pause during the breaks in between maps):**
-> - **Normal Kyu — 95.00% (S) or above**
 > - **Insane Regular — 96.00% or above**
-> - **Insane LN — 95.00% (S) or above"**
+> - **Insane LN — 95.00% (S) or above**
 
-### 2. 完整进阶序列（共 15 级）
+- **暂停规则**：演奏过程中严禁暂停；仅允许在谱面之间的休息段（breaks in between maps）进行暂停。
 
-体系涵盖从入门（0th / Kyu）到人类技术极限（Stellium）的完整 15 级进阶梯度：
-$$\text{0th (Normal Kyu)} \longrightarrow \text{1st} \longrightarrow \text{2nd} \longrightarrow \text{3rd} \longrightarrow \text{4th} \longrightarrow \text{5th} \longrightarrow \text{6th} \longrightarrow \text{7th} \longrightarrow \text{8th} \longrightarrow \text{9th} \longrightarrow \text{10th} \longrightarrow \text{Gamma} \longrightarrow \text{Azimuth} \longrightarrow \text{Zenith} \longrightarrow \text{Stellium}$$
+### 2. 完整进阶序列（共 14 级）
+
+体系涵盖从初段（1st Dan）到人类技术极限（Stellium）的完整 14 级进阶梯度：
+$$\text{1st} \longrightarrow \text{2nd} \longrightarrow \text{3rd} \longrightarrow \text{4th} \longrightarrow \text{5th} \longrightarrow \text{6th} \longrightarrow \text{7th} \longrightarrow \text{8th} \longrightarrow \text{9th} \longrightarrow \text{10th} \longrightarrow \text{Gamma} \longrightarrow \text{Azimuth} \longrightarrow \text{Zenith} \longrightarrow \text{Stellium}$$
 
 ---
 
 ## 二、八大单一技法练习谱面集（Practice Beatmapsets）
 
-Jinjin 体系提供了 8 个针对单一技法专项训练的官方练习谱面集（每套均收录上述完整的 15 个段位难度）：
+Jinjin 体系提供了 8 个针对单一技法专项训练的官方练习谱面集（每套均收录上述完整的 14 个段位难度）：
 
 ### Regular Dan（常规米键四大技法）
 1. **Jack Practice（叠）**：[Beatmapset 1877617](https://osu.ppy.sh/beatmapsets/1877617)
@@ -44,7 +45,6 @@ Jinjin 体系提供了 8 个针对单一技法专项训练的官方练习谱面�
 
 | 段位 (Dan) | Jack (叠 - 1877617) | Tech (技 - 1877625) | Speed (乱/速 - 1877636) | Stream (切/流 - 1877727) |
 | :--- | :--- | :--- | :--- | :--- |
-| **0th** | S-C-U feat. Qrispy Joybox - Anemone [Another] (JJ Edit) (200BPM) | The Flashbulb - WYETWM [Pope's AD] (JJ Edit) (105BPM) | Cres - End Time [Interlude] (JJ Edit) (180BPM) | Aqours - Yuki wa Doko ni? Kimi no Mune ni! [Expert] (167BPM) |
 | **1st** | dai - dir [Hard] (118BPM) | xi - .357 Magnum [Insane] (JJ Edit) (178.5BPM) | xi - Aragami [Insane] (Cut) (196BPM) | Kozato - Tsuki -Yue- [Another] (JJ Edit) (150BPM) |
 | **2nd** | Various Artists - East West Wobble (JJ Edit) (140BPM) | w_tre respect for AT&HU - Schur's Theorem [Another] (185BPM) | xi - Hesperides [Another] (JJ Edit) (200BPM) | M2U - Gyspy Tronic [SHD] (JJ Edit) (125BPM) |
 | **3rd** | Azu - Haryu [S.Star's Insane] (JJ Edit) (218BPM) | Mr.T - Electro Peaceful [Another] (JJ Edit) (160BPM) | Sakuzyo - Altale [epilogue_18] (JJ Edit) (90BPM) | Susumu Hirasawa - CHEVRON [Thunder] (120BPM) |
@@ -66,7 +66,6 @@ Jinjin 体系提供了 8 个针对单一技法专项训练的官方练习谱面�
 
 | 段位 (Dan) | General (密度 - 1887981) | Tech (技 - 1888000) | Inverse (反键 - 1888009) | Release (释放 - 1888027) |
 | :--- | :--- | :--- | :--- | :--- |
-| **0th** | Tamiyasu, Aoba - Crayon Tulip [Arc] (JJ Edit) (111BPM) | kensuke ushio - lit(var) [light] (JJ Edit, Cut) (95BPM) | OkhaP - Reimu-instrumental- [Jinjin's LN] (90BPM) | Renka - if Hitori Omou [Normal] (JJ Edit) (120BPM) |
 | **1st** | *namirin - Mawaru Sora Usagi [Sky Rabbit] (JJ Edit) (120BPM) | Kevin Penkin - The First Layer [Craving] (JJ Edit) (85BPM) | Raika - LN Pack [Lv1] / Mami Kawada - Portamento (JJ Edit, Cut) (105BPM) | Chata - Dango Daikazoku Mix Piano [TV size] [HD] (JJ Edit) (100BPM) |
 | **2nd** | mimimemeMIMI - Mr. Darling [Profetti's MX] (JJ Edit) (163BPM) | DDRKirby(ISQ) - Take It to the Limit [Run~!] (JJ Edit) (160BPM) | Raika - LN Pack [Lv3] / Silent Siren - Yumeoi (Cut) (JJ Edit) (138BPM) | Kyary Pamyu Pamyu - HARAJUKU IYAHOI [Sulit [HD]] (JJ Edit) (128BPM) |
 | **3rd** | Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit) (190BPM) | C-Show - Panic Holic [Lv.31] (JJ Edit) (220BPM) | BlackY & Yooh - XROSS INFECTION Lv.2 (JJ Edit) (200BPM) | BEAST - 12:30 [LN] (JJ Edit, Cut) (200BPM) |
