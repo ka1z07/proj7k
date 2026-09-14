@@ -409,6 +409,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--expected-checksum",
         help="Expected deterministic feature checksum string (sha256:...)",
     )
+    parser.add_argument(
+        "--guard-metric",
+        action="append",
+        dest="guard_metrics",
+        help="Specific metrics to validate in Monotonicity Guard (default: all evaluated metrics)",
+    )
+    parser.add_argument(
+        "--guard-max-violations",
+        type=int,
+        default=0,
+        help="Maximum allowed monotonicity violations per metric (default: 0)",
+    )
+    parser.add_argument(
+        "--guard-min-tau",
+        type=float,
+        default=0.80,
+        help="Minimum Kendall's tau threshold (default: 0.80)",
+    )
+    parser.add_argument(
+        "--guard-min-rho",
+        type=float,
+        default=0.85,
+        help="Minimum Spearman's rho threshold (default: 0.85)",
+    )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -428,16 +452,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Pipeline initialization error: {e}", file=sys.stderr)
         return 1
 
-    if args.guard:
-        from proj7k.guard import evaluate_monotonicity_guard, MonotonicityGuardConfig
-        guard_cfg = MonotonicityGuardConfig(expected_checksum=args.expected_checksum)
-        guard_res = evaluate_monotonicity_guard(report, config=guard_cfg)
-        if not guard_res.passed:
-            print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)
-            return 1
-        else:
-            print("CI Monotonicity Guard: PASSED (all techniques and tiers strictly monotonic).", file=sys.stderr)
-
     if args.output:
         report.save_json(args.output)
         print(
@@ -446,6 +460,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
     else:
         print(report.to_json())
+
+    if args.guard:
+        from proj7k.guard import evaluate_monotonicity_guard, MonotonicityGuardConfig
+        guard_cfg = MonotonicityGuardConfig(
+            expected_checksum=args.expected_checksum,
+            metrics=args.guard_metrics,
+            max_violations=args.guard_max_violations,
+            min_kendall_tau=args.guard_min_tau,
+            min_spearman_rho=args.guard_min_rho,
+        )
+        guard_res = evaluate_monotonicity_guard(report, config=guard_cfg)
+        if not guard_res.passed:
+            print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)
+            return 1
+        else:
+            print("CI Monotonicity Guard: PASSED (all techniques and tiers strictly monotonic).", file=sys.stderr)
 
     return 0
 

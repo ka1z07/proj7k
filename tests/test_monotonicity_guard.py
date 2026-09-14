@@ -149,6 +149,16 @@ def test_batch_cli_with_guard_flag(tmp_path: Path):
     ])
     assert exit_code == 1
 
+    # With max-violations tolerance >= 1, it passes
+    exit_code_tolerated = batch_cli_main([
+        "--manifest", str(manifest_file),
+        "--guard",
+        "--guard-max-violations", "1",
+        "--guard-min-tau", "-1.0",
+        "--guard-min-rho", "-1.0",
+    ])
+    assert exit_code_tolerated == 0
+
 
 def test_monotonicity_guard_blocks_on_ingestion_failure():
     manifest = [

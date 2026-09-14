@@ -38,8 +38,13 @@ def scan_local_asset_library(library_dir: Union[str, Path]) -> AssetLibraryIndex
 
     index = AssetLibraryIndex()
 
-    for p in base.rglob("*.osu"):
+    for p in base.rglob("*"):
         if not p.is_file():
+            continue
+
+        name = p.name
+        # Support both standard .osu files and osu!lazer content-addressed store (64-char SHA-256 hex)
+        if not (name.endswith(".osu") or (len(name) == 64 and all(c in "0123456789abcdefABCDEF" for c in name))):
             continue
 
         # Inspect header for 7K Mode, CircleSize, BeatmapID, Title, Version

@@ -1,0 +1,2587 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-09-14T15:09:40.567718+00:00",
+  "total_beatmaps": 120,
+  "feature_keys": [
+    "hold_pct",
+    "avg_nps",
+    "peak_4m_nps",
+    "peak_1b_nps",
+    "gap1_density",
+    "adj_density",
+    "mean_locked_fingers",
+    "antiphase_rate",
+    "inverse_score"
+  ],
+  "techniques": {
+    "Regular Jack": {
+      "fingerprint": {
+        "technique": "Regular Jack",
+        "centroid_raw": {
+          "hold_pct": 0.0162,
+          "avg_nps": 20.7616,
+          "peak_4m_nps": 28.9052,
+          "peak_1b_nps": 44.4303,
+          "gap1_density": 1.7221,
+          "adj_density": 2.5264,
+          "mean_locked_fingers": 0.0213,
+          "antiphase_rate": 0.0083,
+          "inverse_score": 0.049
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.0002,
+          "avg_nps": 0.5865,
+          "peak_4m_nps": 0.5023,
+          "peak_1b_nps": 0.456,
+          "gap1_density": 0.6092,
+          "adj_density": 0.5126,
+          "mean_locked_fingers": 0.0036,
+          "antiphase_rate": 0.0002,
+          "inverse_score": 0.0009
+        },
+        "radar_profile": {
+          "hold_pct": 0.0002,
+          "avg_nps": 0.5865,
+          "peak_4m_nps": 0.5023,
+          "peak_1b_nps": 0.456,
+          "gap1_density": 0.6092,
+          "adj_density": 0.5126,
+          "mean_locked_fingers": 0.0036,
+          "antiphase_rate": 0.0002,
+          "inverse_score": 0.0009
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.4759,
+            "raw_value": 0.0162,
+            "normalized_value": 0.0002,
+            "rank": 1
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.2936,
+            "raw_value": 0.0213,
+            "normalized_value": 0.0036,
+            "rank": 2
+          },
+          {
+            "feature": "gap1_density",
+            "score": 0.2552,
+            "raw_value": 1.7221,
+            "normalized_value": 0.6092,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3864749,
+          "song": "Azu - Haryu [S.Star's Insane] (JJ Edit)",
+          "tier": "3rd",
+          "purity_score": 0.9997
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3864745,
+          "song": "S-C-U feat. Qrispy Joybox - Anemone [Another] (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 10.6541,
+            "peak_4m_nps": 16.6667,
+            "peak_1b_nps": 26.6667,
+            "gap1_density": 0.9105,
+            "adj_density": 0.3558,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "10th": {
+          "id": 3864746,
+          "song": "SAMBA MASTER Satou -SATOH- - SAMBA LAND [SAMBAJACK]",
+          "bpm": 132,
+          "features": {
+            "hold_pct": 0.0325,
+            "avg_nps": 26.07,
+            "peak_4m_nps": 31.7625,
+            "peak_1b_nps": 52.7995,
+            "gap1_density": 2.5215,
+            "adj_density": 3.8331,
+            "mean_locked_fingers": 0.0039,
+            "antiphase_rate": 0.0338,
+            "inverse_score": 0.0038
+          }
+        },
+        "1st": {
+          "id": 3864747,
+          "song": "dai - dir [Hard]",
+          "bpm": 118,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 12.5657,
+            "peak_4m_nps": 15.4875,
+            "peak_1b_nps": 21.6331,
+            "gap1_density": 0.7613,
+            "adj_density": 1.1376,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "3rd": {
+          "id": 3864749,
+          "song": "Azu - Haryu [S.Star's Insane] (JJ Edit)",
+          "bpm": 218,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 15.7834,
+            "peak_4m_nps": 21.5729,
+            "peak_1b_nps": 32.6999,
+            "gap1_density": 1.7306,
+            "adj_density": 1.1377,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "4th": {
+          "id": 3864750,
+          "song": "toby fox - MEGALOVANIA [sans] (Edited)",
+          "bpm": 240,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 15.2146,
+            "peak_4m_nps": 23.5,
+            "peak_1b_nps": 36.0,
+            "gap1_density": 1.5639,
+            "adj_density": 1.6334,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "5th": {
+          "id": 3864751,
+          "song": "Kaneko Chiharu - AciculignosA [Scent](JJ Edit)",
+          "bpm": 148,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 18.5924,
+            "peak_4m_nps": 23.5875,
+            "peak_1b_nps": 36.9996,
+            "gap1_density": 0.8374,
+            "adj_density": 3.1537,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "6th": {
+          "id": 3864752,
+          "song": "Renard - Gabberse Town [Silva Edit] (JJ Edit)",
+          "bpm": 175,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 18.0263,
+            "peak_4m_nps": 26.6146,
+            "peak_1b_nps": 46.6663,
+            "gap1_density": 1.2353,
+            "adj_density": 1.3611,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "7th": {
+          "id": 3864753,
+          "song": "void - Sudden Romance [Koi (short)] (JJ Edit)",
+          "bpm": 152,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 21.288,
+            "peak_4m_nps": 29.7667,
+            "peak_1b_nps": 35.4664,
+            "gap1_density": 2.3433,
+            "adj_density": 1.9633,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "9th": {
+          "id": 3864755,
+          "song": "scytheleg - gazer [lv.17] (JJ Edit)",
+          "bpm": 125,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 21.0069,
+            "peak_4m_nps": 30.0781,
+            "peak_1b_nps": 33.3333,
+            "gap1_density": 2.1701,
+            "adj_density": 2.2135,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Azimuth": {
+          "id": 3864756,
+          "song": "Manabu Namiki - TENSHI (True Final Boss) [sp10] (JJ Edit)",
+          "bpm": 270,
+          "features": {
+            "hold_pct": 0.0549,
+            "avg_nps": 28.4812,
+            "peak_4m_nps": 38.8126,
+            "peak_1b_nps": 63.0006,
+            "gap1_density": 2.2666,
+            "adj_density": 3.8142,
+            "mean_locked_fingers": 0.0027,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0549
+          }
+        },
+        "Stellium": {
+          "id": 3864758,
+          "song": "-45 - EXILE [Downfall]",
+          "bpm": 157,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 32.7086,
+            "peak_4m_nps": 47.5906,
+            "peak_1b_nps": 62.7993,
+            "gap1_density": 2.8211,
+            "adj_density": 4.8245,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Zenith": {
+          "id": 3864759,
+          "song": "ROKINA - Icicle Stinger [Shards]",
+          "bpm": 285,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 28.3125,
+            "peak_4m_nps": 48.0938,
+            "peak_1b_nps": 85.4985,
+            "gap1_density": 2.0703,
+            "adj_density": 3.2031,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "2nd": {
+          "id": 3864772,
+          "song": "Various Artists - East West Wobble (JJ Edit)",
+          "bpm": 140,
+          "features": {
+            "hold_pct": 0.0709,
+            "avg_nps": 15.8287,
+            "peak_4m_nps": 17.7917,
+            "peak_1b_nps": 32.6668,
+            "gap1_density": 0.9648,
+            "adj_density": 2.21,
+            "mean_locked_fingers": 0.0048,
+            "antiphase_rate": 0.0449,
+            "inverse_score": 0.0046
+          }
+        },
+        "8th": {
+          "id": 3864773,
+          "song": "Thaehan - Overworld [Nivrad's Streams] (JJ Edit)",
+          "bpm": 193.34,
+          "features": {
+            "hold_pct": 0.0845,
+            "avg_nps": 18.3272,
+            "peak_4m_nps": 25.9398,
+            "peak_1b_nps": 41.8909,
+            "gap1_density": 1.5415,
+            "adj_density": 2.6104,
+            "mean_locked_fingers": 0.3077,
+            "antiphase_rate": 0.0465,
+            "inverse_score": 0.6714
+          }
+        },
+        "Gamma": {
+          "id": 5079875,
+          "song": "SHK - Identity Part 4 [Identity: Jack] (Edited)",
+          "bpm": 140,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 28.5648,
+            "peak_4m_nps": 36.3125,
+            "peak_1b_nps": 58.3335,
+            "gap1_density": 2.0926,
+            "adj_density": 4.4444,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        }
+      }
+    },
+    "Regular Tech": {
+      "fingerprint": {
+        "technique": "Regular Tech",
+        "centroid_raw": {
+          "hold_pct": 0.0996,
+          "avg_nps": 21.2529,
+          "peak_4m_nps": 28.9976,
+          "peak_1b_nps": 41.8742,
+          "gap1_density": 1.3386,
+          "adj_density": 2.207,
+          "mean_locked_fingers": 0.0154,
+          "antiphase_rate": 0.0171,
+          "inverse_score": 0.0692
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.001,
+          "avg_nps": 0.6025,
+          "peak_4m_nps": 0.5042,
+          "peak_1b_nps": 0.4222,
+          "gap1_density": 0.4728,
+          "adj_density": 0.447,
+          "mean_locked_fingers": 0.0026,
+          "antiphase_rate": 0.0004,
+          "inverse_score": 0.0013
+        },
+        "radar_profile": {
+          "hold_pct": 0.001,
+          "avg_nps": 0.6025,
+          "peak_4m_nps": 0.5042,
+          "peak_1b_nps": 0.4222,
+          "gap1_density": 0.4728,
+          "adj_density": 0.447,
+          "mean_locked_fingers": 0.0026,
+          "antiphase_rate": 0.0004,
+          "inverse_score": 0.0013
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.475,
+            "raw_value": 0.0996,
+            "normalized_value": 0.001,
+            "rank": 1
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.2948,
+            "raw_value": 0.0154,
+            "normalized_value": 0.0026,
+            "rank": 2
+          },
+          {
+            "feature": "antiphase_rate",
+            "score": 0.1874,
+            "raw_value": 0.0171,
+            "normalized_value": 0.0004,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3864788,
+          "song": "U1 High-Speed - EGOISM 440 [EGOMANIA]",
+          "tier": "Gamma",
+          "purity_score": 0.9997
+        }
+      },
+      "tier_profiles": {
+        "10th": {
+          "id": 3864777,
+          "song": "puru - Toki (maidable Remix) [Glitched] (Edited)",
+          "bpm": 175,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 23.892,
+            "peak_4m_nps": 30.8073,
+            "peak_1b_nps": 43.7496,
+            "gap1_density": 1.8176,
+            "adj_density": 2.5851,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "1st": {
+          "id": 3864778,
+          "song": "xi - .357 Magnum [Insane] (JJ Edit)",
+          "bpm": 178.5,
+          "features": {
+            "hold_pct": 0.2205,
+            "avg_nps": 14.2768,
+            "peak_4m_nps": 17.6641,
+            "peak_1b_nps": 26.7754,
+            "gap1_density": 1.031,
+            "adj_density": 1.4009,
+            "mean_locked_fingers": 0.0184,
+            "antiphase_rate": 0.0157,
+            "inverse_score": 0.0255
+          }
+        },
+        "2nd": {
+          "id": 3864779,
+          "song": "w_tre respect for AT&HU - Schur's Theorem [Another]",
+          "bpm": 185,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 14.8579,
+            "peak_4m_nps": 18.6927,
+            "peak_1b_nps": 24.667,
+            "gap1_density": 0.4656,
+            "adj_density": 0.745,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "3rd": {
+          "id": 3864780,
+          "song": "Mr.T - Electro Peaceful [Another] (JJ Edit)",
+          "bpm": 160,
+          "features": {
+            "hold_pct": 0.4722,
+            "avg_nps": 16.1354,
+            "peak_4m_nps": 21.5,
+            "peak_1b_nps": 34.6667,
+            "gap1_density": 0.5333,
+            "adj_density": 1.854,
+            "mean_locked_fingers": 0.094,
+            "antiphase_rate": 0.127,
+            "inverse_score": 0.1135
+          }
+        },
+        "5th": {
+          "id": 3864782,
+          "song": "The Flashbulb - Passage D [Forbidden Path] (JJ Edit)",
+          "bpm": 180,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 18.6926,
+            "peak_4m_nps": 24.75,
+            "peak_1b_nps": 48.0005,
+            "gap1_density": 0.8371,
+            "adj_density": 2.2524,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "6th": {
+          "id": 3864783,
+          "song": "The Algorithm - Isometry [Extra] (JJ Edit)",
+          "bpm": 240,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 18.3958,
+            "peak_4m_nps": 26.25,
+            "peak_1b_nps": 44.0,
+            "gap1_density": 0.9727,
+            "adj_density": 1.9714,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "7th": {
+          "id": 3864784,
+          "song": "incinerate - Rengoku -Purgatorium- [Jinjin's Lv.16.6]",
+          "bpm": 193,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 20.142,
+            "peak_4m_nps": 27.1406,
+            "peak_1b_nps": 32.1668,
+            "gap1_density": 1.5828,
+            "adj_density": 1.1136,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "8th": {
+          "id": 3864785,
+          "song": "Camellia - Bangin' Burst [Rage!!] (JJ Edit)",
+          "bpm": 234,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 21.5445,
+            "peak_4m_nps": 31.4438,
+            "peak_1b_nps": 50.7001,
+            "gap1_density": 1.7181,
+            "adj_density": 2.3795,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "9th": {
+          "id": 3864786,
+          "song": "Stellabee - Ubiquity [Another] (JJ Edit)",
+          "bpm": 220,
+          "features": {
+            "hold_pct": 0.0374,
+            "avg_nps": 24.4933,
+            "peak_4m_nps": 31.3959,
+            "peak_1b_nps": 47.6679,
+            "gap1_density": 2.2825,
+            "adj_density": 2.6858,
+            "mean_locked_fingers": 0.0101,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0493
+          }
+        },
+        "Azimuth": {
+          "id": 3864787,
+          "song": "goreshit - najimi breakers [Immunity] (JJ Edit)",
+          "bpm": 222,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 33.387,
+            "peak_4m_nps": 38.3875,
+            "peak_1b_nps": 51.8001,
+            "gap1_density": 2.7349,
+            "adj_density": 3.5975,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Gamma": {
+          "id": 3864788,
+          "song": "U1 High-Speed - EGOISM 440 [EGOMANIA]",
+          "bpm": 220,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 27.2005,
+            "peak_4m_nps": 36.2083,
+            "peak_1b_nps": 51.3328,
+            "gap1_density": 1.8279,
+            "adj_density": 4.178,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Stellium": {
+          "id": 3864789,
+          "song": "Aquellex - Wanderflux [Gekido's Annihilation+ (315 BPM)]",
+          "bpm": 315,
+          "features": {
+            "hold_pct": 0.0222,
+            "avg_nps": 33.1405,
+            "peak_4m_nps": 49.5469,
+            "peak_1b_nps": 68.2522,
+            "gap1_density": 1.4723,
+            "adj_density": 3.2905,
+            "mean_locked_fingers": 0.0107,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.7943
+          }
+        },
+        "Zenith": {
+          "id": 3864790,
+          "song": "LunaticSounds - Rinjuu [Death-]",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 0.0367,
+            "avg_nps": 26.6803,
+            "peak_4m_nps": 43.3333,
+            "peak_1b_nps": 53.3333,
+            "gap1_density": 1.3722,
+            "adj_density": 2.4406,
+            "mean_locked_fingers": 0.0029,
+            "antiphase_rate": 0.0098,
+            "inverse_score": 0.0084
+          }
+        },
+        "0th": {
+          "id": 3864794,
+          "song": "The Flashbulb - WYETWM [Pope's AD] (JJ Edit)",
+          "bpm": 105,
+          "features": {
+            "hold_pct": 0.7051,
+            "avg_nps": 10.9907,
+            "peak_4m_nps": 12.9063,
+            "peak_1b_nps": 21.0003,
+            "gap1_density": 0.607,
+            "adj_density": 0.8266,
+            "mean_locked_fingers": 0.0943,
+            "antiphase_rate": 0.1033,
+            "inverse_score": 0.0476
+          }
+        },
+        "4th": {
+          "id": 3864795,
+          "song": "AI / CM - My Son, the Leopard [Insane] (JJ Edit)",
+          "bpm": 180,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 14.9637,
+            "peak_4m_nps": 24.9375,
+            "peak_1b_nps": 30.0003,
+            "gap1_density": 0.8237,
+            "adj_density": 1.7847,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        }
+      }
+    },
+    "Regular Speed": {
+      "fingerprint": {
+        "technique": "Regular Speed",
+        "centroid_raw": {
+          "hold_pct": 0.3482,
+          "avg_nps": 20.6578,
+          "peak_4m_nps": 29.1072,
+          "peak_1b_nps": 38.8606,
+          "gap1_density": 0.8261,
+          "adj_density": 1.3876,
+          "mean_locked_fingers": 0.0482,
+          "antiphase_rate": 0.0916,
+          "inverse_score": 0.1365
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.0035,
+          "avg_nps": 0.5831,
+          "peak_4m_nps": 0.5065,
+          "peak_1b_nps": 0.3823,
+          "gap1_density": 0.2906,
+          "adj_density": 0.2789,
+          "mean_locked_fingers": 0.0082,
+          "antiphase_rate": 0.002,
+          "inverse_score": 0.0026
+        },
+        "radar_profile": {
+          "hold_pct": 0.0035,
+          "avg_nps": 0.5831,
+          "peak_4m_nps": 0.5065,
+          "peak_1b_nps": 0.3823,
+          "gap1_density": 0.2906,
+          "adj_density": 0.2789,
+          "mean_locked_fingers": 0.0082,
+          "antiphase_rate": 0.002,
+          "inverse_score": 0.0026
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.4721,
+            "raw_value": 0.3482,
+            "normalized_value": 0.0035,
+            "rank": 1
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.2884,
+            "raw_value": 0.0482,
+            "normalized_value": 0.0082,
+            "rank": 2
+          },
+          {
+            "feature": "antiphase_rate",
+            "score": 0.1856,
+            "raw_value": 0.0916,
+            "normalized_value": 0.002,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3864812,
+          "song": "xi - Hesperides [Another] (JJ Edit)",
+          "tier": "2nd",
+          "purity_score": 1.0
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3864809,
+          "song": "Cres - End Time [Interlude] (JJ Edit)",
+          "bpm": 180,
+          "features": {
+            "hold_pct": 0.0978,
+            "avg_nps": 8.6208,
+            "peak_4m_nps": 15.375,
+            "peak_1b_nps": 27.0003,
+            "gap1_density": 0.0927,
+            "adj_density": 0.0674,
+            "mean_locked_fingers": 0.0225,
+            "antiphase_rate": 0.0253,
+            "inverse_score": 0.0287
+          }
+        },
+        "10th": {
+          "id": 3864810,
+          "song": "beta - Blue-White Crazystars [Stellar]",
+          "bpm": 290,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 26.2128,
+            "peak_4m_nps": 34.4376,
+            "peak_1b_nps": 53.1658,
+            "gap1_density": 1.2109,
+            "adj_density": 2.2653,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "1st": {
+          "id": 3864811,
+          "song": "xi - Aragami [Insane] (Cut)",
+          "bpm": 196,
+          "features": {
+            "hold_pct": 3.9634,
+            "avg_nps": 13.08,
+            "peak_4m_nps": 19.8723,
+            "peak_1b_nps": 29.4002,
+            "gap1_density": 0.2692,
+            "adj_density": 0.4985,
+            "mean_locked_fingers": 0.3343,
+            "antiphase_rate": 1.0966,
+            "inverse_score": 0.7254
+          }
+        },
+        "2nd": {
+          "id": 3864812,
+          "song": "xi - Hesperides [Another] (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 0.0561,
+            "avg_nps": 16.0288,
+            "peak_4m_nps": 22.5,
+            "peak_1b_nps": 30.0,
+            "gap1_density": 0.3324,
+            "adj_density": 1.1231,
+            "mean_locked_fingers": 0.0054,
+            "antiphase_rate": 0.027,
+            "inverse_score": 0.0135
+          }
+        },
+        "3rd": {
+          "id": 3864813,
+          "song": "Sakuzyo - Altale [epilogue_18] (JJ Edit)",
+          "bpm": 90,
+          "features": {
+            "hold_pct": 1.0689,
+            "avg_nps": 12.7985,
+            "peak_4m_nps": 24.375,
+            "peak_1b_nps": 26.9999,
+            "gap1_density": 0.4583,
+            "adj_density": 0.814,
+            "mean_locked_fingers": 0.3339,
+            "antiphase_rate": 0.2257,
+            "inverse_score": 0.1272
+          }
+        },
+        "5th": {
+          "id": 3864815,
+          "song": "antiPLUR - Speed of Link [Jinjin's Limit Lv.10]",
+          "bpm": 263.08,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 17.8342,
+            "peak_4m_nps": 23.2933,
+            "peak_1b_nps": 30.6923,
+            "gap1_density": 0.9662,
+            "adj_density": 0.4063,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "6th": {
+          "id": 3864816,
+          "song": "-45 - 44river [Delayanother]",
+          "bpm": 142,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 19.4593,
+            "peak_4m_nps": 23.8146,
+            "peak_1b_nps": 28.3997,
+            "gap1_density": 0.5341,
+            "adj_density": 0.8218,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "7th": {
+          "id": 3864817,
+          "song": "Katy B - Witches Brew [DERAY POTION] (JJ Edit)",
+          "bpm": 256,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 20.6753,
+            "peak_4m_nps": 28.0,
+            "peak_1b_nps": 34.1326,
+            "gap1_density": 0.9281,
+            "adj_density": 1.4296,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "8th": {
+          "id": 3864818,
+          "song": "Sai Oto / Komiya Mao - Yozakura [Lv.16] (JJ Edit)",
+          "bpm": 135,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 21.7679,
+            "peak_4m_nps": 30.9375,
+            "peak_1b_nps": 33.7503,
+            "gap1_density": 0.9015,
+            "adj_density": 2.0728,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Azimuth": {
+          "id": 3864820,
+          "song": "DJ TECHNORCH - Nijuu [ichi no mae]",
+          "bpm": 120,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 27.395,
+            "peak_4m_nps": 38.5,
+            "peak_1b_nps": 56.0,
+            "gap1_density": 1.084,
+            "adj_density": 2.3782,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Gamma": {
+          "id": 3864821,
+          "song": "Silvia - Vertex GAMMA [Tachyon]",
+          "bpm": 300,
+          "features": {
+            "hold_pct": 0.0369,
+            "avg_nps": 22.713,
+            "peak_4m_nps": 36.25,
+            "peak_1b_nps": 60.0,
+            "gap1_density": 0.8474,
+            "adj_density": 2.106,
+            "mean_locked_fingers": 0.0268,
+            "antiphase_rate": 0.0,
+            "inverse_score": 1.1528
+          }
+        },
+        "Stellium": {
+          "id": 3864822,
+          "song": "onoken - P8107 (Cut) [Apocalypse]",
+          "bpm": 180,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 31.3627,
+            "peak_4m_nps": 45.1875,
+            "peak_1b_nps": 57.0006,
+            "gap1_density": 1.2587,
+            "adj_density": 1.8076,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Zenith": {
+          "id": 3864823,
+          "song": "Erahamonika remixed by kors k - Der Wald [Geschwindigkeiten]",
+          "bpm": 170,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 27.6378,
+            "peak_4m_nps": 39.3125,
+            "peak_1b_nps": 45.3335,
+            "gap1_density": 1.1367,
+            "adj_density": 1.493,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "4th": {
+          "id": 3864827,
+          "song": "Colorful Sounds Port - ETERNAL DRAIN [Jinjin's Lv.8]",
+          "bpm": 149,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 18.5634,
+            "peak_4m_nps": 23.5917,
+            "peak_1b_nps": 32.2837,
+            "gap1_density": 0.6869,
+            "adj_density": 0.5548,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "9th": {
+          "id": 3864828,
+          "song": "ueotan - Mario Paint [SHD] (JJ Edit)",
+          "bpm": 155,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 25.7179,
+            "peak_4m_nps": 31.1615,
+            "peak_1b_nps": 38.7497,
+            "gap1_density": 1.6838,
+            "adj_density": 2.9754,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        }
+      }
+    },
+    "Regular Stream": {
+      "fingerprint": {
+        "technique": "Regular Stream",
+        "centroid_raw": {
+          "hold_pct": 0.2661,
+          "avg_nps": 22.4943,
+          "peak_4m_nps": 32.3452,
+          "peak_1b_nps": 42.7609,
+          "gap1_density": 1.3447,
+          "adj_density": 2.9449,
+          "mean_locked_fingers": 0.0176,
+          "antiphase_rate": 0.0495,
+          "inverse_score": 0.0698
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.0027,
+          "avg_nps": 0.6432,
+          "peak_4m_nps": 0.5731,
+          "peak_1b_nps": 0.4339,
+          "gap1_density": 0.475,
+          "adj_density": 0.5985,
+          "mean_locked_fingers": 0.003,
+          "antiphase_rate": 0.0011,
+          "inverse_score": 0.0014
+        },
+        "radar_profile": {
+          "hold_pct": 0.0027,
+          "avg_nps": 0.6432,
+          "peak_4m_nps": 0.5731,
+          "peak_1b_nps": 0.4339,
+          "gap1_density": 0.475,
+          "adj_density": 0.5985,
+          "mean_locked_fingers": 0.003,
+          "antiphase_rate": 0.0011,
+          "inverse_score": 0.0014
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.473,
+            "raw_value": 0.2661,
+            "normalized_value": 0.0027,
+            "rank": 1
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.2943,
+            "raw_value": 0.0176,
+            "normalized_value": 0.003,
+            "rank": 2
+          },
+          {
+            "feature": "adj_density",
+            "score": 0.2417,
+            "raw_value": 2.9449,
+            "normalized_value": 0.5985,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3865219,
+          "song": "yak_won - Out Of The Blue [Ex Nihilo (BMS Style)]",
+          "tier": "7th",
+          "purity_score": 0.9995
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3865205,
+          "song": "Aqours - Yuki wa Doko ni? Kimi no Mune ni! [Expert]",
+          "bpm": 167,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 12.9186,
+            "peak_4m_nps": 17.3958,
+            "peak_1b_nps": 27.8334,
+            "gap1_density": 0.3591,
+            "adj_density": 2.0915,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "10th": {
+          "id": 3865206,
+          "song": "Getty vs. DJ DiA - Fox4-Raize- [BMSAVITY] (Edited)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 29.8762,
+            "peak_4m_nps": 37.7083,
+            "peak_1b_nps": 43.3333,
+            "gap1_density": 2.2073,
+            "adj_density": 4.9012,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "1st": {
+          "id": 3865207,
+          "song": "Kozato - Tsuki -Yue- [Another] (JJ Edit)",
+          "bpm": 150,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 11.8821,
+            "peak_4m_nps": 17.1875,
+            "peak_1b_nps": 22.5,
+            "gap1_density": 0.5114,
+            "adj_density": 0.1562,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "2nd": {
+          "id": 3865208,
+          "song": "M2U - Gyspy Tronic [SHD] (JJ Edit)",
+          "bpm": 125,
+          "features": {
+            "hold_pct": 3.4355,
+            "avg_nps": 15.0084,
+            "peak_4m_nps": 20.8333,
+            "peak_1b_nps": 25.0,
+            "gap1_density": 0.8988,
+            "adj_density": 1.08,
+            "mean_locked_fingers": 0.0836,
+            "antiphase_rate": 0.5435,
+            "inverse_score": 0.0636
+          }
+        },
+        "3rd": {
+          "id": 3865209,
+          "song": "Susumu Hirasawa - CHEVRON [Thunder]",
+          "bpm": 120,
+          "features": {
+            "hold_pct": 0.2018,
+            "avg_nps": 19.0577,
+            "peak_4m_nps": 23.25,
+            "peak_1b_nps": 28.0,
+            "gap1_density": 1.0192,
+            "adj_density": 2.4231,
+            "mean_locked_fingers": 0.0288,
+            "antiphase_rate": 0.1346,
+            "inverse_score": 0.0214
+          }
+        },
+        "4th": {
+          "id": 3865210,
+          "song": "Mr.T - electro peaceful (8bit) [Notes of Peace] (JJ Edit)",
+          "bpm": 160,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 19.3504,
+            "peak_4m_nps": 24.0,
+            "peak_1b_nps": 34.6667,
+            "gap1_density": 1.3932,
+            "adj_density": 2.265,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "5th": {
+          "id": 3865211,
+          "song": "Izayoi Sak - Blue Planet [Blue Another]",
+          "bpm": 147,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 19.5919,
+            "peak_4m_nps": 26.1844,
+            "peak_1b_nps": 31.8503,
+            "gap1_density": 1.2455,
+            "adj_density": 2.4172,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "6th": {
+          "id": 3865212,
+          "song": "Imperishable Night 2006 [2016 Lunatic] (JJ Edit)",
+          "bpm": 161,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 23.5786,
+            "peak_4m_nps": 29.1813,
+            "peak_1b_nps": 34.8834,
+            "gap1_density": 1.5703,
+            "adj_density": 2.6225,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "8th": {
+          "id": 3865213,
+          "song": "Chroma - Tiny Tales Continue [Recollections] (JJ Edit)",
+          "bpm": 187.82,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 25.1112,
+            "peak_4m_nps": 35.6075,
+            "peak_1b_nps": 40.6949,
+            "gap1_density": 1.4369,
+            "adj_density": 3.1475,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Azimuth": {
+          "id": 3865214,
+          "song": "Silentroom - Finixe [The End+]",
+          "bpm": 222,
+          "features": {
+            "hold_pct": 0.1932,
+            "avg_nps": 27.1901,
+            "peak_4m_nps": 44.8625,
+            "peak_1b_nps": 59.2001,
+            "gap1_density": 1.4839,
+            "adj_density": 4.0907,
+            "mean_locked_fingers": 0.0949,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.509
+          }
+        },
+        "Gamma": {
+          "id": 3865215,
+          "song": "LeaF - Paraclete [Sacred]",
+          "bpm": 210,
+          "features": {
+            "hold_pct": 0.0808,
+            "avg_nps": 26.9472,
+            "peak_4m_nps": 40.6875,
+            "peak_1b_nps": 59.5009,
+            "gap1_density": 1.5467,
+            "adj_density": 4.0809,
+            "mean_locked_fingers": 0.0124,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0474
+          }
+        },
+        "Stellium": {
+          "id": 3865216,
+          "song": "TamaDo - Triumphal Return [Victory]",
+          "bpm": 260,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 33.0187,
+            "peak_4m_nps": 53.0834,
+            "peak_1b_nps": 82.3331,
+            "gap1_density": 1.9372,
+            "adj_density": 4.2502,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "Zenith": {
+          "id": 3865217,
+          "song": "Frums - We Want To Run [Ascend] (Cut)",
+          "bpm": 243,
+          "features": {
+            "hold_pct": 0.0804,
+            "avg_nps": 24.3735,
+            "peak_4m_nps": 44.55,
+            "peak_1b_nps": 56.7008,
+            "gap1_density": 1.2691,
+            "adj_density": 3.6947,
+            "mean_locked_fingers": 0.0442,
+            "antiphase_rate": 0.0637,
+            "inverse_score": 0.4059
+          }
+        },
+        "7th": {
+          "id": 3865219,
+          "song": "yak_won - Out Of The Blue [Ex Nihilo (BMS Style)]",
+          "bpm": 170,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 20.6206,
+            "peak_4m_nps": 32.0521,
+            "peak_1b_nps": 39.6668,
+            "gap1_density": 1.1734,
+            "adj_density": 2.7813,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        },
+        "9th": {
+          "id": 3865220,
+          "song": "Helblinde - The Solace of Oblivion [Ephemerality]",
+          "bpm": 195,
+          "features": {
+            "hold_pct": 0.0,
+            "avg_nps": 28.89,
+            "peak_4m_nps": 38.5938,
+            "peak_1b_nps": 55.2504,
+            "gap1_density": 2.1192,
+            "adj_density": 4.1714,
+            "mean_locked_fingers": 0.0,
+            "antiphase_rate": 0.0,
+            "inverse_score": 0.0
+          }
+        }
+      }
+    },
+    "LN General": {
+      "fingerprint": {
+        "technique": "LN General",
+        "centroid_raw": {
+          "hold_pct": 75.0908,
+          "avg_nps": 17.9669,
+          "peak_4m_nps": 23.9574,
+          "peak_1b_nps": 34.1657,
+          "gap1_density": 1.0039,
+          "adj_density": 1.9185,
+          "mean_locked_fingers": 2.5462,
+          "antiphase_rate": 18.1451,
+          "inverse_score": 4.3041
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.7509,
+          "avg_nps": 0.4949,
+          "peak_4m_nps": 0.4005,
+          "peak_1b_nps": 0.3201,
+          "gap1_density": 0.3539,
+          "adj_density": 0.3878,
+          "mean_locked_fingers": 0.4318,
+          "antiphase_rate": 0.3927,
+          "inverse_score": 0.0834
+        },
+        "radar_profile": {
+          "hold_pct": 0.7509,
+          "avg_nps": 0.4949,
+          "peak_4m_nps": 0.4005,
+          "peak_1b_nps": 0.3201,
+          "gap1_density": 0.3539,
+          "adj_density": 0.3878,
+          "mean_locked_fingers": 0.4318,
+          "antiphase_rate": 0.3927,
+          "inverse_score": 0.0834
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.382,
+            "raw_value": 75.0908,
+            "normalized_value": 0.7509,
+            "rank": 1
+          },
+          {
+            "feature": "antiphase_rate",
+            "score": 0.2609,
+            "raw_value": 18.1451,
+            "normalized_value": 0.3927,
+            "rank": 2
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.1957,
+            "raw_value": 2.5462,
+            "normalized_value": 0.4318,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3888057,
+          "song": "Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit)",
+          "tier": "3rd",
+          "purity_score": 0.9999
+        }
+      },
+      "tier_profiles": {
+        "10th": {
+          "id": 3888054,
+          "song": "OSTER project - SpaceLand TOYBOX [Playful]",
+          "bpm": 172,
+          "features": {
+            "hold_pct": 99.7675,
+            "avg_nps": 20.9733,
+            "peak_4m_nps": 28.3083,
+            "peak_1b_nps": 40.1342,
+            "gap1_density": 1.4626,
+            "adj_density": 2.0671,
+            "mean_locked_fingers": 2.9874,
+            "antiphase_rate": 24.0154,
+            "inverse_score": 4.3156
+          }
+        },
+        "1st": {
+          "id": 3888055,
+          "song": "*namirin - Mawaru Sora Usagi [Sky Rabbit] (JJ Edit)",
+          "bpm": 120,
+          "features": {
+            "hold_pct": 70.3184,
+            "avg_nps": 6.3631,
+            "peak_4m_nps": 10.625,
+            "peak_1b_nps": 20.0,
+            "gap1_density": 0.3336,
+            "adj_density": 0.4111,
+            "mean_locked_fingers": 1.3068,
+            "antiphase_rate": 6.4882,
+            "inverse_score": 0.7947
+          }
+        },
+        "2nd": {
+          "id": 3888056,
+          "song": "mimimemeMIMI - Mr. Darling [Profetti's MX] (JJ Edit)",
+          "bpm": 163,
+          "features": {
+            "hold_pct": 28.6634,
+            "avg_nps": 10.889,
+            "peak_4m_nps": 13.4135,
+            "peak_1b_nps": 24.4499,
+            "gap1_density": 1.1222,
+            "adj_density": 0.9206,
+            "mean_locked_fingers": 1.4745,
+            "antiphase_rate": 6.6369,
+            "inverse_score": 1.6859
+          }
+        },
+        "3rd": {
+          "id": 3888057,
+          "song": "Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit)",
+          "bpm": 190,
+          "features": {
+            "hold_pct": 55.9524,
+            "avg_nps": 14.0823,
+            "peak_4m_nps": 17.2188,
+            "peak_1b_nps": 25.3333,
+            "gap1_density": 0.7358,
+            "adj_density": 1.2294,
+            "mean_locked_fingers": 1.6506,
+            "antiphase_rate": 13.3186,
+            "inverse_score": 3.285
+          }
+        },
+        "4th": {
+          "id": 3888058,
+          "song": "Takanashi Yasuharu - Doku Ryuu no Kobura [Lv.37] (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 62.6432,
+            "avg_nps": 13.7645,
+            "peak_4m_nps": 18.75,
+            "peak_1b_nps": 26.6667,
+            "gap1_density": 1.2093,
+            "adj_density": 1.1356,
+            "mean_locked_fingers": 1.9757,
+            "antiphase_rate": 15.2576,
+            "inverse_score": 5.2282
+          }
+        },
+        "5th": {
+          "id": 3888059,
+          "song": "Perfume - Chocolate Disco [Lv.42] (JJ Edit)",
+          "bpm": 128,
+          "features": {
+            "hold_pct": 77.2427,
+            "avg_nps": 15.5301,
+            "peak_4m_nps": 19.6,
+            "peak_1b_nps": 27.7333,
+            "gap1_density": 0.9937,
+            "adj_density": 2.0796,
+            "mean_locked_fingers": 2.4165,
+            "antiphase_rate": 16.8618,
+            "inverse_score": 1.9443
+          }
+        },
+        "6th": {
+          "id": 3888060,
+          "song": "M2U & Nicode - Lune [Moonlight] (Edited)",
+          "bpm": 160,
+          "features": {
+            "hold_pct": 73.0275,
+            "avg_nps": 13.9744,
+            "peak_4m_nps": 24.8333,
+            "peak_1b_nps": 34.6667,
+            "gap1_density": 0.5897,
+            "adj_density": 1.6752,
+            "mean_locked_fingers": 2.8082,
+            "antiphase_rate": 13.2137,
+            "inverse_score": 3.2809
+          }
+        },
+        "7th": {
+          "id": 3888061,
+          "song": "TWICE - YES or YES [YES!]",
+          "bpm": 138,
+          "features": {
+            "hold_pct": 88.5301,
+            "avg_nps": 17.6343,
+            "peak_4m_nps": 23.8625,
+            "peak_1b_nps": 32.2002,
+            "gap1_density": 0.7069,
+            "adj_density": 2.6609,
+            "mean_locked_fingers": 2.8753,
+            "antiphase_rate": 22.4553,
+            "inverse_score": 2.775
+          }
+        },
+        "8th": {
+          "id": 3888062,
+          "song": "Sakuzyo - Imprinting [Impression] (JJ Edit)",
+          "bpm": 175,
+          "features": {
+            "hold_pct": 90.0448,
+            "avg_nps": 20.0129,
+            "peak_4m_nps": 23.3334,
+            "peak_1b_nps": 46.6676,
+            "gap1_density": 1.5615,
+            "adj_density": 2.3962,
+            "mean_locked_fingers": 2.644,
+            "antiphase_rate": 26.995,
+            "inverse_score": 3.8667
+          }
+        },
+        "9th": {
+          "id": 3888063,
+          "song": "Starving Trancer - New Gravity [LNsane+]",
+          "bpm": 154,
+          "features": {
+            "hold_pct": 89.5263,
+            "avg_nps": 19.0495,
+            "peak_4m_nps": 27.2709,
+            "peak_1b_nps": 33.3667,
+            "gap1_density": 0.9124,
+            "adj_density": 2.5266,
+            "mean_locked_fingers": 3.1612,
+            "antiphase_rate": 30.5093,
+            "inverse_score": 3.764
+          }
+        },
+        "Azimuth": {
+          "id": 3888064,
+          "song": "DJ YOSHITAKA - JOMANDA [Azimuth] (Edited)",
+          "bpm": 195,
+          "features": {
+            "hold_pct": 93.6943,
+            "avg_nps": 25.1165,
+            "peak_4m_nps": 33.7188,
+            "peak_1b_nps": 45.5003,
+            "gap1_density": 1.1277,
+            "adj_density": 2.2471,
+            "mean_locked_fingers": 3.4217,
+            "antiphase_rate": 13.0765,
+            "inverse_score": 9.9079
+          }
+        },
+        "Gamma": {
+          "id": 3888065,
+          "song": "Risk Junk - quaver [LN Master]",
+          "bpm": 182,
+          "features": {
+            "hold_pct": 94.512,
+            "avg_nps": 24.4377,
+            "peak_4m_nps": 32.7979,
+            "peak_1b_nps": 42.4667,
+            "gap1_density": 1.4944,
+            "adj_density": 3.4104,
+            "mean_locked_fingers": 3.1812,
+            "antiphase_rate": 28.4228,
+            "inverse_score": 6.3189
+          }
+        },
+        "Stellium": {
+          "id": 3888066,
+          "song": "Yooh - Decoy [Hard] (JJ Edit)",
+          "bpm": 180,
+          "features": {
+            "hold_pct": 70.7341,
+            "avg_nps": 31.0816,
+            "peak_4m_nps": 40.6875,
+            "peak_1b_nps": 51.0005,
+            "gap1_density": 0.8013,
+            "adj_density": 2.5488,
+            "mean_locked_fingers": 3.1161,
+            "antiphase_rate": 18.6734,
+            "inverse_score": 6.3634
+          }
+        },
+        "Zenith": {
+          "id": 3888067,
+          "song": "technoplanet - Redshift [Zenith] (JJ Edit)",
+          "bpm": 190,
+          "features": {
+            "hold_pct": 94.8765,
+            "avg_nps": 28.0233,
+            "peak_4m_nps": 35.2292,
+            "peak_1b_nps": 47.4999,
+            "gap1_density": 1.2974,
+            "adj_density": 3.1137,
+            "mean_locked_fingers": 3.8652,
+            "antiphase_rate": 29.3639,
+            "inverse_score": 10.3236
+          }
+        },
+        "0th": {
+          "id": 3888075,
+          "song": "Tamiyasu, Aoba - Crayon Tulip [Arc] (JJ Edit)",
+          "bpm": 111,
+          "features": {
+            "hold_pct": 36.8293,
+            "avg_nps": 8.5706,
+            "peak_4m_nps": 9.7125,
+            "peak_1b_nps": 14.8,
+            "gap1_density": 0.7107,
+            "adj_density": 0.3554,
+            "mean_locked_fingers": 1.3084,
+            "antiphase_rate": 6.8878,
+            "inverse_score": 0.7075
+          }
+        }
+      }
+    },
+    "LN Tech": {
+      "fingerprint": {
+        "technique": "LN Tech",
+        "centroid_raw": {
+          "hold_pct": 76.5807,
+          "avg_nps": 17.3601,
+          "peak_4m_nps": 23.767,
+          "peak_1b_nps": 35.2009,
+          "gap1_density": 0.9922,
+          "adj_density": 1.6057,
+          "mean_locked_fingers": 2.171,
+          "antiphase_rate": 18.2404,
+          "inverse_score": 5.4215
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.7658,
+          "avg_nps": 0.475,
+          "peak_4m_nps": 0.3966,
+          "peak_1b_nps": 0.3338,
+          "gap1_density": 0.3497,
+          "adj_density": 0.3236,
+          "mean_locked_fingers": 0.3682,
+          "antiphase_rate": 0.3948,
+          "inverse_score": 0.1051
+        },
+        "radar_profile": {
+          "hold_pct": 0.7658,
+          "avg_nps": 0.475,
+          "peak_4m_nps": 0.3966,
+          "peak_1b_nps": 0.3338,
+          "gap1_density": 0.3497,
+          "adj_density": 0.3236,
+          "mean_locked_fingers": 0.3682,
+          "antiphase_rate": 0.3948,
+          "inverse_score": 0.1051
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.3991,
+            "raw_value": 76.5807,
+            "normalized_value": 0.7658,
+            "rank": 1
+          },
+          {
+            "feature": "antiphase_rate",
+            "score": 0.2633,
+            "raw_value": 18.2404,
+            "normalized_value": 0.3948,
+            "rank": 2
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.1231,
+            "raw_value": 2.171,
+            "normalized_value": 0.3682,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3888130,
+          "song": "C-Show - Panic Holic [Lv.31] (JJ Edit)",
+          "tier": "3rd",
+          "purity_score": 0.9993
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3888126,
+          "song": "kensuke ushio - lit(var) [light] (JJ Edit, Cut)",
+          "bpm": 95,
+          "features": {
+            "hold_pct": 49.6667,
+            "avg_nps": 5.5393,
+            "peak_4m_nps": 8.8403,
+            "peak_1b_nps": 12.6666,
+            "gap1_density": 0.3878,
+            "adj_density": 0.8309,
+            "mean_locked_fingers": 1.9874,
+            "antiphase_rate": 4.5515,
+            "inverse_score": 0.7463
+          }
+        },
+        "10th": {
+          "id": 3888127,
+          "song": "Shiron - CODE -CRiMSON- [LNavity -CRiTiCAL- (Edited)]",
+          "bpm": 167,
+          "features": {
+            "hold_pct": 92.7885,
+            "avg_nps": 20.9252,
+            "peak_4m_nps": 26.2677,
+            "peak_1b_nps": 38.9668,
+            "gap1_density": 1.3246,
+            "adj_density": 1.7605,
+            "mean_locked_fingers": 2.2818,
+            "antiphase_rate": 17.1107,
+            "inverse_score": 3.1513
+          }
+        },
+        "1st": {
+          "id": 3888128,
+          "song": "Kevin Penkin - The First Layer [Craving] (JJ Edit)",
+          "bpm": 85,
+          "features": {
+            "hold_pct": 57.6246,
+            "avg_nps": 6.1909,
+            "peak_4m_nps": 8.8542,
+            "peak_1b_nps": 11.3334,
+            "gap1_density": 0.4266,
+            "adj_density": 0.236,
+            "mean_locked_fingers": 0.8871,
+            "antiphase_rate": 2.4328,
+            "inverse_score": 0.2698
+          }
+        },
+        "2nd": {
+          "id": 3888129,
+          "song": "DDRKirby(ISQ) - Take It to the Limit [Run~!] (JJ Edit)",
+          "bpm": 160,
+          "features": {
+            "hold_pct": 52.8381,
+            "avg_nps": 8.7048,
+            "peak_4m_nps": 13.3333,
+            "peak_1b_nps": 21.3333,
+            "gap1_density": 0.4287,
+            "adj_density": 0.3124,
+            "mean_locked_fingers": 1.2707,
+            "antiphase_rate": 5.4496,
+            "inverse_score": 1.3623
+          }
+        },
+        "3rd": {
+          "id": 3888130,
+          "song": "C-Show - Panic Holic [Lv.31] (JJ Edit)",
+          "bpm": 220,
+          "features": {
+            "hold_pct": 56.0,
+            "avg_nps": 13.3784,
+            "peak_4m_nps": 16.7292,
+            "peak_1b_nps": 25.6674,
+            "gap1_density": 0.6342,
+            "adj_density": 1.1793,
+            "mean_locked_fingers": 1.2372,
+            "antiphase_rate": 11.5451,
+            "inverse_score": 5.4505
+          }
+        },
+        "4th": {
+          "id": 3888131,
+          "song": "STN - The Limbo [Rumi's MX] (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 79.4466,
+            "avg_nps": 13.0328,
+            "peak_4m_nps": 17.7083,
+            "peak_1b_nps": 40.0,
+            "gap1_density": 0.6697,
+            "adj_density": 0.6783,
+            "mean_locked_fingers": 1.5121,
+            "antiphase_rate": 11.8652,
+            "inverse_score": 3.872
+          }
+        },
+        "5th": {
+          "id": 3888132,
+          "song": "Lily & Morrigan - Oath Nova Apocalypse [Phantasmagoric] (JJ Edit)",
+          "bpm": 120,
+          "features": {
+            "hold_pct": 74.2115,
+            "avg_nps": 15.4774,
+            "peak_4m_nps": 19.375,
+            "peak_1b_nps": 26.0,
+            "gap1_density": 0.9706,
+            "adj_density": 1.6425,
+            "mean_locked_fingers": 2.281,
+            "antiphase_rate": 19.6525,
+            "inverse_score": 1.6115
+          }
+        },
+        "6th": {
+          "id": 3888133,
+          "song": "Schubert - 'Trockne Blumen' [Blocko's Experte] (JJ Edit)",
+          "bpm": 155,
+          "features": {
+            "hold_pct": 83.3859,
+            "avg_nps": 19.2686,
+            "peak_4m_nps": 22.2812,
+            "peak_1b_nps": 31.0005,
+            "gap1_density": 0.8003,
+            "adj_density": 1.5905,
+            "mean_locked_fingers": 2.2752,
+            "antiphase_rate": 30.696,
+            "inverse_score": 2.7441
+          }
+        },
+        "7th": {
+          "id": 3888134,
+          "song": "Camellia - Towards the Horizon [Horizon] (JJ Edit)",
+          "bpm": 154.4,
+          "features": {
+            "hold_pct": 66.0296,
+            "avg_nps": 17.4657,
+            "peak_4m_nps": 25.4117,
+            "peak_1b_nps": 36.0268,
+            "gap1_density": 1.0681,
+            "adj_density": 2.0612,
+            "mean_locked_fingers": 2.1459,
+            "antiphase_rate": 18.0498,
+            "inverse_score": 2.5064
+          }
+        },
+        "8th": {
+          "id": 3888135,
+          "song": "penoreri - Sailing Force [Weigh Anchor] (JJ Edit)",
+          "bpm": 159,
+          "features": {
+            "hold_pct": 70.3184,
+            "avg_nps": 18.9845,
+            "peak_4m_nps": 24.8438,
+            "peak_1b_nps": 34.4508,
+            "gap1_density": 1.111,
+            "adj_density": 2.1242,
+            "mean_locked_fingers": 2.3522,
+            "antiphase_rate": 20.8687,
+            "inverse_score": 2.9354
+          }
+        },
+        "9th": {
+          "id": 3888136,
+          "song": "Toromaru - Enigma [Virtuoso] (JJ Edit)",
+          "bpm": 198,
+          "features": {
+            "hold_pct": 95.1366,
+            "avg_nps": 18.5538,
+            "peak_4m_nps": 23.3062,
+            "peak_1b_nps": 36.3,
+            "gap1_density": 0.7992,
+            "adj_density": 2.2258,
+            "mean_locked_fingers": 2.9049,
+            "antiphase_rate": 30.7827,
+            "inverse_score": 8.1528
+          }
+        },
+        "Azimuth": {
+          "id": 3888137,
+          "song": "KAKU P-MODEL - Big Brother [AD1983.99] (Edited)",
+          "bpm": 190,
+          "features": {
+            "hold_pct": 98.8269,
+            "avg_nps": 25.4052,
+            "peak_4m_nps": 31.2708,
+            "peak_1b_nps": 41.1666,
+            "gap1_density": 1.3463,
+            "adj_density": 1.9424,
+            "mean_locked_fingers": 2.6614,
+            "antiphase_rate": 22.507,
+            "inverse_score": 6.5235
+          }
+        },
+        "Gamma": {
+          "id": 3888138,
+          "song": "Hommarju - Hellfire [Hell LN+] (Edited)",
+          "bpm": 176,
+          "features": {
+            "hold_pct": 93.6801,
+            "avg_nps": 21.8683,
+            "peak_4m_nps": 34.65,
+            "peak_1b_nps": 43.9999,
+            "gap1_density": 1.2222,
+            "adj_density": 2.4538,
+            "mean_locked_fingers": 2.6591,
+            "antiphase_rate": 24.8392,
+            "inverse_score": 4.0262
+          }
+        },
+        "Stellium": {
+          "id": 3888139,
+          "song": "sak feat. myui - Unleashed World [Zola] (JJ Edit)",
+          "bpm": 232,
+          "features": {
+            "hold_pct": 83.121,
+            "avg_nps": 29.2125,
+            "peak_4m_nps": 46.8833,
+            "peak_1b_nps": 69.6002,
+            "gap1_density": 1.8184,
+            "adj_density": 2.3258,
+            "mean_locked_fingers": 2.871,
+            "antiphase_rate": 32.6463,
+            "inverse_score": 23.6803
+          }
+        },
+        "Zenith": {
+          "id": 3888140,
+          "song": "LunaticSounds - Dement ~After Legend~ [Dementia] (JJ Edit)",
+          "bpm": 210,
+          "features": {
+            "hold_pct": 95.6364,
+            "avg_nps": 26.3945,
+            "peak_4m_nps": 36.75,
+            "peak_1b_nps": 59.5009,
+            "gap1_density": 1.876,
+            "adj_density": 2.7223,
+            "mean_locked_fingers": 3.2379,
+            "antiphase_rate": 20.6096,
+            "inverse_score": 14.2908
+          }
+        }
+      }
+    },
+    "LN Inverse": {
+      "fingerprint": {
+        "technique": "LN Inverse",
+        "centroid_raw": {
+          "hold_pct": 91.7708,
+          "avg_nps": 12.4395,
+          "peak_4m_nps": 18.6729,
+          "peak_1b_nps": 29.0992,
+          "gap1_density": 0.6053,
+          "adj_density": 1.36,
+          "mean_locked_fingers": 4.6012,
+          "antiphase_rate": 12.1371,
+          "inverse_score": 9.6509
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.9177,
+          "avg_nps": 0.3139,
+          "peak_4m_nps": 0.2917,
+          "peak_1b_nps": 0.253,
+          "gap1_density": 0.2121,
+          "adj_density": 0.2732,
+          "mean_locked_fingers": 0.7803,
+          "antiphase_rate": 0.2627,
+          "inverse_score": 0.187
+        },
+        "radar_profile": {
+          "hold_pct": 0.9177,
+          "avg_nps": 0.3139,
+          "peak_4m_nps": 0.2917,
+          "peak_1b_nps": 0.253,
+          "gap1_density": 0.2121,
+          "adj_density": 0.2732,
+          "mean_locked_fingers": 0.7803,
+          "antiphase_rate": 0.2627,
+          "inverse_score": 0.187
+        },
+        "top_features": [
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.594,
+            "raw_value": 4.6012,
+            "normalized_value": 0.7803,
+            "rank": 1
+          },
+          {
+            "feature": "hold_pct",
+            "score": 0.5727,
+            "raw_value": 91.7708,
+            "normalized_value": 0.9177,
+            "rank": 2
+          },
+          {
+            "feature": "avg_nps",
+            "score": 0.223,
+            "raw_value": 12.4395,
+            "normalized_value": 0.3139,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3888165,
+          "song": "Toromaru - Hustle Beat!! [LNavity]",
+          "tier": "9th",
+          "purity_score": 0.9986
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3888155,
+          "song": "OkhaP - Reimu-instrumental- [Jinjin's LN]",
+          "bpm": 90,
+          "features": {
+            "hold_pct": 76.2791,
+            "avg_nps": 3.1047,
+            "peak_4m_nps": 4.5,
+            "peak_1b_nps": 10.5001,
+            "gap1_density": 0.1733,
+            "adj_density": 0.0289,
+            "mean_locked_fingers": 2.78,
+            "antiphase_rate": 0.6209,
+            "inverse_score": 0.8961
+          }
+        },
+        "10th": {
+          "id": 3888156,
+          "song": "Mr.T - attack in the minor key [aeoLiaN] (Edited)",
+          "bpm": 164,
+          "features": {
+            "hold_pct": 98.5908,
+            "avg_nps": 16.5889,
+            "peak_4m_nps": 27.1625,
+            "peak_1b_nps": 35.5337,
+            "gap1_density": 0.5575,
+            "adj_density": 1.9781,
+            "mean_locked_fingers": 4.4826,
+            "antiphase_rate": 21.3453,
+            "inverse_score": 5.6565
+          }
+        },
+        "1st": {
+          "id": 3888157,
+          "song": "Raika - LN Pack [Lv1] / Mami Kawada - Portamento (JJ Edit, Cut)",
+          "bpm": 105,
+          "features": {
+            "hold_pct": 55.6797,
+            "avg_nps": 4.1953,
+            "peak_4m_nps": 6.5625,
+            "peak_1b_nps": 19.25,
+            "gap1_density": 0.1875,
+            "adj_density": 0.1719,
+            "mean_locked_fingers": 3.2029,
+            "antiphase_rate": 1.25,
+            "inverse_score": 1.4341
+          }
+        },
+        "2nd": {
+          "id": 3888158,
+          "song": "Raika - LN Pack [Lv3] / Silent Siren - Yumeoi (Cut) (JJ Edit)",
+          "bpm": 138,
+          "features": {
+            "hold_pct": 57.5,
+            "avg_nps": 5.273,
+            "peak_4m_nps": 7.7625,
+            "peak_1b_nps": 18.4001,
+            "gap1_density": 0.1943,
+            "adj_density": 0.2012,
+            "mean_locked_fingers": 2.6517,
+            "antiphase_rate": 1.8039,
+            "inverse_score": 2.0915
+          }
+        },
+        "3rd": {
+          "id": 3888159,
+          "song": "BlackY & Yooh - XROSS INFECTION Lv.2 (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 94.7368,
+            "avg_nps": 2.8574,
+            "peak_4m_nps": 5.2778,
+            "peak_1b_nps": 23.3333,
+            "gap1_density": 0.0088,
+            "adj_density": 0.0354,
+            "mean_locked_fingers": 5.1678,
+            "antiphase_rate": 0.1504,
+            "inverse_score": 12.9826
+          }
+        },
+        "4th": {
+          "id": 3888160,
+          "song": "3L - Be Happy* (Cut) - [Jinjin's LN]",
+          "bpm": 158,
+          "features": {
+            "hold_pct": 97.7901,
+            "avg_nps": 4.8969,
+            "peak_4m_nps": 8.0646,
+            "peak_1b_nps": 21.067,
+            "gap1_density": 0.0721,
+            "adj_density": 0.5682,
+            "mean_locked_fingers": 5.7839,
+            "antiphase_rate": 0.0631,
+            "inverse_score": 5.69
+          }
+        },
+        "5th": {
+          "id": 3888161,
+          "song": "nano feat. MFS - SAVIOR OF SONG (TV Size) [JJ's LNverse]",
+          "bpm": 192,
+          "features": {
+            "hold_pct": 99.8339,
+            "avg_nps": 7.0307,
+            "peak_4m_nps": 13.0,
+            "peak_1b_nps": 28.8,
+            "gap1_density": 0.1869,
+            "adj_density": 0.9343,
+            "mean_locked_fingers": 5.6087,
+            "antiphase_rate": 0.9109,
+            "inverse_score": 12.4141
+          }
+        },
+        "6th": {
+          "id": 3888162,
+          "song": "Aqua, Megumin, Darkness - Chiisana Boukensha [Insane] (JJ Edit)",
+          "bpm": 78.96,
+          "features": {
+            "hold_pct": 99.7354,
+            "avg_nps": 6.9135,
+            "peak_4m_nps": 8.598,
+            "peak_1b_nps": 15.77,
+            "gap1_density": 0.4664,
+            "adj_density": 0.5761,
+            "mean_locked_fingers": 5.8966,
+            "antiphase_rate": 1.5272,
+            "inverse_score": 1.5679
+          }
+        },
+        "7th": {
+          "id": 3888163,
+          "song": "Jeon Young Ho - brave heart [WAWACORE!![HARD LN]] (JJ Edit)",
+          "bpm": 142,
+          "features": {
+            "hold_pct": 99.4113,
+            "avg_nps": 8.681,
+            "peak_4m_nps": 11.8333,
+            "peak_1b_nps": 28.3997,
+            "gap1_density": 0.6643,
+            "adj_density": 0.6899,
+            "mean_locked_fingers": 5.837,
+            "antiphase_rate": 2.1846,
+            "inverse_score": 5.0
+          }
+        },
+        "8th": {
+          "id": 3888164,
+          "song": "Moe Shop - Heart [but love is madness] (JJ Edit)",
+          "bpm": 135,
+          "features": {
+            "hold_pct": 99.0444,
+            "avg_nps": 14.4533,
+            "peak_4m_nps": 17.5781,
+            "peak_1b_nps": 27.0003,
+            "gap1_density": 0.8189,
+            "adj_density": 1.9238,
+            "mean_locked_fingers": 4.7894,
+            "antiphase_rate": 10.0334,
+            "inverse_score": 4.2155
+          }
+        },
+        "9th": {
+          "id": 3888165,
+          "song": "Toromaru - Hustle Beat!! [LNavity]",
+          "bpm": 148,
+          "features": {
+            "hold_pct": 98.9981,
+            "avg_nps": 15.064,
+            "peak_4m_nps": 20.1959,
+            "peak_1b_nps": 32.0671,
+            "gap1_density": 0.6131,
+            "adj_density": 1.7073,
+            "mean_locked_fingers": 4.8789,
+            "antiphase_rate": 14.6018,
+            "inverse_score": 5.1571
+          }
+        },
+        "Azimuth": {
+          "id": 3888166,
+          "song": "Qrispy Joybox - licca [Azimuth] (Edited)",
+          "bpm": 196,
+          "features": {
+            "hold_pct": 99.1383,
+            "avg_nps": 23.9278,
+            "peak_4m_nps": 37.1584,
+            "peak_1b_nps": 42.467,
+            "gap1_density": 1.6027,
+            "adj_density": 3.524,
+            "mean_locked_fingers": 4.3346,
+            "antiphase_rate": 23.6372,
+            "inverse_score": 13.1915
+          }
+        },
+        "Gamma": {
+          "id": 3888167,
+          "song": "SHIKI - Pure Ruby [Crimson LNother](Edited)",
+          "bpm": 178,
+          "features": {
+            "hold_pct": 99.824,
+            "avg_nps": 17.9223,
+            "peak_4m_nps": 31.15,
+            "peak_1b_nps": 38.5665,
+            "gap1_density": 0.9225,
+            "adj_density": 1.8056,
+            "mean_locked_fingers": 4.2644,
+            "antiphase_rate": 22.1723,
+            "inverse_score": 6.2066
+          }
+        },
+        "Stellium": {
+          "id": 3888168,
+          "song": "Gram - Nibelungen (Cut Ver.) [Stellium (240bpm)] (JJ Edit)",
+          "bpm": 240,
+          "features": {
+            "hold_pct": 100.0,
+            "avg_nps": 25.5296,
+            "peak_4m_nps": 43.75,
+            "peak_1b_nps": 52.0,
+            "gap1_density": 1.2461,
+            "adj_density": 3.2511,
+            "mean_locked_fingers": 4.8471,
+            "antiphase_rate": 35.5545,
+            "inverse_score": 51.6055
+          }
+        },
+        "Zenith": {
+          "id": 3888169,
+          "song": "wa. - Black Lotus [Black LNother] (JJ Edit)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 100.0,
+            "avg_nps": 30.1534,
+            "peak_4m_nps": 37.5,
+            "peak_1b_nps": 43.3333,
+            "gap1_density": 1.365,
+            "adj_density": 3.0049,
+            "mean_locked_fingers": 4.4925,
+            "antiphase_rate": 46.2017,
+            "inverse_score": 16.6549
+          }
+        }
+      }
+    },
+    "LN Release": {
+      "fingerprint": {
+        "technique": "LN Release",
+        "centroid_raw": {
+          "hold_pct": 89.1089,
+          "avg_nps": 14.2583,
+          "peak_4m_nps": 20.7232,
+          "peak_1b_nps": 30.0362,
+          "gap1_density": 0.9199,
+          "adj_density": 1.3659,
+          "mean_locked_fingers": 2.869,
+          "antiphase_rate": 12.0627,
+          "inverse_score": 5.187
+        },
+        "centroid_normalized": {
+          "hold_pct": 0.8911,
+          "avg_nps": 0.3734,
+          "peak_4m_nps": 0.3339,
+          "peak_1b_nps": 0.2654,
+          "gap1_density": 0.324,
+          "adj_density": 0.2744,
+          "mean_locked_fingers": 0.4865,
+          "antiphase_rate": 0.2611,
+          "inverse_score": 0.1005
+        },
+        "radar_profile": {
+          "hold_pct": 0.8911,
+          "avg_nps": 0.3734,
+          "peak_4m_nps": 0.3339,
+          "peak_1b_nps": 0.2654,
+          "gap1_density": 0.324,
+          "adj_density": 0.2744,
+          "mean_locked_fingers": 0.4865,
+          "antiphase_rate": 0.2611,
+          "inverse_score": 0.1005
+        },
+        "top_features": [
+          {
+            "feature": "hold_pct",
+            "score": 0.5423,
+            "raw_value": 89.1089,
+            "normalized_value": 0.8911,
+            "rank": 1
+          },
+          {
+            "feature": "mean_locked_fingers",
+            "score": 0.2583,
+            "raw_value": 2.869,
+            "normalized_value": 0.4865,
+            "rank": 2
+          },
+          {
+            "feature": "avg_nps",
+            "score": 0.155,
+            "raw_value": 14.2583,
+            "normalized_value": 0.3734,
+            "rank": 3
+          }
+        ],
+        "purity_champion": {
+          "id": 3888208,
+          "song": "Beltaine - Rockhill [Celtic Glee]",
+          "tier": "7th",
+          "purity_score": 0.9979
+        }
+      },
+      "tier_profiles": {
+        "0th": {
+          "id": 3888200,
+          "song": "Renka - if Hitori Omou [Normal] (JJ Edit)",
+          "bpm": 120,
+          "features": {
+            "hold_pct": 71.6599,
+            "avg_nps": 3.1069,
+            "peak_4m_nps": 4.6667,
+            "peak_1b_nps": 10.0,
+            "gap1_density": 0.1635,
+            "adj_density": 0.1384,
+            "mean_locked_fingers": 1.7419,
+            "antiphase_rate": 2.0503,
+            "inverse_score": 0.9982
+          }
+        },
+        "10th": {
+          "id": 3888201,
+          "song": "DJ'TEKINA//STH - Internet bitch P*Light Remix [Websurfer] (Edited)",
+          "bpm": 175,
+          "features": {
+            "hold_pct": 99.1803,
+            "avg_nps": 19.5167,
+            "peak_4m_nps": 29.5313,
+            "peak_1b_nps": 43.7496,
+            "gap1_density": 0.9941,
+            "adj_density": 1.6454,
+            "mean_locked_fingers": 3.3093,
+            "antiphase_rate": 18.0655,
+            "inverse_score": 4.8053
+          }
+        },
+        "1st": {
+          "id": 3888202,
+          "song": "Chata - Dango Daikazoku Mix Piano [TV size] [HD] (JJ Edit)",
+          "bpm": 100,
+          "features": {
+            "hold_pct": 65.1869,
+            "avg_nps": 5.0771,
+            "peak_4m_nps": 5.9375,
+            "peak_1b_nps": 11.6667,
+            "gap1_density": 0.6168,
+            "adj_density": 0.4033,
+            "mean_locked_fingers": 1.8877,
+            "antiphase_rate": 2.7402,
+            "inverse_score": 0.7791
+          }
+        },
+        "2nd": {
+          "id": 3888203,
+          "song": "Kyary Pamyu Pamyu - HARAJUKU IYAHOI [Sulit [HD]] (JJ Edit)",
+          "bpm": 128,
+          "features": {
+            "hold_pct": 89.5987,
+            "avg_nps": 9.8667,
+            "peak_4m_nps": 13.6,
+            "peak_1b_nps": 17.0667,
+            "gap1_density": 1.5192,
+            "adj_density": 0.3071,
+            "mean_locked_fingers": 1.5763,
+            "antiphase_rate": 5.5354,
+            "inverse_score": 1.1587
+          }
+        },
+        "3rd": {
+          "id": 3888204,
+          "song": "BEAST - 12:30 [LN] (JJ Edit, Cut)",
+          "bpm": 200,
+          "features": {
+            "hold_pct": 78.6429,
+            "avg_nps": 5.2008,
+            "peak_4m_nps": 9.4444,
+            "peak_1b_nps": 16.6667,
+            "gap1_density": 0.2198,
+            "adj_density": 0.376,
+            "mean_locked_fingers": 2.5425,
+            "antiphase_rate": 5.5016,
+            "inverse_score": 5.9746
+          }
+        },
+        "4th": {
+          "id": 3888205,
+          "song": "Mili - Main Theme [LN] (JJ Edit)",
+          "bpm": 118,
+          "features": {
+            "hold_pct": 87.6359,
+            "avg_nps": 5.361,
+            "peak_4m_nps": 7.5389,
+            "peak_1b_nps": 13.7668,
+            "gap1_density": 0.3496,
+            "adj_density": 0.2914,
+            "mean_locked_fingers": 2.9314,
+            "antiphase_rate": 6.0748,
+            "inverse_score": 1.6933
+          }
+        },
+        "5th": {
+          "id": 3888206,
+          "song": "NAGI* - inside [Holding on]",
+          "bpm": 111,
+          "features": {
+            "hold_pct": 71.3592,
+            "avg_nps": 6.2711,
+            "peak_4m_nps": 9.9437,
+            "peak_1b_nps": 14.8,
+            "gap1_density": 0.2537,
+            "adj_density": 0.5683,
+            "mean_locked_fingers": 3.1732,
+            "antiphase_rate": 4.404,
+            "inverse_score": 1.6484
+          }
+        },
+        "6th": {
+          "id": 3888207,
+          "song": "yanaginagi - in flight (zygani Remix) [Soaring] (JJ Edit)",
+          "bpm": 175,
+          "features": {
+            "hold_pct": 90.5643,
+            "avg_nps": 11.8977,
+            "peak_4m_nps": 17.1354,
+            "peak_1b_nps": 37.9164,
+            "gap1_density": 0.9025,
+            "adj_density": 1.2327,
+            "mean_locked_fingers": 2.4626,
+            "antiphase_rate": 17.731,
+            "inverse_score": 3.1839
+          }
+        },
+        "7th": {
+          "id": 3888208,
+          "song": "Beltaine - Rockhill [Celtic Glee]",
+          "bpm": 140,
+          "features": {
+            "hold_pct": 96.8368,
+            "avg_nps": 12.9823,
+            "peak_4m_nps": 20.8542,
+            "peak_1b_nps": 28.0001,
+            "gap1_density": 0.7466,
+            "adj_density": 1.5586,
+            "mean_locked_fingers": 2.7736,
+            "antiphase_rate": 16.3049,
+            "inverse_score": 2.5655
+          }
+        },
+        "8th": {
+          "id": 3888209,
+          "song": "TAG - Romancing Layer [Hold On!]",
+          "bpm": 150,
+          "features": {
+            "hold_pct": 91.116,
+            "avg_nps": 14.9179,
+            "peak_4m_nps": 23.5938,
+            "peak_1b_nps": 30.0,
+            "gap1_density": 0.6134,
+            "adj_density": 1.8729,
+            "mean_locked_fingers": 3.2176,
+            "antiphase_rate": 18.5104,
+            "inverse_score": 3.4623
+          }
+        },
+        "9th": {
+          "id": 3888210,
+          "song": "TOTTO - Onigami [Onihold] (Edited)",
+          "bpm": 161,
+          "features": {
+            "hold_pct": 99.2248,
+            "avg_nps": 15.3845,
+            "peak_4m_nps": 22.1375,
+            "peak_1b_nps": 34.8834,
+            "gap1_density": 0.7156,
+            "adj_density": 1.3485,
+            "mean_locked_fingers": 3.3747,
+            "antiphase_rate": 22.0722,
+            "inverse_score": 4.067
+          }
+        },
+        "Azimuth": {
+          "id": 3888211,
+          "song": "Kaneko Chiharu - Zettai Reido [Absolute] (Edited)",
+          "bpm": 209,
+          "features": {
+            "hold_pct": 99.8975,
+            "avg_nps": 24.9199,
+            "peak_4m_nps": 36.7927,
+            "peak_1b_nps": 45.2835,
+            "gap1_density": 1.55,
+            "adj_density": 3.1256,
+            "mean_locked_fingers": 3.3562,
+            "antiphase_rate": 13.2094,
+            "inverse_score": 14.2047
+          }
+        },
+        "Gamma": {
+          "id": 3888212,
+          "song": "Cait Sith - Schrodinger no neko [Superposition] (Edited)",
+          "bpm": 187,
+          "features": {
+            "hold_pct": 98.8915,
+            "avg_nps": 20.112,
+            "peak_4m_nps": 32.3354,
+            "peak_1b_nps": 40.5174,
+            "gap1_density": 1.3191,
+            "adj_density": 1.7279,
+            "mean_locked_fingers": 3.0654,
+            "antiphase_rate": 12.1508,
+            "inverse_score": 6.5473
+          }
+        },
+        "Stellium": {
+          "id": 3888213,
+          "song": "penoreri - Lancelot ~Flame of the Rebellion~ [1.05x] (JJ Edit)",
+          "bpm": 204.75,
+          "features": {
+            "hold_pct": 98.6294,
+            "avg_nps": 31.2697,
+            "peak_4m_nps": 40.7367,
+            "peak_1b_nps": 61.4251,
+            "gap1_density": 1.6471,
+            "adj_density": 2.9917,
+            "mean_locked_fingers": 3.887,
+            "antiphase_rate": 20.0593,
+            "inverse_score": 16.2383
+          }
+        },
+        "Zenith": {
+          "id": 3888214,
+          "song": "brz1128 - Alexandrite [Holly Zenith [192bpm] (Buffed)]",
+          "bpm": 192,
+          "features": {
+            "hold_pct": 98.2094,
+            "avg_nps": 27.9904,
+            "peak_4m_nps": 36.6,
+            "peak_1b_nps": 44.8,
+            "gap1_density": 2.188,
+            "adj_density": 2.9012,
+            "mean_locked_fingers": 3.7353,
+            "antiphase_rate": 16.5301,
+            "inverse_score": 10.4786
+          }
+        }
+      }
+    }
+  },
+  "separability_matrix": {
+    "techniques": [
+      "LN General",
+      "LN Inverse",
+      "LN Release",
+      "LN Tech",
+      "Regular Jack",
+      "Regular Speed",
+      "Regular Stream",
+      "Regular Tech"
+    ],
+    "matrix": [
+      [
+        0.0,
+        2.0235,
+        1.0562,
+        0.4039,
+        3.3086,
+        3.02,
+        3.284,
+        3.0853
+      ],
+      [
+        2.0235,
+        0.0,
+        1.3669,
+        2.0195,
+        4.7356,
+        4.1808,
+        4.7255,
+        4.4625
+      ],
+      [
+        1.0562,
+        1.3669,
+        0.0,
+        0.9972,
+        3.7042,
+        3.2199,
+        3.7483,
+        3.4402
+      ],
+      [
+        0.4039,
+        2.0195,
+        0.9972,
+        0.0,
+        3.3439,
+        2.9723,
+        3.3531,
+        3.101
+      ],
+      [
+        3.3086,
+        4.7356,
+        3.7042,
+        3.3439,
+        0.0,
+        1.7877,
+        0.8107,
+        0.7036
+      ],
+      [
+        3.02,
+        4.1808,
+        3.2199,
+        2.9723,
+        1.7877,
+        0.0,
+        1.6354,
+        1.107
+      ],
+      [
+        3.284,
+        4.7255,
+        3.7483,
+        3.3531,
+        0.8107,
+        1.6354,
+        0.0,
+        0.7161
+      ],
+      [
+        3.0853,
+        4.4625,
+        3.4402,
+        3.101,
+        0.7036,
+        1.107,
+        0.7161,
+        0.0
+      ]
+    ],
+    "metric_type": "mahalanobis",
+    "global_orthogonality_score": 0.6613,
+    "global_mutual_information": 0.3387
+  }
+}

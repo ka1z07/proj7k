@@ -121,3 +121,17 @@ def test_load_manifest_with_library_dir(tmp_path: Path):
     items = load_manifest(manifest_dict, library_dir=tmp_path / "assets")
     assert len(items) == 1
     assert items[0].osu_path == str(osu_file)
+
+
+def test_scan_local_asset_library_lazer_content_addressed(tmp_path: Path):
+    # Setup lazer-style hashed filename (64-char hex, no .osu extension)
+    lazer_dir = tmp_path / "files" / "5" / "5a"
+    lazer_dir.mkdir(parents=True)
+    hash_filename = "5abd6258a0842a67ecf98e8a6babfc29bea4ad021ccdd090124b919b388db0c7"
+    lazer_file = lazer_dir / hash_filename
+    lazer_file.write_text(SAMPLE_OSU_WITH_BEATMAP_ID, encoding="utf-8")
+
+    index = scan_local_asset_library(tmp_path / "files")
+    assert 3864745 in index.by_id
+    assert index.by_id[3864745] == lazer_file
+
