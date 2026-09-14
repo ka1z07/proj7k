@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 *.png
 .DS_Store
+.coverage
+.cache/

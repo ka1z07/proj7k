@@ -43,6 +43,24 @@ from proj7k.distillation import (
     SeparabilityMatrix,
     DistillationResult,
 )
+from proj7k.assets import (
+    AssetLibraryIndex,
+    scan_local_asset_library,
+    bind_manifest_to_library,
+)
+from proj7k.cache import (
+    TwoLayerCache,
+    ALGORITHM_VERSION,
+    DEFAULT_CACHE_DIR,
+)
+from proj7k.checksum import compute_feature_checksum
+from proj7k.guard import (
+    MonotonicityGuardError,
+    MonotonicityGuardConfig,
+    MonotonicityGuardResult,
+    evaluate_monotonicity_guard,
+    run_monotonicity_guard,
+)
 
 __version__ = "0.1.0"
 
@@ -83,5 +101,17 @@ __all__ = [
     "distill_benchmark_features",
     "SeparabilityMatrix",
     "DistillationResult",
+    "AssetLibraryIndex",
+    "scan_local_asset_library",
+    "bind_manifest_to_library",
+    "TwoLayerCache",
+    "ALGORITHM_VERSION",
+    "DEFAULT_CACHE_DIR",
+    "compute_feature_checksum",
+    "MonotonicityGuardError",
+    "MonotonicityGuardConfig",
+    "MonotonicityGuardResult",
+    "evaluate_monotonicity_guard",
+    "run_monotonicity_guard",
 ]
 

@@ -4,13 +4,17 @@ import os
 from pathlib import Path
 import sys
 import traceback
-from typing import List, Optional, Dict, Any, Union, Literal
 import argparse
+import concurrent.futures
+from typing import List, Optional, Dict, Any, Union, Literal, Tuple
 
 from proj7k.parser import parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures, get_dominant_bpm
 from proj7k.monotonicity import evaluate_batch_monotonicity
 from proj7k.distillation import distill_benchmark_features
+from proj7k.assets import bind_manifest_to_library, scan_local_asset_library
+from proj7k.cache import TwoLayerCache
+from proj7k.checksum import compute_feature_checksum
 
 IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
 
@@ -76,6 +80,8 @@ class BenchmarkBatchReport:
     results: List[BenchmarkItemResult]
     monotonicity: Optional[Dict[str, Dict[str, Any]]] = None
     distillation: Optional[Dict[str, Any]] = None
+    cache_stats: Optional[Dict[str, int]] = None
+    feature_checksum: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -86,6 +92,10 @@ class BenchmarkBatchReport:
             d["monotonicity"] = self.monotonicity
         if self.distillation is not None:
             d["distillation"] = self.distillation
+        if self.cache_stats is not None:
+            d["cache_stats"] = self.cache_stats
+        if self.feature_checksum is not None:
+            d["feature_checksum"] = self.feature_checksum
         return d
 
     def to_json(self, indent: int = 2) -> str:
@@ -113,12 +123,14 @@ def _resolve_osu_path(
 def load_manifest(
     manifest_input: Union[str, Path, List[Union[BenchmarkItem, Dict[str, Any]]], Dict[str, Any]],
     base_dir: Optional[Union[str, Path]] = None,
+    library_dir: Optional[Union[str, Path]] = None,
 ) -> List[BenchmarkItem]:
     """
     Parses a manifest input from:
     1. A list of BenchmarkItem instances or dicts.
     2. A structured nested dict: { "Technique Name": { "1st": { "id": ..., ... } } }
     3. A JSON file path pointing to either of the above formats.
+    Optionally binds items against a local asset library directory if library_dir is specified.
     """
     raw_data: Any = manifest_input
 
@@ -169,21 +181,122 @@ def load_manifest(
                             )
                         )
 
+    if library_dir is not None:
+        items = bind_manifest_to_library(items, library_dir)
+
     return items
+
+
+def process_benchmark_item(
+    item: BenchmarkItem,
+    cache: Optional[TwoLayerCache] = None,
+) -> BenchmarkItemResult:
+    """
+    Ingests and processes a single benchmark item:
+    - Checks Layer 2 feature cache (bypassing AST parsing & feature extraction on hit)
+    - Checks Layer 1 AST cache (bypassing raw file parsing on hit)
+    - Extracts baseline and physiological features
+    - Fault tolerant: catches exceptions and returns FAILED_INGESTION status.
+    """
+    try:
+        raw_content: Optional[str] = None
+        if item.content is not None:
+            raw_content = item.content
+        elif item.osu_path is not None:
+            with open(item.osu_path, "r", encoding="utf-8", errors="replace") as f:
+                raw_content = f.read()
+        else:
+            raise ValueError("Neither 'content' nor 'osu_path' provided for beatmap")
+
+        content_hash = cache.compute_content_hash(raw_content) if cache else None
+
+        features: Optional[BeatmapFeatures] = None
+        effective_bpm = item.bpm
+
+        # If effective_bpm is pre-specified, probe Layer 2 feature cache directly
+        if cache and content_hash and effective_bpm is not None:
+            features = cache.get_features(content_hash, bpm=effective_bpm)
+
+        if features is None:
+            # Need AST from Layer 1 cache or parser
+            bm = None
+            if cache and content_hash:
+                bm = cache.get_ast(content_hash)
+            if bm is None:
+                bm = parse_osu_7k(raw_content)
+                if cache and content_hash:
+                    cache.put_ast(content_hash, bm)
+
+            if effective_bpm is None:
+                if bm.timing_points:
+                    effective_bpm = get_dominant_bpm(bm)
+                # Check Layer 2 feature cache once effective_bpm is resolved
+                if cache and content_hash:
+                    features = cache.get_features(content_hash, bpm=effective_bpm)
+
+            if features is None:
+                features = extract_beatmap_features(bm, bpm=effective_bpm)
+                if cache and content_hash:
+                    cache.put_features(content_hash, effective_bpm, features)
+
+        return BenchmarkItemResult(
+            technique=item.technique,
+            tier=item.tier,
+            id=item.id,
+            song=item.song,
+            bpm=effective_bpm,
+            status="SUCCESS",
+            features=features,
+            error=None,
+        )
+    except Exception as e:
+        tb_str = traceback.format_exc()
+        return BenchmarkItemResult(
+            technique=item.technique,
+            tier=item.tier,
+            id=item.id,
+            song=item.song,
+            bpm=item.bpm,
+            status="FAILED_INGESTION",
+            features=None,
+            error=f"{type(e).__name__}: {str(e)}",
+            traceback=tb_str,
+        )
+
+
+def _worker_wrapper(
+    args: Tuple[BenchmarkItem, Optional[TwoLayerCache]],
+) -> Tuple[BenchmarkItemResult, Optional[Dict[str, int]]]:
+    item, cache = args
+    if cache is not None:
+        stats_before = dict(cache.stats)
+        res = process_benchmark_item(item, cache=cache)
+        delta_stats = {k: cache.stats[k] - stats_before[k] for k in cache.stats}
+        return res, delta_stats
+    res = process_benchmark_item(item, cache=None)
+    return res, None
 
 
 def run_benchmark_pipeline(
     manifest: Union[str, Path, List[Union[BenchmarkItem, Dict[str, Any]]], Dict[str, Any]],
     base_dir: Optional[Union[str, Path]] = None,
+    library_dir: Optional[Union[str, Path]] = None,
     evaluate_monotonicity: bool = True,
     monotonicity_metrics: Optional[List[str]] = None,
     apply_scaling: bool = True,
     distill_features: bool = True,
     ground_truth_output: Optional[str] = None,
+    cache: Optional[TwoLayerCache] = None,
+    enable_cache: bool = True,
+    cache_dir: Optional[Union[str, Path]] = None,
+    workers: int = 1,
+    log_progress: bool = False,
 ) -> BenchmarkBatchReport:
     """
     Executes the top-level benchmark batch pipeline on the provided manifest.
     - Ingests and parses beatmaps via .osu AST.
+    - Leverages two-layer persistent cache (AST and Feature Tensor).
+    - Supports multi-processing parallel execution with workers.
     - Extracts baseline and physiological features.
     - Evaluates tier sequence monotonicity across techniques.
     - Pre-applies Inverse BPM Scaling Law gating operator for LN Inverse.
@@ -191,54 +304,45 @@ def run_benchmark_pipeline(
     - Fault-tolerant: isolates individual beatmap failures as FAILED_INGESTION.
     - Returns standardized BenchmarkBatchReport.
     """
-    items = load_manifest(manifest, base_dir=base_dir)
+    items = load_manifest(manifest, base_dir=base_dir, library_dir=library_dir)
     results: List[BenchmarkItemResult] = []
-    success_count = 0
-    failed_count = 0
 
-    for item in items:
-        try:
-            if item.content is not None:
-                bm = parse_osu_7k(item.content)
-            elif item.osu_path is not None:
-                bm = parse_osu_7k(item.osu_path)
-            else:
-                raise ValueError("Neither 'content' nor 'osu_path' provided for beatmap")
+    active_cache = cache
+    if active_cache is None and enable_cache:
+        active_cache = TwoLayerCache(cache_dir=cache_dir, enabled=True)
+    elif not enable_cache and active_cache is not None:
+        active_cache.enabled = False
 
-            effective_bpm = item.bpm
-            if effective_bpm is None and bm.timing_points:
-                effective_bpm = get_dominant_bpm(bm)
+    if workers > 1 and len(items) > 1:
+        tasks = [(item, active_cache) for item in items]
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+            worker_outputs = list(executor.map(_worker_wrapper, tasks))
 
-            features = extract_beatmap_features(bm, bpm=effective_bpm)
-            results.append(
-                BenchmarkItemResult(
-                    technique=item.technique,
-                    tier=item.tier,
-                    id=item.id,
-                    song=item.song,
-                    bpm=effective_bpm,
-                    status="SUCCESS",
-                    features=features,
-                    error=None,
+        for idx, (res, w_stats) in enumerate(worker_outputs):
+            results.append(res)
+            if active_cache and w_stats:
+                for k, v in w_stats.items():
+                    active_cache.stats[k] += v
+            if log_progress:
+                item = items[idx]
+                print(
+                    f"[{idx+1}/{len(items)}] {item.technique} {item.tier} "
+                    f"({item.song or item.id}) -> {res.status}",
+                    file=sys.stderr,
                 )
-            )
-            success_count += 1
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            results.append(
-                BenchmarkItemResult(
-                    technique=item.technique,
-                    tier=item.tier,
-                    id=item.id,
-                    song=item.song,
-                    bpm=item.bpm,
-                    status="FAILED_INGESTION",
-                    features=None,
-                    error=f"{type(e).__name__}: {str(e)}",
-                    traceback=tb_str,
+    else:
+        for idx, item in enumerate(items):
+            res = process_benchmark_item(item, cache=active_cache)
+            results.append(res)
+            if log_progress:
+                print(
+                    f"[{idx+1}/{len(items)}] {item.technique} {item.tier} "
+                    f"({item.song or item.id}) -> {res.status}",
+                    file=sys.stderr,
                 )
-            )
-            failed_count += 1
+
+    success_count = sum(1 for r in results if r.status == "SUCCESS")
+    failed_count = sum(1 for r in results if r.status == "FAILED_INGESTION")
 
     summary = BatchSummary(
         total=len(items),
@@ -261,11 +365,16 @@ def run_benchmark_pipeline(
         if ground_truth_output:
             distillation_res.export_ground_truth(ground_truth_output)
 
+    cache_stats_dict = dict(active_cache.stats) if active_cache else None
+    feat_checksum = compute_feature_checksum(results)
+
     return BenchmarkBatchReport(
         summary=summary,
         results=results,
         monotonicity=mono_reports,
         distillation=distillation_dict,
+        cache_stats=cache_stats_dict,
+        feature_checksum=feat_checksum,
     )
 
 
@@ -276,6 +385,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("--manifest", required=True, help="Path to benchmark manifest JSON file")
     parser.add_argument("--base-dir", help="Base directory containing .osu files for path resolution")
+    parser.add_argument("--library-dir", help="Local asset library directory to scan and automatically bind .osu files")
+    parser.add_argument("--cache-dir", help="Directory path for persistent two-layer cache")
+    parser.add_argument("--no-cache", action="store_true", help="Disable persistent two-layer caching")
+    parser.add_argument("-j", "--workers", type=int, default=1, help="Number of worker processes for parallel batch execution")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print real-time batch processing progress log")
     parser.add_argument("-o", "--output", help="Path to output JSON execution report")
     parser.add_argument(
         "--ground-truth-output",
@@ -286,6 +400,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Disable Inverse BPM Scaling Law gating operator",
     )
+    parser.add_argument(
+        "--guard",
+        action="store_true",
+        help="Execute CI Monotonicity Guard and exit 1 if any monotonicity constraint is violated",
+    )
+    parser.add_argument(
+        "--expected-checksum",
+        help="Expected deterministic feature checksum string (sha256:...)",
+    )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
@@ -293,12 +416,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         report = run_benchmark_pipeline(
             args.manifest,
             base_dir=args.base_dir,
+            library_dir=args.library_dir,
             apply_scaling=not args.no_scaling,
             ground_truth_output=args.ground_truth_output,
+            enable_cache=not args.no_cache,
+            cache_dir=args.cache_dir,
+            workers=args.workers,
+            log_progress=args.verbose,
         )
     except Exception as e:
         print(f"Pipeline initialization error: {e}", file=sys.stderr)
         return 1
+
+    if args.guard:
+        from proj7k.guard import evaluate_monotonicity_guard, MonotonicityGuardConfig
+        guard_cfg = MonotonicityGuardConfig(expected_checksum=args.expected_checksum)
+        guard_res = evaluate_monotonicity_guard(report, config=guard_cfg)
+        if not guard_res.passed:
+            print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)
+            return 1
+        else:
+            print("CI Monotonicity Guard: PASSED (all techniques and tiers strictly monotonic).", file=sys.stderr)
 
     if args.output:
         report.save_json(args.output)
