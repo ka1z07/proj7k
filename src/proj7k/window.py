@@ -35,7 +35,7 @@ class SliceWindow:
     barlines: List[Barline] = field(default_factory=list)
 
 
-def _generate_all_barlines(beatmap: Beatmap7K, max_time_ms: float) -> List[Barline]:
+def generate_all_barlines(beatmap: Beatmap7K, max_time_ms: float) -> List[Barline]:
     """Generate global continuous barlines accumulating measure numbers across all BPM changes."""
     uninherited_tps = [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
     if not uninherited_tps:
@@ -91,6 +91,9 @@ def _generate_all_barlines(beatmap: Beatmap7K, max_time_ms: float) -> List[Barli
             seen_times.add(b.time)
             deduped.append(b)
     return deduped
+
+
+_generate_all_barlines = generate_all_barlines
 
 
 def extract_time_window(

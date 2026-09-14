@@ -3,11 +3,14 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import List, Optional, Dict, Any, Union
+import traceback
+from typing import List, Optional, Dict, Any, Union, Literal
 import argparse
 
 from proj7k.parser import parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures
+
+IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
 
 
 @dataclass
@@ -19,7 +22,14 @@ class BenchmarkItem:
     osu_path: Optional[str] = None
     content: Optional[str] = None
     bpm: Optional[float] = None
+    ref_sr: Optional[float] = None
     sr: Optional[float] = None
+
+    def __post_init__(self):
+        if self.ref_sr is None and self.sr is not None:
+            self.ref_sr = self.sr
+        elif self.sr is None and self.ref_sr is not None:
+            self.sr = self.ref_sr
 
 
 @dataclass
@@ -36,11 +46,12 @@ class BatchSummary:
 class BenchmarkItemResult:
     technique: str
     tier: str
-    status: str  # "SUCCESS" or "FAILED_INGESTION"
+    status: IngestionStatus
     id: Optional[int] = None
     song: Optional[str] = None
     features: Optional[BeatmapFeatures] = None
     error: Optional[str] = None
+    traceback: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -51,6 +62,7 @@ class BenchmarkItemResult:
             "song": self.song,
             "features": self.features.to_dict() if self.features else None,
             "error": self.error,
+            "traceback": self.traceback,
         }
 
 
@@ -71,6 +83,20 @@ class BenchmarkBatchReport:
     def save_json(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             f.write(self.to_json())
+
+
+def _resolve_osu_path(
+    osu_path: Optional[str],
+    beatmap_id: Optional[int],
+    base_dir: Optional[Union[str, Path]],
+) -> Optional[str]:
+    if not osu_path and base_dir and beatmap_id:
+        candidate = Path(base_dir) / f"{beatmap_id}.osu"
+        if candidate.exists():
+            return str(candidate)
+    elif osu_path and base_dir and not os.path.isabs(osu_path):
+        return str(Path(base_dir) / osu_path)
+    return osu_path
 
 
 def load_manifest(
@@ -100,19 +126,17 @@ def load_manifest(
             if isinstance(entry, BenchmarkItem):
                 items.append(entry)
             elif isinstance(entry, dict):
-                osu_p = entry.get("osu_path")
-                if osu_p and base_dir and not os.path.isabs(osu_p):
-                    osu_p = str(Path(base_dir) / osu_p)
+                resolved_path = _resolve_osu_path(entry.get("osu_path"), entry.get("id"), base_dir)
                 items.append(
                     BenchmarkItem(
                         technique=entry["technique"],
                         tier=entry["tier"],
                         id=entry.get("id"),
                         song=entry.get("song"),
-                        osu_path=osu_p,
+                        osu_path=resolved_path,
                         content=entry.get("content"),
                         bpm=entry.get("bpm"),
-                        sr=entry.get("sr"),
+                        ref_sr=entry.get("ref_sr") or entry.get("sr"),
                     )
                 )
     elif isinstance(raw_data, dict):
@@ -120,24 +144,17 @@ def load_manifest(
             if isinstance(tiers, dict):
                 for tier, meta in tiers.items():
                     if isinstance(meta, dict):
-                        osu_p = meta.get("osu_path")
-                        if not osu_p and base_dir and meta.get("id"):
-                            candidate = Path(base_dir) / f"{meta['id']}.osu"
-                            if candidate.exists():
-                                osu_p = str(candidate)
-                        elif osu_p and base_dir and not os.path.isabs(osu_p):
-                            osu_p = str(Path(base_dir) / osu_p)
-
+                        resolved_path = _resolve_osu_path(meta.get("osu_path"), meta.get("id"), base_dir)
                         items.append(
                             BenchmarkItem(
                                 technique=technique,
                                 tier=tier,
                                 id=meta.get("id"),
                                 song=meta.get("song"),
-                                osu_path=osu_p,
+                                osu_path=resolved_path,
                                 content=meta.get("content"),
                                 bpm=meta.get("bpm"),
-                                sr=meta.get("sr"),
+                                ref_sr=meta.get("ref_sr") or meta.get("sr"),
                             )
                         )
 
@@ -183,6 +200,7 @@ def run_benchmark_pipeline(
             )
             success_count += 1
         except Exception as e:
+            tb_str = traceback.format_exc()
             results.append(
                 BenchmarkItemResult(
                     technique=item.technique,
@@ -192,6 +210,7 @@ def run_benchmark_pipeline(
                     status="FAILED_INGESTION",
                     features=None,
                     error=f"{type(e).__name__}: {str(e)}",
+                    traceback=tb_str,
                 )
             )
             failed_count += 1
