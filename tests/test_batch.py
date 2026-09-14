@@ -308,3 +308,162 @@ def test_batch_pipeline_hierarchical_manifest():
     assert ln_results[0].tier == "1st"
     assert ln_results[0].status == "SUCCESS"
 
+
+CONTROLLED_REGULAR_CHORD_OSU = """osu file format v14
+[General]
+Mode: 3
+
+[Metadata]
+Title: Controlled Regular Chord
+Version: 1st
+
+[Difficulty]
+CircleSize: 7
+OverallDifficulty: 8
+
+[TimingPoints]
+0,500,4,2,0,50,1,0
+
+[HitObjects]
+36,192,0,1,0,0:0:0:0:
+182,192,0,1,0,0:0:0:0:
+329,192,500,1,0,0:0:0:0:
+402,192,500,1,0,0:0:0:0:
+36,192,1000,1,0,0:0:0:0:
+109,192,1000,1,0,0:0:0:0:
+329,192,1000,1,0,0:0:0:0:
+475,192,1000,1,0,0:0:0:0:
+109,192,1500,1,0,0:0:0:0:
+182,192,1500,1,0,0:0:0:0:
+402,192,1500,1,0,0:0:0:0:
+475,192,1500,1,0,0:0:0:0:
+256,192,2000,1,0,0:0:0:0:
+"""
+
+CONTROLLED_LN_INVERSE_OSU = """osu file format v14
+[General]
+Mode: 3
+
+[Metadata]
+Title: Controlled LN Inverse
+Version: 1st
+
+[Difficulty]
+CircleSize: 7
+OverallDifficulty: 8
+
+[TimingPoints]
+0,500,4,2,0,50,1,0
+
+[HitObjects]
+36,192,0,128,0,2000:0:0:0:0:
+109,192,0,128,0,2000:0:0:0:0:
+329,192,0,128,0,2000:0:0:0:0:
+402,192,0,128,0,2000:0:0:0:0:
+256,192,500,1,0,0:0:0:0:
+256,192,1000,1,0,0:0:0:0:
+256,192,1500,1,0,0:0:0:0:
+256,192,2000,1,0,0:0:0:0:
+"""
+
+CONTROLLED_LN_RELEASE_OSU = """osu file format v14
+[General]
+Mode: 3
+
+[Metadata]
+Title: Controlled LN Release
+Version: 1st
+
+[Difficulty]
+CircleSize: 7
+OverallDifficulty: 8
+
+[TimingPoints]
+0,500,4,2,0,50,1,0
+
+[HitObjects]
+36,192,0,128,0,1000:0:0:0:0:
+109,192,0,128,0,1000:0:0:0:0:
+182,192,1000,1,0,0:0:0:0:
+329,192,1000,128,0,2000:0:0:0:0:
+329,192,2000,1,0,0:0:0:0:
+"""
+
+
+def test_batch_pipeline_physiological_features(tmp_path: Path):
+    manifest = [
+        BenchmarkItem(
+            technique="Regular Chord",
+            tier="1st",
+            id=101,
+            song="Controlled Regular Chord",
+            content=CONTROLLED_REGULAR_CHORD_OSU,
+        ),
+        BenchmarkItem(
+            technique="LN Inverse",
+            tier="1st",
+            id=201,
+            song="Controlled LN Inverse",
+            content=CONTROLLED_LN_INVERSE_OSU,
+        ),
+        BenchmarkItem(
+            technique="LN Release",
+            tier="1st",
+            id=301,
+            song="Controlled LN Release",
+            content=CONTROLLED_LN_RELEASE_OSU,
+        ),
+    ]
+
+    report = run_benchmark_pipeline(manifest)
+    assert report.summary.total == 3
+    assert report.summary.success == 3
+    assert report.summary.failed == 0
+
+    # 1. Assert Regular Chord physiological metrics
+    res_chord = report.results[0]
+    f_chord = res_chord.features
+    assert f_chord is not None
+    assert f_chord.gap1_count == 2
+    assert f_chord.gap1_density == 1.0
+    assert f_chord.adj_count == 4
+    assert f_chord.adj_density == 2.0
+    assert f_chord.mean_locked_fingers == 0.0
+    assert f_chord.lockout_profile[0] == 100.0
+    assert f_chord.antiphase_count == 0
+    assert f_chord.antiphase_rate == 0.0
+
+    # 2. Assert LN Inverse degree-of-freedom suppression metrics
+    res_inverse = report.results[1]
+    f_inverse = res_inverse.features
+    assert f_inverse is not None
+    assert f_inverse.mean_locked_fingers >= 3.9
+    assert f_inverse.lockout_profile[4] >= 99.0
+    assert f_inverse.hold_pct == 50.0
+
+    # 3. Assert LN Release antiphase articulation metrics
+    res_release = report.results[2]
+    f_release = res_release.features
+    assert f_release is not None
+    assert f_release.antiphase_count == 4
+    assert f_release.antiphase_rate == 2.0
+
+    # 4. Assert full serialization into JSON report
+    report_dict = report.to_dict()
+    for item in report_dict["results"]:
+        feat = item["features"]
+        assert "gap1_count" in feat
+        assert "gap1_density" in feat
+        assert "adj_count" in feat
+        assert "adj_density" in feat
+        assert "mean_locked_fingers" in feat
+        assert "lockout_profile" in feat
+        assert "antiphase_count" in feat
+        assert "antiphase_rate" in feat
+
+    out_json = tmp_path / "physio_report.json"
+    report.save_json(str(out_json))
+    assert out_json.exists()
+    loaded_json = json.loads(out_json.read_text(encoding="utf-8"))
+    assert loaded_json == report_dict
+

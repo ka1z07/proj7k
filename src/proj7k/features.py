@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.window import generate_all_barlines
@@ -15,19 +15,44 @@ class BeatmapFeatures:
     duration_seconds: float
     peak_1b_nps: float = 0.0
 
+    # Hand topology
+    gap1_count: int = 0
+    gap1_density: float = 0.0
+    adj_count: int = 0
+    adj_density: float = 0.0
+
+    # Degree-of-freedom suppression
+    mean_locked_fingers: float = 0.0
+    lockout_profile: Dict[int, float] = field(default_factory=lambda: {i: 0.0 for i in range(8)})
+
+    # Antiphase articulation
+    antiphase_count: int = 0
+    antiphase_rate: float = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["lockout_profile"] = {str(k): v for k, v in self.lockout_profile.items()}
+        return d
 
 
-def extract_beatmap_features(beatmap: Beatmap7K) -> BeatmapFeatures:
+def _calc_rate(count: int, duration_s: float) -> float:
+    return round(count / duration_s, 4) if duration_s > 0 else 0.0
+
+
+def extract_beatmap_features(beatmap: Beatmap7K, step_ms: int = 10) -> BeatmapFeatures:
     """
-    Extracts baseline spatiotemporal density and timing features:
+    Extracts baseline spatiotemporal density and timing features, as well as
+    physiological topology, degree-of-freedom suppression, and antiphase events:
     - total_notes, rice_count, ln_count
     - hold_pct (LN notes percentage)
     - avg_nps (Full-beatmap average NPS)
     - peak_4m_nps (Peak 4-measure rolling window NPS)
     - peak_1b_nps (Peak 1-beat burst window NPS)
     - duration_seconds
+    - gap1_count, gap1_density
+    - adj_count, adj_density
+    - mean_locked_fingers, lockout_profile
+    - antiphase_count, antiphase_rate
     """
     total_notes = len(beatmap.hit_objects)
     if total_notes == 0:
@@ -40,6 +65,14 @@ def extract_beatmap_features(beatmap: Beatmap7K) -> BeatmapFeatures:
             peak_4m_nps=0.0,
             duration_seconds=0.0,
             peak_1b_nps=0.0,
+            gap1_count=0,
+            gap1_density=0.0,
+            adj_count=0,
+            adj_density=0.0,
+            mean_locked_fingers=0.0,
+            lockout_profile={i: 0.0 for i in range(8)},
+            antiphase_count=0,
+            antiphase_rate=0.0,
         )
 
     rice_count = sum(1 for ho in beatmap.hit_objects if ho.note_type == NoteType.RICE)
@@ -64,7 +97,6 @@ def extract_beatmap_features(beatmap: Beatmap7K) -> BeatmapFeatures:
     if len(measure_starts) >= 5:
         max_window_nps = 0.0
         found_valid_window = False
-        # Iterate through all 4-measure rolling windows that fit within beatmap span
         for i in range(len(measure_starts) - 4):
             window_start = measure_starts[i].time
             window_end = measure_starts[i + 4].time
@@ -110,6 +142,116 @@ def extract_beatmap_features(beatmap: Beatmap7K) -> BeatmapFeatures:
         if found_valid_beat:
             peak_1b_nps = max_beat_nps
 
+    # Single pass over hit objects to collect chord press ticks and release ticks
+    notes_by_time: Dict[int, List[int]] = {}
+    ticks_released: Dict[int, List[int]] = {}
+
+    for ho in beatmap.hit_objects:
+        st_tick = int(round(ho.time))
+        notes_by_time.setdefault(st_tick, []).append(ho.column)
+        if ho.note_type == NoteType.LN and ho.end_time is not None:
+            et_tick = int(round(ho.end_time))
+            ticks_released.setdefault(et_tick, []).append(ho.column)
+
+    # 3. Calculate hand topology metrics ([gap:1] and [adj])
+    gap1_count = 0
+    adj_count = 0
+    for t_key, cols in notes_by_time.items():
+        unique_cols = sorted(set(cols))
+        l_cols = [c for c in unique_cols if c in (0, 1, 2)]
+        r_cols = [c for c in unique_cols if c in (4, 5, 6)]
+
+        # Left hand evaluation
+        if len(l_cols) == 2:
+            if l_cols == [0, 2]:
+                gap1_count += 1
+            elif l_cols in ([0, 1], [1, 2]):
+                adj_count += 1
+
+        # Right hand evaluation
+        if len(r_cols) == 2:
+            if r_cols == [4, 6]:
+                gap1_count += 1
+            elif r_cols in ([4, 5], [5, 6]):
+                adj_count += 1
+
+    gap1_density = _calc_rate(gap1_count, duration_s)
+    adj_density = _calc_rate(adj_count, duration_s)
+
+    # 4. Compute finger lockout profile and mean locked fingers (sampling every step_ms)
+    # Merge overlapping LN intervals per column to guarantee each physical finger is at most locked once
+    merged_ln_intervals: List[Tuple[float, float]] = []
+    for col in range(7):
+        col_lns = sorted(
+            [
+                (ho.time, ho.end_time)
+                for ho in beatmap.hit_objects
+                if ho.column == col and ho.note_type == NoteType.LN and ho.end_time is not None
+            ],
+            key=lambda x: x[0],
+        )
+        if not col_lns:
+            continue
+        cur_st, cur_et = col_lns[0]
+        for st, et in col_lns[1:]:
+            if st <= cur_et:
+                cur_et = max(cur_et, et)
+            else:
+                merged_ln_intervals.append((cur_st, cur_et))
+                cur_st, cur_et = st, et
+        merged_ln_intervals.append((cur_st, cur_et))
+
+    lock_counts: Dict[int, int] = {i: 0 for i in range(8)}
+    total_samples = 0
+    sum_locked = 0
+
+    if step_ms > 0 and end_ms >= start_ms:
+        import math
+        num_samples = int((end_ms - start_ms) // step_ms) + 1
+        total_samples = num_samples
+
+        if merged_ln_intervals:
+            diff = [0] * (num_samples + 1)
+            for st, et in merged_ln_intervals:
+                if et <= start_ms or st >= end_ms:
+                    continue
+                j_start = max(0, math.ceil((st - start_ms) / step_ms))
+                j_end = min(num_samples, math.ceil((et - start_ms) / step_ms))
+                if j_start < j_end:
+                    diff[j_start] += 1
+                    diff[j_end] -= 1
+
+            cur_holds = 0
+            for j in range(num_samples):
+                cur_holds += diff[j]
+                active = min(max(cur_holds, 0), 7)
+                lock_counts[active] += 1
+                sum_locked += active
+        else:
+            lock_counts[0] = num_samples
+    else:
+        total_samples = 1
+        lock_counts[0] = 1
+
+    mean_locked_fingers = round(sum_locked / max(total_samples, 1), 4)
+    lockout_profile = {
+        k: round((v / max(total_samples, 1)) * 100.0, 4) for k, v in lock_counts.items()
+    }
+
+    # 5. Detect and count antiphase articulation events
+    # An antiphase event occurs when at the same tick (rounded ms), one track releases (LN tail)
+    # while another track (different column) is pressed (Rice or LN head).
+    antiphase_count = 0
+    for tick, released_cols in ticks_released.items():
+        if tick in notes_by_time:
+            pressed_cols = notes_by_time[tick]
+            for r_col in released_cols:
+                for p_col in pressed_cols:
+                    if r_col != p_col:
+                        antiphase_count += 1
+
+    antiphase_rate = _calc_rate(antiphase_count, duration_s)
+
     return BeatmapFeatures(
         total_notes=total_notes,
         rice_count=rice_count,
@@ -119,4 +261,12 @@ def extract_beatmap_features(beatmap: Beatmap7K) -> BeatmapFeatures:
         peak_4m_nps=round(peak_4m_nps, 4),
         duration_seconds=round(duration_s, 4),
         peak_1b_nps=round(peak_1b_nps, 4),
+        gap1_count=gap1_count,
+        gap1_density=gap1_density,
+        adj_count=adj_count,
+        adj_density=adj_density,
+        mean_locked_fingers=mean_locked_fingers,
+        lockout_profile=lockout_profile,
+        antiphase_count=antiphase_count,
+        antiphase_rate=antiphase_rate,
     )
