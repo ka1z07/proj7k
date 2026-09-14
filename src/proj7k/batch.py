@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any, Union, Literal
 import argparse
 
 from proj7k.parser import parse_osu_7k
-from proj7k.features import extract_beatmap_features, BeatmapFeatures
+from proj7k.features import extract_beatmap_features, BeatmapFeatures, get_dominant_bpm
 from proj7k.monotonicity import evaluate_batch_monotonicity
 
 IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
@@ -50,6 +50,7 @@ class BenchmarkItemResult:
     status: IngestionStatus
     id: Optional[int] = None
     song: Optional[str] = None
+    bpm: Optional[float] = None
     features: Optional[BeatmapFeatures] = None
     error: Optional[str] = None
     traceback: Optional[str] = None
@@ -61,6 +62,7 @@ class BenchmarkItemResult:
             "status": self.status,
             "id": self.id,
             "song": self.song,
+            "bpm": self.bpm,
             "features": self.features.to_dict() if self.features else None,
             "error": self.error,
             "traceback": self.traceback,
@@ -171,12 +173,14 @@ def run_benchmark_pipeline(
     base_dir: Optional[Union[str, Path]] = None,
     evaluate_monotonicity: bool = True,
     monotonicity_metrics: Optional[List[str]] = None,
+    apply_scaling: bool = True,
 ) -> BenchmarkBatchReport:
     """
     Executes the top-level benchmark batch pipeline on the provided manifest.
     - Ingests and parses beatmaps via .osu AST.
     - Extracts baseline and physiological features.
     - Evaluates tier sequence monotonicity across techniques.
+    - Pre-applies Inverse BPM Scaling Law gating operator for LN Inverse.
     - Fault-tolerant: isolates individual beatmap failures as FAILED_INGESTION.
     - Returns standardized BenchmarkBatchReport.
     """
@@ -194,13 +198,18 @@ def run_benchmark_pipeline(
             else:
                 raise ValueError("Neither 'content' nor 'osu_path' provided for beatmap")
 
-            features = extract_beatmap_features(bm)
+            effective_bpm = item.bpm
+            if effective_bpm is None and bm.timing_points:
+                effective_bpm = get_dominant_bpm(bm)
+
+            features = extract_beatmap_features(bm, bpm=effective_bpm)
             results.append(
                 BenchmarkItemResult(
                     technique=item.technique,
                     tier=item.tier,
                     id=item.id,
                     song=item.song,
+                    bpm=effective_bpm,
                     status="SUCCESS",
                     features=features,
                     error=None,
@@ -215,6 +224,7 @@ def run_benchmark_pipeline(
                     tier=item.tier,
                     id=item.id,
                     song=item.song,
+                    bpm=item.bpm,
                     status="FAILED_INGESTION",
                     features=None,
                     error=f"{type(e).__name__}: {str(e)}",
@@ -231,7 +241,11 @@ def run_benchmark_pipeline(
 
     mono_reports = None
     if evaluate_monotonicity:
-        mono_reports = evaluate_batch_monotonicity(results, metrics=monotonicity_metrics)
+        mono_reports = evaluate_batch_monotonicity(
+            results,
+            metrics=monotonicity_metrics,
+            apply_scaling=apply_scaling,
+        )
 
     return BenchmarkBatchReport(summary=summary, results=results, monotonicity=mono_reports)
 
@@ -244,11 +258,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--manifest", required=True, help="Path to benchmark manifest JSON file")
     parser.add_argument("--base-dir", help="Base directory containing .osu files for path resolution")
     parser.add_argument("-o", "--output", help="Path to output JSON execution report")
+    parser.add_argument(
+        "--no-scaling",
+        action="store_true",
+        help="Disable Inverse BPM Scaling Law gating operator",
+    )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     try:
-        report = run_benchmark_pipeline(args.manifest, base_dir=args.base_dir)
+        report = run_benchmark_pipeline(
+            args.manifest,
+            base_dir=args.base_dir,
+            apply_scaling=not args.no_scaling,
+        )
     except Exception as e:
         print(f"Pipeline initialization error: {e}", file=sys.stderr)
         return 1

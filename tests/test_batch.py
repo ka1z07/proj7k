@@ -550,3 +550,136 @@ def test_batch_pipeline_monotonicity_evaluation(tmp_path: Path):
     loaded_data = json.loads(out_file.read_text(encoding="utf-8"))
     assert loaded_data["monotonicity"] == report_dict["monotonicity"]
 
+
+def test_batch_pipeline_inverse_bpm_scaling_top_level_seam(tmp_path: Path):
+    # Highest testing seam: test end-to-end benchmark pipeline with Inverse BPM scaling law.
+    # Chart 1: 7th Dan, Low-speed 130 BPM, 6 LNs locked simultaneously (mean locked ~ 5.8)
+    # Chart 2: Stellium, High-speed 220 BPM, 4 LNs locked simultaneously (mean locked ~ 3.9)
+    #
+    # Without scaling: 7th (5.8) > Stellium (3.9) -> Pseudo Inversion!
+    # With scaling: Gating operator cuts 7th Dan to <= 5.0 (low-speed cap)
+    #               and applies exponential penalty to 220 BPM Stellium (> 15.0).
+    # Monotonicity is preserved and Kendall's tau reaches 1.0.
+
+    low_speed_osu = """osu file format v14
+[General]
+Mode: 3
+[Metadata]
+Title: Low Speed High Lock
+Version: 7th
+[Difficulty]
+CircleSize: 7
+OverallDifficulty: 8
+[TimingPoints]
+0,461.538,4,2,0,50,1,0
+[HitObjects]
+36,192,0,128,0,2000:0:0:0:0:
+109,192,0,128,0,2000:0:0:0:0:
+182,192,0,128,0,2000:0:0:0:0:
+329,192,0,128,0,2000:0:0:0:0:
+402,192,0,128,0,2000:0:0:0:0:
+475,192,0,128,0,2000:0:0:0:0:
+256,192,500,1,0,0:0:0:0:
+256,192,1000,1,0,0:0:0:0:
+256,192,1500,1,0,0:0:0:0:
+"""
+
+    high_speed_osu = """osu file format v14
+[General]
+Mode: 3
+[Metadata]
+Title: High Speed Modest Lock
+Version: Stellium
+[Difficulty]
+CircleSize: 7
+OverallDifficulty: 8
+[TimingPoints]
+0,272.727,4,2,0,50,1,0
+[HitObjects]
+36,192,0,128,0,2000:0:0:0:0:
+109,192,0,128,0,2000:0:0:0:0:
+402,192,0,128,0,2000:0:0:0:0:
+475,192,0,128,0,2000:0:0:0:0:
+256,192,250,1,0,0:0:0:0:
+256,192,500,1,0,0:0:0:0:
+256,192,750,1,0,0:0:0:0:
+256,192,1000,1,0,0:0:0:0:
+"""
+
+    manifest = [
+        BenchmarkItem(
+            technique="LN Inverse",
+            tier="7th",
+            id=701,
+            song="Low Speed High Lock",
+            bpm=130.0,
+            content=low_speed_osu,
+        ),
+        BenchmarkItem(
+            technique="LN Inverse",
+            tier="Stellium",
+            id=1401,
+            song="High Speed Modest Lock",
+            bpm=220.0,
+            content=high_speed_osu,
+        ),
+    ]
+
+    # 1. Run pipeline with scaling enabled (default)
+    report = run_benchmark_pipeline(manifest, monotonicity_metrics=["mean_locked_fingers"])
+
+    assert report.summary.total == 2
+    assert report.summary.success == 2
+    assert report.summary.failed == 0
+
+    # 2. Check item-level results
+    res_7th = report.results[0]
+    res_stellium = report.results[1]
+    assert res_7th.bpm == 130.0
+    assert res_7th.features.mean_locked_fingers >= 5.0
+    assert res_7th.features.delta_t_action == pytest.approx(115.3846, abs=1e-3)
+
+    assert res_stellium.bpm == 220.0
+    assert res_stellium.features.mean_locked_fingers < res_7th.features.mean_locked_fingers
+    assert res_stellium.features.delta_t_action == pytest.approx(68.1818, abs=1e-3)
+
+    # 3. Check monotonicity evaluation
+    assert report.monotonicity is not None
+    assert "LN Inverse" in report.monotonicity
+    inverse_mono = report.monotonicity["LN Inverse"]["mean_locked_fingers"]
+
+    # Calibrated evaluation must eliminate pseudo-inversion!
+    assert inverse_mono["is_monotonic"] is True
+    assert inverse_mono["kendall_tau"] == 1.0
+    assert len(inverse_mono["violations"]) == 0
+
+    # 4. Check calibration chapter with before/after comparison
+    calib = inverse_mono["scaling_calibration"]
+    assert calib is not None
+    assert calib["before"]["is_monotonic"] is False
+    assert calib["before"]["kendall_tau"] == -1.0
+    assert calib["before"]["violations_count"] == 1
+    assert calib["after"]["is_monotonic"] is True
+    assert calib["after"]["kendall_tau"] == 1.0
+    assert calib["after"]["violations_count"] == 0
+
+    # 5. Check action clock window distribution
+    dist = calib["window_distribution"]
+    assert len(dist) == 2
+    assert dist[0]["tier"] == "7th"
+    assert dist[0]["regime"] == "LOW_SPEED_TRUNCATION"
+    assert dist[0]["calibrated_value"] <= 5.0
+
+    assert dist[1]["tier"] == "Stellium"
+    assert dist[1]["regime"] == "EXPONENTIAL_PENALTY"
+    assert dist[1]["scaling_factor"] > 1.0
+    assert dist[1]["calibrated_value"] > dist[0]["calibrated_value"]
+
+    # 6. Check full JSON export roundtrip
+    out_file = tmp_path / "top_level_seam_report.json"
+    report.save_json(str(out_file))
+    assert out_file.exists()
+    loaded_data = json.loads(out_file.read_text(encoding="utf-8"))
+    assert loaded_data["monotonicity"]["LN Inverse"]["mean_locked_fingers"]["is_monotonic"] is True
+
+

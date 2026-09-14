@@ -20,6 +20,18 @@ from proj7k.monotonicity import (
     DiscontinuityWarning,
     TierMonotonicityReport,
 )
+from proj7k.scaling import (
+    compute_action_window,
+    compute_inverse_scaling_factor,
+    apply_inverse_bpm_scaling,
+    compute_inverse_score,
+    ClockWindowRecord,
+    ScalingRegime,
+    ScalingConfig,
+    LOW_SPEED_BPM_THRESHOLD,
+    HIGH_SPEED_BPM_THRESHOLD,
+    LOW_SPEED_CAP,
+)
 
 __version__ = "0.1.0"
 
@@ -41,5 +53,15 @@ __all__ = [
     "MonotonicityViolation",
     "DiscontinuityWarning",
     "TierMonotonicityReport",
+    "compute_action_window",
+    "compute_inverse_scaling_factor",
+    "apply_inverse_bpm_scaling",
+    "compute_inverse_score",
+    "ClockWindowRecord",
+    "ScalingRegime",
+    "ScalingConfig",
+    "LOW_SPEED_BPM_THRESHOLD",
+    "HIGH_SPEED_BPM_THRESHOLD",
+    "LOW_SPEED_CAP",
 ]
 

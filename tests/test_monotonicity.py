@@ -121,3 +121,92 @@ def test_evaluate_tier_sequence_with_discontinuity():
     assert warning.delta == 20.0
     assert warning.delta > warning.threshold
     assert "3-sigma" in warning.message or "threshold" in warning.message
+
+
+def test_evaluate_batch_monotonicity_inverse_bpm_scaling():
+    from proj7k.features import BeatmapFeatures
+    from proj7k.monotonicity import evaluate_batch_monotonicity
+
+    # Mock batch items for LN Inverse with pseudo-inversion caused by low-speed charts:
+    # 7th Dan: 142 BPM, 5.60 locked fingers (Cognitive illusion, low physical load)
+    # 10th Dan: 164 BPM, 4.80 locked fingers
+    # Gamma: 178 BPM, 4.60 locked fingers
+    # Zenith: 200 BPM, 5.10 locked fingers
+    # Stellium: 240 BPM, 5.20 locked fingers
+    #
+    # Without scaling: 7th (5.60) -> 10th (4.80) -> Gamma (4.60) has 2 inversions!
+    class MockItem:
+        def __init__(self, tier: str, bpm: float, locked: float):
+            self.technique = "LN Inverse"
+            self.tier = tier
+            self.bpm = bpm
+            self.status = "SUCCESS"
+            self.id = 100
+            self.song = f"Song {tier}"
+            self.features = BeatmapFeatures(
+                total_notes=1000,
+                rice_count=10,
+                ln_count=990,
+                hold_pct=99.0,
+                avg_nps=10.0,
+                peak_4m_nps=15.0,
+                duration_seconds=100.0,
+                mean_locked_fingers=locked,
+            )
+
+    items = [
+        MockItem("7th", 142.0, 5.60),
+        MockItem("10th", 164.0, 4.80),
+        MockItem("Gamma", 178.0, 4.60),
+        MockItem("Zenith", 200.0, 5.10),
+        MockItem("Stellium", 240.0, 5.20),
+    ]
+
+    # 1. Evaluate with scaling disabled -> shows inversion
+    unscaled_report = evaluate_batch_monotonicity(
+        items,
+        metrics=["mean_locked_fingers"],
+        apply_scaling=False,
+    )
+    unscaled_eval = unscaled_report["LN Inverse"]["mean_locked_fingers"]
+    assert unscaled_eval["is_monotonic"] is False
+    assert unscaled_eval["kendall_tau"] < 1.0
+    assert len(unscaled_eval["violations"]) >= 1
+
+    # 2. Evaluate with scaling enabled -> gating operator pre-applied!
+    scaled_report = evaluate_batch_monotonicity(
+        items,
+        metrics=["mean_locked_fingers"],
+        apply_scaling=True,
+    )
+    scaled_eval = scaled_report["LN Inverse"]["mean_locked_fingers"]
+    assert scaled_eval["is_monotonic"] is True
+    assert scaled_eval["kendall_tau"] == 1.0
+    assert len(scaled_eval["violations"]) == 0
+
+    # 3. Assert calibration chapter is clearly present with before/after comparison
+    calibration = scaled_eval.get("scaling_calibration")
+    assert calibration is not None
+    assert calibration["before"]["is_monotonic"] is False
+    assert calibration["before"]["kendall_tau"] < 1.0
+    assert calibration["after"]["is_monotonic"] is True
+    assert calibration["after"]["kendall_tau"] == 1.0
+
+    # 4. Assert clock window distribution is clearly recorded
+    dist = calibration["window_distribution"]
+    assert len(dist) == 5
+    # Check 7th Dan (low speed truncation)
+    rec_7th = [r for r in dist if r["tier"] == "7th"][0]
+    assert rec_7th["bpm"] == 142.0
+    assert rec_7th["delta_t_ms"] == pytest.approx(105.6338, abs=1e-3)
+    assert rec_7th["regime"] == "LOW_SPEED_TRUNCATION"
+    assert rec_7th["calibrated_value"] <= 5.0
+    assert rec_7th["calibrated_value"] < rec_7th["raw_value"]
+
+    # Check Stellium (extreme high speed penalty)
+    rec_stellium = [r for r in dist if r["tier"] == "Stellium"][0]
+    assert rec_stellium["bpm"] == 240.0
+    assert rec_stellium["delta_t_ms"] == 62.5
+    assert rec_stellium["regime"] == "EXPONENTIAL_PENALTY"
+    assert rec_stellium["scaling_factor"] > 3.0
+

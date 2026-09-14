@@ -2,6 +2,7 @@ from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.window import generate_all_barlines
+from proj7k.scaling import compute_action_window, compute_inverse_score
 
 
 @dataclass
@@ -29,6 +30,10 @@ class BeatmapFeatures:
     antiphase_count: int = 0
     antiphase_rate: float = 0.0
 
+    # Action clock window and calibrated inverse score
+    delta_t_action: float = 0.0
+    inverse_score: float = 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         d["lockout_profile"] = {str(k): v for k, v in self.lockout_profile.items()}
@@ -39,7 +44,29 @@ def _calc_rate(count: int, duration_s: float) -> float:
     return round(count / duration_s, 4) if duration_s > 0 else 0.0
 
 
-def extract_beatmap_features(beatmap: Beatmap7K, step_ms: int = 10) -> BeatmapFeatures:
+def get_dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
+    """Extracts dominant BPM from uninherited timing points."""
+    uninherited = [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
+    if not uninherited:
+        return default
+    if len(uninherited) == 1:
+        return round(60000.0 / uninherited[0].beat_length, 2)
+    durations: Dict[float, float] = {}
+    for i, tp in enumerate(uninherited):
+        bpm_val = round(60000.0 / tp.beat_length, 2)
+        end_t = uninherited[i + 1].time if (i + 1 < len(uninherited)) else (
+            max(ho.time for ho in beatmap.hit_objects) if beatmap.hit_objects else tp.time + 10000.0
+        )
+        span = max(0.0, end_t - tp.time)
+        durations[bpm_val] = durations.get(bpm_val, 0.0) + span
+    return max(durations.keys(), key=lambda b: durations[b])
+
+
+def extract_beatmap_features(
+    beatmap: Beatmap7K,
+    step_ms: int = 10,
+    bpm: Optional[float] = None,
+) -> BeatmapFeatures:
     """
     Extracts baseline spatiotemporal density and timing features, as well as
     physiological topology, degree-of-freedom suppression, and antiphase events:
@@ -73,6 +100,8 @@ def extract_beatmap_features(beatmap: Beatmap7K, step_ms: int = 10) -> BeatmapFe
             lockout_profile={i: 0.0 for i in range(8)},
             antiphase_count=0,
             antiphase_rate=0.0,
+            delta_t_action=0.0,
+            inverse_score=0.0,
         )
 
     rice_count = sum(1 for ho in beatmap.hit_objects if ho.note_type == NoteType.RICE)
@@ -252,6 +281,10 @@ def extract_beatmap_features(beatmap: Beatmap7K, step_ms: int = 10) -> BeatmapFe
 
     antiphase_rate = _calc_rate(antiphase_count, duration_s)
 
+    effective_bpm = bpm if (bpm is not None and bpm > 0) else get_dominant_bpm(beatmap)
+    delta_t_action = compute_action_window(effective_bpm)
+    inverse_score = compute_inverse_score(mean_locked_fingers, bpm=effective_bpm, nps=avg_nps)
+
     return BeatmapFeatures(
         total_notes=total_notes,
         rice_count=rice_count,
@@ -269,4 +302,6 @@ def extract_beatmap_features(beatmap: Beatmap7K, step_ms: int = 10) -> BeatmapFe
         lockout_profile=lockout_profile,
         antiphase_count=antiphase_count,
         antiphase_rate=antiphase_rate,
+        delta_t_action=delta_t_action,
+        inverse_score=inverse_score,
     )

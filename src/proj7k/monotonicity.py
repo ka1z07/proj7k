@@ -1,6 +1,11 @@
 import math
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
+from proj7k.scaling import (
+    compute_action_window,
+    apply_inverse_bpm_scaling,
+    ClockWindowRecord,
+)
 
 TIER_ORDER: List[str] = [
     "1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
@@ -127,9 +132,10 @@ class TierMonotonicityReport:
     steps: List[MonotonicityStep]
     violations: List[MonotonicityViolation]
     warnings: List[DiscontinuityWarning]
+    scaling_calibration: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "technique": self.technique,
             "metric": self.metric,
             "kendall_tau": self.kendall_tau,
@@ -139,6 +145,9 @@ class TierMonotonicityReport:
             "violations": [v.to_dict() for v in self.violations],
             "warnings": [w.to_dict() for w in self.warnings],
         }
+        if self.scaling_calibration is not None:
+            d["scaling_calibration"] = self.scaling_calibration
+        return d
 
 
 def evaluate_tier_sequence(
@@ -146,6 +155,7 @@ def evaluate_tier_sequence(
     technique: str = "",
     metric: str = "",
     epsilon: float = 1e-4,
+    scaling_calibration: Optional[Dict[str, Any]] = None,
 ) -> TierMonotonicityReport:
     """
     Evaluates tier progression monotonicity for a given metric across tiers.
@@ -164,6 +174,7 @@ def evaluate_tier_sequence(
             steps=[],
             violations=[],
             warnings=[],
+            scaling_calibration=scaling_calibration,
         )
 
     y_vals = [float(item[1]) for item in sorted_items]
@@ -248,19 +259,27 @@ def evaluate_tier_sequence(
         steps=steps,
         violations=violations,
         warnings=warnings,
+        scaling_calibration=scaling_calibration,
     )
 
 
 def evaluate_batch_monotonicity(
     results: List[Any],
     metrics: Optional[List[str]] = None,
+    apply_scaling: bool = True,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Groups batch results by technique and evaluates monotonicity along canonical tiers
     for the specified feature metrics.
+
+    If apply_scaling is True, pre-applies the Inverse BPM Scaling Law gating operator
+    for LN Inverse on mean_locked_fingers to eliminate pseudo-inversions caused by low-speed charts,
+    and records full before/after metrics and action clock window distribution.
     """
     if metrics is None:
         metrics = ["avg_nps", "peak_4m_nps", "hold_pct", "mean_locked_fingers"]
+
+    tier_indices = {t: i for i, t in enumerate(TIER_ORDER)}
 
     results_by_tech: Dict[str, List[Any]] = {}
     for r in results:
@@ -268,21 +287,93 @@ def evaluate_batch_monotonicity(
             results_by_tech.setdefault(r.technique, []).append(r)
 
     reports_by_tech: Dict[str, Dict[str, Any]] = {}
-    for tech, items in results_by_tech.items():
+    for tech, raw_items in results_by_tech.items():
+        valid_items = [item for item in raw_items if getattr(item, "tier", None) in tier_indices]
+        items = sorted(valid_items, key=lambda x: tier_indices[x.tier])
         if len(items) < 2:
             continue
+
+        tech_norm = tech.lower().replace("_", " ").strip()
+        is_inverse = tech_norm in ("ln inverse", "inverse")
+
         tech_reports: Dict[str, Any] = {}
         for metric in metrics:
-            tier_vals = []
-            for item in items:
-                feat = getattr(item, "features", None)
-                if feat is not None:
-                    val = getattr(feat, metric, None)
-                    if val is not None and isinstance(val, (int, float)):
-                        tier_vals.append((item.tier, float(val)))
-            if len(tier_vals) >= 2:
-                report = evaluate_tier_sequence(tier_vals, technique=tech, metric=metric)
-                tech_reports[metric] = report.to_dict()
+            if is_inverse and metric == "mean_locked_fingers" and apply_scaling:
+                # 1. Evaluate uncalibrated raw baseline
+                tier_vals_raw = []
+                for item in items:
+                    feat = getattr(item, "features", None)
+                    if feat is not None:
+                        val = getattr(feat, "mean_locked_fingers", None)
+                        if val is not None and isinstance(val, (int, float)):
+                            tier_vals_raw.append((item.tier, float(val)))
+
+                report_raw = evaluate_tier_sequence(tier_vals_raw, technique=tech, metric=metric)
+
+                # 2. Pre-apply Inverse BPM Scaling Law non-linear gating operator
+                tier_vals_calibrated = []
+                window_distribution = []
+                for item in items:
+                    feat = getattr(item, "features", None)
+                    if feat is not None:
+                        raw_val = float(getattr(feat, "mean_locked_fingers", 0.0))
+                        bpm = float(getattr(item, "bpm", None) or 150.0)
+                        calibrated_val, factor, regime = apply_inverse_bpm_scaling(raw_val, bpm=bpm)
+                        delta_t = compute_action_window(bpm)
+
+                        rec = ClockWindowRecord(
+                            tier=item.tier,
+                            bpm=bpm,
+                            delta_t_ms=delta_t,
+                            raw_value=raw_val,
+                            calibrated_value=calibrated_val,
+                            scaling_factor=factor,
+                            regime=regime,
+                            id=getattr(item, "id", None),
+                            song=getattr(item, "song", None),
+                        )
+                        window_distribution.append(rec.to_dict())
+                        tier_vals_calibrated.append((item.tier, calibrated_val))
+
+                # 3. Evaluate calibrated sequence
+                report_calibrated = evaluate_tier_sequence(tier_vals_calibrated, technique=tech, metric=metric)
+
+                # 4. Construct calibration comparison and window distribution
+                scaling_calibration = {
+                    "enabled": True,
+                    "technique": tech,
+                    "target_metric": metric,
+                    "before": {
+                        "kendall_tau": report_raw.kendall_tau,
+                        "spearman_rho": report_raw.spearman_rho,
+                        "is_monotonic": report_raw.is_monotonic,
+                        "violations_count": len(report_raw.violations),
+                        "violations": [v.to_dict() for v in report_raw.violations],
+                    },
+                    "after": {
+                        "kendall_tau": report_calibrated.kendall_tau,
+                        "spearman_rho": report_calibrated.spearman_rho,
+                        "is_monotonic": report_calibrated.is_monotonic,
+                        "violations_count": len(report_calibrated.violations),
+                        "violations": [v.to_dict() for v in report_calibrated.violations],
+                    },
+                    "window_distribution": window_distribution,
+                }
+                report_calibrated.scaling_calibration = scaling_calibration
+                tech_reports[metric] = report_calibrated.to_dict()
+                tech_reports["scaling_calibration"] = scaling_calibration
+            else:
+                tier_vals = []
+                for item in items:
+                    feat = getattr(item, "features", None)
+                    if feat is not None:
+                        val = getattr(feat, metric, None)
+                        if val is not None and isinstance(val, (int, float)):
+                            tier_vals.append((item.tier, float(val)))
+                if len(tier_vals) >= 2:
+                    report = evaluate_tier_sequence(tier_vals, technique=tech, metric=metric)
+                    tech_reports[metric] = report.to_dict()
+
         if tech_reports:
             reports_by_tech[tech] = tech_reports
 
