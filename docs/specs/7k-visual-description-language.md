@@ -27,8 +27,7 @@
 - **底层物理索引（Physical Index）**：绝对正整数 `1, 2, 3, 4, 5, 6, 7`（屏幕从左至右）。
 - **视觉对称拓扑代号（Topological Notation）**：
   $$\text{Layout} = [\text{L3}, \text{L2}, \text{L1} \mid \text{S} \mid \text{R1}, \text{R2}, \text{R3}]$$
-  - 由外向内对称编号：$\text{L3}/\text{R3}$ 为小指或无名指最外轨，$\text{L1}/\text{R1}$ 为食指内轨，$\text{S}$ 为中心轨（Space 键）。
-  - **镜像同构变换（Mirror Equivalence）**：对任意单体或复合模体 $M$，其关于中心轨的镜像记为 $M^{\text{mirror}}$，通过交换 $\text{L}i \leftrightarrow \text{R}i$ 直接计算。
+  - 由外向内对称编号：$\text{L3}/\text{R3}$ 为无名指外轨，$\text{L2}/\text{R2}$ 为中指中轨，$\text{L1}/\text{R1}$ 为食指内轨，$\text{S}$ 为中心轨（大拇指 Space 键）。标准 7K 键位（如 SDF+Space+JKL）下，双手均以“无名指-中指-食指-大拇指”操作，完全不使用小指。
 
 ### 2.2 时序量化基准 (Temporal Quantization)
 - **量化骨架**：以音乐拍号细分网格（Beat Snap: 1/4, 1/8, 1/12, 1/16, 1/24, 1/32 等）为离散推进基准。
@@ -160,4 +159,4 @@ $$M_{\text{Left}} \parallel M_{\text{Right}} \quad \text{或} \quad \text{Layer}
 本规范已在以下三种世界级极端 7K 谱面上完成可用性全量压力验证：
 1. **MWC 7K Grand Finals 极限反键**（Jane Remover - Psychoboost，★9.50）：100% 纯 LN Inverse、34 NPS、平均锁指 5.0 根、1/24 摇摆内滚与反相位抬按。
 2. **270 BPM 虚标马拉松散流**（ICDD - Yuuaku no Inori，官方标星 7.79★，实测 10+★）：38 NPS 纯米键高速手流、无叠键平铺、4 押瞬时爆发与 8 分钟耐力极限。
-3. **10.88★ 终极核爆**（Raphiiel - Once Forgotten, Nothing Remains，10 分钟 20,267 连击）：239 BPM 复合盾牌流、215 BPM 小指 2.5 秒长锚点钢琴独奏、252 BPM 轮转空轨 6 押连打与 59.5ms 外内极速交错叠打。
+3. **10.88★ 终极核爆**（Raphiiel - Once Forgotten, Nothing Remains，10 分钟 20,267 连击）：239 BPM 复合盾牌流、215 BPM 无名指（R3）2.5 秒长锚点钢琴独奏、252 BPM 轮转空轨 6 押连打与 59.5ms 外内极速交错叠打。
