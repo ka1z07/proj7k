@@ -467,3 +467,86 @@ def test_batch_pipeline_physiological_features(tmp_path: Path):
     loaded_json = json.loads(out_json.read_text(encoding="utf-8"))
     assert loaded_json == report_dict
 
+
+def _make_osu_with_notes(title: str, version: str, notes_per_sec: int) -> str:
+    # 2-second beatmap with specified notes per second
+    lines = [
+        "osu file format v14",
+        "[General]",
+        "Mode: 3",
+        "[Metadata]",
+        f"Title: {title}",
+        f"Version: {version}",
+        "[Difficulty]",
+        "CircleSize: 7",
+        "OverallDifficulty: 8",
+        "[TimingPoints]",
+        "0,500,4,2,0,50,1,0",
+        "[HitObjects]",
+    ]
+    step_ms = 1000.0 / notes_per_sec
+    t = 0.0
+    while t <= 2000.0:
+        lines.append(f"36,192,{int(t)},1,0,0:0:0:0:")
+        t += step_ms
+    return "\n".join(lines) + "\n"
+
+
+def test_batch_pipeline_monotonicity_evaluation(tmp_path: Path):
+    manifest = [
+        # Technique 1: Strictly monotonic progression (Jack 1st..4th)
+        BenchmarkItem(technique="Regular Jack", tier="1st", content=_make_osu_with_notes("Jack", "1st", 2)),
+        BenchmarkItem(technique="Regular Jack", tier="2nd", content=_make_osu_with_notes("Jack", "2nd", 4)),
+        BenchmarkItem(technique="Regular Jack", tier="3rd", content=_make_osu_with_notes("Jack", "3rd", 6)),
+        BenchmarkItem(technique="Regular Jack", tier="4th", content=_make_osu_with_notes("Jack", "4th", 8)),
+
+        # Technique 2: Sequence with inversion (Stream 1st..4th, 3rd drops below 2nd!)
+        BenchmarkItem(technique="Regular Stream", tier="1st", content=_make_osu_with_notes("Stream", "1st", 2)),
+        BenchmarkItem(technique="Regular Stream", tier="2nd", content=_make_osu_with_notes("Stream", "2nd", 6)),
+        BenchmarkItem(technique="Regular Stream", tier="3rd", content=_make_osu_with_notes("Stream", "3rd", 3)),
+        BenchmarkItem(technique="Regular Stream", tier="4th", content=_make_osu_with_notes("Stream", "4th", 8)),
+    ]
+
+    report = run_benchmark_pipeline(manifest)
+    assert report.summary.total == 8
+    assert report.summary.success == 8
+    assert report.summary.failed == 0
+
+    # Assert top-level report contains monotonicity evaluation
+    assert report.monotonicity is not None
+    assert "Regular Jack" in report.monotonicity
+    assert "Regular Stream" in report.monotonicity
+
+    # 1. Assert Regular Jack is monotonic
+    jack_mono = report.monotonicity["Regular Jack"]["avg_nps"]
+    assert jack_mono["is_monotonic"] is True
+    assert jack_mono["kendall_tau"] == 1.0
+    assert jack_mono["spearman_rho"] == 1.0
+    assert len(jack_mono["violations"]) == 0
+    assert len(jack_mono["steps"]) == 3
+
+    # 2. Assert Regular Stream captures the inversion violation at 2nd -> 3rd
+    stream_mono = report.monotonicity["Regular Stream"]["avg_nps"]
+    assert stream_mono["is_monotonic"] is False
+    assert stream_mono["kendall_tau"] < 1.0
+    assert len(stream_mono["violations"]) == 1
+
+    violation = stream_mono["violations"][0]
+    assert violation["metric"] == "avg_nps"
+    assert violation["from_tier"] == "2nd"
+    assert violation["to_tier"] == "3rd"
+    assert violation["drop_magnitude"] > 0
+    assert "2nd" in violation["advice"] and "3rd" in violation["advice"]
+
+    # 3. Assert full JSON serialization of monotonicity chapter
+    report_dict = report.to_dict()
+    assert "monotonicity" in report_dict
+    assert "Regular Jack" in report_dict["monotonicity"]
+    assert "Regular Stream" in report_dict["monotonicity"]
+
+    out_file = tmp_path / "mono_report.json"
+    report.save_json(str(out_file))
+    assert out_file.exists()
+    loaded_data = json.loads(out_file.read_text(encoding="utf-8"))
+    assert loaded_data["monotonicity"] == report_dict["monotonicity"]
+

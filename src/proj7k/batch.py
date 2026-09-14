@@ -9,6 +9,7 @@ import argparse
 
 from proj7k.parser import parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures
+from proj7k.monotonicity import evaluate_batch_monotonicity
 
 IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
 
@@ -70,12 +71,16 @@ class BenchmarkItemResult:
 class BenchmarkBatchReport:
     summary: BatchSummary
     results: List[BenchmarkItemResult]
+    monotonicity: Optional[Dict[str, Dict[str, Any]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "summary": self.summary.to_dict(),
             "results": [r.to_dict() for r in self.results],
         }
+        if self.monotonicity is not None:
+            d["monotonicity"] = self.monotonicity
+        return d
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
@@ -164,11 +169,14 @@ def load_manifest(
 def run_benchmark_pipeline(
     manifest: Union[str, Path, List[Union[BenchmarkItem, Dict[str, Any]]], Dict[str, Any]],
     base_dir: Optional[Union[str, Path]] = None,
+    evaluate_monotonicity: bool = True,
+    monotonicity_metrics: Optional[List[str]] = None,
 ) -> BenchmarkBatchReport:
     """
     Executes the top-level benchmark batch pipeline on the provided manifest.
     - Ingests and parses beatmaps via .osu AST.
-    - Extracts baseline features (total_notes, hold_pct, avg_nps, peak_4m_nps).
+    - Extracts baseline and physiological features.
+    - Evaluates tier sequence monotonicity across techniques.
     - Fault-tolerant: isolates individual beatmap failures as FAILED_INGESTION.
     - Returns standardized BenchmarkBatchReport.
     """
@@ -220,7 +228,12 @@ def run_benchmark_pipeline(
         success=success_count,
         failed=failed_count,
     )
-    return BenchmarkBatchReport(summary=summary, results=results)
+
+    mono_reports = None
+    if evaluate_monotonicity:
+        mono_reports = evaluate_batch_monotonicity(results, metrics=monotonicity_metrics)
+
+    return BenchmarkBatchReport(summary=summary, results=results, monotonicity=mono_reports)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
