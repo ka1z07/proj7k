@@ -82,3 +82,43 @@ _Avoid_: 连环暴毙、断谱崩盘
 反键难度由微观动作时钟窗口（$\Delta t$）强主导：低速反键（$\le 145$ BPM）受认知门槛影响，实际难度上限仅约 5 星；只有在更高 BPM（$\ge 180 \sim 200+$ BPM）下维持同样高锁指密度，动作容错极限压缩，才会跃升为 9★~10★+ 极限高难。
 _Avoid_: 脱离 BPM 夸大反键难度、低速反键虚高定级
 
+### 难度引擎与评级架构
+
+**双层难度模型 (Two-Layer Intrinsic Difficulty Model)**:
+解耦为底层物理键力时序与上层读谱认知负荷的双通道评价模型。
+_Avoid_: 单层黑盒打分、纯 NPS 线性加权
+
+**物理键力负载 (Mechanical Physical Load, $L_{phys}$)**:
+由动作时钟窗口、击键通量、手指物理间隙与同轨连击产生的生理耐力与肌腱负荷。
+_Avoid_: 手速、基础密度
+
+**认知阻抗 (Perceptual Cognitive Impedance, $L_{cog}$)**:
+由负空间倒错、反相位对偶、尾放精度及自由度压制引发的读谱与脑神经协调阻抗，对物理负载起非线性放大作用。
+_Avoid_: 读谱难度、眼力消耗
+
+**认知阻抗调制 (Cognitive Impedance Modulation)**:
+以物理通量为基底、认知阻抗为非线性放大算子的难度耦合形式（$D = L_{phys} \cdot (1 + \alpha L_{cog})^\gamma$）。
+_Avoid_: 线性加和、无脑乘积
+
+**判定窗口重叠缓冲 (Judgment Window Overlap Buffer, $\eta$)**:
+在高速高密长条（动作时钟 $\Delta t_{\text{action}}$ 逼近判定窗 $W_{\text{judg}}$）下，判定窗相对打击窗口占比剧增（$\eta = W_{\text{judg}} / \Delta t_{\text{action}}$），高水平玩家利用判定容错缓冲滑键，使得高速机械区的认知阻抗增长由纯指数级转变为受判定理智缓冲的亚线性饱和收敛。
+_Avoid_: 机械区无限制指数暴走、脱离判定窗口谈长条阻抗
+
+**微观爆发神经应变 (Micro-Speed Burst Strain)**:
+反映手部在极小击键间隔（单手相邻击键 $\Delta t < 110\text{ms}$，即单手连续 16 分音符速度 $> 136\text{BPM}$，全谱等效速度 $> 272\text{BPM}$）进行单指高频敲击或手指高速轮打时，受运动神经动作电位不应期与肌腱募集极限非线性惩罚所产生的物理键力激增项。
+_Avoid_: 线性 NPS 统计、忽视微观极速爆发
+
+**双曲正切软上限压缩 (Hyperbolic Tangent Soft-Cap)**:
+在星级超过 $9.5★$（人类神级/Stellium 门槛）之后引入的光滑渐进收敛算子（$SR_{\text{final}} = 9.5 + 3.0 \cdot \tanh((SR_{\text{raw}} - 9.5) / 3.0)$），保证超过 10★ 的超极限神图（如 240BPM 全反键）平滑收敛在 $12.5★$ 封顶区间，既保持星级阶梯严格单调，又维护全局排行榜比例尺度的美学与直观可用性。
+_Avoid_: 暴力硬截断、无上限天文数字膨胀
+
+**极值占优广义范数 (Extremum-Dominant $p$-Norm)**:
+基于 $p \ge 3$ 的广义幂均值星级合成算子，确保极端单项偏科铺面不被算术平均稀释，同时保留复合铺面的协同增益。
+_Avoid_: 算术平均、加权平均、简单最大值
+
+
+**段位权威层级阶梯 (Canonical Dan Progression Hierarchy)**:
+由 0th 贯穿至 Stellium 的 15 级严格单调全序难度序列（`0th < 1st < ... < 10th < Gamma < Azimuth < Zenith < Stellium`）。
+_Avoid_: 散乱星级对比、无序段位
+
+
