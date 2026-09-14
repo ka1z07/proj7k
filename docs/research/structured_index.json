@@ -1,0 +1,738 @@
+{
+  "Regular Jack": {
+    "0th": {
+      "id": 3864745,
+      "song": "S-C-U feat. Qrispy Joybox - Anemone [Another] (JJ Edit)",
+      "bpm": 200,
+      "sr": 3.83649
+    },
+    "10th": {
+      "id": 3864746,
+      "song": "SAMBA MASTER Satou -SATOH- - SAMBA LAND [SAMBAJACK]",
+      "bpm": 132,
+      "sr": 7.04616
+    },
+    "1st": {
+      "id": 3864747,
+      "song": "dai - dir [Hard]",
+      "bpm": 118,
+      "sr": 3.75611
+    },
+    "3rd": {
+      "id": 3864749,
+      "song": "Azu - Haryu [S.Star's Insane] (JJ Edit)",
+      "bpm": 218,
+      "sr": 4.80482
+    },
+    "4th": {
+      "id": 3864750,
+      "song": "toby fox - MEGALOVANIA [sans] (Edited)",
+      "bpm": 240,
+      "sr": 4.99508
+    },
+    "5th": {
+      "id": 3864751,
+      "song": "Kaneko Chiharu - AciculignosA [Scent](JJ Edit)",
+      "bpm": 148,
+      "sr": 5.25029
+    },
+    "6th": {
+      "id": 3864752,
+      "song": "Renard - Gabberse Town [Silva Edit] (JJ Edit)",
+      "bpm": 175,
+      "sr": 5.78574
+    },
+    "7th": {
+      "id": 3864753,
+      "song": "void - Sudden Romance [Koi (short)] (JJ Edit)",
+      "bpm": 152,
+      "sr": 6.18951
+    },
+    "9th": {
+      "id": 3864755,
+      "song": "scytheleg - gazer [lv.17] (JJ Edit)",
+      "bpm": 125,
+      "sr": 6.40519
+    },
+    "Azimuth": {
+      "id": 3864756,
+      "song": "Manabu Namiki - TENSHI (True Final Boss) [sp10] (JJ Edit)",
+      "bpm": 270,
+      "sr": 7.94744
+    },
+    "Stellium": {
+      "id": 3864758,
+      "song": "-45 - EXILE [Downfall]",
+      "bpm": 157,
+      "sr": 9.26563
+    },
+    "Zenith": {
+      "id": 3864759,
+      "song": "ROKINA - Icicle Stinger [Shards]",
+      "bpm": 285,
+      "sr": 9.26512
+    },
+    "2nd": {
+      "id": 3864772,
+      "song": "Various Artists - East West Wobble (JJ Edit)",
+      "bpm": 140,
+      "sr": 4.32739
+    },
+    "8th": {
+      "id": 3864773,
+      "song": "Thaehan - Overworld [Nivrad's Streams] (JJ Edit)",
+      "bpm": 193.34,
+      "sr": 5.72663
+    },
+    "Gamma": {
+      "id": 5079875,
+      "song": "SHK - Identity Part 4 [Identity: Jack] (Edited)",
+      "bpm": 140,
+      "sr": 7.85342
+    }
+  },
+  "Regular Tech": {
+    "10th": {
+      "id": 3864777,
+      "song": "puru - Toki (maidable Remix) [Glitched] (Edited)",
+      "bpm": 175,
+      "sr": 6.24903
+    },
+    "1st": {
+      "id": 3864778,
+      "song": "xi - .357 Magnum [Insane] (JJ Edit)",
+      "bpm": 178.5,
+      "sr": 4.05739
+    },
+    "2nd": {
+      "id": 3864779,
+      "song": "w_tre respect for AT&HU - Schur's Theorem [Another]",
+      "bpm": 185,
+      "sr": 3.90196
+    },
+    "3rd": {
+      "id": 3864780,
+      "song": "Mr.T - Electro Peaceful [Another] (JJ Edit)",
+      "bpm": 160,
+      "sr": 5.12878
+    },
+    "5th": {
+      "id": 3864782,
+      "song": "The Flashbulb - Passage D [Forbidden Path] (JJ Edit)",
+      "bpm": 180,
+      "sr": 5.50262
+    },
+    "6th": {
+      "id": 3864783,
+      "song": "The Algorithm - Isometry [Extra] (JJ Edit)",
+      "bpm": 240,
+      "sr": 5.53166
+    },
+    "7th": {
+      "id": 3864784,
+      "song": "incinerate - Rengoku -Purgatorium- [Jinjin's Lv.16.6]",
+      "bpm": 193,
+      "sr": 5.45209
+    },
+    "8th": {
+      "id": 3864785,
+      "song": "Camellia - Bangin' Burst [Rage!!] (JJ Edit)",
+      "bpm": 234,
+      "sr": 6.25103
+    },
+    "9th": {
+      "id": 3864786,
+      "song": "Stellabee - Ubiquity [Another] (JJ Edit)",
+      "bpm": 220,
+      "sr": 6.21808
+    },
+    "Azimuth": {
+      "id": 3864787,
+      "song": "goreshit - najimi breakers [Immunity] (JJ Edit)",
+      "bpm": 222,
+      "sr": 7.65532
+    },
+    "Gamma": {
+      "id": 3864788,
+      "song": "U1 High-Speed - EGOISM 440 [EGOMANIA]",
+      "bpm": 220,
+      "sr": 7.22666
+    },
+    "Stellium": {
+      "id": 3864789,
+      "song": "Aquellex - Wanderflux [Gekido's Annihilation+ (315 BPM)]",
+      "bpm": 315,
+      "sr": 9.6444
+    },
+    "Zenith": {
+      "id": 3864790,
+      "song": "LunaticSounds - Rinjuu [Death-]",
+      "bpm": 200,
+      "sr": 8.25562
+    },
+    "0th": {
+      "id": 3864794,
+      "song": "The Flashbulb - WYETWM [Pope's AD] (JJ Edit)",
+      "bpm": 105,
+      "sr": 3.32947
+    },
+    "4th": {
+      "id": 3864795,
+      "song": "AI / CM - My Son, the Leopard [Insane] (JJ Edit)",
+      "bpm": 180,
+      "sr": 5.11918
+    }
+  },
+  "Regular Speed": {
+    "0th": {
+      "id": 3864809,
+      "song": "Cres - End Time [Interlude] (JJ Edit)",
+      "bpm": 180,
+      "sr": 3.39879
+    },
+    "10th": {
+      "id": 3864810,
+      "song": "beta - Blue-White Crazystars [Stellar]",
+      "bpm": 290,
+      "sr": 6.58994
+    },
+    "1st": {
+      "id": 3864811,
+      "song": "xi - Aragami [Insane] (Cut)",
+      "bpm": 196,
+      "sr": 4.32529
+    },
+    "2nd": {
+      "id": 3864812,
+      "song": "xi - Hesperides [Another] (JJ Edit)",
+      "bpm": 200,
+      "sr": 4.6892
+    },
+    "3rd": {
+      "id": 3864813,
+      "song": "Sakuzyo - Altale [epilogue_18] (JJ Edit)",
+      "bpm": 90,
+      "sr": 5.04096
+    },
+    "5th": {
+      "id": 3864815,
+      "song": "antiPLUR - Speed of Link [Jinjin's Limit Lv.10]",
+      "bpm": 263.08,
+      "sr": 4.83986
+    },
+    "6th": {
+      "id": 3864816,
+      "song": "-45 - 44river [Delayanother]",
+      "bpm": 142,
+      "sr": 4.97304
+    },
+    "7th": {
+      "id": 3864817,
+      "song": "Katy B - Witches Brew [DERAY POTION] (JJ Edit)",
+      "bpm": 256,
+      "sr": 5.47017
+    },
+    "8th": {
+      "id": 3864818,
+      "song": "Sai Oto / Komiya Mao - Yozakura [Lv.16] (JJ Edit)",
+      "bpm": 135,
+      "sr": 6.38959
+    },
+    "Azimuth": {
+      "id": 3864820,
+      "song": "DJ TECHNORCH - Nijuu [ichi no mae]",
+      "bpm": 120,
+      "sr": 8.08603
+    },
+    "Gamma": {
+      "id": 3864821,
+      "song": "Silvia - Vertex GAMMA [Tachyon]",
+      "bpm": 300,
+      "sr": 7.31334
+    },
+    "Stellium": {
+      "id": 3864822,
+      "song": "onoken - P8107 (Cut) [Apocalypse]",
+      "bpm": 180,
+      "sr": 8.74447
+    },
+    "Zenith": {
+      "id": 3864823,
+      "song": "Erahamonika remixed by kors k - Der Wald [Geschwindigkeiten]",
+      "bpm": 170,
+      "sr": 7.90128
+    },
+    "4th": {
+      "id": 3864827,
+      "song": "Colorful Sounds Port - ETERNAL DRAIN [Jinjin's Lv.8]",
+      "bpm": 149,
+      "sr": 4.74498
+    },
+    "9th": {
+      "id": 3864828,
+      "song": "ueotan - Mario Paint [SHD] (JJ Edit)",
+      "bpm": 155,
+      "sr": 6.36361
+    }
+  },
+  "Regular Stream": {
+    "0th": {
+      "id": 3865205,
+      "song": "Aqours - Yuki wa Doko ni? Kimi no Mune ni! [Expert]",
+      "bpm": 167,
+      "sr": 3.92558
+    },
+    "10th": {
+      "id": 3865206,
+      "song": "Getty vs. DJ DiA - Fox4-Raize- [BMSAVITY] (Edited)",
+      "bpm": 200,
+      "sr": 7.56724
+    },
+    "1st": {
+      "id": 3865207,
+      "song": "Kozato - Tsuki -Yue- [Another] (JJ Edit)",
+      "bpm": 150,
+      "sr": 3.92719
+    },
+    "2nd": {
+      "id": 3865208,
+      "song": "M2U - Gyspy Tronic [SHD] (JJ Edit)",
+      "bpm": 125,
+      "sr": 4.46212
+    },
+    "3rd": {
+      "id": 3865209,
+      "song": "Susumu Hirasawa - CHEVRON [Thunder]",
+      "bpm": 120,
+      "sr": 5.17465
+    },
+    "4th": {
+      "id": 3865210,
+      "song": "Mr.T - electro peaceful (8bit) [Notes of Peace] (JJ Edit)",
+      "bpm": 160,
+      "sr": 5.22026
+    },
+    "5th": {
+      "id": 3865211,
+      "song": "Izayoi Sak - Blue Planet [Blue Another]",
+      "bpm": 147,
+      "sr": 5.42443
+    },
+    "6th": {
+      "id": 3865212,
+      "song": "Imperishable Night 2006 [2016 Lunatic] (JJ Edit)",
+      "bpm": 161,
+      "sr": 5.80139
+    },
+    "8th": {
+      "id": 3865213,
+      "song": "Chroma - Tiny Tales Continue [Recollections] (JJ Edit)",
+      "bpm": 187.82,
+      "sr": 6.93354
+    },
+    "Azimuth": {
+      "id": 3865214,
+      "song": "Silentroom - Finixe [The End+]",
+      "bpm": 222,
+      "sr": 8.38273
+    },
+    "Gamma": {
+      "id": 3865215,
+      "song": "LeaF - Paraclete [Sacred]",
+      "bpm": 210,
+      "sr": 7.99943
+    },
+    "Stellium": {
+      "id": 3865216,
+      "song": "TamaDo - Triumphal Return [Victory]",
+      "bpm": 260,
+      "sr": 9.9489
+    },
+    "Zenith": {
+      "id": 3865217,
+      "song": "Frums - We Want To Run [Ascend] (Cut)",
+      "bpm": 243,
+      "sr": 8.85655
+    },
+    "7th": {
+      "id": 3865219,
+      "song": "yak_won - Out Of The Blue [Ex Nihilo (BMS Style)]",
+      "bpm": 170,
+      "sr": 6.38678
+    },
+    "9th": {
+      "id": 3865220,
+      "song": "Helblinde - The Solace of Oblivion [Ephemerality]",
+      "bpm": 195,
+      "sr": 7.35602
+    }
+  },
+  "LN General": {
+    "10th": {
+      "id": 3888054,
+      "song": "OSTER project - SpaceLand TOYBOX [Playful]",
+      "bpm": 172,
+      "sr": 7.63042
+    },
+    "1st": {
+      "id": 3888055,
+      "song": "*namirin - Mawaru Sora Usagi [Sky Rabbit] (JJ Edit)",
+      "bpm": 120,
+      "sr": 2.85961
+    },
+    "2nd": {
+      "id": 3888056,
+      "song": "mimimemeMIMI - Mr. Darling [Profetti's MX] (JJ Edit)",
+      "bpm": 163,
+      "sr": 3.82301
+    },
+    "3rd": {
+      "id": 3888057,
+      "song": "Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit)",
+      "bpm": 190,
+      "sr": 4.4367
+    },
+    "4th": {
+      "id": 3888058,
+      "song": "Takanashi Yasuharu - Doku Ryuu no Kobura [Lv.37] (JJ Edit)",
+      "bpm": 200,
+      "sr": 4.27852
+    },
+    "5th": {
+      "id": 3888059,
+      "song": "Perfume - Chocolate Disco [Lv.42] (JJ Edit)",
+      "bpm": 128,
+      "sr": 5.11786
+    },
+    "6th": {
+      "id": 3888060,
+      "song": "M2U & Nicode - Lune [Moonlight] (Edited)",
+      "bpm": 160,
+      "sr": 6.19908
+    },
+    "7th": {
+      "id": 3888061,
+      "song": "TWICE - YES or YES [YES!]",
+      "bpm": 138,
+      "sr": 6.06767
+    },
+    "8th": {
+      "id": 3888062,
+      "song": "Sakuzyo - Imprinting [Impression] (JJ Edit)",
+      "bpm": 175,
+      "sr": 6.0228
+    },
+    "9th": {
+      "id": 3888063,
+      "song": "Starving Trancer - New Gravity [LNsane+]",
+      "bpm": 154,
+      "sr": 7.8522
+    },
+    "Azimuth": {
+      "id": 3888064,
+      "song": "DJ YOSHITAKA - JOMANDA [Azimuth] (Edited)",
+      "bpm": 195,
+      "sr": 8.62658
+    },
+    "Gamma": {
+      "id": 3888065,
+      "song": "Risk Junk - quaver [LN Master]",
+      "bpm": 182,
+      "sr": 8.92801
+    },
+    "Stellium": {
+      "id": 3888066,
+      "song": "Yooh - Decoy [Hard] (JJ Edit)",
+      "bpm": 180,
+      "sr": 10.4583
+    },
+    "Zenith": {
+      "id": 3888067,
+      "song": "technoplanet - Redshift [Zenith] (JJ Edit)",
+      "bpm": 190,
+      "sr": 9.69765
+    },
+    "0th": {
+      "id": 3888075,
+      "song": "Tamiyasu, Aoba - Crayon Tulip [Arc] (JJ Edit)",
+      "bpm": 111,
+      "sr": 2.79258
+    }
+  },
+  "LN Tech": {
+    "0th": {
+      "id": 3888126,
+      "song": "kensuke ushio - lit(var) [light] (JJ Edit, Cut)",
+      "bpm": 95,
+      "sr": 2.65117
+    },
+    "10th": {
+      "id": 3888127,
+      "song": "Shiron - CODE -CRiMSON- [LNavity -CRiTiCAL- (Edited)]",
+      "bpm": 167,
+      "sr": 7.33444
+    },
+    "1st": {
+      "id": 3888128,
+      "song": "Kevin Penkin - The First Layer [Craving] (JJ Edit)",
+      "bpm": 85,
+      "sr": 2.68989
+    },
+    "2nd": {
+      "id": 3888129,
+      "song": "DDRKirby(ISQ) - Take It to the Limit [Run~!] (JJ Edit)",
+      "bpm": 160,
+      "sr": 3.61172
+    },
+    "3rd": {
+      "id": 3888130,
+      "song": "C-Show - Panic Holic [Lv.31] (JJ Edit)",
+      "bpm": 220,
+      "sr": 3.88376
+    },
+    "4th": {
+      "id": 3888131,
+      "song": "STN - The Limbo [Rumi's MX] (JJ Edit)",
+      "bpm": 200,
+      "sr": 4.72905
+    },
+    "5th": {
+      "id": 3888132,
+      "song": "Lily & Morrigan - Oath Nova Apocalypse [Phantasmagoric] (JJ Edit)",
+      "bpm": 120,
+      "sr": 5.03699
+    },
+    "6th": {
+      "id": 3888133,
+      "song": "Schubert - 'Trockne Blumen' [Blocko's Experte] (JJ Edit)",
+      "bpm": 155,
+      "sr": 5.33322
+    },
+    "7th": {
+      "id": 3888134,
+      "song": "Camellia - Towards the Horizon [Horizon] (JJ Edit)",
+      "bpm": 154.4,
+      "sr": 6.49838
+    },
+    "8th": {
+      "id": 3888135,
+      "song": "penoreri - Sailing Force [Weigh Anchor] (JJ Edit)",
+      "bpm": 159,
+      "sr": 6.91904
+    },
+    "9th": {
+      "id": 3888136,
+      "song": "Toromaru - Enigma [Virtuoso] (JJ Edit)",
+      "bpm": 198,
+      "sr": 6.48434
+    },
+    "Azimuth": {
+      "id": 3888137,
+      "song": "KAKU P-MODEL - Big Brother [AD1983.99] (Edited)",
+      "bpm": 190,
+      "sr": 8.26809
+    },
+    "Gamma": {
+      "id": 3888138,
+      "song": "Hommarju - Hellfire [Hell LN+] (Edited)",
+      "bpm": 176,
+      "sr": 8.51929
+    },
+    "Stellium": {
+      "id": 3888139,
+      "song": "sak feat. myui - Unleashed World [Zola] (JJ Edit)",
+      "bpm": 232,
+      "sr": 11.7964
+    },
+    "Zenith": {
+      "id": 3888140,
+      "song": "LunaticSounds - Dement ~After Legend~ [Dementia] (JJ Edit)",
+      "bpm": 210,
+      "sr": 10.068
+    }
+  },
+  "LN Inverse": {
+    "0th": {
+      "id": 3888155,
+      "song": "OkhaP - Reimu-instrumental- [Jinjin's LN]",
+      "bpm": 90,
+      "sr": 1.94698
+    },
+    "10th": {
+      "id": 3888156,
+      "song": "Mr.T - attack in the minor key [aeoLiaN] (Edited)",
+      "bpm": 164,
+      "sr": 7.84456
+    },
+    "1st": {
+      "id": 3888157,
+      "song": "Raika - LN Pack [Lv1] / Mami Kawada - Portamento (JJ Edit, Cut)",
+      "bpm": 105,
+      "sr": 2.483
+    },
+    "2nd": {
+      "id": 3888158,
+      "song": "Raika - LN Pack [Lv3] / Silent Siren - Yumeoi (Cut) (JJ Edit)",
+      "bpm": 138,
+      "sr": 2.85212
+    },
+    "3rd": {
+      "id": 3888159,
+      "song": "BlackY & Yooh - XROSS INFECTION Lv.2 (JJ Edit)",
+      "bpm": 200,
+      "sr": 2.31582
+    },
+    "4th": {
+      "id": 3888160,
+      "song": "3L - Be Happy* (Cut) - [Jinjin's LN]",
+      "bpm": 158,
+      "sr": 3.20408
+    },
+    "5th": {
+      "id": 3888161,
+      "song": "nano feat. MFS - SAVIOR OF SONG (TV Size) [JJ's LNverse]",
+      "bpm": 192,
+      "sr": 4.16773
+    },
+    "6th": {
+      "id": 3888162,
+      "song": "Aqua, Megumin, Darkness - Chiisana Boukensha [Insane] (JJ Edit)",
+      "bpm": 78.96,
+      "sr": 3.63591
+    },
+    "7th": {
+      "id": 3888163,
+      "song": "Jeon Young Ho - brave heart [WAWACORE!![HARD LN]] (JJ Edit)",
+      "bpm": 142,
+      "sr": 4.66099
+    },
+    "8th": {
+      "id": 3888164,
+      "song": "Moe Shop - Heart [but love is madness] (JJ Edit)",
+      "bpm": 135,
+      "sr": 5.69306
+    },
+    "9th": {
+      "id": 3888165,
+      "song": "Toromaru - Hustle Beat!! [LNavity]",
+      "bpm": 148,
+      "sr": 6.55722
+    },
+    "Azimuth": {
+      "id": 3888166,
+      "song": "Qrispy Joybox - licca [Azimuth] (Edited)",
+      "bpm": 196,
+      "sr": 9.53797
+    },
+    "Gamma": {
+      "id": 3888167,
+      "song": "SHIKI - Pure Ruby [Crimson LNother](Edited)",
+      "bpm": 178,
+      "sr": 8.69212
+    },
+    "Stellium": {
+      "id": 3888168,
+      "song": "Gram - Nibelungen (Cut Ver.) [Stellium (240bpm)] (JJ Edit)",
+      "bpm": 240,
+      "sr": 11.329
+    },
+    "Zenith": {
+      "id": 3888169,
+      "song": "wa. - Black Lotus [Black LNother] (JJ Edit)",
+      "bpm": 200,
+      "sr": 10.064
+    }
+  },
+  "LN Release": {
+    "0th": {
+      "id": 3888200,
+      "song": "Renka - if Hitori Omou [Normal] (JJ Edit)",
+      "bpm": 120,
+      "sr": 1.62772
+    },
+    "10th": {
+      "id": 3888201,
+      "song": "DJ'TEKINA//STH - Internet bitch P*Light Remix [Websurfer] (Edited)",
+      "bpm": 175,
+      "sr": 8.20527
+    },
+    "1st": {
+      "id": 3888202,
+      "song": "Chata - Dango Daikazoku Mix Piano [TV size] [HD] (JJ Edit)",
+      "bpm": 100,
+      "sr": 2.18843
+    },
+    "2nd": {
+      "id": 3888203,
+      "song": "Kyary Pamyu Pamyu - HARAJUKU IYAHOI [Sulit [HD]] (JJ Edit)",
+      "bpm": 128,
+      "sr": 3.17765
+    },
+    "3rd": {
+      "id": 3888204,
+      "song": "BEAST - 12:30 [LN] (JJ Edit, Cut)",
+      "bpm": 200,
+      "sr": 2.70599
+    },
+    "4th": {
+      "id": 3888205,
+      "song": "Mili - Main Theme [LN] (JJ Edit)",
+      "bpm": 118,
+      "sr": 2.85857
+    },
+    "5th": {
+      "id": 3888206,
+      "song": "NAGI* - inside [Holding on]",
+      "bpm": 111,
+      "sr": 3.80992
+    },
+    "6th": {
+      "id": 3888207,
+      "song": "yanaginagi - in flight (zygani Remix) [Soaring] (JJ Edit)",
+      "bpm": 175,
+      "sr": 4.21281
+    },
+    "7th": {
+      "id": 3888208,
+      "song": "Beltaine - Rockhill [Celtic Glee]",
+      "bpm": 140,
+      "sr": 6.11344
+    },
+    "8th": {
+      "id": 3888209,
+      "song": "TAG - Romancing Layer [Hold On!]",
+      "bpm": 150,
+      "sr": 6.95212
+    },
+    "9th": {
+      "id": 3888210,
+      "song": "TOTTO - Onigami [Onihold] (Edited)",
+      "bpm": 161,
+      "sr": 7.9008
+    },
+    "Azimuth": {
+      "id": 3888211,
+      "song": "Kaneko Chiharu - Zettai Reido [Absolute] (Edited)",
+      "bpm": 209,
+      "sr": 9.65799
+    },
+    "Gamma": {
+      "id": 3888212,
+      "song": "Cait Sith - Schrodinger no neko [Superposition] (Edited)",
+      "bpm": 187,
+      "sr": 8.76942
+    },
+    "Stellium": {
+      "id": 3888213,
+      "song": "penoreri - Lancelot ~Flame of the Rebellion~ [1.05x] (JJ Edit)",
+      "bpm": 204.75,
+      "sr": 11.8155
+    },
+    "Zenith": {
+      "id": 3888214,
+      "song": "brz1128 - Alexandrite [Holly Zenith [192bpm] (Buffed)]",
+      "bpm": 192,
+      "sr": 10.1484
+    }
+  }
+}

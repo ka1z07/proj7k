@@ -1,0 +1,834 @@
+{
+  "https://osu.ppy.sh/beatmapsets/1877617": {
+    "id": 1877617,
+    "title": "7K Regular Dan Jack Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "xinge164",
+    "beatmaps": [
+      {
+        "id": 3864745,
+        "version": "[7K] - 0th ~  S-C-U feat. Qrispy Joybox - Anemone [Another] (JJ Edit)",
+        "bpm": 200,
+        "diff": 3.83649
+      },
+      {
+        "id": 3864746,
+        "version": "[7K] - 10th ~  SAMBA MASTER Satou -SATOH- - SAMBA LAND [SAMBAJACK]",
+        "bpm": 132,
+        "diff": 7.04616
+      },
+      {
+        "id": 3864747,
+        "version": "[7K] - 1st ~  dai - dir [Hard]",
+        "bpm": 118,
+        "diff": 3.75611
+      },
+      {
+        "id": 3864749,
+        "version": "[7K] - 3rd ~  Azu - Haryu [S.Star's Insane] (JJ Edit)",
+        "bpm": 218,
+        "diff": 4.80482
+      },
+      {
+        "id": 3864750,
+        "version": "[7K] - 4th ~  toby fox - MEGALOVANIA [sans] (Edited)",
+        "bpm": 240,
+        "diff": 4.99508
+      },
+      {
+        "id": 3864751,
+        "version": "[7K] - 5th ~  Kaneko Chiharu - AciculignosA [Scent](JJ Edit)",
+        "bpm": 148,
+        "diff": 5.25029
+      },
+      {
+        "id": 3864752,
+        "version": "[7K] - 6th ~  Renard - Gabberse Town [Silva Edit] (JJ Edit)",
+        "bpm": 175,
+        "diff": 5.78574
+      },
+      {
+        "id": 3864753,
+        "version": "[7K] - 7th ~  void - Sudden Romance [Koi (short)] (JJ Edit)",
+        "bpm": 152,
+        "diff": 6.18951
+      },
+      {
+        "id": 3864755,
+        "version": "[7K] - 9th ~  scytheleg - gazer [lv.17] (JJ Edit)",
+        "bpm": 125,
+        "diff": 6.40519
+      },
+      {
+        "id": 3864756,
+        "version": "[7K] - Azimuth ~  Manabu Namiki - TENSHI (True Final Boss) [sp10] (JJ Edit)",
+        "bpm": 270,
+        "diff": 7.94744
+      },
+      {
+        "id": 3864758,
+        "version": "[7K] - Stellium ~  -45 - EXILE [Downfall]",
+        "bpm": 157,
+        "diff": 9.26563
+      },
+      {
+        "id": 3864759,
+        "version": "[7K] - Zenith ~  ROKINA - Icicle Stinger [Shards]",
+        "bpm": 285,
+        "diff": 9.26512
+      },
+      {
+        "id": 3864760,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      },
+      {
+        "id": 3864772,
+        "version": "[7K] - 2nd ~  Various Artists - East West Wobble (JJ Edit)",
+        "bpm": 140,
+        "diff": 4.32739
+      },
+      {
+        "id": 3864773,
+        "version": "[7K] - 8th ~  Thaehan - Overworld [Nivrad's Streams] (JJ Edit)",
+        "bpm": 193.34,
+        "diff": 5.72663
+      },
+      {
+        "id": 5079875,
+        "version": "[7K] - Gamma ~  SHK - Identity Part 4 [Identity: Jack] (Edited)",
+        "bpm": 140,
+        "diff": 7.85342
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1877727": {
+    "id": 1877727,
+    "title": "7K Regular Dan Stream Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "Mrhbyy",
+    "beatmaps": [
+      {
+        "id": 3865205,
+        "version": "[7K] ~ 0th ~  Aqours - Yuki wa Doko ni? Kimi no Mune ni! [Expert]",
+        "bpm": 167,
+        "diff": 3.92558
+      },
+      {
+        "id": 3865206,
+        "version": "[7K] ~ 10th ~  Getty vs. DJ DiA - Fox4-Raize- [BMSAVITY] (Edited)",
+        "bpm": 200,
+        "diff": 7.56724
+      },
+      {
+        "id": 3865207,
+        "version": "[7K] ~ 1st ~  Kozato - Tsuki -Yue- [Another] (JJ Edit)",
+        "bpm": 150,
+        "diff": 3.92719
+      },
+      {
+        "id": 3865208,
+        "version": "[7K] ~ 2nd ~  M2U - Gyspy Tronic [SHD] (JJ Edit)",
+        "bpm": 125,
+        "diff": 4.46212
+      },
+      {
+        "id": 3865209,
+        "version": "[7K] ~ 3rd ~  Susumu Hirasawa - CHEVRON [Thunder]",
+        "bpm": 120,
+        "diff": 5.17465
+      },
+      {
+        "id": 3865210,
+        "version": "[7K] ~ 4th ~  Mr.T - electro peaceful (8bit) [Notes of Peace] (JJ Edit)",
+        "bpm": 160,
+        "diff": 5.22026
+      },
+      {
+        "id": 3865211,
+        "version": "[7K] ~ 5th ~  Izayoi Sak - Blue Planet [Blue Another]",
+        "bpm": 147,
+        "diff": 5.42443
+      },
+      {
+        "id": 3865212,
+        "version": "[7K] ~ 6th ~  Imperishable Night 2006 [2016 Lunatic] (JJ Edit)",
+        "bpm": 161,
+        "diff": 5.80139
+      },
+      {
+        "id": 3865213,
+        "version": "[7K] ~ 8th ~  Chroma - Tiny Tales Continue [Recollections] (JJ Edit)",
+        "bpm": 187.82,
+        "diff": 6.93354
+      },
+      {
+        "id": 3865214,
+        "version": "[7K] ~ Azimuth ~  Silentroom - Finixe [The End+]",
+        "bpm": 222,
+        "diff": 8.38273
+      },
+      {
+        "id": 3865215,
+        "version": "[7K] ~ Gamma ~  LeaF - Paraclete [Sacred]",
+        "bpm": 210,
+        "diff": 7.99943
+      },
+      {
+        "id": 3865216,
+        "version": "[7K] ~ Stellium ~  TamaDo - Triumphal Return [Victory]",
+        "bpm": 260,
+        "diff": 9.9489
+      },
+      {
+        "id": 3865217,
+        "version": "[7K] ~ Zenith ~  Frums - We Want To Run [Ascend] (Cut)",
+        "bpm": 243,
+        "diff": 8.85655
+      },
+      {
+        "id": 3865219,
+        "version": "[7K] ~ 7th ~  yak_won - Out Of The Blue [Ex Nihilo (BMS Style)]",
+        "bpm": 170,
+        "diff": 6.38678
+      },
+      {
+        "id": 3865220,
+        "version": "[7K] ~ 9th ~  Helblinde - The Solace of Oblivion [Ephemerality]",
+        "bpm": 195,
+        "diff": 7.35602
+      },
+      {
+        "id": 3865221,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1877636": {
+    "id": 1877636,
+    "title": "7K Regular Dan Speed Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3864809,
+        "version": "[7K] ~ 0th ~  Cres - End Time [Interlude] (JJ Edit)",
+        "bpm": 180,
+        "diff": 3.39879
+      },
+      {
+        "id": 3864810,
+        "version": "[7K] ~ 10th ~  beta - Blue-White Crazystars [Stellar]",
+        "bpm": 290,
+        "diff": 6.58994
+      },
+      {
+        "id": 3864811,
+        "version": "[7K] ~ 1st ~  xi - Aragami [Insane] (Cut)",
+        "bpm": 196,
+        "diff": 4.32529
+      },
+      {
+        "id": 3864812,
+        "version": "[7K] ~ 2nd ~  xi - Hesperides [Another] (JJ Edit)",
+        "bpm": 200,
+        "diff": 4.6892
+      },
+      {
+        "id": 3864813,
+        "version": "[7K] ~ 3rd ~  Sakuzyo - Altale [epilogue_18] (JJ Edit)",
+        "bpm": 90,
+        "diff": 5.04096
+      },
+      {
+        "id": 3864815,
+        "version": "[7K] ~ 5th ~  antiPLUR - Speed of Link [Jinjin's Limit Lv.10]",
+        "bpm": 263.08,
+        "diff": 4.83986
+      },
+      {
+        "id": 3864816,
+        "version": "[7K] ~ 6th ~  -45 - 44river [Delayanother]",
+        "bpm": 142,
+        "diff": 4.97304
+      },
+      {
+        "id": 3864817,
+        "version": "[7K] ~ 7th ~  Katy B - Witches Brew [DERAY POTION] (JJ Edit)",
+        "bpm": 256,
+        "diff": 5.47017
+      },
+      {
+        "id": 3864818,
+        "version": "[7K] ~ 8th ~  Sai Oto / Komiya Mao - Yozakura [Lv.16] (JJ Edit)",
+        "bpm": 135,
+        "diff": 6.38959
+      },
+      {
+        "id": 3864820,
+        "version": "[7K] ~ Azimuth ~  DJ TECHNORCH - Nijuu [ichi no mae]",
+        "bpm": 120,
+        "diff": 8.08603
+      },
+      {
+        "id": 3864821,
+        "version": "[7K] ~ Gamma ~  Silvia - Vertex GAMMA [Tachyon]",
+        "bpm": 300,
+        "diff": 7.31334
+      },
+      {
+        "id": 3864822,
+        "version": "[7K] ~ Stellium ~  onoken - P8107 (Cut) [Apocalypse]",
+        "bpm": 180,
+        "diff": 8.74447
+      },
+      {
+        "id": 3864823,
+        "version": "[7K] ~ Zenith ~  Erahamonika remixed by kors k - Der Wald [Geschwindigkeiten]",
+        "bpm": 170,
+        "diff": 7.90128
+      },
+      {
+        "id": 3864824,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      },
+      {
+        "id": 3864827,
+        "version": "[7K] ~ 4th ~  Colorful Sounds Port - ETERNAL DRAIN [Jinjin's Lv.8]",
+        "bpm": 149,
+        "diff": 4.74498
+      },
+      {
+        "id": 3864828,
+        "version": "[7K] ~ 9th ~  ueotan - Mario Paint [SHD] (JJ Edit)",
+        "bpm": 155,
+        "diff": 6.36361
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1877625": {
+    "id": 1877625,
+    "title": "7K Regular Dan Tech Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3864777,
+        "version": "[7K] ~ 10th ~  puru - Toki (maidable Remix) [Glitched] (Edited)",
+        "bpm": 175,
+        "diff": 6.24903
+      },
+      {
+        "id": 3864778,
+        "version": "[7K] ~ 1st ~  xi - .357 Magnum [Insane] (JJ Edit)",
+        "bpm": 178.5,
+        "diff": 4.05739
+      },
+      {
+        "id": 3864779,
+        "version": "[7K] ~ 2nd ~  w_tre respect for AT&HU - Schur's Theorem [Another]",
+        "bpm": 185,
+        "diff": 3.90196
+      },
+      {
+        "id": 3864780,
+        "version": "[7K] ~ 3rd ~  Mr.T - Electro Peaceful [Another] (JJ Edit)",
+        "bpm": 160,
+        "diff": 5.12878
+      },
+      {
+        "id": 3864782,
+        "version": "[7K] ~ 5th ~  The Flashbulb - Passage D [Forbidden Path] (JJ Edit)",
+        "bpm": 180,
+        "diff": 5.50262
+      },
+      {
+        "id": 3864783,
+        "version": "[7K] ~ 6th ~  The Algorithm - Isometry [Extra] (JJ Edit)",
+        "bpm": 240,
+        "diff": 5.53166
+      },
+      {
+        "id": 3864784,
+        "version": "[7K] ~ 7th ~  incinerate - Rengoku -Purgatorium- [Jinjin's Lv.16.6]",
+        "bpm": 193,
+        "diff": 5.45209
+      },
+      {
+        "id": 3864785,
+        "version": "[7K] ~ 8th ~  Camellia - Bangin' Burst [Rage!!] (JJ Edit)",
+        "bpm": 234,
+        "diff": 6.25103
+      },
+      {
+        "id": 3864786,
+        "version": "[7K] ~ 9th ~  Stellabee - Ubiquity [Another] (JJ Edit)",
+        "bpm": 220,
+        "diff": 6.21808
+      },
+      {
+        "id": 3864787,
+        "version": "[7K] ~ Azimuth ~  goreshit - najimi breakers [Immunity] (JJ Edit)",
+        "bpm": 222,
+        "diff": 7.65532
+      },
+      {
+        "id": 3864788,
+        "version": "[7K] ~ Gamma ~  U1 High-Speed - EGOISM 440 [EGOMANIA]",
+        "bpm": 220,
+        "diff": 7.22666
+      },
+      {
+        "id": 3864789,
+        "version": "[7K] ~ Stellium ~  Aquellex - Wanderflux [Gekido's Annihilation+ (315 BPM)]",
+        "bpm": 315,
+        "diff": 9.6444
+      },
+      {
+        "id": 3864790,
+        "version": "[7K] ~ Zenith ~  LunaticSounds - Rinjuu [Death-]",
+        "bpm": 200,
+        "diff": 8.25562
+      },
+      {
+        "id": 3864791,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      },
+      {
+        "id": 3864794,
+        "version": "[7K] ~ 0th ~  The Flashbulb - WYETWM [Pope's AD] (JJ Edit)",
+        "bpm": 105,
+        "diff": 3.32947
+      },
+      {
+        "id": 3864795,
+        "version": "[7K] ~ 4th ~  AI / CM - My Son, the Leopard [Insane] (JJ Edit)",
+        "bpm": 180,
+        "diff": 5.11918
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1887981": {
+    "id": 1887981,
+    "title": "7K LN Dan General Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3888054,
+        "version": "[7K] ~ 10th ~  OSTER project - SpaceLand TOYBOX [Playful]",
+        "bpm": 172,
+        "diff": 7.63042
+      },
+      {
+        "id": 3888055,
+        "version": "[7K] ~ 1st ~  *namirin - Mawaru Sora Usagi [Sky Rabbit] (JJ Edit)",
+        "bpm": 120,
+        "diff": 2.85961
+      },
+      {
+        "id": 3888056,
+        "version": "[7K] ~ 2nd ~  mimimemeMIMI - Mr. Darling [Profetti's MX] (JJ Edit)",
+        "bpm": 163,
+        "diff": 3.82301
+      },
+      {
+        "id": 3888057,
+        "version": "[7K] ~ 3rd ~  Mr.T - athletic meet of sound toy [RUN!!] (JJ Edit)",
+        "bpm": 190,
+        "diff": 4.4367
+      },
+      {
+        "id": 3888058,
+        "version": "[7K] ~ 4th ~  Takanashi Yasuharu - Doku Ryuu no Kobura [Lv.37] (JJ Edit)",
+        "bpm": 200,
+        "diff": 4.27852
+      },
+      {
+        "id": 3888059,
+        "version": "[7K] ~ 5th ~  Perfume - Chocolate Disco [Lv.42] (JJ Edit)",
+        "bpm": 128,
+        "diff": 5.11786
+      },
+      {
+        "id": 3888060,
+        "version": "[7K] ~ 6th ~  M2U & Nicode - Lune [Moonlight] (Edited)",
+        "bpm": 160,
+        "diff": 6.19908
+      },
+      {
+        "id": 3888061,
+        "version": "[7K] ~ 7th ~  TWICE - YES or YES [YES!]",
+        "bpm": 138,
+        "diff": 6.06767
+      },
+      {
+        "id": 3888062,
+        "version": "[7K] ~ 8th ~  Sakuzyo - Imprinting [Impression] (JJ Edit)",
+        "bpm": 175,
+        "diff": 6.0228
+      },
+      {
+        "id": 3888063,
+        "version": "[7K] ~ 9th ~  Starving Trancer - New Gravity [LNsane+]",
+        "bpm": 154,
+        "diff": 7.8522
+      },
+      {
+        "id": 3888064,
+        "version": "[7K] ~ Azimuth ~  DJ YOSHITAKA - JOMANDA [Azimuth] (Edited)",
+        "bpm": 195,
+        "diff": 8.62658
+      },
+      {
+        "id": 3888065,
+        "version": "[7K] ~ Gamma ~  Risk Junk - quaver [LN Master]",
+        "bpm": 182,
+        "diff": 8.92801
+      },
+      {
+        "id": 3888066,
+        "version": "[7K] ~ Stellium ~  Yooh - Decoy [Hard] (JJ Edit)",
+        "bpm": 180,
+        "diff": 10.4583
+      },
+      {
+        "id": 3888067,
+        "version": "[7K] ~ Zenith ~  technoplanet - Redshift [Zenith] (JJ Edit)",
+        "bpm": 190,
+        "diff": 9.69765
+      },
+      {
+        "id": 3888068,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      },
+      {
+        "id": 3888075,
+        "version": "[7K] ~ 0th ~  Tamiyasu, Aoba - Crayon Tulip [Arc] (JJ Edit)",
+        "bpm": 111,
+        "diff": 2.79258
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1888000": {
+    "id": 1888000,
+    "title": "7K LN Dan Tech Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3888126,
+        "version": "[7K] ~ 0th ~  kensuke ushio - lit(var) [light] (JJ Edit, Cut)",
+        "bpm": 95,
+        "diff": 2.65117
+      },
+      {
+        "id": 3888127,
+        "version": "[7K] ~ 10th ~  Shiron - CODE -CRiMSON- [LNavity -CRiTiCAL- (Edited)]",
+        "bpm": 167,
+        "diff": 7.33444
+      },
+      {
+        "id": 3888128,
+        "version": "[7K] ~ 1st ~  Kevin Penkin - The First Layer [Craving] (JJ Edit)",
+        "bpm": 85,
+        "diff": 2.68989
+      },
+      {
+        "id": 3888129,
+        "version": "[7K] ~ 2nd ~  DDRKirby(ISQ) - Take It to the Limit [Run~!] (JJ Edit)",
+        "bpm": 160,
+        "diff": 3.61172
+      },
+      {
+        "id": 3888130,
+        "version": "[7K] ~ 3rd ~  C-Show - Panic Holic [Lv.31] (JJ Edit)",
+        "bpm": 220,
+        "diff": 3.88376
+      },
+      {
+        "id": 3888131,
+        "version": "[7K] ~ 4th ~  STN - The Limbo [Rumi's MX] (JJ Edit)",
+        "bpm": 200,
+        "diff": 4.72905
+      },
+      {
+        "id": 3888132,
+        "version": "[7K] ~ 5th ~  Lily & Morrigan - Oath Nova Apocalypse [Phantasmagoric] (JJ Edit)",
+        "bpm": 120,
+        "diff": 5.03699
+      },
+      {
+        "id": 3888133,
+        "version": "[7K] ~ 6th ~  Schubert - 'Trockne Blumen' [Blocko's Experte] (JJ Edit)",
+        "bpm": 155,
+        "diff": 5.33322
+      },
+      {
+        "id": 3888134,
+        "version": "[7K] ~ 7th ~  Camellia - Towards the Horizon [Horizon] (JJ Edit)",
+        "bpm": 154.4,
+        "diff": 6.49838
+      },
+      {
+        "id": 3888135,
+        "version": "[7K] ~ 8th ~  penoreri - Sailing Force [Weigh Anchor] (JJ Edit)",
+        "bpm": 159,
+        "diff": 6.91904
+      },
+      {
+        "id": 3888136,
+        "version": "[7K] ~ 9th ~  Toromaru - Enigma [Virtuoso] (JJ Edit)",
+        "bpm": 198,
+        "diff": 6.48434
+      },
+      {
+        "id": 3888137,
+        "version": "[7K] ~ Azimuth ~  KAKU P-MODEL - Big Brother [AD1983.99] (Edited)",
+        "bpm": 190,
+        "diff": 8.26809
+      },
+      {
+        "id": 3888138,
+        "version": "[7K] ~ Gamma ~  Hommarju - Hellfire [Hell LN+] (Edited)",
+        "bpm": 176,
+        "diff": 8.51929
+      },
+      {
+        "id": 3888139,
+        "version": "[7K] ~ Stellium ~  sak feat. myui - Unleashed World [Zola] (JJ Edit)",
+        "bpm": 232,
+        "diff": 11.7964
+      },
+      {
+        "id": 3888140,
+        "version": "[7K] ~ Zenith ~  LunaticSounds - Dement ~After Legend~ [Dementia] (JJ Edit)",
+        "bpm": 210,
+        "diff": 10.068
+      },
+      {
+        "id": 3888141,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1888009": {
+    "id": 1888009,
+    "title": "7K LN Dan Inverse Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3888155,
+        "version": "[7K] ~ 0th ~  OkhaP - Reimu-instrumental- [Jinjin's LN]",
+        "bpm": 90,
+        "diff": 1.94698
+      },
+      {
+        "id": 3888156,
+        "version": "[7K] ~ 10th ~  Mr.T - attack in the minor key [aeoLiaN] (Edited)",
+        "bpm": 164,
+        "diff": 7.84456
+      },
+      {
+        "id": 3888157,
+        "version": "[7K] ~ 1st ~  Raika - LN Pack [Lv1] / Mami Kawada - Portamento (JJ Edit, Cut)",
+        "bpm": 105,
+        "diff": 2.483
+      },
+      {
+        "id": 3888158,
+        "version": "[7K] ~ 2nd ~  Raika - LN Pack [Lv3] / Silent Siren - Yumeoi (Cut) (JJ Edit)",
+        "bpm": 138,
+        "diff": 2.85212
+      },
+      {
+        "id": 3888159,
+        "version": "[7K] ~ 3rd ~  BlackY & Yooh - XROSS INFECTION Lv.2 (JJ Edit)",
+        "bpm": 200,
+        "diff": 2.31582
+      },
+      {
+        "id": 3888160,
+        "version": "[7K] ~ 4th ~  3L - Be Happy* (Cut) - [Jinjin's LN]",
+        "bpm": 158,
+        "diff": 3.20408
+      },
+      {
+        "id": 3888161,
+        "version": "[7K] ~ 5th ~  nano feat. MFS - SAVIOR OF SONG (TV Size) [JJ's LNverse]",
+        "bpm": 192,
+        "diff": 4.16773
+      },
+      {
+        "id": 3888162,
+        "version": "[7K] ~ 6th ~  Aqua, Megumin, Darkness - Chiisana Boukensha [Insane] (JJ Edit)",
+        "bpm": 78.96,
+        "diff": 3.63591
+      },
+      {
+        "id": 3888163,
+        "version": "[7K] ~ 7th ~  Jeon Young Ho - brave heart [WAWACORE!![HARD LN]] (JJ Edit)",
+        "bpm": 142,
+        "diff": 4.66099
+      },
+      {
+        "id": 3888164,
+        "version": "[7K] ~ 8th ~  Moe Shop - Heart [but love is madness] (JJ Edit)",
+        "bpm": 135,
+        "diff": 5.69306
+      },
+      {
+        "id": 3888165,
+        "version": "[7K] ~ 9th ~  Toromaru - Hustle Beat!! [LNavity]",
+        "bpm": 148,
+        "diff": 6.55722
+      },
+      {
+        "id": 3888166,
+        "version": "[7K] ~ Azimuth ~  Qrispy Joybox - licca [Azimuth] (Edited)",
+        "bpm": 196,
+        "diff": 9.53797
+      },
+      {
+        "id": 3888167,
+        "version": "[7K] ~ Gamma ~  SHIKI - Pure Ruby [Crimson LNother](Edited)",
+        "bpm": 178,
+        "diff": 8.69212
+      },
+      {
+        "id": 3888168,
+        "version": "[7K] ~ Stellium ~  Gram - Nibelungen (Cut Ver.) [Stellium (240bpm)] (JJ Edit)",
+        "bpm": 240,
+        "diff": 11.329
+      },
+      {
+        "id": 3888169,
+        "version": "[7K] ~ Zenith ~  wa. - Black Lotus [Black LNother] (JJ Edit)",
+        "bpm": 200,
+        "diff": 10.064
+      },
+      {
+        "id": 3888170,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      }
+    ]
+  },
+  "https://osu.ppy.sh/beatmapsets/1888027": {
+    "id": 1888027,
+    "title": "7K LN Dan Release Practice",
+    "artist": "osu!mania 7K Dan Course",
+    "creator": "KomeijiDove",
+    "beatmaps": [
+      {
+        "id": 3888200,
+        "version": "[7K] ~ 0th ~  Renka - if Hitori Omou [Normal] (JJ Edit)",
+        "bpm": 120,
+        "diff": 1.62772
+      },
+      {
+        "id": 3888201,
+        "version": "[7K] ~ 10th ~  DJ'TEKINA//STH - Internet bitch P*Light Remix [Websurfer] (Edited)",
+        "bpm": 175,
+        "diff": 8.20527
+      },
+      {
+        "id": 3888202,
+        "version": "[7K] ~ 1st ~  Chata - Dango Daikazoku Mix Piano [TV size] [HD] (JJ Edit)",
+        "bpm": 100,
+        "diff": 2.18843
+      },
+      {
+        "id": 3888203,
+        "version": "[7K] ~ 2nd ~  Kyary Pamyu Pamyu - HARAJUKU IYAHOI [Sulit [HD]] (JJ Edit)",
+        "bpm": 128,
+        "diff": 3.17765
+      },
+      {
+        "id": 3888204,
+        "version": "[7K] ~ 3rd ~  BEAST - 12:30 [LN] (JJ Edit, Cut)",
+        "bpm": 200,
+        "diff": 2.70599
+      },
+      {
+        "id": 3888205,
+        "version": "[7K] ~ 4th ~  Mili - Main Theme [LN] (JJ Edit)",
+        "bpm": 118,
+        "diff": 2.85857
+      },
+      {
+        "id": 3888206,
+        "version": "[7K] ~ 5th ~  NAGI* - inside [Holding on]",
+        "bpm": 111,
+        "diff": 3.80992
+      },
+      {
+        "id": 3888207,
+        "version": "[7K] ~ 6th ~  yanaginagi - in flight (zygani Remix) [Soaring] (JJ Edit)",
+        "bpm": 175,
+        "diff": 4.21281
+      },
+      {
+        "id": 3888208,
+        "version": "[7K] ~ 7th ~  Beltaine - Rockhill [Celtic Glee]",
+        "bpm": 140,
+        "diff": 6.11344
+      },
+      {
+        "id": 3888209,
+        "version": "[7K] ~ 8th ~  TAG - Romancing Layer [Hold On!]",
+        "bpm": 150,
+        "diff": 6.95212
+      },
+      {
+        "id": 3888210,
+        "version": "[7K] ~ 9th ~  TOTTO - Onigami [Onihold] (Edited)",
+        "bpm": 161,
+        "diff": 7.9008
+      },
+      {
+        "id": 3888211,
+        "version": "[7K] ~ Azimuth ~  Kaneko Chiharu - Zettai Reido [Absolute] (Edited)",
+        "bpm": 209,
+        "diff": 9.65799
+      },
+      {
+        "id": 3888212,
+        "version": "[7K] ~ Gamma ~  Cait Sith - Schrodinger no neko [Superposition] (Edited)",
+        "bpm": 187,
+        "diff": 8.76942
+      },
+      {
+        "id": 3888213,
+        "version": "[7K] ~ Stellium ~  penoreri - Lancelot ~Flame of the Rebellion~ [1.05x] (JJ Edit)",
+        "bpm": 204.75,
+        "diff": 11.8155
+      },
+      {
+        "id": 3888214,
+        "version": "[7K] ~ Zenith ~  brz1128 - Alexandrite [Holly Zenith [192bpm] (Buffed)]",
+        "bpm": 192,
+        "diff": 10.1484
+      },
+      {
+        "id": 3888215,
+        "version": "[7K] Delete Upon download",
+        "bpm": 200,
+        "diff": 0.054
+      }
+    ]
+  }
+}
