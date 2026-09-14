@@ -1,7 +1,21 @@
 from dataclasses import dataclass, field
 import math
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
+
+
+def parse_measure_arg(measure_str: str) -> Tuple[int, int]:
+    """Parse measure range string (e.g. '12-16', 'M12-M16', or '12') into (start_m, end_m)."""
+    m_str = measure_str.strip().upper().replace("M", "")
+    if "-" in m_str:
+        parts = m_str.split("-", 1)
+        start_m = int(parts[0])
+        end_m = int(parts[1])
+    else:
+        start_m = int(m_str)
+        end_m = start_m + 1
+    return start_m, end_m
+
 
 
 @dataclass

@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from proj7k.parser import parse_osu_7k
 from proj7k.renderer import RenderOptions, ScrollDirection, render_slice
-from proj7k.window import extract_measure_window, extract_time_window
+from proj7k.window import extract_measure_window, extract_time_window, parse_measure_arg
 
 
 def parse_timestamp(ts_str: str) -> float:
@@ -65,14 +65,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Check if measure range was provided
     if args.measure:
-        m_str = args.measure.strip().upper().replace("M", "")
-        if "-" in m_str:
-            parts = m_str.split("-", 1)
-            start_m = int(parts[0])
-            end_m = int(parts[1])
-        else:
-            start_m = int(m_str)
-            end_m = start_m + 1
+        start_m, end_m = parse_measure_arg(args.measure)
         window = extract_measure_window(beatmap, start_m, end_m)
     elif args.start and args.end:
         start_ms = parse_timestamp(args.start)

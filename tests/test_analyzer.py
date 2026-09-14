@@ -13,7 +13,7 @@ class TestChordSignature(unittest.TestCase):
     def test_single_notes(self):
         # L3 is col 0 (outer)
         sig_l3 = compute_hand_partition([0])
-        self.assertEqual(sig_l3, "L{3}[out]")
+        self.assertEqual(sig_l3, "L{3}[outer]")
 
         # S is col 3
         sig_s = compute_hand_partition([3])
@@ -21,7 +21,7 @@ class TestChordSignature(unittest.TestCase):
 
         # R1 is col 4 (inner)
         sig_r1 = compute_hand_partition([4])
-        self.assertEqual(sig_r1, "R{1}[in]")
+        self.assertEqual(sig_r1, "R{1}[inner]")
 
     def test_adjacent_chords(self):
         # R1 + R2 = col 4, 5 (adjacent)

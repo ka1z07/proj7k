@@ -58,3 +58,11 @@ def test_extract_window_computes_barlines(sample_beatmap):
     assert 2000.0 in beat_times
     assert 2500.0 in beat_times
     assert 3000.0 in beat_times
+
+
+def test_parse_measure_arg():
+    from proj7k.window import parse_measure_arg
+    assert parse_measure_arg("12-16") == (12, 16)
+    assert parse_measure_arg("M12-M16") == (12, 16)
+    assert parse_measure_arg("12") == (12, 13)
+    assert parse_measure_arg("m5") == (5, 6)

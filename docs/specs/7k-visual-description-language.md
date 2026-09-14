@@ -69,7 +69,7 @@ $$\text{Signature} = \text{L}\{\text{tracks}\}[\text{topology}] \mid \text{S}[\t
 
 ### 4.2 示例
 - `(2,1,2)[L3, L1, S, R2, R3]` $\implies$ `L{3,1}[gap:1] | S | R{2,3}[adj]`
-- `(1,0,3)[L3, R1, R2, R3]` $\implies$ `L{3}[out] | R{1,2,3}[full]`
+- `(1,0,3)[L3, R1, R2, R3]` $\implies$ `L{3}[outer] | R{1,2,3}[full]`
 
 ---
 

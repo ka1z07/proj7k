@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from proj7k.parser import Beatmap7K, HitObject, NoteType, parse_osu_7k
-from proj7k.window import extract_time_window, extract_measure_window
+from proj7k.window import extract_time_window, extract_measure_window, parse_measure_arg
 from proj7k.slicer import parse_timestamp
 
 
@@ -38,7 +38,7 @@ def compute_hand_partition(cols: List[int]) -> str:
         nums_str = ",".join(str(x) for x in finger_nums)
 
         if len(l_cols) == 1:
-            loc = "out" if 0 in l_cols else ("mid" if 1 in l_cols else "in")
+            loc = "outer" if 0 in l_cols else ("mid" if 1 in l_cols else "inner")
             parts.append(f"L{{{nums_str}}}[{loc}]")
         elif len(l_cols) == 2:
             if l_cols == [0, 1] or l_cols == [1, 2]:
@@ -69,7 +69,7 @@ def compute_hand_partition(cols: List[int]) -> str:
         nums_str = ",".join(str(x) for x in finger_nums)
 
         if len(r_cols) == 1:
-            loc = "in" if 4 in r_cols else ("mid" if 5 in r_cols else "out")
+            loc = "inner" if 4 in r_cols else ("mid" if 5 in r_cols else "outer")
             parts.append(f"R{{{nums_str}}}[{loc}]")
         elif len(r_cols) == 2:
             if r_cols == [4, 5] or r_cols == [5, 6]:
@@ -223,9 +223,12 @@ def analyze_slice(beatmap: Beatmap7K, start_time: float, end_time: float) -> Sli
                     if row[col] == PrimitiveState.EMPTY:
                         row[col] = PrimitiveState.LN_HOLD
 
-        # Antiphase check: tail on one track and head on another track
-        if tails_in_tick and heads_in_tick:
-            antiphase_count += len(tails_in_tick) * len(heads_in_tick)
+        # Antiphase check: release on one track (tail) and press on another track (rice or ln head) at same tick
+        if tails_in_tick and pressed_cols:
+            for tail_col in tails_in_tick:
+                for p_col in pressed_cols:
+                    if tail_col != p_col:
+                        antiphase_count += 1
 
         # Chord annotation
         ann = ""
@@ -277,7 +280,7 @@ def analyze_slice(beatmap: Beatmap7K, start_time: float, end_time: float) -> Sli
     )
 
 
-def main():
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python3 -m proj7k.analyzer",
         description="7k-VSDL Slice Analyzer: Extracts objective geometric, topological and cognitive metrics from 7K osu! beatmaps."
@@ -288,20 +291,17 @@ def main():
     parser.add_argument("-m", "--measure", help="Measure range to slice (e.g. '12-16' or 'M12-M16')")
     parser.add_argument("-o", "--output", help="Output VSDL file path (default: stdout)")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
-    bm = parse_osu_7k(args.osu)
+    try:
+        bm = parse_osu_7k(args.osu)
+    except Exception as e:
+        print(f"Error parsing .osu file: {e}", file=sys.stderr)
+        return 1
 
     # Determine window
     if args.measure:
-        m_str = args.measure.strip().upper().replace("M", "")
-        if "-" in m_str:
-            parts = m_str.split("-", 1)
-            start_m = int(parts[0])
-            end_m = int(parts[1])
-        else:
-            start_m = int(m_str)
-            end_m = start_m + 1
+        start_m, end_m = parse_measure_arg(args.measure)
         window = extract_measure_window(bm, start_m, end_m)
         start_ms, end_ms = window.start_ms, window.end_ms
     elif args.start and args.end:
@@ -320,6 +320,9 @@ def main():
     else:
         print(analysis.vsdl_dsl)
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
+
