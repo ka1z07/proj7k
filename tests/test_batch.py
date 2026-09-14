@@ -683,3 +683,145 @@ OverallDifficulty: 8
     assert loaded_data["monotonicity"]["LN Inverse"]["mean_locked_fingers"]["is_monotonic"] is True
 
 
+def test_batch_pipeline_feature_distillation_and_orthogonality(tmp_path: Path):
+    # Highest testing seam: verify 8-technique feature distillation, baseline fingerprints,
+    # top-3 feature rankings, separability matrix non-negativity, and ground-truth JSON export.
+    # We construct controlled beatmaps representing distinct techniques:
+    # 1. Regular Jack: burst chord/jack density (cols 0, 1)
+    # 2. Regular Stream: high NPS with gap:1 (cols 0, 2)
+    # 3. LN Inverse: full LN lock (5 columns held)
+    # 4. LN Release: rapid antiphase releases
+    manifest = [
+        BenchmarkItem(
+            technique="Regular Jack",
+            tier="1st",
+            id=101,
+            bpm=150.0,
+            content="""osu file format v14
+[General]
+Mode: 3
+[Difficulty]
+CircleSize: 7
+[TimingPoints]
+0,400,4,2,0,50,1,0
+[HitObjects]
+36,192,0,1,0,0:0:0:0:
+109,192,0,1,0,0:0:0:0:
+36,192,200,1,0,0:0:0:0:
+109,192,200,1,0,0:0:0:0:
+""",
+        ),
+        BenchmarkItem(
+            technique="Regular Stream",
+            tier="1st",
+            id=201,
+            bpm=180.0,
+            content="""osu file format v14
+[General]
+Mode: 3
+[Difficulty]
+CircleSize: 7
+[TimingPoints]
+0,333.33,4,2,0,50,1,0
+[HitObjects]
+36,192,0,1,0,0:0:0:0:
+182,192,0,1,0,0:0:0:0:
+329,192,100,1,0,0:0:0:0:
+475,192,100,1,0,0:0:0:0:
+""",
+        ),
+        BenchmarkItem(
+            technique="LN Inverse",
+            tier="1st",
+            id=301,
+            bpm=140.0,
+            content="""osu file format v14
+[General]
+Mode: 3
+[Difficulty]
+CircleSize: 7
+[TimingPoints]
+0,428.57,4,2,0,50,1,0
+[HitObjects]
+36,192,0,128,0,1000:0:0:0:0:
+109,192,0,128,0,1000:0:0:0:0:
+182,192,0,128,0,1000:0:0:0:0:
+329,192,0,128,0,1000:0:0:0:0:
+402,192,0,128,0,1000:0:0:0:0:
+""",
+        ),
+        BenchmarkItem(
+            technique="LN Release",
+            tier="1st",
+            id=401,
+            bpm=140.0,
+            content="""osu file format v14
+[General]
+Mode: 3
+[Difficulty]
+CircleSize: 7
+[TimingPoints]
+0,428.57,4,2,0,50,1,0
+[HitObjects]
+36,192,0,128,0,500:0:0:0:0:
+109,192,0,128,0,500:0:0:0:0:
+182,192,500,1,0,0:0:0:0:
+329,192,500,128,0,1000:0:0:0:0:
+""",
+        ),
+    ]
+
+    gt_file = tmp_path / "ground_truth_test.json"
+    report = run_benchmark_pipeline(manifest, ground_truth_output=str(gt_file))
+
+    assert report.summary.total == 4
+    assert report.summary.success == 4
+    assert report.summary.failed == 0
+
+    # 1. Distillation chapter present in report
+    assert report.distillation is not None
+    fps = report.distillation["fingerprints"]
+    assert len(fps) == 4
+    for tech in ["Regular Jack", "Regular Stream", "LN Inverse", "LN Release"]:
+        assert tech in fps
+        fp = fps[tech]
+        assert "centroid_raw" in fp
+        assert "centroid_normalized" in fp
+        assert "top_features" in fp
+        assert len(fp["top_features"]) == 3
+        # Assert top features are ranked
+        ranks = [f["rank"] for f in fp["top_features"]]
+        assert ranks == [1, 2, 3]
+
+    # 2. Separability matrix non-negativity and symmetry
+    sep = report.distillation["separability_matrix"]
+    matrix = sep["matrix"]
+    techs = sep["techniques"]
+    assert len(techs) == 4
+    for i in range(len(techs)):
+        for j in range(len(techs)):
+            # Strictly non-negative
+            assert matrix[i][j] >= 0.0
+            # Strictly symmetric
+            assert matrix[i][j] == pytest.approx(matrix[j][i], abs=1e-4)
+            if i == j:
+                assert matrix[i][j] == 0.0
+            else:
+                assert matrix[i][j] > 0.0
+    assert sep["global_orthogonality_score"] > 0.0
+
+    # 3. Ground truth JSON file exported and valid
+    assert gt_file.exists()
+    gt_data = json.loads(gt_file.read_text(encoding="utf-8"))
+    assert gt_data["version"] == "1.0.0"
+    assert "techniques" in gt_data
+    assert "separability_matrix" in gt_data
+    assert len(gt_data["techniques"]) == 4
+
+    # 4. Full report JSON serialization roundtrip
+    report_dict = report.to_dict()
+    assert "distillation" in report_dict
+    assert report_dict["distillation"]["separability_matrix"] == sep
+
+
+

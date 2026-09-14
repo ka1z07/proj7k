@@ -10,6 +10,7 @@ import argparse
 from proj7k.parser import parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures, get_dominant_bpm
 from proj7k.monotonicity import evaluate_batch_monotonicity
+from proj7k.distillation import distill_benchmark_features
 
 IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
 
@@ -74,6 +75,7 @@ class BenchmarkBatchReport:
     summary: BatchSummary
     results: List[BenchmarkItemResult]
     monotonicity: Optional[Dict[str, Dict[str, Any]]] = None
+    distillation: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -82,6 +84,8 @@ class BenchmarkBatchReport:
         }
         if self.monotonicity is not None:
             d["monotonicity"] = self.monotonicity
+        if self.distillation is not None:
+            d["distillation"] = self.distillation
         return d
 
     def to_json(self, indent: int = 2) -> str:
@@ -174,6 +178,8 @@ def run_benchmark_pipeline(
     evaluate_monotonicity: bool = True,
     monotonicity_metrics: Optional[List[str]] = None,
     apply_scaling: bool = True,
+    distill_features: bool = True,
+    ground_truth_output: Optional[str] = None,
 ) -> BenchmarkBatchReport:
     """
     Executes the top-level benchmark batch pipeline on the provided manifest.
@@ -181,6 +187,7 @@ def run_benchmark_pipeline(
     - Extracts baseline and physiological features.
     - Evaluates tier sequence monotonicity across techniques.
     - Pre-applies Inverse BPM Scaling Law gating operator for LN Inverse.
+    - Distills technique fingerprints and computes orthogonality separability matrix.
     - Fault-tolerant: isolates individual beatmap failures as FAILED_INGESTION.
     - Returns standardized BenchmarkBatchReport.
     """
@@ -247,7 +254,19 @@ def run_benchmark_pipeline(
             apply_scaling=apply_scaling,
         )
 
-    return BenchmarkBatchReport(summary=summary, results=results, monotonicity=mono_reports)
+    distillation_dict = None
+    if distill_features:
+        distillation_res = distill_benchmark_features(results)
+        distillation_dict = distillation_res.to_dict()
+        if ground_truth_output:
+            distillation_res.export_ground_truth(ground_truth_output)
+
+    return BenchmarkBatchReport(
+        summary=summary,
+        results=results,
+        monotonicity=mono_reports,
+        distillation=distillation_dict,
+    )
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -258,6 +277,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--manifest", required=True, help="Path to benchmark manifest JSON file")
     parser.add_argument("--base-dir", help="Base directory containing .osu files for path resolution")
     parser.add_argument("-o", "--output", help="Path to output JSON execution report")
+    parser.add_argument(
+        "--ground-truth-output",
+        help="Path to export Ground Truth distillation benchmark dataset JSON",
+    )
     parser.add_argument(
         "--no-scaling",
         action="store_true",
@@ -271,6 +294,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.manifest,
             base_dir=args.base_dir,
             apply_scaling=not args.no_scaling,
+            ground_truth_output=args.ground_truth_output,
         )
     except Exception as e:
         print(f"Pipeline initialization error: {e}", file=sys.stderr)

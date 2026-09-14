@@ -32,6 +32,17 @@ from proj7k.scaling import (
     HIGH_SPEED_BPM_THRESHOLD,
     LOW_SPEED_CAP,
 )
+from proj7k.distillation import (
+    DISTILLATION_FEATURE_KEYS,
+    extract_feature_vector,
+    normalize_feature_vectors,
+    compute_technique_centroids,
+    compute_feature_importance,
+    compute_separability_matrix,
+    distill_benchmark_features,
+    SeparabilityMatrix,
+    DistillationResult,
+)
 
 __version__ = "0.1.0"
 
@@ -63,5 +74,14 @@ __all__ = [
     "LOW_SPEED_BPM_THRESHOLD",
     "HIGH_SPEED_BPM_THRESHOLD",
     "LOW_SPEED_CAP",
+    "DISTILLATION_FEATURE_KEYS",
+    "extract_feature_vector",
+    "normalize_feature_vectors",
+    "compute_technique_centroids",
+    "compute_feature_importance",
+    "compute_separability_matrix",
+    "distill_benchmark_features",
+    "SeparabilityMatrix",
+    "DistillationResult",
 ]
 
