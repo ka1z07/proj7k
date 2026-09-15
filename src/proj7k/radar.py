@@ -69,34 +69,127 @@ class TechniqueRadar:
 class RadarOptions:
     """Configuration options for technique radar calibration and suppression."""
     min_rice_hold_threshold: float = 0.05
-    jack_threshold_ms: float = 160.0
+    jack_threshold_ms: float = 220.0
     speed_burst_threshold_ms: float = 110.0
     w_judg_ms: float = 38.0
+    chord_eps_ms: float = 8.0
+    jack_m_max: float = 1.5
+    jack_tau: float = 3.0
+    jack_chord_boost: float = 0.35
+    stream_tort_weight: float = 0.60
+    stream_gap1_weight: float = 0.30
 
 
-def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float) -> float:
-    """Computes raw Jack intensity from same-column repeat intervals."""
+def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> List[List]:
+    """Partitions beatmap hit objects into discrete chord steps S_0, S_1, ..., S_M."""
+    hos = sorted(beatmap.hit_objects, key=lambda x: (x.time, x.column))
+    if not hos:
+        return []
+    steps: List[List] = []
+    curr = [hos[0]]
+    curr_t = hos[0].time
+    for ho in hos[1:]:
+        if abs(ho.time - curr_t) <= chord_eps_ms:
+            curr.append(ho)
+        else:
+            steps.append(curr)
+            curr = [ho]
+            curr_t = ho.time
+    steps.append(curr)
+    return steps
+
+
+def _compute_jack_and_stream_raw(
+    beatmap: Beatmap7K,
+    options: RadarOptions,
+) -> Tuple[float, float, float]:
+    """
+    Computes decoupled raw Chordjack and Stream intensities using discrete step distance
+    and stream topological modulation.
+
+    Returns:
+        (r_jack, r_stream, jack_ratio)
+    """
     hos = beatmap.hit_objects
-    col_times: Dict[int, List[float]] = {c: [] for c in range(7)}
-    for ho in hos:
-        col_times[ho.column].append(ho.time)
-
-    total_jack_strain = 0.0
-    jack_intervals_count = 0
-    for col, times in col_times.items():
-        if len(times) >= 2:
-            stimes = sorted(times)
-            for k in range(len(stimes) - 1):
-                dt_ms = stimes[k + 1] - stimes[k]
-                if dt_ms < jack_threshold_ms:
-                    total_jack_strain += (jack_threshold_ms - dt_ms) / jack_threshold_ms
-                    jack_intervals_count += 1
-
-    if jack_intervals_count == 0:
-        return 0.0
+    if not hos:
+        return 0.0, 0.0, 0.0
 
     duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0)
-    return total_jack_strain / duration_s
+    steps = _partition_chord_steps(beatmap, options.chord_eps_ms)
+
+    col_state: Dict[int, Tuple[int, float, int]] = {c: (-999, -1e9, 1) for c in range(7)}
+    jack_count = 0
+    jack_strain_total = 0.0
+
+    flow_history: List[Tuple[float, int]] = []
+    reversals = 0
+    gap1_count = 0
+
+    for k, step in enumerate(steps):
+        c_size = len(step)
+        for ho in step:
+            c = ho.column
+            lk, lt, run_l = col_state[c]
+            dk = k - lk
+            dt = ho.time - lt
+
+            # Discrete step-distance criterion: Delta k == 1 and Delta t <= jack_threshold_ms
+            if dk == 1 and dt <= options.jack_threshold_ms:
+                jack_count += 1
+                new_run_l = run_l + 1
+
+                # Chordjack run-length saturation W(L) = 1.0 + M_max * tanh((L - 2) / tau)
+                w_l = 1.0 + options.jack_m_max * math.tanh((new_run_l - 2) / options.jack_tau)
+                # Multi-key chord arm vibration load
+                c_factor = 1.0 + options.jack_chord_boost * (c_size - 1)
+                # Frequency strain
+                s_factor = math.pow(options.jack_threshold_ms / max(35.0, dt), 1.25)
+
+                jack_strain_total += s_factor * w_l * c_factor
+                col_state[c] = (k, ho.time, new_run_l)
+            else:
+                col_state[c] = (k, ho.time, 1)
+                flow_history.append((ho.time, c))
+                if len(flow_history) >= 3:
+                    t0, c0 = flow_history[-3]
+                    t1, c1 = flow_history[-2]
+                    t2, c2 = flow_history[-1]
+                    if (t2 - t0) <= 250.0:
+                        d1 = c1 - c0
+                        d2 = c2 - c1
+                        if (d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0):
+                            reversals += 1
+                        if abs(c1 - c0) == 2 or abs(c2 - c1) == 2:
+                            gap1_count += 1
+
+    total_notes = len(hos)
+    active_lanes = len({ho.column for ho in hos})
+    lane_spread = max(0.0, min(1.0, (active_lanes - 2) / 2.0))
+
+    jack_ratio = jack_count / total_notes if total_notes else 0.0
+    flow_count = total_notes - jack_count
+    flow_nps = flow_count / duration_s
+
+    tortuosity = reversals / max(1, flow_count)
+    gap1_ratio = gap1_count / max(1, flow_count)
+    t_stream = 1.0 + options.stream_tort_weight * tortuosity + options.stream_gap1_weight * gap1_ratio
+
+    # Jack raw driver with chordjack density synergy
+    c_syn = 1.0 + 3.0 * max(0.0, jack_ratio - 0.08)
+    r_jack = (jack_strain_total / duration_s) * 1.48 * c_syn
+
+    # Stream raw driver with dominant chordjack suppression
+    supp = max(0.05, 1.0 - 3.6 * max(0.0, jack_ratio - 0.11))
+    r_stream = flow_nps * t_stream * lane_spread * 0.85 * supp
+
+    return r_jack, r_stream, jack_ratio
+
+
+def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float = 220.0) -> float:
+    """Computes raw Jack intensity via _compute_jack_and_stream_raw."""
+    r_jack, _, _ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
+    return r_jack
+
 
 
 def _compute_speed_raw(beatmap: Beatmap7K, speed_threshold_ms: float, avg_nps: float) -> float:
@@ -152,8 +245,8 @@ def compute_technique_radar(
     sr_base = compute_raw_strain_star_rating(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
-    # Jack
-    r_jack = _compute_jack_raw(beatmap, options.jack_threshold_ms)
+    # Decoupled Jack and Stream drivers via discrete step distance and topological modulation
+    r_jack, r_stream, jack_ratio = _compute_jack_and_stream_raw(beatmap, options)
 
     # Tech (finger decoupling, gap:1 shear, complex track transitions)
     r_tech = features.gap1_density * 2.0 + features.adj_density * 0.80
@@ -161,11 +254,7 @@ def compute_technique_radar(
     # Speed (micro-speed burst tapping rate)
     r_speed = _compute_speed_raw(beatmap, options.speed_burst_threshold_ms, features.avg_nps)
 
-    # Stream (sustained physical throughput with high average and peak NPS across multiple lanes, penalized by jacks)
     active_lanes = len({ho.column for ho in hos})
-    lane_spread = max(0.0, min(1.0, (active_lanes - 2) / 2.0))
-    raw_stream = (features.avg_nps * 0.60 + features.peak_4m_nps * 0.40) - (r_jack * 0.80)
-    r_stream = max(0.0, raw_stream) * lane_spread
 
     # LN General (overall hold presence and sustained hold chords)
     r_ln_gen = hold_ratio * features.avg_nps * 1.50
@@ -191,18 +280,24 @@ def compute_technique_radar(
     elif hold_ratio > 0.30:
         r_jack *= max(0.0, 1.0 - (hold_ratio - 0.30) / 0.20)
 
-    # Rule C: Lane spread gating & Pure Jack specialization
+    # Rule C: Lane spread gating & Pure Jack/Stream specialization
     if active_lanes <= 2:
         r_stream = 0.0
         r_tech = 0.0
         r_speed = 0.0
-    elif r_jack > 3.0:
-        if r_jack > r_stream * 1.5:
-            r_stream = max(0.0, r_stream - (r_jack * 0.5))
-        if r_jack > r_tech * 1.5:
-            r_tech = max(0.0, r_tech - (r_jack * 0.3))
-        if r_jack > r_speed * 0.7:
-            r_speed = max(0.0, r_speed - (r_jack * 0.6))
+    else:
+        if r_jack > 3.0:
+            if r_jack > r_stream * 1.5:
+                r_stream = max(0.0, r_stream - (r_jack * 0.5))
+            if r_jack > r_tech * 1.5:
+                r_tech = max(0.0, r_tech - (r_jack * 0.3))
+            if r_jack > r_speed * 0.7:
+                r_speed = max(0.0, r_speed - (r_jack * 0.6))
+        # Rule D: Dominant Stream cross-suppression of residual jack noise
+        if r_stream > 3.0 and jack_ratio < 0.13:
+            if r_stream > r_jack * 0.9:
+                r_jack = max(0.0, r_jack - (r_stream * 0.40))
+
 
     raw_scores: Dict[str, float] = {
         "jack": max(0.0, r_jack),
