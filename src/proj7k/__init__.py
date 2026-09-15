@@ -65,6 +65,9 @@ from proj7k.strain import (
     StrainTimeseriesProfile,
     StrainOptions,
     compute_dual_hand_strain,
+    compute_judgment_overlap_buffer,
+    compute_high_speed_scaling_factor,
+    compute_micro_speed_burst,
 )
 
 __version__ = "0.1.0"
@@ -121,5 +124,8 @@ __all__ = [
     "StrainTimeseriesProfile",
     "StrainOptions",
     "compute_dual_hand_strain",
+    "compute_judgment_overlap_buffer",
+    "compute_high_speed_scaling_factor",
+    "compute_micro_speed_burst",
 ]
 
