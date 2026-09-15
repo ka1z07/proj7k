@@ -21,6 +21,7 @@ from proj7k.strain import (
     StrainTimeseriesProfile,
     compute_dual_hand_strain,
     compute_micro_speed_burst,
+    compute_raw_strain_star_rating,
 )
 
 TECHNIQUE_NAMES: Tuple[str, ...] = (
@@ -67,7 +68,7 @@ class TechniqueRadar:
 @dataclass(frozen=True)
 class RadarOptions:
     """Configuration options for technique radar calibration and suppression."""
-    min_rice_hold_threshold: float = 0.02
+    min_rice_hold_threshold: float = 0.05
     jack_threshold_ms: float = 160.0
     speed_burst_threshold_ms: float = 110.0
     w_judg_ms: float = 38.0
@@ -80,48 +81,37 @@ def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float) -> float:
     for ho in hos:
         col_times[ho.column].append(ho.time)
 
-    for c in range(7):
-        col_times[c].sort()
-
     total_jack_strain = 0.0
     jack_intervals_count = 0
-
-    for c in range(7):
-        times = col_times[c]
+    for col, times in col_times.items():
         if len(times) >= 2:
-            for k in range(len(times) - 1):
-                dt_ms = times[k + 1] - times[k]
-                if 5.0 < dt_ms < jack_threshold_ms:
-                    weight = (jack_threshold_ms - dt_ms) / jack_threshold_ms
-                    # Quadratic emphasis for very tight jacks (< 120ms)
-                    total_jack_strain += weight * (1.0 + max(0.0, (120.0 - dt_ms) / 60.0))
+            stimes = sorted(times)
+            for k in range(len(stimes) - 1):
+                dt_ms = stimes[k + 1] - stimes[k]
+                if dt_ms < jack_threshold_ms:
+                    total_jack_strain += (jack_threshold_ms - dt_ms) / jack_threshold_ms
                     jack_intervals_count += 1
 
     if jack_intervals_count == 0:
         return 0.0
 
     duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0)
-    jack_rate = total_jack_strain / duration_s
-    # Map jack_rate to difficulty scale [0, ~12]
-    return min(12.0, math.pow(jack_rate, 0.65) * 1.85)
+    return total_jack_strain / duration_s
 
 
-def _compute_speed_raw(beatmap: Beatmap7K, speed_threshold_ms: float) -> float:
-    """Computes raw Speed intensity from rapid successive note presses."""
-    hos = beatmap.hit_objects
-    sorted_times_s = sorted(ho.time / 1000.0 for ho in hos)
-    burst = compute_micro_speed_burst(
-        sorted_times_s,
-        min_interval_ms=5.0,
-        max_interval_ms=speed_threshold_ms,
-    )
-    duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0)
+def _compute_speed_raw(beatmap: Beatmap7K, speed_threshold_ms: float, avg_nps: float) -> float:
+    """Computes raw Speed intensity from rapid successive note presses across different columns."""
+    hos = sorted(beatmap.hit_objects, key=lambda x: x.time)
+    burst = 0.0
+    for k in range(len(hos) - 1):
+        if hos[k].column != hos[k + 1].column:
+            dt_ms = hos[k + 1].time - hos[k].time
+            if 5.0 < dt_ms < speed_threshold_ms:
+                burst += math.pow((speed_threshold_ms - dt_ms) / 50.0, 1.35)
+
+    duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0) if hos else 1.0
     burst_rate = burst / duration_s
-
-    # High speed single note density
-    nps = len(hos) / duration_s
-    speed_factor = burst_rate * 0.45 + max(0.0, nps - 10.0) * 0.35
-    return min(12.0, math.pow(max(0.0, speed_factor), 0.70) * 1.65)
+    return burst_rate * 1.50 + max(0.0, avg_nps - 10.0) * 0.60
 
 
 def compute_technique_radar(
@@ -157,71 +147,64 @@ def compute_technique_radar(
     if strain_profile is None:
         strain_profile = compute_dual_hand_strain(beatmap)
 
-    hold_pct = features.hold_pct
+    hold_ratio = (features.hold_pct / 100.0) if features.hold_pct > 1.0 else features.hold_pct
     p90_strain = strain_profile.p90_strain
+    sr_base = compute_raw_strain_star_rating(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
     # Jack
     r_jack = _compute_jack_raw(beatmap, options.jack_threshold_ms)
 
     # Tech (finger decoupling, gap:1 shear, complex track transitions)
-    gap1_factor = features.gap1_density * 3.2
-    adj_factor = features.adj_density * 1.2
-    r_tech = min(12.0, math.pow(gap1_factor + adj_factor, 0.70) * 1.60)
+    r_tech = features.gap1_density * 2.0 + features.adj_density * 0.80
 
     # Speed (micro-speed burst tapping rate)
-    r_speed = _compute_speed_raw(beatmap, options.speed_burst_threshold_ms)
+    r_speed = _compute_speed_raw(beatmap, options.speed_burst_threshold_ms, features.avg_nps)
 
-    # Stream (sustained physical throughput with high average and peak NPS across multiple lanes)
+    # Stream (sustained physical throughput with high average and peak NPS across multiple lanes, penalized by jacks)
     active_lanes = len({ho.column for ho in hos})
     lane_spread = max(0.0, min(1.0, (active_lanes - 2) / 2.0))
-    stream_metric = features.avg_nps * 0.50 + features.peak_4m_nps * 0.50
-    r_stream = min(12.0, math.pow(max(0.0, stream_metric), 0.68) * 0.75) * lane_spread
+    raw_stream = (features.avg_nps * 0.60 + features.peak_4m_nps * 0.40) - (r_jack * 0.80)
+    r_stream = max(0.0, raw_stream) * lane_spread
 
     # LN General (overall hold presence and sustained hold chords)
-    ln_chord_density = hold_pct * features.avg_nps
-    r_ln_gen = min(12.0, math.pow(ln_chord_density * 2.5, 0.72) * 1.50)
+    r_ln_gen = hold_ratio * features.avg_nps * 1.50
 
     # LN Tech (LN with gap1 and finger coordination constraints)
-    ln_tech_factor = hold_pct * (features.gap1_density * 2.5 + features.adj_density * 1.5)
-    r_ln_tech = min(12.0, math.pow(ln_tech_factor * 2.0, 0.70) * 1.60)
+    r_ln_tech = hold_ratio * (features.gap1_density * 2.0 + features.adj_density * 1.0) * 2.0
 
     # LN Inverse (high locked finger density, inverse score under BPM scaling)
-    inverse_score = features.inverse_score
-    locked_factor = features.mean_locked_fingers * 2.5
-    r_ln_inv = min(12.0, math.pow(max(0.0, inverse_score * 3.5 + locked_factor), 0.72) * 1.75)
+    r_ln_inv = (features.inverse_score * 0.80 + features.mean_locked_fingers * 1.50) * min(1.0, hold_ratio * 2.0)
 
-    # LN Release (antiphase rate and high-frequency release density)
-    release_factor = features.antiphase_rate * 4.0 + hold_pct * (features.peak_1b_nps * 0.15)
-    r_ln_rel = min(12.0, math.pow(max(0.0, release_factor * 2.2), 0.70) * 1.65)
+    # LN Release (antiphase rate, release rate and high-frequency release density)
+    duration_s = max(0.5, features.duration_seconds)
+    release_rate = features.ln_count / duration_s
+    r_ln_rel = (release_rate * 0.80 + features.antiphase_rate * 1.50 + hold_ratio * features.peak_1b_nps * 0.10) * min(1.0, hold_ratio * 2.0)
 
     # --- 2. Orthogonal Cross-Suppression ---
-    # Rule A: Pure Rice charts (hold_pct < min_rice_hold_threshold)
-    # LN techniques are strictly suppressed to 0.0 (no LN exists)
-    if hold_pct < options.min_rice_hold_threshold:
+    # Rule A: Pure Rice charts (hold_ratio < min_rice_hold_threshold)
+    if hold_ratio < options.min_rice_hold_threshold:
         r_ln_gen = 0.0
         r_ln_tech = 0.0
         r_ln_inv = 0.0
         r_ln_rel = 0.0
+    elif hold_ratio > 0.30:
+        r_jack *= max(0.0, 1.0 - (hold_ratio - 0.30) / 0.20)
 
-    # Rule B: Rice Jack vs LN cross-inhibition
-    # Regular Jack is strictly a Rice discipline (centroid hold_pct = 0.016)
-    # When LN dominates (hold_pct > 0.25), Rice Jack is cross-suppressed
-    if hold_pct > 0.25:
-        rice_ratio = max(0.0, 1.0 - (hold_pct - 0.25) / 0.25)
-        r_jack = r_jack * rice_ratio
-
-    # Rule C: Pure Jack specialization
-    # If jack is overwhelmingly dominant and other rice features are minimal, suppress noise
+    # Rule C: Lane spread gating & Pure Jack specialization
     if active_lanes <= 2:
         r_stream = 0.0
         r_tech = 0.0
-    elif r_jack > 3.0 and r_jack > r_stream * 2.0 and r_jack > r_tech * 1.5:
-        r_stream = max(0.0, r_stream - (r_jack * 0.3))
-        r_tech = max(0.0, r_tech - (r_jack * 0.2))
+        r_speed = 0.0
+    elif r_jack > 3.0:
+        if r_jack > r_stream * 1.5:
+            r_stream = max(0.0, r_stream - (r_jack * 0.5))
+        if r_jack > r_tech * 1.5:
+            r_tech = max(0.0, r_tech - (r_jack * 0.3))
+        if r_jack > r_speed * 0.7:
+            r_speed = max(0.0, r_speed - (r_jack * 0.6))
 
-    # Ensure all values are non-negative
-    scores: Dict[str, float] = {
+    raw_scores: Dict[str, float] = {
         "jack": max(0.0, r_jack),
         "tech": max(0.0, r_tech),
         "speed": max(0.0, r_speed),
@@ -231,6 +214,15 @@ def compute_technique_radar(
         "ln_inverse": max(0.0, r_ln_inv),
         "ln_release": max(0.0, r_ln_rel),
     }
+
+    max_raw = max(raw_scores.values()) if raw_scores else 0.0
+    if max_raw <= 1e-6 or sr_base <= 1e-6:
+        scores = {k: 0.0 for k in raw_scores}
+    else:
+        scores = {
+            k: min(12.0, sr_base * math.pow(v / max_raw, 0.75))
+            for k, v in raw_scores.items()
+        }
 
     # Determine dominant technique and score
     max_tech = "None"

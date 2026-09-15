@@ -12,7 +12,7 @@ import math
 from typing import Dict, List, Optional, Sequence, Union
 
 from proj7k.radar import TechniqueRadar
-
+from proj7k.strain import compute_raw_strain_star_rating
 
 @dataclass(frozen=True)
 class RatingOptions:
@@ -46,19 +46,6 @@ class StarRatingSynthesis:
         }
 
 
-def compute_raw_strain_star_rating(
-    s_base: float,
-    a: float = 0.268980,
-    b: float = 0.129915,
-    exp: float = 0.65,
-) -> float:
-    """
-    Maps physical steady-state strain S_base to raw star rating:
-    SR_raw = a * S_base^exp + b
-    """
-    if s_base <= 0.0:
-        return 0.0
-    return max(0.0, a * math.pow(s_base, exp) + b)
 
 
 def aggregate_p_norm(

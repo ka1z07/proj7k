@@ -78,7 +78,7 @@ def test_pure_jack_dominance():
 def test_pure_speed_burst_dominance():
     # 300 BPM fast single notes (50ms interval) across alternating lanes
     hos: List[HitObject] = []
-    for i in range(40):
+    for i in range(60):
         hos.append(HitObject(column=(i * 2) % 7, time=i * 50.0, note_type=NoteType.RICE))
     bm = _make_sample_beatmap(hos, bpm=300.0)
     radar = compute_technique_radar(bm)

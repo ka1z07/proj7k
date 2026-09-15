@@ -222,6 +222,21 @@ def _calculate_percentile(values: List[float], q: float) -> float:
     return float((1.0 - weight) * sorted_v[low] + weight * sorted_v[high])
 
 
+def compute_raw_strain_star_rating(
+    s_base: float,
+    a: float = 0.268980,
+    b: float = 0.129915,
+    exp: float = 0.65,
+) -> float:
+    """
+    Maps physical steady-state strain S_base to raw star rating:
+    SR_raw = a * S_base^exp + b
+    """
+    if s_base <= 0.0:
+        return 0.0
+    return max(0.0, a * math.pow(s_base, exp) + b)
+
+
 def compute_dual_hand_strain(
     beatmap: Beatmap7K,
     options: Optional[StrainOptions] = None,

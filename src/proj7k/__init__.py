@@ -85,6 +85,13 @@ from proj7k.rating import (
 
 __version__ = "0.1.0"
 
+
+def __getattr__(name: str):
+    if name in ("DifficultyOptions", "IntrinsicDifficultyResult", "evaluate_intrinsic_difficulty"):
+        import proj7k.difficulty as _diff
+        return getattr(_diff, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 __all__ = [
     "BeatmapFeatures",
     "extract_beatmap_features",
@@ -149,5 +156,8 @@ __all__ = [
     "apply_tanh_soft_cap",
     "compute_raw_strain_star_rating",
     "synthesize_star_rating",
+    "DifficultyOptions",
+    "IntrinsicDifficultyResult",
+    "evaluate_intrinsic_difficulty",
 ]
 
