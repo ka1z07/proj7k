@@ -74,6 +74,14 @@ from proj7k.radar import (
     RadarOptions,
     compute_technique_radar,
 )
+from proj7k.rating import (
+    RatingOptions,
+    StarRatingSynthesis,
+    aggregate_p_norm,
+    apply_tanh_soft_cap,
+    compute_raw_strain_star_rating,
+    synthesize_star_rating,
+)
 
 __version__ = "0.1.0"
 
@@ -135,5 +143,11 @@ __all__ = [
     "TechniqueRadar",
     "RadarOptions",
     "compute_technique_radar",
+    "RatingOptions",
+    "StarRatingSynthesis",
+    "aggregate_p_norm",
+    "apply_tanh_soft_cap",
+    "compute_raw_strain_star_rating",
+    "synthesize_star_rating",
 ]
 
