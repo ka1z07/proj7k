@@ -69,6 +69,11 @@ from proj7k.strain import (
     compute_high_speed_scaling_factor,
     compute_micro_speed_burst,
 )
+from proj7k.radar import (
+    TechniqueRadar,
+    RadarOptions,
+    compute_technique_radar,
+)
 
 __version__ = "0.1.0"
 
@@ -127,5 +132,8 @@ __all__ = [
     "compute_judgment_overlap_buffer",
     "compute_high_speed_scaling_factor",
     "compute_micro_speed_burst",
+    "TechniqueRadar",
+    "RadarOptions",
+    "compute_technique_radar",
 ]
 
