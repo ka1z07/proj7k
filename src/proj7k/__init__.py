@@ -61,6 +61,11 @@ from proj7k.guard import (
     evaluate_monotonicity_guard,
     run_monotonicity_guard,
 )
+from proj7k.strain import (
+    StrainTimeseriesProfile,
+    StrainOptions,
+    compute_dual_hand_strain,
+)
 
 __version__ = "0.1.0"
 
@@ -113,5 +118,8 @@ __all__ = [
     "MonotonicityGuardResult",
     "evaluate_monotonicity_guard",
     "run_monotonicity_guard",
+    "StrainTimeseriesProfile",
+    "StrainOptions",
+    "compute_dual_hand_strain",
 ]
 
