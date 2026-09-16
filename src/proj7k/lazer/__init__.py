@@ -33,6 +33,27 @@ from proj7k.lazer.annotator import (
     create_lazer_revert_payload,
     annotate_batch_and_build_collections,
 )
+from proj7k.lazer.lock import (
+    LockBusyError,
+    probe_realm_lock,
+    SafeFlushWindow,
+)
+from proj7k.lazer.backup import (
+    DEFAULT_CACHE_DIR,
+    DEFAULT_BACKUP_STATE_FILE,
+    BeatmapBackupState,
+    LazerBackupManager,
+)
+from proj7k.lazer.daemon import (
+    DEFAULT_FILES_DIR,
+    DEFAULT_LOCK_PATH,
+    SyncOptions,
+    SyncSummary,
+    resolve_beatmap_file,
+    LazerSyncManager,
+    LazerDaemon,
+    run_daemon,
+)
 
 __all__ = [
     "RealmBridgeClient",
@@ -61,5 +82,20 @@ __all__ = [
     "annotate_lazer_beatmap",
     "create_lazer_revert_payload",
     "annotate_batch_and_build_collections",
+    "LockBusyError",
+    "probe_realm_lock",
+    "SafeFlushWindow",
+    "DEFAULT_CACHE_DIR",
+    "DEFAULT_BACKUP_STATE_FILE",
+    "BeatmapBackupState",
+    "LazerBackupManager",
+    "DEFAULT_FILES_DIR",
+    "DEFAULT_LOCK_PATH",
+    "SyncOptions",
+    "SyncSummary",
+    "resolve_beatmap_file",
+    "LazerSyncManager",
+    "LazerDaemon",
+    "run_daemon",
 ]
 

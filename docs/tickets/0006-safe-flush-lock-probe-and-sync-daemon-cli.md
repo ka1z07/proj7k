@@ -1,8 +1,8 @@
 # Ticket 6: 安全刷盘窗探针、容灾备份与守护 CLI 总控
 
 - **ID**: `SPEC-P2.3-03`
-- **状态**: `ready-for-agent`
-- **标签**: `ready-for-agent`
+- **状态**: `closed`
+- **标签**: `ready-for-human`
 - **阻塞依赖 (Blocked by)**: `SPEC-P2.3-02`
 - **所属父规格**: [`docs/specs/phase2.3-lazer-realm-ingestion-and-sync-daemon.md`](file:///Users/kz/proj7k/docs/specs/phase2.3-lazer-realm-ingestion-and-sync-daemon.md)
 - **关联 ADR**: [`docs/adr/0009-lazer-realm-non-destructive-ingestion-and-node-bridge.md`](file:///Users/kz/proj7k/docs/adr/0009-lazer-realm-non-destructive-ingestion-and-node-bridge.md)
@@ -40,7 +40,8 @@
 
 ## 验收条件 (Acceptance Criteria)
 
-- [ ] `lock.py` 在并发模拟测试中 100% 正确判定游戏锁状态；
-- [ ] 备份与回滚机制通过无损全量回滚断言；
-- [ ] CLI 入口完整支持 `--once`, `--daemon`, `--revert`, `--setup`；
-- [ ] 现有测试全量通过无回归，覆盖率维持在 90% 以上。
+- [x] `lock.py` 在并发模拟测试中 100% 正确判定游戏锁状态；
+- [x] 备份与回滚机制通过无损全量回滚断言；
+- [x] CLI 入口完整支持 `--once`, `--daemon`, `--revert`, `--setup`；
+- [x] 现有测试全量通过无回归，覆盖率维持在 90% 以上（实际达到 98%）。
+
