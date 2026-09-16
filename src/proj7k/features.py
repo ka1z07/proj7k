@@ -1,5 +1,6 @@
+import math
 from dataclasses import dataclass, asdict, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.window import generate_all_barlines
 from proj7k.scaling import compute_action_window, compute_inverse_score
@@ -33,6 +34,12 @@ class BeatmapFeatures:
     # Action clock window and calibrated inverse score
     delta_t_action: float = 0.0
     inverse_score: float = 0.0
+
+    # 4D Unorthodox Permutation and Rhythm Features (ADR-0008)
+    spatial_entropy: float = 0.0
+    snap_variance_entropy: float = 0.0
+    microtiming_jerk: float = 0.0
+    rhythm_irreg: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -102,6 +109,10 @@ def extract_beatmap_features(
             antiphase_rate=0.0,
             delta_t_action=0.0,
             inverse_score=0.0,
+            spatial_entropy=0.0,
+            snap_variance_entropy=0.0,
+            microtiming_jerk=0.0,
+            rhythm_irreg=0.0,
         )
 
     rice_count = sum(1 for ho in beatmap.hit_objects if ho.note_type == NoteType.RICE)
@@ -288,6 +299,107 @@ def extract_beatmap_features(
     delta_t_action = compute_action_window(effective_bpm)
     inverse_score = compute_inverse_score(mean_locked_fingers, bpm=effective_bpm, nps=avg_nps)
 
+    # 6. Spatial Transition Entropy (7-track conditional transition entropy) (ADR-0008)
+    hos_sorted = sorted(beatmap.hit_objects, key=lambda x: x.time)
+    trans: Dict[Tuple[int, int], int] = {}
+    lane_counts: Dict[int, int] = {c: 0 for c in range(7)}
+    for k in range(len(hos_sorted) - 1):
+        c1, c2 = hos_sorted[k].column, hos_sorted[k + 1].column
+        trans[(c1, c2)] = trans.get((c1, c2), 0) + 1
+        lane_counts[c1] += 1
+
+    tot_trans = sum(trans.values())
+    h_spatial = 0.0
+    if tot_trans > 0:
+        for c1 in range(7):
+            n_c1 = lane_counts[c1]
+            if n_c1 > 0:
+                h_c = 0.0
+                for c2 in range(7):
+                    cnt = trans.get((c1, c2), 0)
+                    if cnt > 0:
+                        p_c = cnt / n_c1
+                        h_c -= p_c * math.log2(p_c)
+                h_spatial += (n_c1 / tot_trans) * h_c
+        spatial_entropy = round(h_spatial / math.log2(7.0), 4)
+    else:
+        spatial_entropy = 0.0
+
+    # 7. Rhythmic Irregularity (Snap Variance Entropy, Micro-timing Jerk, and Mixing) (ADR-0008)
+    uninherited = [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
+    default_bl = (60000.0 / effective_bpm) if effective_bpm > 0 else 400.0
+    step_times = sorted(list(set(ho.time for ho in hos_sorted)))
+
+    BINARY_SNAPS = (1/16, 1/8, 1/4, 1/2, 1.0, 2.0)
+    TERNARY_SNAPS = (1/24, 1/12, 1/6, 1/3, 2/3)
+    CANONICAL_SNAPS = (
+        (1/16, 0.0625), (1/12, 0.0833), (1/8, 0.125), (1/6, 0.1667),
+        (1/4, 0.25), (1/3, 0.3333), (1/2, 0.5), (3/4, 0.75), (1.0, 1.0)
+    )
+
+    snap_counts: Dict[Any, int] = {}
+    jerks: List[float] = []
+    tp_idx = 0
+    tot_steps = 0
+    bin_cnt = 0
+    ter_cnt = 0
+    irr_cnt = 0
+
+    for i in range(len(step_times) - 1):
+        t1, t2 = step_times[i], step_times[i + 1]
+        dt = t2 - t1
+        if dt < 10.0 or dt > 2000.0:
+            continue
+        while tp_idx + 1 < len(uninherited) and uninherited[tp_idx + 1].time <= t1:
+            tp_idx += 1
+        bl = uninherited[tp_idx].beat_length if uninherited else default_bl
+        frac = dt / bl
+
+        matched: Any = "irr"
+        for s_val, s_num in CANONICAL_SNAPS:
+            if abs(frac - s_num) <= max(0.02, s_num * 0.10):
+                matched = s_val
+                break
+        snap_counts[matched] = snap_counts.get(matched, 0) + 1
+        tot_steps += 1
+
+        is_bin = any(abs(frac - s) <= max(0.015, s * 0.08) for s in BINARY_SNAPS)
+        is_ter = any(abs(frac - s) <= max(0.015, s * 0.08) for s in TERNARY_SNAPS)
+        if is_bin:
+            bin_cnt += 1
+        elif is_ter:
+            ter_cnt += 1
+        else:
+            irr_cnt += 1
+
+        if i + 2 < len(step_times):
+            dt_next = step_times[i + 2] - t2
+            if 10.0 <= dt_next <= 2000.0:
+                j = abs(dt_next - dt) / max(dt, 25.0)
+                jerks.append(min(j, 2.5))
+
+    h_snap = 0.0
+    if tot_steps > 0:
+        for s_key, cnt in snap_counts.items():
+            p = cnt / tot_steps
+            h_snap -= p * math.log2(p)
+    snap_variance_entropy = round(h_snap / math.log2(10.0), 4)
+    microtiming_jerk = round(sum(jerks) / len(jerks), 4) if jerks else 0.0
+
+    p_bin = bin_cnt / max(1, tot_steps)
+    p_ter = ter_cnt / max(1, tot_steps)
+    p_irr = irr_cnt / max(1, tot_steps)
+    h_mix = 0.0
+    for p_val in (p_bin, p_ter, p_irr):
+        if p_val > 0:
+            h_mix -= p_val * math.log2(p_val)
+    norm_h_mix = h_mix / math.log2(3.0)
+
+    rhythm_irreg = round(
+        snap_variance_entropy * 0.40 + min(1.0, microtiming_jerk * 2.5) * 0.30 + norm_h_mix * 0.30,
+        4,
+    )
+
     return BeatmapFeatures(
         total_notes=total_notes,
         rice_count=rice_count,
@@ -307,4 +419,8 @@ def extract_beatmap_features(
         antiphase_rate=antiphase_rate,
         delta_t_action=delta_t_action,
         inverse_score=inverse_score,
+        spatial_entropy=spatial_entropy,
+        snap_variance_entropy=snap_variance_entropy,
+        microtiming_jerk=microtiming_jerk,
+        rhythm_irreg=rhythm_irreg,
     )

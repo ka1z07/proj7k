@@ -83,9 +83,16 @@ class RadarOptions:
     stream_bracket_weight: float = 0.40
     ln_gen_concurrent_weight: float = 0.30
     ln_inv_score_weight: float = 2.50
-    ln_inv_lock_weight: float = 1.80
+    ln_inv_lock_weight: float = 1.30
     ln_release_rate_weight: float = 0.75
     ln_release_antiphase_weight: float = 1.20
+    tech_coupling_gamma: float = 1.25
+    tech_coupling_lambda: float = 2.85
+    tech_tort_weight: float = 0.35
+    tech_bracket_weight: float = 0.70
+    tech_spatial_weight: float = 0.30
+    tech_rhythm_weight: float = 1.20
+    ln_tech_coupling_lambda: float = 3.30
 
 
 def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> List[List[HitObject]]:
@@ -110,7 +117,7 @@ def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> Lis
 def _compute_jack_and_stream_raw(
     beatmap: Beatmap7K,
     options: RadarOptions,
-) -> Tuple[float, float, float, int, int]:
+) -> Tuple[float, float, float, int, int, float, float]:
     """
     Computes decoupled raw Chordjack and Stream intensities using discrete step distance,
     continuous strain decay accumulation, and stream topological modulation (ADR-0007, ADR-0008).
@@ -247,12 +254,12 @@ def _compute_jack_and_stream_raw(
     supp = max(0.05, 1.0 - 3.6 * max(0.0, jack_ratio - 0.11))
     r_stream = flow_nps * t_stream * lane_spread * 0.85 * supp
 
-    return r_jack, r_stream, jack_ratio, max_run_length, jack_count
+    return r_jack, r_stream, jack_ratio, max_run_length, jack_count, tortuosity, bracket_density
 
 
 def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float = 220.0) -> float:
     """Computes raw Jack intensity via _compute_jack_and_stream_raw."""
-    r_jack, _, _, _, _ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
+    r_jack, *_ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
     return r_jack
 
 
@@ -304,29 +311,99 @@ def compute_technique_radar(
     if strain_profile is None:
         strain_profile = compute_dual_hand_strain(beatmap)
 
-    hold_ratio = (features.hold_pct / 100.0) if features.hold_pct > 1.0 else features.hold_pct
+    hold_ratio = features.hold_pct / 100.0
     p90_strain = strain_profile.p90_strain
     sr_base = compute_raw_strain_star_rating(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
     # Decoupled Jack and Stream drivers via discrete step distance, continuous strain decay,
     # and topological modulation (ADR-0007, ADR-0008)
-    r_jack, r_stream, jack_ratio, max_run, jack_count = _compute_jack_and_stream_raw(beatmap, options)
-
-    # Tech (finger decoupling, gap:1 shear, complex track transitions)
-    r_tech = features.gap1_density * 2.0 + features.adj_density * 0.80
+    (
+        r_jack,
+        r_stream,
+        jack_ratio,
+        max_run,
+        jack_count,
+        tortuosity,
+        bracket_density,
+    ) = _compute_jack_and_stream_raw(beatmap, options)
 
     # Speed (micro-speed burst tapping rate)
     r_speed = _compute_speed_raw(beatmap, options.speed_burst_threshold_ms, features.avg_nps)
 
     active_lanes = len({ho.column for ho in hos})
 
+    # Rule C on speed and jack before Rule D
+    if r_jack > 3.0:
+        if r_jack > r_speed * 0.7:
+            r_speed = max(0.0, r_speed - (r_jack * 0.6))
+
+    # Effective Jack for kinetic base (reflecting Rule D soft-cap on stream noise)
+    if r_stream > 3.0 and jack_ratio < 0.14:
+        if max_run >= 2 and jack_count >= 10:
+            eff_jack_base = min(r_jack, r_stream * 0.82)
+            r_jack = min(r_jack, r_stream * 0.82)
+        else:
+            eff_jack_base = max(0.0, r_jack - (r_stream * 0.40))
+            r_jack = max(0.0, r_jack - (r_stream * 0.40))
+    else:
+        eff_jack_base = r_jack
+
+    # Kinetic base energy K_base = max(r_stream, r_speed, min(eff_jack, r_stream * 1.25)) (ADR-0008)
+    k_base = max(r_stream, r_speed, min(eff_jack_base, r_stream * 1.25))
+
+    # Four-dimensional Unorthodox Permutation Operator Omega_irreg (ADR-0008)
+    # 1. Flow tortuosity (reversals)
+    t_tort = max(0.0, tortuosity - 0.45)
+    # 2. Bracket and shear
+    shear_ratio = (features.gap1_density + 0.5 * features.adj_density) / max(1.0, features.avg_nps)
+    b_bracket = bracket_density * min(1.0, features.rhythm_irreg * 2.0) + shear_ratio * 0.30
+    # 3. Spatial transition entropy
+    s_spatial = max(0.0, features.spatial_entropy - 0.88) / 0.12
+    # 4. Rhythmic irregularity
+    r_rhythm = max(0.0, features.rhythm_irreg - 0.20)
+
+    omega_irreg = (
+        1.0
+        + options.tech_tort_weight * t_tort
+        + options.tech_bracket_weight * b_bracket
+        + options.tech_spatial_weight * s_spatial
+        + options.tech_rhythm_weight * r_rhythm
+    )
+
+    # Tech (kinetic technique coupling) (ADR-0008)
+    tech_excess = max(0.0, omega_irreg - 1.0)
+    raw_mult = math.pow(tech_excess, options.tech_coupling_gamma) * options.tech_coupling_lambda
+    if raw_mult > 1.0:
+        mult = 1.0 + 0.15 * math.tanh((raw_mult - 1.0) / 0.20)
+        r_tech = k_base * mult
+        r_jack = max(0.0, r_jack - (r_tech * 0.40))
+    else:
+        r_tech = k_base * raw_mult * 0.90
+
     # LN General (overall hold presence, sustained hold chords, and concurrent spatial flux) (ADR-0008)
     concurrent_factor = 1.0 + options.ln_gen_concurrent_weight * features.mean_locked_fingers
     r_ln_gen = hold_ratio * features.avg_nps * concurrent_factor * 1.50
 
-    # LN Tech (LN with gap1 and finger coordination constraints)
-    r_ln_tech = hold_ratio * (features.gap1_density * 2.0 + features.adj_density * 1.0) * 2.0
+    # LN Tech (kinetic coupling with LN flux and unorthodox permutation) (ADR-0008)
+    base_ln_flux = hold_ratio * features.avg_nps * 1.50
+    finger_freedom = (features.gap1_density + 0.8) / max(1.0, features.mean_locked_fingers)
+    antiphase_boost = 1.0 + 0.05 * features.antiphase_rate
+    raw_ln_mult = (
+        math.pow(tech_excess, 1.15)
+        * options.ln_tech_coupling_lambda
+        * finger_freedom
+        * antiphase_boost
+    )
+    is_ln_tech_chart = (
+        (tech_excess >= 0.55 and finger_freedom >= 0.75 and features.mean_locked_fingers < 2.85)
+        or (features.gap1_density >= 1.60 and finger_freedom >= 0.80)
+    )
+    if raw_ln_mult > 1.0 and hold_ratio >= options.min_rice_hold_threshold:
+        ln_mult = 1.0 + 0.15 * math.tanh((raw_ln_mult - 1.0) / 0.20)
+        r_ln_tech = max(base_ln_flux, r_ln_gen) * ln_mult if is_ln_tech_chart else (base_ln_flux * ln_mult)
+    else:
+        r_ln_tech = (base_ln_flux * raw_ln_mult * 0.90) if hold_ratio >= options.min_rice_hold_threshold else 0.0
 
     # LN Inverse (high locked finger density, inverse score under micro-action scaling) (ADR-0006, ADR-0008)
     lock_load = math.pow(max(0.0, features.mean_locked_fingers - 2.0) / 2.0, 2.0)
@@ -354,27 +431,18 @@ def compute_technique_radar(
     elif hold_ratio > 0.30:
         r_jack *= max(0.0, 1.0 - (hold_ratio - 0.30) / 0.20)
 
-    # Rule C: Lane spread gating & Pure Jack/Stream specialization
+    # Rule C: Lane spread gating and Pure Jack specialization
     if active_lanes <= 2:
         r_stream = 0.0
         r_tech = 0.0
         r_speed = 0.0
     else:
+        # Rule C: Genuine Jack dominance suppresses competing stream/tech dimensions
         if r_jack > 3.0:
             if jack_ratio >= 0.15 and r_jack > r_stream * 1.05:
                 r_stream = max(0.0, r_stream - (r_jack * 0.5))
             if r_jack > r_tech * 1.5:
                 r_tech = max(0.0, r_tech - (r_jack * 0.3))
-            if r_jack > r_speed * 0.7:
-                r_speed = max(0.0, r_speed - (r_jack * 0.6))
-        # Rule D: Dominant Stream cross-suppression of residual jack noise (Ticket 1 / ADR-0008)
-        if r_stream > 3.0 and jack_ratio < 0.14:
-            if max_run >= 2 and jack_count >= 10:
-                # Genuine 2-note jacks in stream charts: soft cap so stream dominates without zeroing jack
-                r_jack = min(r_jack, r_stream * 0.82)
-            else:
-                # Incidental noise: subtract
-                r_jack = max(0.0, r_jack - (r_stream * 0.40))
 
     # Rule E: Inverse specialization gating (ADR-0008)
     # When a chart enters the severe inverted state (mean_locked_fingers >= 4.0 and hold_ratio >= 0.85),
@@ -382,6 +450,7 @@ def compute_technique_radar(
     if features.mean_locked_fingers >= 4.0 and hold_ratio >= 0.85:
         if r_ln_inv > r_ln_gen * 0.80:
             r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * 0.35))
+            r_ln_tech = max(0.0, r_ln_tech - (r_ln_inv * 0.35))
 
     raw_scores: Dict[str, float] = {
         "jack": max(0.0, r_jack),
@@ -403,13 +472,13 @@ def compute_technique_radar(
             for k, v in raw_scores.items()
         }
 
-    # Determine dominant technique and score
-    max_tech = "None"
-    max_score = 0.0
-    for t_name, sc in scores.items():
-        if sc > max_score:
-            max_score = sc
-            max_tech = t_name
+    # Determine dominant technique and score (based on raw uncompressed intensity to break ceiling ties)
+    if max_raw <= 1e-6:
+        max_tech = "None"
+        max_score = 0.0
+    else:
+        max_tech = max(raw_scores.keys(), key=lambda k: raw_scores[k])
+        max_score = scores[max_tech]
 
     return TechniqueRadar(
         jack=scores["jack"],

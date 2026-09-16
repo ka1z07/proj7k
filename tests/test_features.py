@@ -168,3 +168,72 @@ def test_extract_antiphase_concurrent_chord_no_cartesian_explosion():
     bm = Beatmap7K(title="Cartesian Fix Test", mode=3, circle_size=7, hit_objects=hit_objects)
     features = extract_beatmap_features(bm)
     assert features.antiphase_count == 3
+
+
+def test_extract_spatial_transition_entropy():
+    """
+    Unit test for SPEC-P2.2-03 / ADR-0008:
+    Verify spatial transition entropy on deterministic trill vs dispersed permutation.
+    """
+    # 1. Deterministic alternating trill on lanes 0 and 1:
+    # 0 -> 1 -> 0 -> 1 -> 0 -> 1 -> 0 -> 1
+    # From lane 0, transitions are 100% to lane 1 (entropy 0).
+    # From lane 1, transitions are 100% to lane 0 (entropy 0).
+    trill_hos = [
+        HitObject(column=i % 2, time=float(i * 100), note_type=NoteType.RICE)
+        for i in range(20)
+    ]
+    bm_trill = Beatmap7K(title="Trill", mode=3, circle_size=7, hit_objects=trill_hos)
+    f_trill = extract_beatmap_features(bm_trill)
+    assert f_trill.spatial_entropy == 0.0
+
+    # 2. Random-like dispersed cyclic permutations across all 7 lanes:
+    # 0 -> 1, 0 -> 2, 0 -> 3, 0 -> 4, 0 -> 5, 0 -> 6...
+    dispersed_hos = []
+    t = 0.0
+    for src in range(7):
+        for dst in range(7):
+            dispersed_hos.append(HitObject(column=src, time=t, note_type=NoteType.RICE))
+            t += 50.0
+            dispersed_hos.append(HitObject(column=dst, time=t, note_type=NoteType.RICE))
+            t += 50.0
+    bm_disp = Beatmap7K(title="Dispersed", mode=3, circle_size=7, hit_objects=dispersed_hos)
+    f_disp = extract_beatmap_features(bm_disp)
+    assert f_disp.spatial_entropy > 0.85
+
+
+def test_extract_rhythmic_irregularity_features():
+    """
+    Unit test for SPEC-P2.2-03 / ADR-0008:
+    Verify snap variance entropy and micro-timing jerk on regular stream vs irregular polyrhythm.
+    """
+    from proj7k.parser import TimingPoint
+
+    # 1. Perfectly uniform metronomic stream: 150 BPM (400ms beat length), constant 1/4 (100ms) notes
+    tp = [TimingPoint(time=0.0, beat_length=400.0, meter=4, uninherited=True)]
+    regular_hos = [
+        HitObject(column=i % 7, time=float(i * 100), note_type=NoteType.RICE)
+        for i in range(30)
+    ]
+    bm_regular = Beatmap7K(title="Regular", mode=3, circle_size=7, timing_points=tp, hit_objects=regular_hos)
+    f_regular = extract_beatmap_features(bm_regular)
+
+    assert f_regular.snap_variance_entropy == 0.0
+    assert f_regular.microtiming_jerk == 0.0
+    assert f_regular.rhythm_irreg == 0.0
+
+    # 2. Irregular polyrhythmic pattern mixing 1/4 (100ms), 1/3 (133.3ms), 1/6 (66.7ms), and 1/8 (50ms)
+    intervals = [100.0, 133.3, 66.7, 50.0, 133.3, 100.0, 66.7, 100.0, 50.0, 133.3] * 3
+    t_curr = 0.0
+    irregular_hos = [HitObject(column=0, time=0.0, note_type=NoteType.RICE)]
+    for idx, dt in enumerate(intervals):
+        t_curr += dt
+        irregular_hos.append(HitObject(column=(idx + 1) % 7, time=t_curr, note_type=NoteType.RICE))
+
+    bm_irreg = Beatmap7K(title="Irregular", mode=3, circle_size=7, timing_points=tp, hit_objects=irregular_hos)
+    f_irreg = extract_beatmap_features(bm_irreg)
+
+    assert f_irreg.snap_variance_entropy > 0.40
+    assert f_irreg.microtiming_jerk > 0.20
+    assert f_irreg.rhythm_irreg > 0.35
+

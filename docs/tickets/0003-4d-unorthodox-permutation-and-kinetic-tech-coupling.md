@@ -1,7 +1,7 @@
 # Ticket 3: 四维非常规排列复杂度与动能乘性技巧重构 (Tech 主导权恢复)
 
 - **ID**: `SPEC-P2.2-03`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [`docs/tickets/0002-ln-flux-base-and-antiphase-cartesian-product-fix.md`](file:///Users/kz/proj7k/docs/tickets/0002-ln-flux-base-and-antiphase-cartesian-product-fix.md)
 - **所属父规格**: [`docs/specs/phase2.2-radar-alignment-and-subdimension-recalibration.md`](file:///Users/kz/proj7k/docs/specs/phase2.2-radar-alignment-and-subdimension-recalibration.md)
@@ -32,7 +32,7 @@
 
 ## 验收条件 (Acceptance Criteria)
 
-- [ ] `Regular Tech` 标杆曲目成功以 `tech` 为主导维度，且分值随段位严格单调上升。
-- [ ] `LN Tech` 标杆曲目成功以 `ln_tech` 为主导维度。
-- [ ] 规整切键谱面（`Regular Stream`）不发生语义漂移，维持 `stream` 主导与 0 逆序数。
-- [ ] 全量 120 曲跑批单调性守卫全绿（`tests/test_120_benchmark_guard.py`：Mean Spearman $\rho \ge 0.98$, Mean Kendall $\tau \ge 0.94$, Inversions $\le 20$）。
+- [x] `Regular Tech` 标杆曲目成功以 `tech` 为主导维度，且分值随段位严格单调上升。
+- [x] `LN Tech` 标杆曲目成功以 `ln_tech` 为主导维度。
+- [x] 规整切键谱面（`Regular Stream`）不发生语义漂移，维持 `stream` 主导与 0 逆序数。
+- [x] 全量 120 曲跑批单调性守卫全绿（`tests/test_120_benchmark_guard.py`：Mean Spearman $\rho \ge 0.98$, Mean Kendall $\tau \ge 0.94$, Inversions $\le 20$）。
