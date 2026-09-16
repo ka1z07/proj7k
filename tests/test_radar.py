@@ -154,3 +154,25 @@ def test_radar_data_contract():
         assert key in d
     assert isinstance(d["dominant_technique"], str)
     assert isinstance(d["dominant_score"], float)
+
+
+def test_isolated_two_note_jack_not_zeroed_by_stream():
+    """
+    Unit test for SPEC-P2.2-01:
+    A chart with mostly stream notes but interspersed with 16th-note 2-note jacks
+    must retain jack > 0, rather than being completely zeroed out by Rule D.
+    """
+    hos = []
+    # 200 stream notes at 150ms intervals across columns 0..6
+    for i in range(200):
+        hos.append(HitObject(column=(i % 7), time=i * 150.0, note_type=NoteType.RICE))
+    # Interspersed with 10 pairs of 2-note jacks at 120ms intervals
+    for j in range(10):
+        t_base = 35000.0 + j * 2000.0
+        hos.append(HitObject(column=3, time=t_base, note_type=NoteType.RICE))
+        hos.append(HitObject(column=3, time=t_base + 120.0, note_type=NoteType.RICE))
+    
+    bm = _make_sample_beatmap(hos)
+    radar = compute_technique_radar(bm)
+    assert radar.jack > 1.0, f"Expected jack > 1.0 for interspersed 2-note jacks, got {radar.jack}"
+

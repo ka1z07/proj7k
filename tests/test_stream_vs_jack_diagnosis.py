@@ -84,3 +84,20 @@ def test_regular_stream_benchmark_tracks_classified_as_stream(benchmark_env):
     assert r_gamma.stream > r_gamma.jack, (
         f"Gamma Dan Paraclete stream score ({r_gamma.stream:.2f}★) <= jack score ({r_gamma.jack:.2f}★)"
     )
+
+
+def test_regular_jack_1st_dai_dir_detected_with_valid_jack_score(benchmark_env):
+    """
+    Feedback loop for Ticket 1 (SPEC-P2.2-01):
+    Asserts that 1st Dan dai - dir [Hard] (which contains 41 instances of 127ms two-note jacks)
+    receives a valid Jack radar score > 3.0★ (expected 3.2★ ~ 4.2★), not 0.00★.
+    """
+    index, manifest = benchmark_env
+    r_1st = _get_radar(index, manifest, "Regular Jack", "1st")
+    assert r_1st.jack > 3.0, (
+        f"1st Dan dai - dir jack score too low: {r_1st.jack:.2f}★ <= 3.0★ (was 0.00★)"
+    )
+    assert 3.0 <= r_1st.jack <= 4.5, (
+        f"1st Dan dai - dir jack score out of expected range: {r_1st.jack:.2f}★"
+    )
+

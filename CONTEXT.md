@@ -160,8 +160,33 @@ _Avoid_: 线性连击累加、无界指数膨胀
 以严格双手交替为难度下确界、同手括号混切为难度上确界，由单手时钟压缩比与括号相变频率共同调制的非线性难度算子。在括号混切下的加成倍率采取保守标定，待后续实证校准。
 _Avoid_: 密度决定论、纯 NPS 等价论、粗暴激进系数
 
+**连续应变衰减累积 (Continuous Strain Decay-Accumulation)**:
+每个技能击键对该维度瞬时负荷注入冲激，随时间按生理半衰期指数衰减（$S(t) = S(t - \Delta t) \cdot e^{-\Delta t / \tau} + \Delta S$），从数学上平滑消除人造切片边界，同时自适应表征瞬间尖峰（Burst）与长程稳态高原（Sustained）。
+_Avoid_: 人造固定时间窗切片边界、全局时长整曲线性均摊
+
+**多尺度分位数池化 (Multi-Scale Quantile Pooling)**:
+废除全局时长整曲线性时间均摊（$/ \text{duration\_s}$），通过 $0.70 \cdot \text{P90}(S(t)) + 0.30 \cdot \text{Top5\%Mean}(S(t))$ 聚合各技能强度，使局部短致死段落（如低段位短二连叠）与长程耐力高原（如高段位长连叠）均能获得与其真实生理致死性相符的评级。
+_Avoid_: 全局算术均摊、单点极端尖峰过拟合
+
+**LN 空间总通量基座 (LN Spatial Flux Base, $r_{\text{ln\_gen}}$)**:
+由持握比例 $\text{hold\_ratio}$、有效 NPS 与多轨长条并发度构成的物理空间占据通量基准，作为 LN 谱面的客观物理基本盘。
+_Avoid_: 释放维度反客为主、忽视长条物理持握通量
+
+**非常规排列复杂度 (Unorthodox Permutation Complexity, $\Omega_{\text{irreg}}$)**:
+用于度量与社区定义对齐的“技（Tech）”维度的第一性指标。由流向紊乱度（Tortuosity）、括号/手内剪切度（Bracket/Shear Ratio）、轨位转移熵（Spatial Transition Entropy）以及节奏混乱度（Rhythmic Irregularity）四大正交分量合成。
+_Avoid_: 静态音符对计数、脱离排布几何的简单分类
+
+**节奏混乱度 (Rhythmic Irregularity, $R_{\text{rhythm}}$)**:
+由拍点细分变异熵（Snap Variance Entropy，表征 1/3、1/4、1/6、12 分音符混切与切分音复节奏）与时钟抖动率（Micro-timing Jerk）构成的非均匀击键复杂度，属于技（Tech）的核心要素。
+_Avoid_: 仅依赖 TimingPoints 数量、忽视实际击键时基变异
+
+**动能乘性技巧耦合 (Kinetic Technique Coupling)**:
+技巧难度在物理上是排列无序度在高速击打动能下的非线性放大。$r_{\text{tech}} = K_{\text{base}} \times (\Omega_{\text{irreg}} - 1.0)^\gamma \times \lambda_{\text{tech}}$，使得技巧复杂度极高的谱面能够顺理成章压倒常规物理底座，实现“Tech”维度的权威主导。
+_Avoid_: 静态事件率、无速度耦合技巧评分
+
 **段位权威层级阶梯 (Canonical Dan Progression Hierarchy)**:
 由 0th 贯穿至 Stellium 的 15 级严格单调全序难度序列（`0th < 1st < ... < 10th < Gamma < Azimuth < Zenith < Stellium`）。
 _Avoid_: 散乱星级对比、无序段位
+
 
 

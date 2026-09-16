@@ -76,6 +76,9 @@ class RadarOptions:
     jack_m_max: float = 1.5
     jack_tau: float = 3.0
     jack_chord_boost: float = 0.35
+    jack_decay_tau_s: float = 1.0
+    jack_quantile_p90_weight: float = 0.70
+    jack_quantile_top5_weight: float = 0.30
     stream_tort_weight: float = 0.50
     stream_bracket_weight: float = 0.40
 
@@ -102,17 +105,17 @@ def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> Lis
 def _compute_jack_and_stream_raw(
     beatmap: Beatmap7K,
     options: RadarOptions,
-) -> Tuple[float, float, float]:
+) -> Tuple[float, float, float, int, int]:
     """
-    Computes decoupled raw Chordjack and Stream intensities using discrete step distance
-    and stream topological modulation (ADR-0007).
+    Computes decoupled raw Chordjack and Stream intensities using discrete step distance,
+    continuous strain decay accumulation, and stream topological modulation (ADR-0007, ADR-0008).
 
     Returns:
-        (r_jack, r_stream, jack_ratio)
+        (r_jack, r_stream, jack_ratio, max_run_length, jack_count)
     """
     hos = beatmap.hit_objects
     if not hos:
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 1, 0
 
     duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0)
     steps = _partition_chord_steps(beatmap, options.chord_eps_ms)
@@ -120,7 +123,8 @@ def _compute_jack_and_stream_raw(
     # col_state: Dict[column, Tuple[last_step_k, last_time, run_length]]
     col_state: Dict[int, Tuple[int, float, int]] = {c: (-999, -1e9, 1) for c in range(7)}
     jack_count = 0
-    jack_strain_total = 0.0
+    max_run_length = 1
+    step_impulses: List[Tuple[float, float]] = []
 
     flow_history: List[Tuple[float, int]] = []
     reversals = 0
@@ -151,6 +155,7 @@ def _compute_jack_and_stream_raw(
         prev_right_cols = curr_right
         prev_step_time = step_time
 
+        step_impulse = 0.0
         for ho in step:
             c = ho.column
             last_step_k, last_time_ms, run_length = col_state[c]
@@ -161,6 +166,8 @@ def _compute_jack_and_stream_raw(
             if dk == 1 and dt <= options.jack_threshold_ms:
                 jack_count += 1
                 new_run_length = run_length + 1
+                if new_run_length > max_run_length:
+                    max_run_length = new_run_length
 
                 # Chordjack run-length saturation W(L) = 1.0 + M_max * tanh((L - 2) / tau)
                 w_l = 1.0 + options.jack_m_max * math.tanh((new_run_length - 2) / options.jack_tau)
@@ -169,7 +176,8 @@ def _compute_jack_and_stream_raw(
                 # Frequency strain
                 s_factor = math.pow(options.jack_threshold_ms / max(35.0, dt), 1.25)
 
-                jack_strain_total += s_factor * w_l * c_factor
+                imp = s_factor * w_l * c_factor
+                step_impulse += imp
                 col_state[c] = (k, ho.time, new_run_length)
             else:
                 col_state[c] = (k, ho.time, 1)
@@ -184,6 +192,34 @@ def _compute_jack_and_stream_raw(
                         if (d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0):
                             reversals += 1
 
+        if step_impulse > 0.0:
+            step_impulses.append((step_time / 1000.0, step_impulse))
+
+    # Continuous strain decay accumulation S(t) = S(t - dt) * exp(-dt / tau) + dS (ADR-0008)
+    dt_grid = 0.25
+    decay = math.exp(-dt_grid / options.jack_decay_tau_s)
+    t_start = min(ho.time for ho in hos) / 1000.0
+    t_end = max(ho.time for ho in hos) / 1000.0
+
+    strains: List[float] = []
+    t = t_start
+    imp_idx = 0
+    curr_s = 0.0
+    while t <= t_end + dt_grid:
+        curr_s *= decay
+        while imp_idx < len(step_impulses) and step_impulses[imp_idx][0] <= t:
+            curr_s += step_impulses[imp_idx][1]
+            imp_idx += 1
+        strains.append(curr_s)
+        t += dt_grid
+
+    # Quantile pooling: 0.70 * P90 + 0.30 * Top5%Mean (ADR-0008)
+    sorted_s = sorted(strains) if strains else [0.0]
+    p90 = sorted_s[int(len(sorted_s) * 0.90)]
+    n_top5 = max(1, int(len(sorted_s) * 0.05))
+    top5_mean = sum(sorted_s[-n_top5:]) / n_top5
+    pooled_jack = options.jack_quantile_p90_weight * p90 + options.jack_quantile_top5_weight * top5_mean
+
     total_notes = len(hos)
     active_lanes = len({ho.column for ho in hos})
     lane_spread = max(0.0, min(1.0, (active_lanes - 2) / 2.0))
@@ -196,20 +232,22 @@ def _compute_jack_and_stream_raw(
     bracket_density = bracket_inversions / max(1, len(steps))
     t_stream = 1.0 + options.stream_tort_weight * tortuosity + options.stream_bracket_weight * bracket_density
 
-    # Jack raw driver with chordjack density synergy
+    # Jack raw driver combining sustained duration rate and local pooled burst strain
     c_syn = 1.0 + 3.0 * max(0.0, jack_ratio - 0.08)
-    r_jack = (jack_strain_total / duration_s) * 1.48 * c_syn
+    duration_rate = (sum(x[1] for x in step_impulses) / duration_s) * 1.48 * c_syn
+    burst_driver = pooled_jack * 2.0 * c_syn
+    r_jack = max(duration_rate, burst_driver)
 
     # Stream raw driver with dominant chordjack suppression
     supp = max(0.05, 1.0 - 3.6 * max(0.0, jack_ratio - 0.11))
     r_stream = flow_nps * t_stream * lane_spread * 0.85 * supp
 
-    return r_jack, r_stream, jack_ratio
+    return r_jack, r_stream, jack_ratio, max_run_length, jack_count
 
 
 def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float = 220.0) -> float:
     """Computes raw Jack intensity via _compute_jack_and_stream_raw."""
-    r_jack, _, _ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
+    r_jack, _, _, _, _ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
     return r_jack
 
 
@@ -266,8 +304,9 @@ def compute_technique_radar(
     sr_base = compute_raw_strain_star_rating(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
-    # Decoupled Jack and Stream drivers via discrete step distance and topological modulation (ADR-0007)
-    r_jack, r_stream, jack_ratio = _compute_jack_and_stream_raw(beatmap, options)
+    # Decoupled Jack and Stream drivers via discrete step distance, continuous strain decay,
+    # and topological modulation (ADR-0007, ADR-0008)
+    r_jack, r_stream, jack_ratio, max_run, jack_count = _compute_jack_and_stream_raw(beatmap, options)
 
     # Tech (finger decoupling, gap:1 shear, complex track transitions)
     r_tech = features.gap1_density * 2.0 + features.adj_density * 0.80
@@ -308,15 +347,19 @@ def compute_technique_radar(
         r_speed = 0.0
     else:
         if r_jack > 3.0:
-            if r_jack > r_stream * 1.05:
+            if jack_ratio >= 0.15 and r_jack > r_stream * 1.05:
                 r_stream = max(0.0, r_stream - (r_jack * 0.5))
             if r_jack > r_tech * 1.5:
                 r_tech = max(0.0, r_tech - (r_jack * 0.3))
             if r_jack > r_speed * 0.7:
                 r_speed = max(0.0, r_speed - (r_jack * 0.6))
-        # Rule D: Dominant Stream cross-suppression of residual jack noise
-        if r_stream > 3.0 and jack_ratio < 0.13:
-            if r_stream > r_jack * 0.9:
+        # Rule D: Dominant Stream cross-suppression of residual jack noise (Ticket 1 / ADR-0008)
+        if r_stream > 3.0 and jack_ratio < 0.14:
+            if max_run >= 2 and jack_count >= 10:
+                # Genuine 2-note jacks in stream charts: soft cap so stream dominates without zeroing jack
+                r_jack = min(r_jack, r_stream * 0.82)
+            else:
+                # Incidental noise: subtract
                 r_jack = max(0.0, r_jack - (r_stream * 0.40))
 
     raw_scores: Dict[str, float] = {
