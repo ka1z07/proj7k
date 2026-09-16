@@ -108,7 +108,7 @@ def test_ln_inverse_and_release_dominance():
     radar = compute_technique_radar(bm)
 
     assert radar.ln_inverse > 4.0
-    assert radar.ln_release > 3.5
+    assert radar.ln_release > 1.5
     assert radar.dominant_technique in ("ln_inverse", "ln_release", "ln_tech", "ln_general")
     # Jack should be suppressed
     assert radar.jack < 1.0

@@ -267,17 +267,20 @@ def extract_beatmap_features(
         k: round((v / max(total_samples, 1)) * 100.0, 4) for k, v in lock_counts.items()
     }
 
-    # 5. Detect and count antiphase articulation events
+    # 5. Detect and count antiphase articulation events (ADR-0008)
     # An antiphase event occurs when at the same tick (rounded ms), one track releases (LN tail)
     # while another track (different column) is pressed (Rice or LN head).
+    # To prevent Cartesian O(R x P) explosion during concurrent multi-key chord releases/presses,
+    # we compute the exclusive physical hand transitions: min(|R_diff|, |P_diff|).
     antiphase_count = 0
     for tick, released_cols in ticks_released.items():
         if tick in notes_by_time:
             pressed_cols = notes_by_time[tick]
-            for r_col in released_cols:
-                for p_col in pressed_cols:
-                    if r_col != p_col:
-                        antiphase_count += 1
+            r_set = set(released_cols)
+            p_set = set(pressed_cols)
+            r_diff = r_set - p_set
+            p_diff = p_set - r_set
+            antiphase_count += min(len(r_diff), len(p_diff))
 
     antiphase_rate = _calc_rate(antiphase_count, duration_s)
 

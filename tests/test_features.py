@@ -132,8 +132,8 @@ def test_extract_degree_of_freedom_suppression():
 def test_extract_antiphase_articulation():
     # 0ms to 2000ms (2.0s duration)
     # t=0: 2 LNs start on cols 0, 1 (end at 1000ms)
-    # t=1000: cols 0, 1 release. Col 2 (Rice) and Col 4 (LN 1000~2000) press.
-    #   Cross-track pairs: (0, 2), (0, 4), (1, 2), (1, 4) -> 4 antiphase events
+    # t=1000: cols 0, 1 release (2 notes) while Col 2 (Rice) and Col 4 (LN 1000~2000) press (2 notes).
+    #   Under exclusive physical matching (ADR-0008), min(|R|, |P|) = min(2, 2) = 2 antiphase events
     # t=2000: Col 4 LN releases and Col 4 Rice presses (same track overlap -> 0 antiphase)
     hit_objects = [
         HitObject(column=0, time=0.0, note_type=NoteType.LN, end_time=1000.0),
@@ -146,5 +146,25 @@ def test_extract_antiphase_articulation():
     features = extract_beatmap_features(bm)
 
     assert features.duration_seconds == 2.0
-    assert features.antiphase_count == 4
-    assert features.antiphase_rate == 2.0
+    assert features.antiphase_count == 2
+    assert features.antiphase_rate == 1.0
+
+
+def test_extract_antiphase_concurrent_chord_no_cartesian_explosion():
+    """
+    Unit test for SPEC-P2.2-02 / ADR-0008:
+    Verify that multi-note chord transitions do not suffer from Cartesian O(R x P) explosion.
+    4 LNs releasing while 3 notes press should yield min(4, 3) = 3 antiphase events, NOT 12.
+    """
+    hit_objects = [
+        HitObject(column=0, time=0.0, note_type=NoteType.LN, end_time=1000.0),
+        HitObject(column=1, time=0.0, note_type=NoteType.LN, end_time=1000.0),
+        HitObject(column=2, time=0.0, note_type=NoteType.LN, end_time=1000.0),
+        HitObject(column=3, time=0.0, note_type=NoteType.LN, end_time=1000.0),
+        HitObject(column=4, time=1000.0, note_type=NoteType.RICE),
+        HitObject(column=5, time=1000.0, note_type=NoteType.RICE),
+        HitObject(column=6, time=1000.0, note_type=NoteType.RICE),
+    ]
+    bm = Beatmap7K(title="Cartesian Fix Test", mode=3, circle_size=7, hit_objects=hit_objects)
+    features = extract_beatmap_features(bm)
+    assert features.antiphase_count == 3

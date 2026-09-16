@@ -81,6 +81,11 @@ class RadarOptions:
     jack_quantile_top5_weight: float = 0.30
     stream_tort_weight: float = 0.50
     stream_bracket_weight: float = 0.40
+    ln_gen_concurrent_weight: float = 0.30
+    ln_inv_score_weight: float = 2.50
+    ln_inv_lock_weight: float = 1.80
+    ln_release_rate_weight: float = 0.75
+    ln_release_antiphase_weight: float = 1.20
 
 
 def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> List[List[HitObject]]:
@@ -316,19 +321,28 @@ def compute_technique_radar(
 
     active_lanes = len({ho.column for ho in hos})
 
-    # LN General (overall hold presence and sustained hold chords)
-    r_ln_gen = hold_ratio * features.avg_nps * 1.50
+    # LN General (overall hold presence, sustained hold chords, and concurrent spatial flux) (ADR-0008)
+    concurrent_factor = 1.0 + options.ln_gen_concurrent_weight * features.mean_locked_fingers
+    r_ln_gen = hold_ratio * features.avg_nps * concurrent_factor * 1.50
 
     # LN Tech (LN with gap1 and finger coordination constraints)
     r_ln_tech = hold_ratio * (features.gap1_density * 2.0 + features.adj_density * 1.0) * 2.0
 
-    # LN Inverse (high locked finger density, inverse score under BPM scaling)
-    r_ln_inv = (features.inverse_score * 0.80 + features.mean_locked_fingers * 1.50) * min(1.0, hold_ratio * 2.0)
+    # LN Inverse (high locked finger density, inverse score under micro-action scaling) (ADR-0006, ADR-0008)
+    lock_load = math.pow(max(0.0, features.mean_locked_fingers - 2.0) / 2.0, 2.0)
+    r_ln_inv = (
+        features.inverse_score * options.ln_inv_score_weight
+        + features.avg_nps * hold_ratio * lock_load * options.ln_inv_lock_weight
+    ) * min(1.0, hold_ratio * 2.0)
 
-    # LN Release (antiphase rate, release rate and high-frequency release density)
+    # LN Release (staccato release rate, exclusive antiphase rate, peak burst release) (ADR-0008)
     duration_s = max(0.5, features.duration_seconds)
     release_rate = features.ln_count / duration_s
-    r_ln_rel = (release_rate * 0.80 + features.antiphase_rate * 1.50 + hold_ratio * features.peak_1b_nps * 0.10) * min(1.0, hold_ratio * 2.0)
+    r_ln_rel = (
+        release_rate * options.ln_release_rate_weight
+        + features.antiphase_rate * options.ln_release_antiphase_weight
+        + hold_ratio * features.peak_1b_nps * 0.08
+    ) * min(1.0, hold_ratio * 2.0)
 
     # --- 2. Orthogonal Cross-Suppression ---
     # Rule A: Pure Rice charts (hold_ratio < min_rice_hold_threshold)
@@ -361,6 +375,13 @@ def compute_technique_radar(
             else:
                 # Incidental noise: subtract
                 r_jack = max(0.0, r_jack - (r_stream * 0.40))
+
+    # Rule E: Inverse specialization gating (ADR-0008)
+    # When a chart enters the severe inverted state (mean_locked_fingers >= 4.0 and hold_ratio >= 0.85),
+    # the motor-cognitive burden is dominated by Inverse rather than General hold volume.
+    if features.mean_locked_fingers >= 4.0 and hold_ratio >= 0.85:
+        if r_ln_inv > r_ln_gen * 0.80:
+            r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * 0.35))
 
     raw_scores: Dict[str, float] = {
         "jack": max(0.0, r_jack),

@@ -445,8 +445,8 @@ def test_batch_pipeline_physiological_features(tmp_path: Path):
     res_release = report.results[2]
     f_release = res_release.features
     assert f_release is not None
-    assert f_release.antiphase_count == 4
-    assert f_release.antiphase_rate == 2.0
+    assert f_release.antiphase_count == 2
+    assert f_release.antiphase_rate == 1.0
 
     # 4. Assert full serialization into JSON report
     report_dict = report.to_dict()
