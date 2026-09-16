@@ -188,5 +188,23 @@ _Avoid_: 静态事件率、无速度耦合技巧评分
 由 0th 贯穿至 Stellium 的 15 级严格单调全序难度序列（`0th < 1st < ... < 10th < Gamma < Azimuth < Zenith < Stellium`）。
 _Avoid_: 散乱星级对比、无序段位
 
+### 客户端集成与游戏内呈现
+
+**无损注入 (Non-Destructive Ingestion)**:
+在保持原始 `.osu` 物理文件内容与 SHA-256 / MD5 哈希绝对不变的前提下，通过直接操作客户端本地元数据数据库（如 osu!lazer 的 `client.realm`）实现游戏内固有难度星级与技法呈现的解耦技术通道。
+_Avoid_: 暴力改写谱面物理文件、修改文件哈希破坏联机榜单
+
+**离散星级桶标签 (Binned Skill Tag)**:
+为克服游戏内搜索解析器无法执行自定义属性动态数值比较（如 `jack>6.0`）的语法缺陷，将各技法星级按区间打散为离散化规范文本（如 `jack_6★`、`tech_5★`、`dominant_jack`）注入谱面 Tags 的标定机制。
+_Avoid_: 连续浮点字符串、不可索引无规则文本
+
+**安全刷盘窗 (Safe Flush Window)**:
+守护进程监听客户端文件锁（`client.realm.lock`）并在检测到游戏退出或锁释放的空闲缝隙中，瞬间完成批量数据库事务写入的并发互斥防护机制。
+_Avoid_: 跨进程强行抢锁、运行时热写入冲突
+
+**双轴技法收藏夹 (Biaxial Technique Collections)**:
+在游戏内同时按照 8 大主导专项维度（如 `7K Jack`、`7K Tech`）与段位阶梯维度（如 `7K Dan 04th-06th`）双向自动生成的分类聚合收藏夹体系。
+_Avoid_: 单一扁平列表、杂乱无章命名
+
 
 

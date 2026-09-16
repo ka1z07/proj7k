@@ -1,0 +1,10 @@
+{
+  "name": "proj7k-lazer-bridge",
+  "version": "0.1.0",
+  "description": "Node.js Realm driver bridge for osu!lazer database ingestion in proj7k",
+  "main": "bridge.js",
+  "type": "commonjs",
+  "dependencies": {
+    "realm": "^12.14.0"
+  }
+}
