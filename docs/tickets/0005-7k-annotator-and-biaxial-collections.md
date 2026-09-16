@@ -1,7 +1,7 @@
 # Ticket 5: 7K 谱面元数据注记器与双轴收藏夹编排器
 
 - **ID**: `SPEC-P2.3-02`
-- **状态**: `ready-for-agent`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: `SPEC-P2.3-01`
 - **所属父规格**: [`docs/specs/phase2.3-lazer-realm-ingestion-and-sync-daemon.md`](file:///Users/kz/proj7k/docs/specs/phase2.3-lazer-realm-ingestion-and-sync-daemon.md)
@@ -39,7 +39,8 @@
 
 ## 验收条件 (Acceptance Criteria)
 
-- [ ] `strip_injected_suffix` 与 `format_injected_difficulty_name` 通过全量幂等属性测试（包括特殊字符与边界测试）；
-- [ ] Tags 注入函数正确生成离散桶且不破坏谱面原有 tag 词法；
-- [ ] 双轴收藏夹生成器对任意 7k 谱面均输出恰好 2 个目标收藏夹（1 个专项 + 1 个阶梯）；
-- [ ] 单元测试覆盖率 $\ge 95\%$。
+- [x] `strip_injected_suffix` 与 `format_injected_difficulty_name` 通过全量幂等属性测试（包括特殊字符与边界测试）；
+- [x] Tags 注入函数正确生成离散桶且不破坏谱面原有 tag 词法；
+- [x] 双轴收藏夹生成器对任意 7k 谱面均输出恰好 2 个目标收藏夹（1 个专项 + 1 个阶梯）；
+- [x] 单元测试覆盖率 $\ge 95\%$（实测 100%）。
+
