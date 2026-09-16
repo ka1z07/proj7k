@@ -1,7 +1,7 @@
 # Ticket 2: LN 通量基座确立与反相笛卡尔积解构 (LN 对齐与 Inverse 恢复)
 
 - **ID**: `SPEC-P2.2-02`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [`docs/tickets/0001-continuous-strain-decay-pooling-and-rule-d-refactor.md`](file:///Users/kz/proj7k/docs/tickets/0001-continuous-strain-decay-pooling-and-rule-d-refactor.md)
 - **所属父规格**: [`docs/specs/phase2.2-radar-alignment-and-subdimension-recalibration.md`](file:///Users/kz/proj7k/docs/specs/phase2.2-radar-alignment-and-subdimension-recalibration.md)
@@ -30,6 +30,6 @@
 
 ## 验收条件 (Acceptance Criteria)
 
-- [ ] `LN General` 15 首标杆谱面的主导维度彻底逆转，以 `ln_general` 为主导。
-- [ ] `LN Inverse` 高段位谱面（8th ~ Stellium，包括 Stellium Gram - Nibelungen）恢复 `dominant == 'ln_inverse'`。
-- [ ] 全量 120 曲跑批单调性守卫全绿（`tests/test_120_benchmark_guard.py`：Mean Spearman $\rho \ge 0.98$, Mean Kendall $\tau \ge 0.94$, Inversions $\le 20$）。
+- [x] `LN General` 15 首标杆谱面的主导维度彻底逆转，以 `ln_general` 为主导。
+- [x] `LN Inverse` 高段位谱面（8th ~ Stellium，包括 Stellium Gram - Nibelungen）恢复 `dominant == 'ln_inverse'`。
+- [x] 全量 120 曲跑批单调性守卫全绿（`tests/test_120_benchmark_guard.py`：Mean Spearman $\rho \ge 0.98$, Mean Kendall $\tau \ge 0.94$, Inversions $\le 20$）。
