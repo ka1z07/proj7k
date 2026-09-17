@@ -31,6 +31,13 @@ from proj7k.downscaler.pipeline import (
     DownscaleOptions,
     DownscaleResult,
 )
+from proj7k.downscaler.cli import (
+    main,
+    build_parser,
+    format_downscale_report,
+    sync_practice_beatmaps_to_lazer,
+    LazerPracticeSyncResult,
+)
 
 __all__ = [
     "apply_pure_deletion",
@@ -54,4 +61,9 @@ __all__ = [
     "downscale_beatmap",
     "DownscaleOptions",
     "DownscaleResult",
+    "main",
+    "build_parser",
+    "format_downscale_report",
+    "sync_practice_beatmaps_to_lazer",
+    "LazerPracticeSyncResult",
 ]

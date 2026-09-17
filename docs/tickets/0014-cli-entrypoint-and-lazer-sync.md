@@ -2,7 +2,7 @@
 
 - **Issue**: [#30](https://github.com/ka1z07/proj7k/issues/30)
 - **ID**: `SPEC-P5.1-04`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [#29](https://github.com/ka1z07/proj7k/issues/29)
 - **所属父规格**: [`docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md`](file:///Users/kz/proj7k/docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md)
@@ -21,7 +21,7 @@
 
 ## Acceptance criteria
 
-- [ ] 实现 `proj7k.downscaler` 命令行入口，支持输入单谱面或曲库目录并批量降阶；
-- [ ] 终端以表格和雷达文本格式输出降阶前后的关键特征与技法对比；
-- [ ] 整合 `--sync-lazer`，调用 Realm Bridge 与 SafeFlushWindow 将衍生谱面打标并写入 `7K Practice` 收藏夹；
-- [ ] 编写端到端 CLI 调用测试，验证参数解析、文件写入与刷盘联动正常。
+- [x] 实现 `proj7k.downscaler` 命令行入口，支持输入单谱面或曲库目录并批量降阶；
+- [x] 终端以表格和雷达文本格式输出降阶前后的关键特征与技法对比；
+- [x] 整合 `--sync-lazer`，调用 Realm Bridge 与 SafeFlushWindow 将衍生谱面打标并写入 `7K Practice` 收藏夹；
+- [x] 编写端到端 CLI 调用测试，验证参数解析、文件写入与刷盘联动正常。

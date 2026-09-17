@@ -139,6 +139,31 @@ def test_dump_7k_beatmaps_success():
         assert "--realm" in cmd
 
 
+def test_dump_collections_success():
+    client = RealmBridgeClient()
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = json.dumps({
+        "success": True,
+        "collections": {
+            "7K Jack": ["md5-1", "md5-2"],
+            "7K Practice": ["md5-p1"],
+        },
+    })
+    mock_proc.stderr = ""
+
+    with patch.object(client, "ensure_installed", return_value=True), \
+         patch("subprocess.run", return_value=mock_proc) as mock_run:
+        cols = client.dump_collections(realm_path=Path("/tmp/client.realm"), auto_setup=False)
+        assert "7K Jack" in cols
+        assert "7K Practice" in cols
+        assert cols["7K Practice"] == ["md5-p1"]
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert "dump-collections" in cmd
+        assert "--realm" in cmd
+
+
 def test_apply_batch_update_success():
     client = RealmBridgeClient()
     mock_proc = MagicMock()

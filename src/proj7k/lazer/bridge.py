@@ -181,6 +181,28 @@ class RealmBridgeClient:
         raw_list = res.get("beatmaps", [])
         return [LazerBeatmapRecord.from_dict(item) for item in raw_list]
 
+    def dump_collections(
+        self,
+        realm_path: Optional[Path] = None,
+        auto_setup: bool = True,
+    ) -> Dict[str, List[str]]:
+        if auto_setup:
+            self.ensure_installed()
+
+        target_realm = realm_path or self.default_realm_path
+        cmd = [
+            self.node_executable,
+            str(self.bridge_script),
+            "dump-collections",
+            "--realm",
+            str(target_realm),
+        ]
+        res = self._run_command(cmd)
+        if not res.get("success", False):
+            raise RealmBridgeError(res.get("error", "Failed to dump collections"))
+
+        return res.get("collections", {})
+
     def apply_batch_update(
         self,
         updates: Sequence[BeatmapMutationPayload],

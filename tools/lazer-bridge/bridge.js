@@ -179,9 +179,40 @@ async function handleDump7k(realmPath) {
             });
         }
 
+        const colObjects = realm.objects('BeatmapCollection');
+        const collections = {};
+        for (let i = 0; i < colObjects.length; i++) {
+            const col = colObjects[i];
+            collections[col.Name] = Array.from(col.BeatmapMD5Hashes || []);
+        }
+
         result = {
             success: true,
-            beatmaps: records
+            beatmaps: records,
+            collections: collections
+        };
+    } catch (err) {
+        result = { success: false, error: err.message };
+    } finally {
+        if (realm && !realm.isClosed) realm.close();
+    }
+    outputJsonAndExit(result);
+}
+
+async function handleDumpCollections(realmPath) {
+    let realm;
+    let result;
+    try {
+        realm = new Realm({ path: realmPath, readOnly: true });
+        const colObjects = realm.objects('BeatmapCollection');
+        const collections = {};
+        for (let i = 0; i < colObjects.length; i++) {
+            const col = colObjects[i];
+            collections[col.Name] = Array.from(col.BeatmapMD5Hashes || []);
+        }
+        result = {
+            success: true,
+            collections: collections
         };
     } catch (err) {
         result = { success: false, error: err.message };
@@ -292,6 +323,9 @@ async function main() {
             break;
         case 'dump-7k':
             await handleDump7k(realmPath);
+            break;
+        case 'dump-collections':
+            await handleDumpCollections(realmPath);
             break;
         case 'update-batch':
             await handleUpdateBatch(realmPath);
