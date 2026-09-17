@@ -2,11 +2,12 @@
 
 - **Issue**: [#25](https://github.com/ka1z07/proj7k/issues/25)
 - **ID**: `SPEC-P2.4-04`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [#24](https://github.com/ka1z07/proj7k/issues/24)
 - **所属父规格**: [`docs/specs/phase2.4-live-radar-profile-and-stream-dashboard.md`](file:///Users/kz/proj7k/docs/specs/phase2.4-live-radar-profile-and-stream-dashboard.md)
 - **关联 ADR**: [`docs/adr/0010-live-radar-profile-web-dashboard-and-log-watcher.md`](file:///Users/kz/proj7k/docs/adr/0010-live-radar-profile-web-dashboard-and-log-watcher.md)
+- **解决 Commit**: [`2ef4e2e`](https://github.com/ka1z07/proj7k/commit/2ef4e2e)
 
 ---
 
@@ -21,8 +22,8 @@
 
 ## Acceptance criteria
 
-- [ ] 页面在断网状态下（离线）能完美渲染雷达多边形与时序应变波形图；
-- [ ] 游玩时钟光标能依据 `clock_sync` 消息以 1.0x 速率平滑滚动并在切歌/重开时精准复位；
-- [ ] 访问 `/?mode=overlay` 时自动呈现透明背景与紧凑布局，并正确响应 URL query 参数；
-- [ ] `StaticAssetGuard` 自动化测试 100% 通过，坚决杜绝外部 CDN 泄露；
-- [ ] 整个系统端到端验证通过，已有全量测试全绿无回归。
+- [x] 页面在断网状态下（离线）能完美渲染雷达多边形与时序应变波形图；
+- [x] 游玩时钟光标能依据 `clock_sync` 消息以 1.0x 速率平滑滚动并在切歌/重开时精准复位；
+- [x] 访问 `/?mode=overlay` 时自动呈现透明背景与紧凑布局，并正确响应 URL query 参数；
+- [x] `StaticAssetGuard` 自动化测试 100% 通过，坚决杜绝外部 CDN 泄露；
+- [x] 整个系统端到端验证通过，已有全量测试全绿无回归。
