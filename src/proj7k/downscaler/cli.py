@@ -35,6 +35,13 @@ from proj7k.downscaler.pipeline import (
     DownscaleResult,
     downscale_beatmap,
 )
+from proj7k.downscaler.locator import (
+    ResolvedBeatmapAsset,
+    fetch_beatmap_from_web,
+    locate_beatmap_in_lazer,
+    package_into_osz,
+    parse_osu_url_or_id,
+)
 
 
 logger = logging.getLogger("proj7k.downscaler")
@@ -71,9 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     req_group.add_argument(
         "-i",
         "--input",
-        type=Path,
+        type=str,
         required=True,
-        help="Path to an .osu beatmap file or a directory containing .osu beatmaps to downscale.",
+        help="Path to an .osu file, directory, or osu! URL / numeric beatmap ID to downscale.",
     )
     req_group.add_argument(
         "-d",
@@ -108,13 +115,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=None,
-        help="Directory to write derivative practice beatmap(s). Defaults to same folder as original.",
+        help="Directory to write derivative practice beatmap(s). Defaults to same folder as original (or 'practice_maps' for URL inputs).",
     )
     out_group.add_argument(
         "--output",
         type=Path,
         default=None,
         help="Explicit output path for single beatmap downscaling.",
+    )
+    out_group.add_argument(
+        "--package-osz",
+        action="store_true",
+        default=False,
+        help="Package practice beatmap into an .osz archive along with audio and background image.",
+    )
+    out_group.add_argument(
+        "--osz-output",
+        type=Path,
+        default=None,
+        help="Explicit destination path for the packaged .osz file.",
     )
     out_group.add_argument(
         "--dry-run",
@@ -188,12 +207,23 @@ def sanitize_filename(filename: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", filename)
 
 
-def generate_practice_filename(original_stem: str, version: str) -> str:
+def generate_practice_filename(
+    original_stem: str,
+    version: str,
+    beatmap: Optional[Beatmap7K] = None,
+) -> str:
     """
     Constructs a canonical practice beatmap filename:
     Replaces existing `[Version]` with `[{version}]` or appends `[{version}]`.
+    If original_stem is a hash, uses metadata from beatmap.
     """
     clean_version = sanitize_filename(version)
+    if beatmap and (len(original_stem) >= 32 and all(c in "0123456789abcdefABCDEF" for c in original_stem)):
+        clean_artist = sanitize_filename(beatmap.artist or "Artist")
+        clean_title = sanitize_filename(beatmap.title or "Title")
+        clean_creator = sanitize_filename(beatmap.creator or "Creator")
+        return f"{clean_artist} - {clean_title} ({clean_creator}) [{clean_version}].osu"
+
     if "[" in original_stem and original_stem.endswith("]"):
         prefix = original_stem.rsplit("[", 1)[0]
         return f"{prefix}[{clean_version}].osu"
@@ -212,6 +242,7 @@ def format_downscale_report(
     result: DownscaleResult,
     output_path: Optional[Path] = None,
     sync_result: Optional[LazerPracticeSyncResult] = None,
+    osz_path: Optional[Path] = None,
 ) -> str:
     """Formats an ANSI-colored summary card with tabular metrics and technique radar comparison."""
     orig_bm = result.original_beatmap
@@ -250,15 +281,22 @@ def format_downscale_report(
 
     title_str = f"{orig_bm.artist} - {orig_bm.title} [{orig_bm.version}]"
 
-    lines = [
+    header_lines = [
         "=" * 80,
         f" {BOLD}PROJ7K PRACTICE GENERATOR & DOWNSCALER REPORT{RESET}",
         "=" * 80,
         f" Beatmap    : {CYAN}{title_str}{RESET}",
         f" Practice   : {CYAN}{down_bm.version}{RESET}",
         f" File Output: {out_file_str}",
+    ]
+    if osz_path:
+        header_lines.append(f" OSZ Package: {CYAN}{osz_path.name}{RESET} ({osz_path})")
+    header_lines.extend([
         f" Target Dan : {YELLOW}{target.target_dan}{RESET} (SR Target: {target.target_sr:.2f}★ | Strain Target: {target.target_strain:.2f})",
         "-" * 80,
+    ])
+    lines = list(header_lines)
+    lines.extend([
         f" {BOLD}{'METRIC COMPARISON':<28} {'ORIGINAL':<16} {'PRACTICE':<16} {'DELTA / STATUS':<16}{RESET}",
         "-" * 80,
         f" Star Rating                  {orig_sr:5.2f}★           {GREEN}{down_sr:5.2f}★{RESET}           {sr_delta:+5.2f}★ ({sr_pct:+.1f}%)",
@@ -273,7 +311,7 @@ def format_downscale_report(
         f" {BOLD}8-DIMENSION TECHNIQUE RADAR COMPARISON{RESET}",
         f" {'Dimension':<18} {'Original':<12} {'Practice':<12} {'Practice Visual Gauge':<20}",
         "-" * 80,
-    ]
+    ])
 
     r_orig: TechniqueRadar = result.original_radar
     r_down: TechniqueRadar = result.downscaled_radar
@@ -479,7 +517,7 @@ def process_beatmap_file(
         else:
             target_dir = output_dir if output_dir is not None else osu_path.parent
             target_dir.mkdir(parents=True, exist_ok=True)
-            filename = generate_practice_filename(osu_path.stem, result.downscaled_beatmap.version)
+            filename = generate_practice_filename(osu_path.stem, result.downscaled_beatmap.version, beatmap=beatmap)
             dest_path = target_dir / filename
 
         dumped_text = dump_osu_7k(result.downscaled_beatmap)
@@ -506,15 +544,46 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 1
 
-    input_path = args.input
-    if not input_path.exists():
-        print(f"Error: Input path does not exist: '{input_path}'", file=sys.stderr)
-        return 1
+    input_str = str(args.input).strip()
+    input_path = Path(input_str)
 
-    beatmap_files = discover_beatmap_files(input_path)
-    if not beatmap_files:
-        print(f"Error: No 7K .osu beatmap files found at '{input_path}'", file=sys.stderr)
-        return 1
+    resolved_asset: Optional[ResolvedBeatmapAsset] = None
+    beatmap_files: List[Path] = []
+
+    is_url_or_id = (
+        input_str.startswith("http://")
+        or input_str.startswith("https://")
+        or input_str.isdigit()
+        or (not input_path.exists() and "osu.ppy.sh" in input_str)
+    )
+
+    if is_url_or_id:
+        logger.info(f"Resolving beatmap asset from URL or ID: {input_str}")
+        resolved_asset = locate_beatmap_in_lazer(input_str, realm_path=args.realm)
+        if resolved_asset and resolved_asset.osu_path and resolved_asset.osu_path.exists():
+            beatmap_files = [resolved_asset.osu_path]
+        else:
+            url_info = parse_osu_url_or_id(input_str)
+            if url_info.beatmap_id:
+                fallback_dir = args.output_dir or Path("practice_maps")
+                web_path = fetch_beatmap_from_web(url_info, output_dir=fallback_dir)
+                if web_path and web_path.exists():
+                    beatmap_files = [web_path]
+            if not beatmap_files:
+                print(f"Error: Could not locate beatmap for '{input_str}' in osu!lazer database or web.", file=sys.stderr)
+                return 1
+    else:
+        if not input_path.exists():
+            print(f"Error: Input path does not exist: '{input_path}'", file=sys.stderr)
+            return 1
+        beatmap_files = discover_beatmap_files(input_path)
+        if not beatmap_files:
+            print(f"Error: No 7K .osu beatmap files found at '{input_path}'", file=sys.stderr)
+            return 1
+
+    effective_output_dir = args.output_dir
+    if effective_output_dir is None and is_url_or_id:
+        effective_output_dir = Path("practice_maps")
 
     downscale_opts = DownscaleOptions(
         target_dan=args.target_dan,
@@ -535,7 +604,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             res, out_path = process_beatmap_file(
                 path,
                 options=downscale_opts,
-                output_dir=args.output_dir,
+                output_dir=effective_output_dir,
                 explicit_output=args.output if len(beatmap_files) == 1 else None,
                 dry_run=args.dry_run,
             )
@@ -547,6 +616,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not results:
         print("Error: No beatmaps were successfully downscaled.", file=sys.stderr)
         return 1
+
+    # Packaging into .osz archive if requested or if from URL/ID
+    should_package_osz = (args.package_osz or bool(args.osz_output) or is_url_or_id) and not args.dry_run
+
+    osz_map: Dict[Path, Path] = {}
+    if should_package_osz:
+        for res, out_p in results:
+            if not out_p or not out_p.exists():
+                continue
+            osz_target = args.osz_output if (args.osz_output and len(results) == 1) else out_p.with_suffix(".osz")
+
+            # Resolve audio & bg
+            audio_path = resolved_asset.audio_path if resolved_asset else None
+            audio_filename = resolved_asset.audio_filename if resolved_asset else "audio.mp3"
+            bg_path = resolved_asset.bg_path if resolved_asset else None
+            bg_filename = resolved_asset.bg_filename if resolved_asset else "bg.png"
+
+            # If not already found, look in out_p or source directory
+            if not audio_path and out_p.parent.exists():
+                for f in out_p.parent.iterdir():
+                    if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
+                        audio_path = f
+                        audio_filename = f.name
+                        break
+            if not bg_path and out_p.parent.exists():
+                for f in out_p.parent.iterdir():
+                    if f.suffix.lower() in [".png", ".jpg", ".jpeg"]:
+                        bg_path = f
+                        bg_filename = f.name
+                        break
+
+            try:
+                created_osz = package_into_osz(
+                    practice_osu_path=out_p,
+                    output_osz_path=osz_target,
+                    audio_path=audio_path,
+                    audio_filename=audio_filename,
+                    bg_path=bg_path,
+                    bg_filename=bg_filename,
+                )
+                osz_map[out_p] = created_osz
+            except Exception as e:
+                logger.warning(f"Could not package .osz for {out_p}: {e}")
 
     # Synchronization with osu!lazer if requested
     sync_result: Optional[LazerPracticeSyncResult] = None
@@ -569,6 +681,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 {
                     "report": res.to_dict(),
                     "output_file": str(out_p) if out_p else None,
+                    "osz_file": str(osz_map.get(out_p)) if (out_p and out_p in osz_map) else None,
                 }
                 for res, out_p in results
             ],
@@ -586,7 +699,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(json.dumps(output_data, indent=2, ensure_ascii=False))
     else:
         for res, out_path in results:
-            print(format_downscale_report(res, output_path=out_path, sync_result=sync_result))
+            osz_p = osz_map.get(out_path) if out_path else None
+            print(format_downscale_report(res, output_path=out_path, sync_result=sync_result, osz_path=osz_p))
 
     return 0
 

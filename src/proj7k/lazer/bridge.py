@@ -261,6 +261,43 @@ class RealmBridgeClient:
             error=res.get("error"),
         )
 
+    def locate_beatmap(
+        self,
+        online_id: Optional[int] = None,
+        file_hash: Optional[str] = None,
+        set_id: Optional[int] = None,
+        realm_path: Optional[Path] = None,
+        auto_setup: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Locates a beatmap in osu!lazer Realm database by online ID, MD5/SHA256 hash, or set ID.
+        """
+        if auto_setup:
+            self.ensure_installed()
+
+        target_realm = realm_path or self.default_realm_path
+        cmd = [
+            self.node_executable,
+            str(self.bridge_script),
+            "locate-beatmap",
+            "--realm",
+            str(target_realm),
+        ]
+        if online_id is not None:
+            cmd.extend(["--online-id", str(online_id)])
+        if file_hash is not None:
+            cmd.extend(["--hash", str(file_hash)])
+        if set_id is not None:
+            cmd.extend(["--set-id", str(set_id)])
+
+        res = self._run_command(cmd)
+        if not res.get("success", False):
+            raise RealmBridgeError(res.get("error", "Failed to locate beatmap"))
+
+        if res.get("found", False):
+            return res.get("beatmap")
+        return None
+
     def _run_command(self, cmd: List[str], input_data: Optional[str] = None) -> Dict[str, Any]:
         try:
             proc = subprocess.run(

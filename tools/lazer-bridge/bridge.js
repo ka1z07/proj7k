@@ -19,10 +19,22 @@ function parseArgs() {
 
     const command = args[0];
     let realmPath = null;
+    let onlineId = null;
+    let fileHash = null;
+    let setId = null;
 
     for (let i = 1; i < args.length; i++) {
         if (args[i] === '--realm' && i + 1 < args.length) {
             realmPath = args[i + 1];
+            i++;
+        } else if (args[i] === '--online-id' && i + 1 < args.length) {
+            onlineId = args[i + 1];
+            i++;
+        } else if (args[i] === '--hash' && i + 1 < args.length) {
+            fileHash = args[i + 1];
+            i++;
+        } else if (args[i] === '--set-id' && i + 1 < args.length) {
+            setId = args[i + 1];
             i++;
         }
     }
@@ -33,7 +45,7 @@ function parseArgs() {
         realmPath = path.join(homeDir, 'Library', 'Application Support', 'osu', 'client.realm');
     }
 
-    return { command, realmPath };
+    return { command, realmPath, onlineId, fileHash, setId };
 }
 
 function outputJsonAndExit(obj, exitCode = 0) {
@@ -130,6 +142,33 @@ function resolveFileHash(beatmap) {
         }
     }
     return '';
+}
+
+function resolveNamedFile(beatmap, extensions) {
+    if (beatmap.BeatmapSet && beatmap.BeatmapSet.Files) {
+        for (const namedUsage of beatmap.BeatmapSet.Files) {
+            const fname = (namedUsage.Filename || '').toLowerCase();
+            for (const ext of extensions) {
+                if (fname.endsWith(ext) && namedUsage.File && namedUsage.File.Hash) {
+                    return { filename: namedUsage.Filename, hash: namedUsage.File.Hash };
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function resolveSetFiles(beatmap) {
+    const files = [];
+    if (beatmap.BeatmapSet && beatmap.BeatmapSet.Files) {
+        for (const f of beatmap.BeatmapSet.Files) {
+            files.push({
+                filename: f.Filename || '',
+                hash: (f.File && f.File.Hash) || ''
+            });
+        }
+    }
+    return files;
 }
 
 async function handleStatus(realmPath) {
@@ -308,8 +347,84 @@ async function handleRevertBatch(realmPath) {
     outputJsonAndExit(result);
 }
 
+async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId) {
+    let realm;
+    let result;
+    try {
+        realm = new Realm({ path: realmPath, readOnly: true });
+        let matches = [];
+        if (onlineId) {
+            matches = realm.objects('Beatmap').filtered('OnlineID == $0', Number(onlineId));
+            if (matches.length === 0) {
+                // Secondary check: inspect candidate .osu headers for BeatmapID
+                const idTag = `BeatmapID:${onlineId}`;
+                const idTagSpace = `BeatmapID: ${onlineId}`;
+                const allBms = realm.objects('Beatmap');
+                for (let i = 0; i < allBms.length; i++) {
+                    const b = allBms[i];
+                    const fHash = resolveFileHash(b);
+                    if (!fHash || fHash.length < 2) continue;
+                    const fPath = path.join(path.dirname(realmPath), 'files', fHash[0], fHash.slice(0, 2), fHash);
+                    if (fs.existsSync(fPath)) {
+                        try {
+                            const buf = Buffer.alloc(3000);
+                            const fd = fs.openSync(fPath, 'r');
+                            const bytesRead = fs.readSync(fd, buf, 0, 3000, 0);
+                            fs.closeSync(fd);
+                            const text = buf.toString('utf8', 0, bytesRead);
+                            if (text.includes(idTag) || text.includes(idTagSpace)) {
+                                matches = [b];
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+        } else if (fileHash) {
+            matches = realm.objects('Beatmap').filtered('MD5Hash == $0 || Hash == $0', fileHash);
+        } else if (setId) {
+            matches = realm.objects('Beatmap').filtered('BeatmapSet.OnlineID == $0', Number(setId));
+        }
+
+        if (matches.length === 0) {
+            result = { success: true, found: false };
+        } else {
+            const b = matches[0];
+            const audioFile = resolveNamedFile(b, ['.mp3', '.ogg', '.wav']);
+            const bgFile = resolveNamedFile(b, ['.jpg', '.jpeg', '.png']);
+            result = {
+                success: true,
+                found: true,
+                beatmap: {
+                    id: safeIdToString(b.ID),
+                    online_id: b.OnlineID,
+                    set_online_id: (b.BeatmapSet && b.BeatmapSet.OnlineID) || null,
+                    title: (b.Metadata && b.Metadata.Title) ? b.Metadata.Title : '',
+                    artist: (b.Metadata && b.Metadata.Artist) ? b.Metadata.Artist : '',
+                    creator: (b.Metadata && b.Metadata.Author && b.Metadata.Author.Username) ? b.Metadata.Author.Username : '',
+                    difficulty_name: b.DifficultyName || '',
+                    star_rating: typeof b.StarRating === 'number' ? b.StarRating : -1.0,
+                    ruleset_id: (b.Ruleset && typeof b.Ruleset.OnlineID === 'number') ? b.Ruleset.OnlineID : 3,
+                    circle_size: (b.Difficulty && typeof b.Difficulty.CircleSize === 'number') ? b.Difficulty.CircleSize : 7.0,
+                    hash: b.Hash || '',
+                    md5_hash: b.MD5Hash || '',
+                    osu_file_hash: resolveFileHash(b),
+                    audio_file: audioFile,
+                    bg_file: bgFile,
+                    files: resolveSetFiles(b)
+                }
+            };
+        }
+    } catch (err) {
+        result = { success: false, error: err.message };
+    } finally {
+        if (realm && !realm.isClosed) realm.close();
+    }
+    outputJsonAndExit(result);
+}
+
 async function main() {
-    const { command, realmPath } = parseArgs();
+    const { command, realmPath, onlineId, fileHash, setId } = parseArgs();
 
     // Unified realm path existence guard
     if (!fs.existsSync(realmPath)) {
@@ -326,6 +441,9 @@ async function main() {
             break;
         case 'dump-collections':
             await handleDumpCollections(realmPath);
+            break;
+        case 'locate-beatmap':
+            await handleLocateBeatmap(realmPath, onlineId, fileHash, setId);
             break;
         case 'update-batch':
             await handleUpdateBatch(realmPath);
