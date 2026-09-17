@@ -74,6 +74,18 @@ class TechniqueRadar:
     dominant_score: float
     tech_4d: Optional[Tech4DComponents] = None
 
+    def to_vector(self) -> List[float]:
+        return [
+            self.jack,
+            self.tech,
+            self.speed,
+            self.stream,
+            self.ln_general,
+            self.ln_tech,
+            self.ln_inverse,
+            self.ln_release,
+        ]
+
     def to_dict(self) -> Dict[str, Any]:
         d = {
             "jack": round(self.jack, 4),

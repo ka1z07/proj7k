@@ -2,7 +2,7 @@
 
 - **Issue**: [#29](https://github.com/ka1z07/proj7k/issues/29)
 - **ID**: `SPEC-P5.1-03`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [#28](https://github.com/ka1z07/proj7k/issues/28)
 - **所属父规格**: [`docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md`](file:///Users/kz/proj7k/docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md)
@@ -21,7 +21,7 @@
 
 ## Acceptance criteria
 
-- [ ] 实现 `TwoTierDanMapper`，支持标准段位名称与自定义星级解析，映射为应变阈值与雷达目标；
-- [ ] 实现 `WindowedPeakBatchPruner`，能够定位超标峰值区间，多轮迭代分批剪枝直至全局应变达到目标；
-- [ ] 实现 `DualGateValidator`，核验雷达余弦相似度与主导技法第 1 顺位，违例时回滚或惩罚；
-- [ ] 编写端到端单元测试，验证高难 Chordjack 与 Stream 合成图降阶至目标段位，且主导技法严格守恒。
+- [x] 实现 `TwoTierDanMapper`，支持标准段位名称与自定义星级解析，映射为应变阈值与雷达目标；
+- [x] 实现 `WindowedPeakBatchPruner`，能够定位超标峰值区间，多轮迭代分批剪枝直至全局应变达到目标；
+- [x] 实现 `DualGateValidator`，核验雷达余弦相似度与主导技法第 1 顺位，违例时回滚或惩罚；
+- [x] 编写端到端单元测试，验证高难 Chordjack 与 Stream 合成图降阶至目标段位，且主导技法严格守恒。
