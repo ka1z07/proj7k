@@ -84,3 +84,24 @@ def test_parse_rejects_non_7k_or_non_mania():
     osu_std = SAMPLE_7K_OSU.replace("Mode: 3", "Mode: 0")
     with pytest.raises(ValueError, match="Expected Mode 3"):
         parse_osu_7k(osu_std)
+
+def test_dump_osu_7k_roundtrip():
+    from proj7k.parser import dump_osu_7k
+    bm = parse_osu_7k(SAMPLE_7K_OSU)
+    dumped = dump_osu_7k(bm)
+    bm2 = parse_osu_7k(dumped)
+    assert bm2.title == bm.title
+    assert bm2.artist == bm.artist
+    assert bm2.creator == bm.creator
+    assert bm2.version == bm.version
+    assert bm2.mode == bm.mode
+    assert bm2.circle_size == bm.circle_size
+    assert bm2.overall_difficulty == bm.overall_difficulty
+    assert len(bm2.timing_points) == len(bm.timing_points)
+    assert len(bm2.hit_objects) == len(bm.hit_objects)
+    for h1, h2 in zip(bm.hit_objects, bm2.hit_objects):
+        assert h1.column == h2.column
+        assert h1.time == h2.time
+        assert h1.note_type == h2.note_type
+        assert h1.end_time == h2.end_time
+

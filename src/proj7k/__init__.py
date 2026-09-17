@@ -1,6 +1,15 @@
 """proj7k - osu!mania 7K evaluation, slicing and analysis toolchain."""
 
+from proj7k.parser import (
+    Beatmap7K,
+    HitObject,
+    NoteType,
+    TimingPoint,
+    parse_osu_7k,
+    dump_osu_7k,
+)
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
+
 from proj7k.batch import (
     BenchmarkItem,
     BatchSummary,
@@ -93,8 +102,15 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
+    "Beatmap7K",
+    "HitObject",
+    "NoteType",
+    "TimingPoint",
+    "parse_osu_7k",
+    "dump_osu_7k",
     "BeatmapFeatures",
     "extract_beatmap_features",
+
     "BenchmarkItem",
     "BatchSummary",
     "BenchmarkItemResult",
