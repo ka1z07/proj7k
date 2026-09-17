@@ -182,6 +182,33 @@ class LazerLogWatcher:
         except (asyncio.TimeoutError, TimeoutError):
             pass
 
+    def get_latest_beatmap_event(self) -> Optional[BeatmapChangedEvent]:
+        """
+        Scans backwards through the tail of the latest runtime log to find the most
+        recent BeatmapChangedEvent. Allows initializing callers with the active song
+        without waiting for the next beatmap change.
+        """
+        latest = find_latest_runtime_log(self.logs_dir)
+        if latest is None or not latest.exists():
+            return None
+
+        try:
+            with open(latest, "r", encoding="utf-8", errors="replace") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                read_size = min(size, 128 * 1024)
+                f.seek(size - read_size, os.SEEK_SET)
+                lines = f.readlines()
+
+            for line in reversed(lines):
+                ev = parse_log_line(line)
+                if isinstance(ev, BeatmapChangedEvent):
+                    return ev
+        except OSError as e:
+            logger.warning(f"Failed to read initial beatmap from {latest}: {e}")
+
+        return None
+
     async def run(
         self,
         callback: Callable[[BeatmapChangedEvent], Awaitable[None]],

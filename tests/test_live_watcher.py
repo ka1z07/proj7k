@@ -294,4 +294,27 @@ def test_watcher_captures_clock_events_stream(tmp_path: Path):
     asyncio.run(_run())
 
 
+def test_watcher_get_latest_beatmap_event(tmp_path: Path):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    watcher = LazerLogWatcher(logs_dir=logs_dir)
 
+    # Empty directory returns None
+    assert watcher.get_latest_beatmap_event() is None
+
+    log_file = logs_dir / "20260917.runtime.log"
+    log_file.write_text(
+        "2026-09-17 10:00:00 [verbose]: Starting osu!\n"
+        "2026-09-17 10:01:00 [verbose]: Game-wide working beatmap updated to Song1 - Title1 (Mapper1) [Diff1]\n"
+        "2026-09-17 10:02:00 [verbose]: GameplayClockContainer seeking to 0\n"
+        "2026-09-17 10:03:00 [verbose]: Game-wide working beatmap updated to Song2 - Title2 (Mapper2) [Diff2]\n"
+        "2026-09-17 10:04:00 [verbose]: GameplayClockContainer started via call to StartGameplayClock\n",
+        encoding="utf-8",
+    )
+
+    ev = watcher.get_latest_beatmap_event()
+    assert ev is not None
+    assert ev.artist == "Song2"
+    assert ev.title == "Title2"
+    assert ev.creator == "Mapper2"
+    assert ev.difficulty == "Diff2"

@@ -70,6 +70,17 @@ class LiveSessionCoordinator:
                 logger.warning(f"Could not warm up Realm index (osu!lazer may not be installed): {e}")
 
         if self.watcher is not None:
+            initial_event = self.watcher.get_latest_beatmap_event()
+            if initial_event is not None:
+                logger.info(
+                    f"LiveSessionCoordinator: initial active beatmap detected: "
+                    f"{initial_event.artist} - {initial_event.title} [{initial_event.difficulty}]"
+                )
+                try:
+                    await self.on_beatmap_changed(initial_event)
+                except Exception as e:
+                    logger.warning(f"Could not load initial beatmap {initial_event.title}: {e}")
+
             self._watcher_task = asyncio.create_task(
                 self.watcher.run(callback=self.handle_log_event)
             )
