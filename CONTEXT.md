@@ -206,5 +206,21 @@ _Avoid_: 跨进程强行抢锁、运行时热写入冲突
 在游戏内同时按照 8 大主导专项维度（如 `7K Jack`、`7K Tech`）与段位阶梯维度（如 `7K Dan 04th-06th`）双向自动生成的分类聚合收藏夹体系。
 _Avoid_: 单一扁平列表、杂乱无章命名
 
+**8 维技法雷达画像 (8-Dimension Technique Radar Profile)**:
+由 Regular 轨（Jack, Tech, Speed, Stream）与 LN 轨（LN General, LN Tech, LN Inverse, LN Release）构成的 8 项正交技法评分向量多边形拓扑，直观呈现谱面的全域技法能力倾向与主导技能标签。
+_Avoid_: 简单多边形图、无正交抑制的伪雷达
+
+**时序应变剖面 (Strain Timeseries Profile)**:
+基于连续应变衰减累积模型沿时间轴生成的微观键力与认知阻抗负荷时序曲线，显式标注左手与右手应变分量及 P90 / Top5% 权威难点阈值。
+_Avoid_: 离散柱状图、全局平均密度线
+
+**实时铺面监听器 (Real-time Beatmap Watcher)**:
+通过轻量低延迟机制（如监听 osu!lazer 运行时日志或文件变化）非侵入式感知玩家当前所选或正在游玩的 7K 铺面并实时解析的事件管道。
+_Avoid_: 侵入式内存注入、阻塞式长轮询
+
+**实时雷达仪表盘 (Live Radar Dashboard / Overlay)**:
+基于 WebSocket 双工管道向前端实时流式推送当前铺面 8 维技法雷达与时序应变剖面的轻量 Web 观察面板，天然兼容第二屏交互与 OBS 透明图层推流。
+_Avoid_: 重量级原生窗体依赖、不可缩放固定视图
+
 
 

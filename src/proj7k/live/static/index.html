@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k Live Radar Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-purple: #bc8cff;
+      --accent-gold: #e3b341;
+      --danger: #f85149;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+    }
+
+    .badge.connected {
+      color: var(--accent-green);
+      border-color: var(--accent-green);
+    }
+
+    .badge.disconnected {
+      color: var(--danger);
+      border-color: var(--danger);
+    }
+
+    main {
+      width: 100%;
+      max-width: 900px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .meta-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .meta-sub {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+
+    .sr-badge {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent-gold);
+    }
+
+    .radar-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .drop-zone {
+      margin-top: 16px;
+      border: 2px dashed var(--border);
+      border-radius: 6px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .drop-zone:hover {
+      border-color: var(--accent);
+    }
+
+    .tech-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+
+    .tech-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+    }
+
+    .dominant {
+      color: var(--accent-purple);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">proj7k // Live Radar</div>
+    <div id="statusBadge" class="badge disconnected">Connecting...</div>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Beatmap Overview</h2>
+      <div id="bmTitle" class="meta-title">Waiting for chart...</div>
+      <div id="bmMeta" class="meta-sub">Start playing in osu!lazer or drop an .osu file below</div>
+      <div id="srValue" class="sr-badge">0.00★</div>
+
+      <div class="drop-zone" id="dropZone">
+        Drag & Drop .osu file here to inspect
+      </div>
+
+      <div class="tech-list" id="techList"></div>
+    </div>
+
+    <div class="card radar-container">
+      <canvas id="radarCanvas" width="360" height="360"></canvas>
+    </div>
+  </main>
+
+  <script>
+    const statusBadge = document.getElementById("statusBadge");
+    const bmTitle = document.getElementById("bmTitle");
+    const bmMeta = document.getElementById("bmMeta");
+    const srValue = document.getElementById("srValue");
+    const techList = document.getElementById("techList");
+    const canvas = document.getElementById("radarCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let ws;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${location.host}/ws`;
+
+    function connectWs() {
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        statusBadge.textContent = "Live Stream Active";
+        statusBadge.className = "badge connected";
+      };
+
+      ws.onclose = () => {
+        statusBadge.textContent = "Disconnected";
+        statusBadge.className = "badge disconnected";
+        setTimeout(connectWs, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "beatmap_update") {
+            renderBeatmap(data);
+          }
+        } catch (err) {
+          console.error("Failed to parse message", err);
+        }
+      };
+    }
+
+    const TECHS = [
+      { key: "jack", label: "Jack" },
+      { key: "tech", label: "Tech" },
+      { key: "speed", label: "Speed" },
+      { key: "stream", label: "Stream" },
+      { key: "ln_general", label: "LN Gen" },
+      { key: "ln_tech", label: "LN Tech" },
+      { key: "ln_inverse", label: "LN Inv" },
+      { key: "ln_release", label: "LN Rel" }
+    ];
+
+    function renderBeatmap(data) {
+      const meta = data.metadata || {};
+      bmTitle.textContent = `${meta.artist || "Unknown"} - ${meta.title || "Unknown"}`;
+      bmMeta.textContent = `[${meta.version || "7K"}] • mapped by ${meta.creator || "Unknown"} • ${meta.total_notes || 0} notes`;
+      srValue.textContent = `${(data.star_rating || 0).toFixed(2)}★`;
+
+      const radar = data.radar || {};
+      techList.innerHTML = "";
+      TECHS.forEach(({ key, label }) => {
+        const item = document.createElement("div");
+        item.className = "tech-item";
+        const val = (radar[key] || 0).toFixed(2);
+        const isDom = radar.dominant_technique === key;
+        item.innerHTML = `<span>${label}</span><span class="${isDom ? 'dominant' : ''}">${val}★</span>`;
+        techList.appendChild(item);
+      });
+
+      drawRadar(radar);
+    }
+
+    function drawRadar(radar) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = Math.min(cx, cy) - 36;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Rings
+      ctx.strokeStyle = "#30363d";
+      ctx.lineWidth = 1;
+      for (let step = 1; step <= 4; step++) {
+        ctx.beginPath();
+        const curR = (r / 4) * step;
+        for (let i = 0; i < 8; i++) {
+          const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
+          const x = cx + curR * Math.cos(angle);
+          const y = cy + curR * Math.sin(angle);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      // Spokes and labels
+      ctx.fillStyle = "#8b949e";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      TECHS.forEach(({ label }, i) => {
+        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        const lx = cx + (r + 18) * Math.cos(angle);
+        const ly = cy + (r + 18) * Math.sin(angle);
+        ctx.fillText(label, lx, ly);
+      });
+
+      // Data polygon
+      ctx.beginPath();
+      ctx.strokeStyle = "#58a6ff";
+      ctx.fillStyle = "rgba(88, 166, 255, 0.25)";
+      ctx.lineWidth = 2;
+
+      TECHS.forEach(({ key }, i) => {
+        const val = Math.min(12.5, radar[key] || 0);
+        const norm = val / 12.5;
+        const curR = r * norm;
+        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
+        const x = cx + curR * Math.cos(angle);
+        const y = cy + curR * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Drag and drop handler
+    const dropZone = document.getElementById("dropZone");
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = "var(--accent)";
+    });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.style.borderColor = "var(--border)";
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = "var(--border)";
+      if (e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: "analyze_content",
+              content: reader.result
+            }));
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    drawRadar({});
+    connectWs();
+  </script>
+</body>
+</html>
