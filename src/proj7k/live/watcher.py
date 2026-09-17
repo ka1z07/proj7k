@@ -23,6 +23,17 @@ BEATMAP_UPDATED_PATTERN = re.compile(
     r"Game-wide working beatmap updated to (?P<artist_title>.*?)\s*\[(?P<diff>.*)\]\s*\((?P<creator>[^)]*)\)\.?$"
 )
 
+# Regex matching gameplay clock events in osu!lazer logs
+CLOCK_STARTED_PATTERN = re.compile(
+    r"GameplayClockContainer started via call to StartGameplayClock"
+)
+CLOCK_SEEKING_PATTERN = re.compile(
+    r"GameplayClockContainer seeking to\s+(?P<time_ms>-?\d+(?:\.\d+)?)"
+)
+CLOCK_STOPPED_PATTERN = re.compile(
+    r"GameplayClockContainer stopped via call to StopGameplayClock"
+)
+
 
 @dataclass(frozen=True)
 class BeatmapChangedEvent:
@@ -33,37 +44,87 @@ class BeatmapChangedEvent:
     raw_line: str = ""
 
 
-def parse_log_line(line: str) -> Optional[BeatmapChangedEvent]:
+@dataclass(frozen=True)
+class ClockStartedEvent:
+    raw_line: str = ""
+
+
+@dataclass(frozen=True)
+class ClockSeekingEvent:
+    time_ms: float
+    raw_line: str = ""
+
+
+@dataclass(frozen=True)
+class ClockStoppedEvent:
+    raw_line: str = ""
+
+
+from typing import Union
+
+LiveWatcherEvent = Union[
+    BeatmapChangedEvent,
+    ClockStartedEvent,
+    ClockSeekingEvent,
+    ClockStoppedEvent,
+]
+
+
+def parse_log_line(line: str) -> Optional[LiveWatcherEvent]:
     """
-    Parses a single osu!lazer log line and extracts BeatmapChangedEvent if matched.
+    Parses a single osu!lazer log line and extracts LiveWatcherEvent if matched.
+    Matches:
+    - BeatmapChangedEvent: "Game-wide working beatmap updated to ..."
+    - ClockSeekingEvent: "GameplayClockContainer seeking to <time_ms>"
+    - ClockStartedEvent: "GameplayClockContainer started via call to StartGameplayClock"
+    - ClockStoppedEvent: "GameplayClockContainer stopped via call to StopGameplayClock"
     """
     clean_line = line.strip()
-    if not clean_line or "Game-wide working beatmap updated to" not in clean_line:
+    if not clean_line:
         return None
 
-    match = BEATMAP_UPDATED_PATTERN.search(clean_line)
-    if not match:
-        return None
+    # 1. Beatmap change event
+    if "Game-wide working beatmap updated to" in clean_line:
+        match = BEATMAP_UPDATED_PATTERN.search(clean_line)
+        if match:
+            artist_title = match.group("artist_title").strip()
+            difficulty = match.group("diff").strip()
+            creator = match.group("creator").strip()
 
-    artist_title = match.group("artist_title").strip()
-    difficulty = match.group("diff").strip()
-    creator = match.group("creator").strip()
+            if " - " in artist_title:
+                artist, title = artist_title.split(" - ", 1)
+                artist = artist.strip()
+                title = title.strip()
+            else:
+                artist = ""
+                title = artist_title
 
-    if " - " in artist_title:
-        artist, title = artist_title.split(" - ", 1)
-        artist = artist.strip()
-        title = title.strip()
-    else:
-        artist = ""
-        title = artist_title
+            return BeatmapChangedEvent(
+                artist=artist,
+                title=title,
+                difficulty=difficulty,
+                creator=creator,
+                raw_line=clean_line,
+            )
 
-    return BeatmapChangedEvent(
-        artist=artist,
-        title=title,
-        difficulty=difficulty,
-        creator=creator,
-        raw_line=clean_line,
-    )
+    # 2. Clock seeking event
+    if "GameplayClockContainer seeking to" in clean_line:
+        match = CLOCK_SEEKING_PATTERN.search(clean_line)
+        if match:
+            return ClockSeekingEvent(
+                time_ms=float(match.group("time_ms")),
+                raw_line=clean_line,
+            )
+
+    # 3. Clock started event
+    if "GameplayClockContainer started via call to StartGameplayClock" in clean_line:
+        return ClockStartedEvent(raw_line=clean_line)
+
+    # 4. Clock stopped event
+    if "GameplayClockContainer stopped via call to StopGameplayClock" in clean_line:
+        return ClockStoppedEvent(raw_line=clean_line)
+
+    return None
 
 
 def find_latest_runtime_log(logs_dir: Path) -> Optional[Path]:

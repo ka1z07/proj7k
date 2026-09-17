@@ -11,6 +11,9 @@ import pytest
 
 from proj7k.live.watcher import (
     BeatmapChangedEvent,
+    ClockSeekingEvent,
+    ClockStartedEvent,
+    ClockStoppedEvent,
     LazerLogWatcher,
     parse_log_line,
 )
@@ -152,6 +155,104 @@ def test_watcher_truncation_handling(tmp_path: Path):
             watcher.stop()
             await task
 
+def test_parse_log_line_clock_events():
+    # 1. Start event
+    line_start = (
+        "2026-09-17 09:15:35 [verbose]: "
+        "GameplayClockContainer started via call to StartGameplayClock"
+    )
+    ev_start = parse_log_line(line_start)
+    assert isinstance(ev_start, ClockStartedEvent)
+
+    # 2. Seeking event with float milliseconds
+    line_seek_float = (
+        "2026-09-17 09:15:36 [verbose]: "
+        "GameplayClockContainer seeking to 3402.4003548964024"
+    )
+    ev_seek_float = parse_log_line(line_seek_float)
+    assert isinstance(ev_seek_float, ClockSeekingEvent)
+    assert ev_seek_float.time_ms == pytest.approx(3402.4003548964024)
+
+    # 3. Seeking event with negative lead-in milliseconds
+    line_seek_neg = (
+        "2026-09-10 18:09:49 [verbose]: "
+        "GameplayClockContainer seeking to -1680"
+    )
+    ev_seek_neg = parse_log_line(line_seek_neg)
+    assert isinstance(ev_seek_neg, ClockSeekingEvent)
+    assert ev_seek_neg.time_ms == -1680.0
+
+    # 4. Seeking event to 0 (restart)
+    line_seek_zero = "GameplayClockContainer seeking to 0"
+    ev_seek_zero = parse_log_line(line_seek_zero)
+    assert isinstance(ev_seek_zero, ClockSeekingEvent)
+    assert ev_seek_zero.time_ms == 0.0
+
+    # 5. Stop event
+    line_stop = (
+        "2026-09-17 10:02:26 [verbose]: "
+        "GameplayClockContainer stopped via call to StopGameplayClock"
+    )
+    ev_stop = parse_log_line(line_stop)
+    assert isinstance(ev_stop, ClockStoppedEvent)
+
+
+def test_watcher_captures_clock_events_stream(tmp_path: Path):
+    async def _run():
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        log_file = logs_dir / "runtime.log"
+        log_file.write_text("2026-09-17 10:00:00 [verbose]: Starting osu!\n", encoding="utf-8")
+
+        watcher = LazerLogWatcher(logs_dir=logs_dir, poll_interval_s=0.02)
+        received_events = []
+
+        async def on_event(ev):
+            received_events.append(ev)
+
+        task = asyncio.create_task(watcher.run(callback=on_event))
+
+        try:
+            await asyncio.sleep(0.05)
+            with open(log_file, "a", encoding="utf-8") as f:
+                # 1. Beatmap change
+                f.write(
+                    "Game-wide working beatmap updated to Camellia - crystallized [7K Hyper] (Smoothie World)\n"
+                )
+                # 2. Seek before start
+                f.write("GameplayClockContainer seeking to -1500\n")
+                # 3. Clock started
+                f.write("GameplayClockContainer started via call to StartGameplayClock\n")
+                # 4. Skip intro seeking
+                f.write("GameplayClockContainer seeking to 5200.5\n")
+                # 5. Clock stopped
+                f.write("GameplayClockContainer stopped via call to StopGameplayClock\n")
+                f.flush()
+
+            # Wait for all 5 events
+            for _ in range(50):
+                if len(received_events) >= 5:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert len(received_events) == 5
+            assert isinstance(received_events[0], BeatmapChangedEvent)
+            assert received_events[0].title == "crystallized"
+
+            assert isinstance(received_events[1], ClockSeekingEvent)
+            assert received_events[1].time_ms == -1500.0
+
+            assert isinstance(received_events[2], ClockStartedEvent)
+
+            assert isinstance(received_events[3], ClockSeekingEvent)
+            assert received_events[3].time_ms == 5200.5
+
+            assert isinstance(received_events[4], ClockStoppedEvent)
+        finally:
+            watcher.stop()
+            await task
+
     asyncio.run(_run())
+
 
 

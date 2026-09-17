@@ -178,3 +178,57 @@ def test_websocket_analyze_file_not_found(tmp_path):
             await server.stop()
 
     asyncio.run(_run())
+
+
+def test_websocket_clock_sync_broadcast_and_query(tmp_path):
+    async def _run():
+        port = _get_free_port()
+        cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
+        engine = LiveEngine(cache=cache)
+        server = LiveServer(host="127.0.0.1", port=port, engine=engine)
+
+        await server.start()
+        try:
+            ws_url = f"ws://127.0.0.1:{port}/ws"
+            async with websockets.connect(ws_url) as ws:
+                await ws.recv()  # welcome
+
+                # 1. Query clock when idle
+                await ws.send(json.dumps({"type": "get_clock"}))
+                raw_idle = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                idle_clock = json.loads(raw_idle)
+                assert idle_clock["type"] == "clock_sync"
+                assert idle_clock["status"] == "idle"
+                assert idle_clock["active"] is False
+
+                # 2. Server broadcasts clock_sync playing
+                sync_frame = {
+                    "type": "clock_sync",
+                    "status": "playing",
+                    "active": True,
+                    "start_ms": 12500.0,
+                    "time_ms": 12500.0,
+                    "rate": 1.0,
+                    "server_time": 1726574000.0,
+                }
+                await server.broadcast(sync_frame)
+
+                # 3. Client receives broadcast
+                raw_broadcast = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                received = json.loads(raw_broadcast)
+                assert received["type"] == "clock_sync"
+                assert received["status"] == "playing"
+                assert received["start_ms"] == 12500.0
+
+                # 4. Subsequent query returns updated state
+                await ws.send(json.dumps({"type": "get_clock"}))
+                raw_query = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                queried = json.loads(raw_query)
+                assert queried["type"] == "clock_sync"
+                assert queried["status"] == "playing"
+                assert queried["start_ms"] == 12500.0
+        finally:
+            await server.stop()
+
+    asyncio.run(_run())
+

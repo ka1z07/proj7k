@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+import time
 from typing import Any, Dict, Optional, Set
 
 import websockets
@@ -50,6 +51,7 @@ class LiveServer:
 
         self._active_connections: Set[ServerConnection] = set()
         self._current_beatmap: Optional[Dict[str, Any]] = None
+        self._current_clock: Optional[Dict[str, Any]] = None
         self._server: Optional[Server] = None
 
     def _process_request(self, connection: ServerConnection, request: Request) -> Optional[Response]:
@@ -144,6 +146,18 @@ class LiveServer:
                     elif msg_type == "ping":
                         await connection.send(json.dumps({"type": "pong"}))
 
+                    elif msg_type in ("clock_sync", "get_clock"):
+                        clock_frame = self._current_clock or {
+                            "type": "clock_sync",
+                            "status": "idle",
+                            "active": False,
+                            "start_ms": 0.0,
+                            "time_ms": 0.0,
+                            "rate": 0.0,
+                            "server_time": time.time(),
+                        }
+                        await connection.send(json.dumps(clock_frame))
+
                 except Exception as e:
                     logger.error(f"Error handling message: {e}", exc_info=True)
                     err = {"type": "error", "message": str(e)}
@@ -157,6 +171,8 @@ class LiveServer:
         """Broadcasts a state frame to all currently connected WebSocket clients."""
         if frame.get("type") == "beatmap_update":
             self._current_beatmap = frame
+        elif frame.get("type") == "clock_sync":
+            self._current_clock = frame
         payload = json.dumps(frame)
 
         if self._active_connections:

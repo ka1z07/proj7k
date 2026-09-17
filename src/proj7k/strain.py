@@ -33,15 +33,50 @@ class StrainTimeseriesProfile:
     p95_strain: float
     peak_strain: float
 
+    @property
+    def sample_times_ms(self) -> List[float]:
+        return [round(t * 1000.0, 2) for t in self.times]
+
+    @property
+    def left_strains(self) -> List[float]:
+        return self.left_hand_strain
+
+    @property
+    def right_strains(self) -> List[float]:
+        return self.right_hand_strain
+
+    @property
+    def p90(self) -> float:
+        return self.p90_strain
+
+    @property
+    def p95(self) -> float:
+        return self.p95_strain
+
+    @property
+    def top5_percent_strain(self) -> float:
+        return self.p95_strain
+
+    @property
+    def top5_percent(self) -> float:
+        return self.p95_strain
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "step_seconds": self.step_seconds,
             "times": self.times,
+            "sample_times_ms": self.sample_times_ms,
+            "left_strains": self.left_strains,
+            "right_strains": self.right_strains,
             "left_hand_strain": self.left_hand_strain,
             "right_hand_strain": self.right_hand_strain,
             "combined_strain": self.combined_strain,
             "p90_strain": self.p90_strain,
+            "p90": self.p90,
             "p95_strain": self.p95_strain,
+            "p95": self.p95,
+            "top5_percent_strain": self.top5_percent_strain,
+            "top5_percent": self.top5_percent,
             "peak_strain": self.peak_strain,
         }
 

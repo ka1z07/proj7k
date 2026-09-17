@@ -83,6 +83,43 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert cache.get_features(h) is not None
 
 
+def test_live_engine_strain_profile_contract(tmp_path: Path):
+    cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
+    engine = LiveEngine(cache=cache)
+
+    content = _make_dummy_osu_content("Strain Test")
+    frame = engine.analyze_content(content)
+
+    assert "strain_profile" in frame
+    strain = frame["strain_profile"]
+
+    # Verify dual hand strain arrays
+    assert "left_strains" in strain
+    assert "right_strains" in strain
+    assert "sample_times_ms" in strain
+    assert len(strain["left_strains"]) == len(strain["sample_times_ms"])
+    assert len(strain["right_strains"]) == len(strain["sample_times_ms"])
+    assert len(strain["sample_times_ms"]) > 0
+
+    # All sample times must be non-negative and monotonically increasing in ms
+    assert strain["sample_times_ms"][0] >= 0.0
+    for i in range(len(strain["sample_times_ms"]) - 1):
+        assert strain["sample_times_ms"][i + 1] > strain["sample_times_ms"][i]
+
+    # Verify P90 baseline and Top 5% threshold
+    assert "p90_strain" in strain
+    assert "top5_percent_strain" in strain
+    assert strain["p90_strain"] >= 0.0
+    assert strain["top5_percent_strain"] >= strain["p90_strain"]
+
+    # Verify backward compatibility aliases
+    assert "left_hand_strain" in strain
+    assert "right_hand_strain" in strain
+    assert "combined_strain" in strain
+    assert "p95_strain" in strain
+
+
+
 def test_live_engine_cache_hit_on_second_call(tmp_path: Path):
     cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=True)
     engine = LiveEngine(cache=cache)

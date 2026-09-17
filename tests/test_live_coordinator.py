@@ -20,7 +20,13 @@ from proj7k.live.coordinator import LiveSessionCoordinator
 from proj7k.live.engine import LiveEngine
 from proj7k.live.index import LazerRealmIndex
 from proj7k.live.server import LiveServer
-from proj7k.live.watcher import BeatmapChangedEvent, LazerLogWatcher
+from proj7k.live.watcher import (
+    BeatmapChangedEvent,
+    ClockSeekingEvent,
+    ClockStartedEvent,
+    ClockStoppedEvent,
+    LazerLogWatcher,
+)
 
 
 def _get_free_port() -> int:
@@ -275,3 +281,194 @@ def test_end_to_end_log_watcher_injection(tmp_path: Path):
             await server.stop()
 
     asyncio.run(_run())
+
+
+def test_coordinator_clock_sync_lifecycle(tmp_path: Path):
+    async def _run():
+        port = _get_free_port()
+        files_dir, index, engine = _setup_test_environment(tmp_path)
+        server = LiveServer(host="127.0.0.1", port=port, engine=engine)
+        coordinator = LiveSessionCoordinator(server=server, engine=engine, index=index)
+
+        await server.start()
+        await coordinator.start()
+
+        try:
+            ws_url = f"ws://127.0.0.1:{port}/ws"
+            async with websockets.connect(ws_url) as ws:
+                await ws.recv()  # welcome
+
+                # 1. Initially idle
+                assert coordinator.is_playing is False
+                assert coordinator.clock_state.status == "idle"
+
+                # 2. Seeking before start (lead-in)
+                seek_ev1 = ClockSeekingEvent(time_ms=-1680.0)
+                await coordinator.handle_log_event(seek_ev1)
+
+                raw_msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg1 = json.loads(raw_msg)
+                assert msg1["type"] == "clock_sync"
+                assert msg1["status"] == "idle"
+                assert msg1["active"] is False
+                assert msg1["start_ms"] == -1680.0
+                assert msg1["rate"] == 0.0
+
+                # 3. Clock started (gameplay begins)
+                start_ev = ClockStartedEvent()
+                await coordinator.handle_log_event(start_ev)
+
+                raw_msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg2 = json.loads(raw_msg)
+                assert msg2["type"] == "clock_sync"
+                assert msg2["status"] == "playing"
+                assert msg2["active"] is True
+                assert msg2["start_ms"] == -1680.0
+                assert msg2["rate"] == 1.0
+                assert coordinator.is_playing is True
+
+                # 4. Skip intro seeking
+                seek_ev2 = ClockSeekingEvent(time_ms=3402.4)
+                await coordinator.handle_log_event(seek_ev2)
+
+                raw_msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg3 = json.loads(raw_msg)
+                assert msg3["type"] == "clock_sync"
+                assert msg3["status"] == "playing"
+                assert msg3["active"] is True
+                assert msg3["start_ms"] == pytest.approx(3402.4)
+                assert msg3["rate"] == 1.0
+
+                # 5. Stop gameplay
+                stop_ev = ClockStoppedEvent()
+                await coordinator.handle_log_event(stop_ev)
+
+                raw_msg = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                msg4 = json.loads(raw_msg)
+                assert msg4["type"] == "clock_sync"
+                assert msg4["status"] == "idle"
+                assert msg4["active"] is False
+                assert msg4["rate"] == 0.0
+                assert coordinator.is_playing is False
+
+        finally:
+            await coordinator.stop()
+            await server.stop()
+
+    asyncio.run(_run())
+
+
+def test_coordinator_clock_reset_on_beatmap_switch_while_playing(tmp_path: Path):
+    async def _run():
+        port = _get_free_port()
+        files_dir, index, engine = _setup_test_environment(tmp_path)
+        server = LiveServer(host="127.0.0.1", port=port, engine=engine)
+        coordinator = LiveSessionCoordinator(server=server, engine=engine, index=index)
+
+        await server.start()
+        await coordinator.start()
+
+        try:
+            ws_url = f"ws://127.0.0.1:{port}/ws"
+            async with websockets.connect(ws_url) as ws:
+                await ws.recv()  # welcome
+
+                # Start clock playing
+                await coordinator.handle_log_event(ClockStartedEvent())
+                await ws.recv()  # clock_sync playing
+                assert coordinator.is_playing is True
+
+                # Beatmap switch occurs while playing
+                ev = BeatmapChangedEvent(
+                    artist="Live Artist",
+                    title="Live Chart",
+                    difficulty="7K Hyper",
+                    creator="Mapper",
+                )
+                await coordinator.handle_log_event(ev)
+
+                # Expect clock_sync idle frame followed by beatmap_update frame
+                msg1 = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+                assert msg1["type"] == "clock_sync"
+                assert msg1["status"] == "idle"
+                assert msg1["active"] is False
+                assert coordinator.is_playing is False
+
+                msg2 = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
+                assert msg2["type"] == "beatmap_update"
+                assert msg2["metadata"]["title"] == "Live Chart"
+
+        finally:
+            await coordinator.stop()
+            await server.stop()
+
+    asyncio.run(_run())
+
+
+def test_end_to_end_gameplay_clock_sync_from_log_watcher(tmp_path: Path):
+    async def _run():
+        port = _get_free_port()
+        files_dir, index, engine = _setup_test_environment(tmp_path)
+
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        runtime_log = logs_dir / "runtime.log"
+        runtime_log.write_text("2026-09-17 12:00:00 [verbose]: osu! started\n", encoding="utf-8")
+
+        watcher = LazerLogWatcher(logs_dir=logs_dir, poll_interval_s=0.02, start_at_end=True)
+        server = LiveServer(host="127.0.0.1", port=port, engine=engine)
+        coordinator = LiveSessionCoordinator(
+            server=server,
+            engine=engine,
+            index=index,
+            watcher=watcher,
+        )
+
+        await server.start()
+        await coordinator.start()
+
+        try:
+            ws_url = f"ws://127.0.0.1:{port}/ws"
+            async with websockets.connect(ws_url) as ws:
+                await ws.recv()  # welcome
+
+                # Append clock events to runtime.log
+                await asyncio.sleep(0.05)
+                with open(runtime_log, "a", encoding="utf-8") as f:
+                    f.write("2026-09-17 12:01:00 [verbose]: GameplayClockContainer seeking to -1500\n")
+                    f.write("2026-09-17 12:01:00 [verbose]: GameplayClockContainer started via call to StartGameplayClock\n")
+                    f.write("2026-09-17 12:01:02 [verbose]: GameplayClockContainer seeking to 8500.5\n")
+                    f.write("2026-09-17 12:01:30 [verbose]: GameplayClockContainer stopped via call to StopGameplayClock\n")
+                    f.flush()
+
+                # 1. Seek before start
+                f1 = json.loads(await asyncio.wait_for(ws.recv(), timeout=3.0))
+                assert f1["type"] == "clock_sync"
+                assert f1["start_ms"] == -1500.0
+
+                # 2. Started
+                f2 = json.loads(await asyncio.wait_for(ws.recv(), timeout=3.0))
+                assert f2["type"] == "clock_sync"
+                assert f2["status"] == "playing"
+                assert f2["active"] is True
+                assert f2["rate"] == 1.0
+
+                # 3. Seeking (skip intro)
+                f3 = json.loads(await asyncio.wait_for(ws.recv(), timeout=3.0))
+                assert f3["type"] == "clock_sync"
+                assert f3["status"] == "playing"
+                assert f3["start_ms"] == 8500.5
+
+                # 4. Stopped
+                f4 = json.loads(await asyncio.wait_for(ws.recv(), timeout=3.0))
+                assert f4["type"] == "clock_sync"
+                assert f4["status"] == "idle"
+                assert f4["active"] is False
+                assert f4["rate"] == 0.0
+
+        finally:
+            await coordinator.stop()
+            await server.stop()
+
+    asyncio.run(_run())
+
