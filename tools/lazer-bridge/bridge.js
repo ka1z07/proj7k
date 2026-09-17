@@ -36,6 +36,16 @@ function parseArgs() {
     return { command, realmPath };
 }
 
+function outputJsonAndExit(obj, exitCode = 0) {
+    const jsonStr = JSON.stringify(obj) + '\n';
+    if (!process.stdout.write(jsonStr)) {
+        process.stdout.once('drain', () => process.exit(exitCode));
+    } else {
+        process.exit(exitCode);
+    }
+}
+
+
 function readStdin() {
     return new Promise((resolve, reject) => {
         let data = '';
@@ -124,27 +134,29 @@ function resolveFileHash(beatmap) {
 
 async function handleStatus(realmPath) {
     let realm;
+    let result;
     try {
         realm = new Realm({ path: realmPath, readOnly: true });
         const beatmaps = realm.objects('Beatmap');
         const mania7k = beatmaps.filtered('Ruleset.OnlineID == 3 && Difficulty.CircleSize == 7');
-        console.log(JSON.stringify({
+        result = {
             success: true,
             status: 'ok',
             total_beatmaps: beatmaps.length,
             total_7k: mania7k.length,
             realm_path: realmPath
-        }));
+        };
     } catch (err) {
-        console.log(JSON.stringify({ success: false, error: err.message }));
+        result = { success: false, error: err.message };
     } finally {
         if (realm && !realm.isClosed) realm.close();
-        process.exit(0);
     }
+    outputJsonAndExit(result);
 }
 
 async function handleDump7k(realmPath) {
     let realm;
+    let result;
     try {
         realm = new Realm({ path: realmPath, readOnly: true });
         const mania7k = realm.objects('Beatmap').filtered('Ruleset.OnlineID == 3 && Difficulty.CircleSize == 7');
@@ -167,16 +179,16 @@ async function handleDump7k(realmPath) {
             });
         }
 
-        console.log(JSON.stringify({
+        result = {
             success: true,
             beatmaps: records
-        }));
+        };
     } catch (err) {
-        console.log(JSON.stringify({ success: false, error: err.message }));
+        result = { success: false, error: err.message };
     } finally {
         if (realm && !realm.isClosed) realm.close();
-        process.exit(0);
     }
+    outputJsonAndExit(result);
 }
 
 async function handleUpdateBatch(realmPath) {
@@ -185,6 +197,7 @@ async function handleUpdateBatch(realmPath) {
     const collections = input.collections || {};
 
     let realm;
+    let result;
     try {
         realm = new Realm({ path: realmPath, readOnly: false });
         let updatedCount = 0;
@@ -216,16 +229,16 @@ async function handleUpdateBatch(realmPath) {
             }
         });
 
-        console.log(JSON.stringify({
+        result = {
             success: true,
             updated_count: updatedCount
-        }));
+        };
     } catch (err) {
-        console.log(JSON.stringify({ success: false, error: err.message }));
+        result = { success: false, error: err.message };
     } finally {
         if (realm && !realm.isClosed) realm.close();
-        process.exit(0);
     }
+    outputJsonAndExit(result);
 }
 
 async function handleRevertBatch(realmPath) {
@@ -234,6 +247,7 @@ async function handleRevertBatch(realmPath) {
     const collectionsToClean = input.collections_to_clean || [];
 
     let realm;
+    let result;
     try {
         realm = new Realm({ path: realmPath, readOnly: false });
         let revertedCount = 0;
@@ -251,16 +265,16 @@ async function handleRevertBatch(realmPath) {
             }
         });
 
-        console.log(JSON.stringify({
+        result = {
             success: true,
             updated_count: revertedCount
-        }));
+        };
     } catch (err) {
-        console.log(JSON.stringify({ success: false, error: err.message }));
+        result = { success: false, error: err.message };
     } finally {
         if (realm && !realm.isClosed) realm.close();
-        process.exit(0);
     }
+    outputJsonAndExit(result);
 }
 
 async function main() {
@@ -268,8 +282,8 @@ async function main() {
 
     // Unified realm path existence guard
     if (!fs.existsSync(realmPath)) {
-        console.log(JSON.stringify({ success: false, error: `Realm database not found at ${realmPath}` }));
-        process.exit(0);
+        outputJsonAndExit({ success: false, error: `Realm database not found at ${realmPath}` });
+        return;
     }
 
     switch (command) {
@@ -286,12 +300,11 @@ async function main() {
             await handleRevertBatch(realmPath);
             break;
         default:
-            console.log(JSON.stringify({ success: false, error: `Unknown command: ${command}` }));
-            process.exit(1);
+            outputJsonAndExit({ success: false, error: `Unknown command: ${command}` }, 1);
     }
 }
 
 main().catch(err => {
-    console.log(JSON.stringify({ success: false, error: err.message }));
-    process.exit(1);
+    outputJsonAndExit({ success: false, error: err.message }, 1);
 });
+
