@@ -201,7 +201,14 @@ class LazerSyncManager:
         skipped_count = 0
         failed_count = 0
 
-        for rec in mania_7k:
+        total_maps = len(mania_7k)
+        for idx, rec in enumerate(mania_7k, start=1):
+            if idx % 500 == 0 or idx == total_maps:
+                logger.info(
+                    f"Processing 7K beatmaps: {idx}/{total_maps} "
+                    f"({len(items_to_update)} to update, {skipped_count} unchanged)..."
+                )
+
             # Fast-path: check if chart is already annotated and matches
             extracted = try_extract_annotated_metadata(rec)
             if extracted is not None:
@@ -275,29 +282,31 @@ class LazerSyncManager:
             snapshot_path = self.backup_manager.create_realm_snapshot()
             self.backup_manager.record_original_states([r for r, _, _ in items_to_update])
 
-            update_res = self.bridge_client.apply_batch_update(
-                updates=updates,
-                collections=collections,
-                realm_path=self.realm_path,
-                auto_setup=False,
-            )
+        # Release safe flush window lock prior to invoking Node bridge,
+        # allowing Node's Realm Core engine to acquire client.realm.lock without deadlocking.
+        update_res = self.bridge_client.apply_batch_update(
+            updates=updates,
+            collections=collections,
+            realm_path=self.realm_path,
+            auto_setup=False,
+        )
 
-            if not update_res.success:
-                return SyncSummary(
-                    success=False,
-                    total_7k=len(mania_7k),
-                    error=f"Database update failed: {update_res.error}",
-                )
-
+        if not update_res.success:
             return SyncSummary(
-                success=True,
+                success=False,
                 total_7k=len(mania_7k),
-                evaluated_count=len(items_to_update),
-                updated_count=update_res.updated_count,
-                skipped_count=skipped_count,
-                failed_count=failed_count,
-                snapshot_path=str(snapshot_path) if snapshot_path else None,
+                error=f"Database update failed: {update_res.error}",
             )
+
+        return SyncSummary(
+            success=True,
+            total_7k=len(mania_7k),
+            evaluated_count=len(items_to_update),
+            updated_count=update_res.updated_count,
+            skipped_count=skipped_count,
+            failed_count=failed_count,
+            snapshot_path=str(snapshot_path) if snapshot_path else None,
+        )
 
     def revert_all(self) -> BatchUpdateResult:
         """
@@ -312,10 +321,10 @@ class LazerSyncManager:
                         f"database lock at '{self.lock_path}'"
                     ),
                 )
-            return self.backup_manager.revert_realm_modifications(
-                bridge_client=self.bridge_client,
-                auto_setup=self.options.auto_setup,
-            )
+        return self.backup_manager.revert_realm_modifications(
+            bridge_client=self.bridge_client,
+            auto_setup=self.options.auto_setup,
+        )
 
 
 class LazerDaemon:
