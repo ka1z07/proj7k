@@ -94,6 +94,14 @@ class LiveServer:
                 body=body,
             )
 
+        if path == "/favicon.ico":
+            return Response(
+                status_code=204,
+                reason_phrase="No Content",
+                headers=Headers([("Connection", "close")]),
+                body=b"",
+            )
+
         not_found = b"Not Found"
         return Response(
             status_code=404,
