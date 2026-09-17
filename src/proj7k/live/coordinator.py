@@ -10,8 +10,9 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
+from proj7k.live.clock import ClockState, ClockStatus
 from proj7k.live.engine import LiveEngine
 from proj7k.live.index import LazerRealmIndex
 from proj7k.live.server import LiveServer
@@ -26,25 +27,7 @@ from proj7k.live.watcher import (
 
 logger = logging.getLogger("proj7k.live.coordinator")
 
-
-@dataclass
-class ClockState:
-    """Represents the real-time playback clock state of the active beatmap."""
-    status: str = "idle"         # "idle" | "playing"
-    start_ms: float = 0.0        # song position in ms at sync point
-    rate: float = 0.0            # 1.0 when playing, 0.0 when idle
-    last_sync_time: float = 0.0  # server epoch timestamp in seconds
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": "clock_sync",
-            "status": self.status,
-            "active": self.status == "playing",
-            "start_ms": self.start_ms,
-            "time_ms": self.start_ms,
-            "rate": self.rate,
-            "server_time": self.last_sync_time,
-        }
+__all__ = ["ClockState", "ClockStatus", "LiveSessionCoordinator"]
 
 
 class LiveSessionCoordinator:
@@ -65,7 +48,7 @@ class LiveSessionCoordinator:
         self.index = index
         self.watcher = watcher
 
-        self.clock_state = ClockState()
+        self.clock_state = ClockState.create_idle()
         self._watcher_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._current_event: Optional[BeatmapChangedEvent] = None
@@ -73,7 +56,7 @@ class LiveSessionCoordinator:
     @property
     def is_playing(self) -> bool:
         """Returns True if gameplay clock is currently active/playing."""
-        return self.clock_state.status == "playing"
+        return self.clock_state.is_playing
 
     async def start(self) -> None:
         """
@@ -111,9 +94,7 @@ class LiveSessionCoordinator:
         Handles GameplayClockContainer started event. Transitions clock to 'playing'.
         """
         async with self._lock:
-            self.clock_state.status = "playing"
-            self.clock_state.rate = 1.0
-            self.clock_state.last_sync_time = time.time()
+            self.clock_state.start()
             frame = self.clock_state.to_dict()
             await self.server.broadcast(frame)
             return frame
@@ -123,9 +104,7 @@ class LiveSessionCoordinator:
         Handles GameplayClockContainer seeking event. Updates start_ms position.
         """
         async with self._lock:
-            self.clock_state.start_ms = event.time_ms
-            self.clock_state.last_sync_time = time.time()
-            self.clock_state.rate = 1.0 if self.clock_state.status == "playing" else 0.0
+            self.clock_state.seek(event.time_ms)
             frame = self.clock_state.to_dict()
             await self.server.broadcast(frame)
             return frame
@@ -135,9 +114,7 @@ class LiveSessionCoordinator:
         Handles GameplayClockContainer stopped event. Transitions clock to 'idle'.
         """
         async with self._lock:
-            self.clock_state.status = "idle"
-            self.clock_state.rate = 0.0
-            self.clock_state.last_sync_time = time.time()
+            self.clock_state.stop()
             frame = self.clock_state.to_dict()
             await self.server.broadcast(frame)
             return frame
@@ -170,15 +147,9 @@ class LiveSessionCoordinator:
         async with self._lock:
             self._current_event = event
 
-            # If clock was playing, reset to idle and broadcast clock_sync
-            if self.clock_state.status != "idle":
-                self.clock_state.status = "idle"
-                self.clock_state.rate = 0.0
-                self.clock_state.start_ms = 0.0
-                self.clock_state.last_sync_time = time.time()
-                await self.server.broadcast(self.clock_state.to_dict())
-            else:
-                self.clock_state.start_ms = 0.0
+            # Reset clock to idle for new beatmap
+            self.clock_state.reset()
+            reset_clock_frame = self.clock_state.to_dict()
 
             if self.index is None:
                 logger.warning("No Realm index configured in LiveSessionCoordinator.")
@@ -225,6 +196,7 @@ class LiveSessionCoordinator:
                 frame = self.engine.analyze_file(osu_file)
                 frame["metadata"]["realm_id"] = record.id
                 await self.server.broadcast(frame)
+                await self.server.broadcast(reset_clock_frame)
                 return frame
             except Exception as e:
                 logger.error(f"Error evaluating chart {osu_file}: {e}", exc_info=True)

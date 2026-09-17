@@ -16,6 +16,43 @@ from proj7k.rating import synthesize_star_rating
 from proj7k.strain import compute_dual_hand_strain
 
 
+def estimate_dan_tier(star_rating: float) -> str:
+    """
+    Estimates canonical Jinjin 7K Dan benchmark tier from intrinsic star rating.
+    Anchored to [0th Dan ~ 3.5★, 5th Dan ~ 5.5★, 10th Dan ~ 7.5★, Stellium >= 10.2★].
+    """
+    if star_rating < 3.5:
+        return "0th Dan"
+    elif star_rating < 3.9:
+        return "1st Dan"
+    elif star_rating < 4.3:
+        return "2nd Dan"
+    elif star_rating < 4.7:
+        return "3rd Dan"
+    elif star_rating < 5.1:
+        return "4th Dan"
+    elif star_rating < 5.5:
+        return "5th Dan"
+    elif star_rating < 5.9:
+        return "6th Dan"
+    elif star_rating < 6.3:
+        return "7th Dan"
+    elif star_rating < 6.7:
+        return "8th Dan"
+    elif star_rating < 7.1:
+        return "9th Dan"
+    elif star_rating < 7.6:
+        return "10th Dan"
+    elif star_rating < 8.3:
+        return "Gamma"
+    elif star_rating < 9.2:
+        return "Azimuth"
+    elif star_rating < 10.2:
+        return "Zenith"
+    else:
+        return "Stellium"
+
+
 class LiveEngine:
     """
     Evaluates 7K charts for real-time visualization with TwoLayerCache integration.
@@ -59,6 +96,7 @@ class LiveEngine:
         strain_profile = compute_dual_hand_strain(beatmap)
         radar = compute_technique_radar(beatmap, features=features, strain_profile=strain_profile)
         synthesis = synthesize_star_rating(radar, p90_strain=strain_profile.p90_strain)
+        dan_tier = estimate_dan_tier(synthesis.star_rating)
 
         metadata: Dict[str, Any] = {
             "title": beatmap.title,
@@ -72,6 +110,7 @@ class LiveEngine:
             "dominant_technique": synthesis.dominant_technique,
             "dominant_score": synthesis.dominant_score,
             "synergy_bonus": synthesis.synergy_bonus,
+            "dan_tier": dan_tier,
         }
 
         frame = {
@@ -79,6 +118,7 @@ class LiveEngine:
             "cached": False,
             "star_rating": synthesis.star_rating,
             "raw_star_rating": synthesis.uncompressed_rating,
+            "dan_tier": dan_tier,
             "radar": radar.to_dict(),
             "synthesis": synthesis.to_dict(),
             "strain_profile": strain_profile.to_dict(),

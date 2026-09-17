@@ -53,11 +53,14 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert meta["version"] == "Hard"
     assert meta["total_notes"] == 50
 
-    # Check star rating
+    # Check star rating and Jinjin Dan tier
     assert "star_rating" in frame
     assert frame["star_rating"] > 0.0
     assert "raw_star_rating" in frame
     assert frame["raw_star_rating"] > 0.0
+    assert "dan_tier" in frame
+    assert "dan_tier" in meta
+    assert isinstance(meta["dan_tier"], str)
 
     # Check 8-dimension radar
     radar = frame["radar"]

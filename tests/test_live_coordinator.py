@@ -387,16 +387,16 @@ def test_coordinator_clock_reset_on_beatmap_switch_while_playing(tmp_path: Path)
                 )
                 await coordinator.handle_log_event(ev)
 
-                # Expect clock_sync idle frame followed by beatmap_update frame
+                # Expect beatmap_update frame followed by clock_sync idle frame
                 msg1 = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
-                assert msg1["type"] == "clock_sync"
-                assert msg1["status"] == "idle"
-                assert msg1["active"] is False
-                assert coordinator.is_playing is False
+                assert msg1["type"] == "beatmap_update"
+                assert msg1["metadata"]["title"] == "Live Chart"
 
                 msg2 = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
-                assert msg2["type"] == "beatmap_update"
-                assert msg2["metadata"]["title"] == "Live Chart"
+                assert msg2["type"] == "clock_sync"
+                assert msg2["status"] == "idle"
+                assert msg2["active"] is False
+                assert coordinator.is_playing is False
 
         finally:
             await coordinator.stop()
