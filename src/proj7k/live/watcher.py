@@ -18,8 +18,9 @@ DEFAULT_LOGS_DIR = Path.home() / "Library" / "Application Support" / "osu" / "lo
 
 # Regex matching working beatmap update in osu!lazer logs:
 # e.g. "Game-wide working beatmap updated to Artist - Title [Difficulty] (Creator)."
+# Uses greedy match for difficulty to handle nested brackets in diff names
 BEATMAP_UPDATED_PATTERN = re.compile(
-    r"Game-wide working beatmap updated to (?P<artist_title>.*?)\s*\[(?P<diff>[^\]]+)\]\s*\((?P<creator>[^\)]+)\)\.?$"
+    r"Game-wide working beatmap updated to (?P<artist_title>.*?)\s*\[(?P<diff>.*)\]\s*\((?P<creator>[^)]*)\)\.?$"
 )
 
 
@@ -106,6 +107,13 @@ class LazerLogWatcher:
         self._running = False
         self._stop_event.set()
 
+    async def _sleep_poll(self) -> None:
+        """Helper to pause for poll_interval_s or until stop_event is signaled."""
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_s)
+        except (asyncio.TimeoutError, TimeoutError):
+            pass
+
     async def run(
         self,
         callback: Callable[[BeatmapChangedEvent], Awaitable[None]],
@@ -120,6 +128,7 @@ class LazerLogWatcher:
         current_ino: Optional[int] = None
         file_obj = None
         offset = 0
+        is_first_open = True
 
         try:
             while self._running and not self._stop_event.is_set():
@@ -145,8 +154,11 @@ class LazerLogWatcher:
                         latest_stat = current_file.stat()
                         current_ino = latest_stat.st_ino
                         file_obj = open(current_file, "r", encoding="utf-8", errors="replace")
-                        if self.start_at_end and current_file is not None and current_ino is not None and offset == 0:
+                        if self.start_at_end and is_first_open:
                             file_obj.seek(0, os.SEEK_END)
+                        else:
+                            file_obj.seek(0, os.SEEK_SET)
+                        is_first_open = False
                         offset = file_obj.tell()
                         logger.info(f"LazerLogWatcher started tailing {current_file}")
                     except OSError as e:
@@ -154,10 +166,7 @@ class LazerLogWatcher:
                         file_obj = None
 
                 if file_obj is None:
-                    try:
-                        await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_s)
-                    except (asyncio.TimeoutError, TimeoutError):
-                        pass
+                    await self._sleep_poll()
                     continue
 
                 # Check for file truncation
@@ -191,12 +200,7 @@ class LazerLogWatcher:
                             logger.error(f"Error in watcher callback: {e}", exc_info=True)
 
                 offset = file_obj.tell()
-
-                # Sleep before polling again
-                try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval_s)
-                except (asyncio.TimeoutError, TimeoutError):
-                    pass
+                await self._sleep_poll()
 
         finally:
             if file_obj is not None:

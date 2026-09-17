@@ -56,8 +56,9 @@ class LazerRealmIndex:
         self.bridge_client = bridge_client
 
         self._records: List[LazerBeatmapRecord] = []
+        self._normalized_records: List[Tuple[str, str, str, LazerBeatmapRecord]] = []
         self._title_diff_index: Dict[Tuple[str, str], List[LazerBeatmapRecord]] = {}
-        self._artist_title_diff_index: Dict[Tuple[str, str, str], LazerBeatmapRecord] = {}
+        self._artist_title_diff_index: Dict[Tuple[str, str, str], List[LazerBeatmapRecord]] = {}
 
     @property
     def is_warmed_up(self) -> bool:
@@ -89,14 +90,20 @@ class LazerRealmIndex:
     def _build_indices(self, records: Sequence[LazerBeatmapRecord]) -> None:
         self._title_diff_index.clear()
         self._artist_title_diff_index.clear()
+        self._normalized_records.clear()
 
         for rec in records:
             c_title = normalize_token(rec.title)
             c_diff = clean_difficulty(rec.difficulty_name)
             c_artist = normalize_token(rec.artist)
 
+            self._normalized_records.append((c_artist, c_title, c_diff, rec))
+
             # Store in (artist, title, diff) index
-            self._artist_title_diff_index[(c_artist, c_title, c_diff)] = rec
+            artist_key = (c_artist, c_title, c_diff)
+            if artist_key not in self._artist_title_diff_index:
+                self._artist_title_diff_index[artist_key] = []
+            self._artist_title_diff_index[artist_key].append(rec)
 
             # Store in (title, diff) index
             key = (c_title, c_diff)
@@ -119,9 +126,9 @@ class LazerRealmIndex:
         # Try with artist first if supplied
         if artist:
             c_artist = normalize_token(artist)
-            exact_artist_match = self._artist_title_diff_index.get((c_artist, c_title, c_diff))
-            if exact_artist_match is not None:
-                return exact_artist_match
+            artist_candidates = self._artist_title_diff_index.get((c_artist, c_title, c_diff))
+            if artist_candidates:
+                return artist_candidates[0]
 
         # Try without artist
         candidates = self._title_diff_index.get((c_title, c_diff))
@@ -169,23 +176,31 @@ class LazerRealmIndex:
     ) -> Optional[LazerBeatmapRecord]:
         """
         Fuzzy fallback matching when exact title or diff name varies.
+        Uses pre-normalized strings and token filtering for <5ms speed.
         """
         q_title = normalize_token(title)
         q_diff = clean_difficulty(difficulty)
         q_artist = normalize_token(artist) if artist else ""
+        q_tokens = set(q_title.split())
 
         best_record: Optional[LazerBeatmapRecord] = None
         best_score = 0.0
 
-        for rec in self._records:
-            r_title = normalize_token(rec.title)
-            r_diff = clean_difficulty(rec.difficulty_name)
+        # Pre-filter candidate list
+        candidate_pool = [
+            item for item in self._normalized_records
+            if (q_tokens and any(t in item[1] for t in q_tokens))
+            or (q_artist and q_artist in item[0])
+            or (len(q_title) >= 3 and item[1].startswith(q_title[:3]))
+        ]
+        if not candidate_pool:
+            candidate_pool = self._normalized_records
 
+        for r_artist, r_title, r_diff, rec in candidate_pool:
             title_sim = SequenceMatcher(None, q_title, r_title).ratio()
             diff_sim = SequenceMatcher(None, q_diff, r_diff).ratio()
 
             if q_artist:
-                r_artist = normalize_token(rec.artist)
                 artist_sim = SequenceMatcher(None, q_artist, r_artist).ratio()
                 score = 0.4 * title_sim + 0.3 * diff_sim + 0.3 * artist_sim
             else:

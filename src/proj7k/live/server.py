@@ -155,7 +155,8 @@ class LiveServer:
 
     async def broadcast(self, frame: Dict[str, Any]) -> None:
         """Broadcasts a state frame to all currently connected WebSocket clients."""
-        self._current_beatmap = frame
+        if frame.get("type") == "beatmap_update":
+            self._current_beatmap = frame
         payload = json.dumps(frame)
 
         if self._active_connections:

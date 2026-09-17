@@ -54,6 +54,15 @@ def test_parse_log_line_beatmap_update():
     assert event3.difficulty == "14 (10.74★ Tech)"
     assert event3.creator == "Kz"
 
+    # Difficulty with nested brackets
+    line4 = (
+        "Game-wide working beatmap updated to "
+        "xi - FREEDOM DiVE [[FOUR DIMENSIONS]] (Nakagawa-Kanon)"
+    )
+    event4 = parse_log_line(line4)
+    assert event4 is not None
+    assert event4.difficulty == "[FOUR DIMENSIONS]"
+
     # Irrelevant log lines return None
     assert parse_log_line("Running at 60 FPS") is None
     assert parse_log_line("Loading database...") is None

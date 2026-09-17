@@ -100,7 +100,8 @@ class LiveSessionCoordinator:
                 msg = f"Beatmap not found in 7K Realm index: {event.title} [{event.difficulty}]"
                 logger.warning(msg)
                 err_frame = {
-                    "type": "beatmap_not_found",
+                    "type": "error",
+                    "code": "beatmap_not_found",
                     "message": msg,
                     "event": {
                         "artist": event.artist,

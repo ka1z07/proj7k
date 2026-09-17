@@ -166,7 +166,8 @@ def test_coordinator_error_degradation_not_found(tmp_path: Path):
 
                 # Client should receive graceful error notification
                 err_msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=2.0))
-                assert err_msg["type"] in ("error", "beatmap_not_found")
+                assert err_msg["type"] == "error"
+                assert err_msg["code"] == "beatmap_not_found"
                 assert "Unknown Title" in err_msg["message"]
         finally:
             await coordinator.stop()
