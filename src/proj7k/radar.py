@@ -37,6 +37,29 @@ TECHNIQUE_NAMES: Tuple[str, ...] = (
 
 
 @dataclass(frozen=True)
+class Tech4DComponents:
+    """
+    Four-dimensional unorthodox permutation components (Omega_irreg, ADR-0008).
+    - tortuosity: flow reversals ratio
+    - bracket_shear: bracket inversion density and inter-finger shear strain
+    - spatial_entropy: spatial transition Shannon entropy
+    - rhythm_irreg: rhythmic irregularity and microtiming jerk
+    """
+    tortuosity: float
+    bracket_shear: float
+    spatial_entropy: float
+    rhythm_irreg: float
+
+    def to_dict(self) -> Dict[str, float]:
+        return {
+            "tortuosity": round(self.tortuosity, 4),
+            "bracket_shear": round(self.bracket_shear, 4),
+            "spatial_entropy": round(self.spatial_entropy, 4),
+            "rhythm_irreg": round(self.rhythm_irreg, 4),
+        }
+
+
+@dataclass(frozen=True)
 class TechniqueRadar:
     """8-dimension normalized technique capability radar."""
     jack: float
@@ -49,9 +72,10 @@ class TechniqueRadar:
     ln_release: float
     dominant_technique: str
     dominant_score: float
+    tech_4d: Optional[Tech4DComponents] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "jack": round(self.jack, 4),
             "tech": round(self.tech, 4),
             "speed": round(self.speed, 4),
@@ -63,6 +87,9 @@ class TechniqueRadar:
             "dominant_technique": self.dominant_technique,
             "dominant_score": round(self.dominant_score, 4),
         }
+        if self.tech_4d is not None:
+            d["tech_4d"] = self.tech_4d.to_dict()
+        return d
 
 
 @dataclass(frozen=True)
@@ -363,6 +390,13 @@ def compute_technique_radar(
     # 4. Rhythmic irregularity
     r_rhythm = max(0.0, features.rhythm_irreg - 0.20)
 
+    tech_4d = Tech4DComponents(
+        tortuosity=round(tortuosity, 4),
+        bracket_shear=round(b_bracket, 4),
+        spatial_entropy=round(features.spatial_entropy, 4),
+        rhythm_irreg=round(features.rhythm_irreg, 4),
+    )
+
     omega_irreg = (
         1.0
         + options.tech_tort_weight * t_tort
@@ -491,4 +525,29 @@ def compute_technique_radar(
         ln_release=scores["ln_release"],
         dominant_technique=max_tech,
         dominant_score=max_score,
+        tech_4d=tech_4d,
+    )
+
+
+def compute_tech_4d_components(
+    beatmap: Beatmap7K,
+    features: BeatmapFeatures,
+    options: Optional[RadarOptions] = None,
+) -> Tech4DComponents:
+    """
+    Extracts normalized 4D unorthodox permutation components:
+    - tortuosity: flow reversal ratio
+    - bracket_shear: bracket inversion density and finger shear ratio
+    - spatial_entropy: spatial transition entropy
+    - rhythm_irreg: rhythmic irregularity and microtiming jerk
+    """
+    opts = options or RadarOptions()
+    *_, tortuosity, bracket_density = _compute_jack_and_stream_raw(beatmap, opts)
+    shear_ratio = (features.gap1_density + 0.5 * features.adj_density) / max(1.0, features.avg_nps)
+    b_bracket = bracket_density * min(1.0, features.rhythm_irreg * 2.0) + shear_ratio * 0.30
+    return Tech4DComponents(
+        tortuosity=round(tortuosity, 4),
+        bracket_shear=round(b_bracket, 4),
+        spatial_entropy=round(features.spatial_entropy, 4),
+        rhythm_irreg=round(features.rhythm_irreg, 4),
     )

@@ -232,3 +232,39 @@ def test_websocket_clock_sync_broadcast_and_query(tmp_path):
 
     asyncio.run(_run())
 
+
+def test_http_overlay_mode_serving_and_offline_guard(tmp_path):
+    from proj7k.live.guard import StaticAssetGuard
+
+    async def _run():
+        port = _get_free_port()
+        cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
+        engine = LiveEngine(cache=cache)
+        server = LiveServer(host="127.0.0.1", port=port, engine=engine)
+
+        await server.start()
+        try:
+            urls = [
+                f"http://127.0.0.1:{port}/?mode=overlay",
+                f"http://127.0.0.1:{port}/?mode=overlay&radar=1&strain=0&scale=1.2",
+                f"http://127.0.0.1:{port}/index.html?mode=overlay&radar=0&strain=1",
+            ]
+
+            for url in urls:
+                def _fetch():
+                    with urllib.request.urlopen(url) as req:
+                        assert req.status == 200
+                        assert "text/html" in req.headers.get("Content-Type", "")
+                        return req.read().decode("utf-8")
+
+                body = await asyncio.to_thread(_fetch)
+                assert "<canvas id=\"radarCanvas\"" in body
+                assert "<canvas id=\"strainCanvas\"" in body
+                assert "overlay-mode" in body
+                # Assert 100% offline safety with StaticAssetGuard
+                StaticAssetGuard.assert_offline_safe_content(body)
+        finally:
+            await server.stop()
+
+    asyncio.run(_run())
+

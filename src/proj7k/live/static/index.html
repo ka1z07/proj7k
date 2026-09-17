@@ -6,16 +6,20 @@
   <title>proj7k Live Radar Dashboard</title>
   <style>
     :root {
-      --bg: #0d1117;
-      --card-bg: #161b22;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --text-muted: #8b949e;
-      --accent: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-purple: #bc8cff;
-      --accent-gold: #e3b341;
-      --danger: #f85149;
+      --bg-dark: #090d16;
+      --bg-card: rgba(18, 24, 38, 0.85);
+      --bg-card-solid: #121826;
+      --border-color: #242f48;
+      --border-highlight: #3b82f6;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-cyan: #06b6d4;
+      --accent-purple: #c084fc;
+      --accent-gold: #f59e0b;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, monospace;
     }
 
     * {
@@ -25,206 +29,771 @@
     }
 
     body {
-      background-color: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      padding: 24px;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-stack);
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
     }
 
+    /* OBS Overlay Mode Overrides */
+    body.overlay-mode {
+      background: transparent !important;
+      background-color: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      min-height: auto !important;
+      display: block !important;
+    }
+
+    body.overlay-mode header,
+    body.overlay-mode .drop-zone,
+    body.overlay-mode #techDrawer,
+    body.overlay-mode .no-overlay {
+      display: none !important;
+    }
+
+    body.overlay-mode .dashboard-container {
+      max-width: none !important;
+      gap: 12px !important;
+      padding: 10px !important;
+      grid-template-columns: auto auto auto !important;
+      align-items: start !important;
+    }
+
+    body.overlay-mode .card {
+      background: transparent !important;
+      background-color: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: 1px solid rgba(56, 189, 248, 0.25) !important;
+      box-shadow: none !important;
+    }
+
+    /* Header */
     header {
       width: 100%;
-      max-width: 900px;
+      max-width: 1400px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+      padding: 12px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
 
-    .brand {
-      font-size: 1.4rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: var(--accent);
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .badge {
+    .brand-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      gap: 8px;
+      padding: 6px 14px;
       border-radius: 999px;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 600;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
     }
 
-    .badge.connected {
-      color: var(--accent-green);
-      border-color: var(--accent-green);
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-red);
     }
 
-    .badge.disconnected {
-      color: var(--danger);
-      border-color: var(--danger);
+    .status-badge.connected .status-dot {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
     }
 
-    main {
+    .status-badge.connected {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+
+    .status-badge.disconnected {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    /* Main Container (Three Columns Layout) */
+    .dashboard-container {
       width: 100%;
-      max-width: 900px;
+      max-width: 1400px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 340px 440px 1fr;
       gap: 20px;
+      align-items: stretch;
     }
 
+    @media (max-width: 1200px) {
+      .dashboard-container {
+        grid-template-columns: 1fr 1fr;
+      }
+      .col-strain {
+        grid-column: span 2;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .dashboard-container {
+        grid-template-columns: 1fr;
+      }
+      .col-strain {
+        grid-column: span 1;
+      }
+    }
+
+    /* Cards */
     .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
       padding: 20px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
 
-    .card h2 {
-      font-size: 1.1rem;
-      margin-bottom: 14px;
-      color: var(--text);
-    }
-
-    .meta-title {
-      font-size: 1.3rem;
+    .card-title {
+      font-size: 0.95rem;
       font-weight: 700;
-      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .meta-sub {
+    /* Column 1: Info Panel */
+    .song-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .song-artist {
+      font-size: 1rem;
+      font-weight: 600;
       color: var(--text-muted);
-      font-size: 0.9rem;
       margin-top: 4px;
     }
 
-    .sr-badge {
+    .diff-badge {
       display: inline-block;
-      margin-top: 14px;
-      font-size: 1.6rem;
-      font-weight: 800;
-      color: var(--accent-gold);
+      margin-top: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
     }
 
-    .radar-container {
+    .mapper-text {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .rating-row {
       display: flex;
-      justify-content: center;
+      align-items: baseline;
+      gap: 12px;
+      margin-top: 16px;
+      padding: 12px 14px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .sr-number {
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: var(--accent-gold);
+      letter-spacing: -0.02em;
+      text-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
+    }
+
+    .dan-badge {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(192, 132, 252, 0.18);
+      color: var(--accent-purple);
+      border: 1px solid rgba(192, 132, 252, 0.4);
+      box-shadow: 0 0 12px rgba(192, 132, 252, 0.2);
+    }
+
+    .dominant-container {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
       align-items: center;
     }
 
-    canvas {
-      max-width: 100%;
-      height: auto;
+    .dominant-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .dominant-badge {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: var(--accent-cyan);
+      text-shadow: 0 0 10px var(--accent-cyan);
+      text-transform: uppercase;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .stat-box {
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 2px;
     }
 
     .drop-zone {
       margin-top: 16px;
-      border: 2px dashed var(--border);
-      border-radius: 6px;
-      padding: 24px;
+      border: 2px dashed var(--border-color);
+      border-radius: 8px;
+      padding: 16px 12px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      transition: all 0.25s ease;
+      background: rgba(0, 0, 0, 0.15);
     }
 
     .drop-zone:hover {
-      border-color: var(--accent);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
     }
 
-    .tech-list {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 12px;
-      font-size: 0.88rem;
+    /* Column 2: Radar Chart */
+    .radar-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
     }
 
-    .tech-item {
+    #radarCanvas {
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 1 / 1;
+    }
+
+    /* Column 3: Strain Timeseries */
+    .strain-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .strain-header {
       display: flex;
       justify-content: space-between;
-      padding: 6px 10px;
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 4px;
+      align-items: center;
+      margin-bottom: 8px;
     }
 
-    .dominant {
-      color: var(--accent-purple);
+    .strain-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.78rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .legend-lh { background-color: var(--accent-blue); box-shadow: 0 0 6px var(--accent-blue); }
+    .legend-rh { background-color: var(--accent-purple); box-shadow: 0 0 6px var(--accent-purple); }
+    .legend-p90 { background-color: var(--accent-gold); }
+    .legend-top5 { background-color: var(--accent-red); }
+
+    .playhead-time {
+      font-family: monospace;
+      font-size: 0.95rem;
       font-weight: 700;
+      color: var(--accent-blue);
+    }
+
+    #strainCanvas {
+      width: 100%;
+      height: 280px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Bottom: Collapsible 4D Tech Drawer */
+    #techDrawer {
+      width: 100%;
+      max-width: 1400px;
+      margin-top: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .drawer-header {
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      background: rgba(255, 255, 255, 0.02);
+      transition: background 0.2s;
+    }
+
+    .drawer-header:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .drawer-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drawer-icon {
+      font-size: 0.8rem;
+      transition: transform 0.3s ease;
+    }
+
+    .drawer-icon.open {
+      transform: rotate(180deg);
+    }
+
+    .drawer-content {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      padding: 20px;
+      border-top: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    @media (max-width: 1100px) {
+      .drawer-content {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .drawer-content {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .tech-metric-card {
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .metric-name {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .metric-val {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #ffffff;
+      font-family: monospace;
+    }
+
+    .metric-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .metric-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .metric-desc {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 4px;
     }
   </style>
 </head>
 <body>
+
+  <!-- Header Banner -->
   <header>
-    <div class="brand">proj7k // Live Radar</div>
-    <div id="statusBadge" class="badge disconnected">Connecting...</div>
+    <div class="brand-group">
+      <div>
+        <div class="brand-title">proj7k // Live Radar</div>
+        <div class="brand-subtitle">Intrinsic 7K Difficulty & Real-time Technique Profile</div>
+      </div>
+    </div>
+    <div id="statusBadge" class="status-badge disconnected">
+      <span class="status-dot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
   </header>
 
-  <main>
-    <div class="card">
-      <h2>Beatmap Overview</h2>
-      <div id="bmTitle" class="meta-title">Waiting for chart...</div>
-      <div id="bmMeta" class="meta-sub">Start playing in osu!lazer or drop an .osu file below</div>
-      <div id="srValue" class="sr-badge">0.00★</div>
+  <!-- 3-Column Dashboard Container -->
+  <div class="dashboard-container" id="dashboardContainer">
 
-      <div class="drop-zone" id="dropZone">
-        Drag & Drop .osu file here to inspect
+    <!-- Column 1: Beatmap Info & Drop Zone -->
+    <div class="card col-info" id="cardInfo">
+      <div class="card-title">
+        <span>Beatmap Overview</span>
+        <span id="syncStatusTag" style="font-size: 0.75rem; color: var(--accent-green);">IDLE</span>
       </div>
 
-      <div class="tech-list" id="techList"></div>
+      <div class="song-title" id="bmTitle">Waiting for chart...</div>
+      <div class="song-artist" id="bmArtist">Start playing in osu!lazer or drop an .osu file</div>
+      <div>
+        <span class="diff-badge" id="bmDiff">7K Standard</span>
+      </div>
+      <div class="mapper-text" id="bmCreator">Mapped by Unknown</div>
+
+      <div class="rating-row">
+        <div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Intrinsic SR</div>
+          <div class="sr-number" id="srValue">0.00★</div>
+        </div>
+        <div style="margin-left: auto;">
+          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Dan Tier</div>
+          <div class="dan-badge" id="danTierBadge">0th Dan</div>
+        </div>
+      </div>
+
+      <div class="dominant-container">
+        <span class="dominant-label">Dominant Technique</span>
+        <span class="dominant-badge" id="dominantBadge">None</span>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">Total Notes</div>
+          <div class="stat-value" id="statNotes">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Hold Ratio</div>
+          <div class="stat-value" id="statHold">0.0%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Duration</div>
+          <div class="stat-value" id="statDuration">0:00</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Avg NPS</div>
+          <div class="stat-value" id="statNps">0.00</div>
+        </div>
+      </div>
+
+      <div class="drop-zone no-overlay" id="dropZone">
+        拖拽 .osu 铺面至此即可离线深度解析<br>
+        <span style="font-size: 0.75rem; opacity: 0.7;">(Drag & Drop .osu File)</span>
+      </div>
     </div>
 
-    <div class="card radar-container">
-      <canvas id="radarCanvas" width="360" height="360"></canvas>
+    <!-- Column 2: 8-Axis Radar Chart -->
+    <div class="card col-radar" id="cardRadar">
+      <div class="card-title">
+        <span>8-Axis Technique Radar</span>
+        <span style="font-size: 0.75rem; color: var(--accent-purple);">12.5★ Scale</span>
+      </div>
+      <div class="radar-wrapper">
+        <canvas id="radarCanvas" width="400" height="400"></canvas>
+      </div>
     </div>
-  </main>
+
+    <!-- Column 3: Dual-Hand Strain Profile & Playhead Cursor -->
+    <div class="card col-strain" id="cardStrain">
+      <div class="strain-header">
+        <div class="card-title" style="margin-bottom: 0;">Dual-Hand Strain Timeseries</div>
+        <div class="playhead-time" id="playheadTime">00:00.00</div>
+      </div>
+      <div class="strain-legend" style="margin-bottom: 10px;">
+        <div class="legend-item">
+          <span class="legend-color legend-lh"></span>
+          <span>Left Hand</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color legend-rh"></span>
+          <span>Right Hand</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color legend-p90"></span>
+          <span>P90 (<span id="p90Val">0.0</span>)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color legend-top5"></span>
+          <span>Top 5% (<span id="top5Val">0.0</span>)</span>
+        </div>
+      </div>
+      <div class="strain-wrapper">
+        <canvas id="strainCanvas" width="560" height="280"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom: Collapsible 4D Tech Breakdown Drawer -->
+  <div id="techDrawer" class="no-overlay">
+    <div class="drawer-header" id="drawerToggle">
+      <div class="drawer-title">
+        <span>4D Tech 细分指标 (Unorthodox Permutation)</span>
+      </div>
+      <div class="drawer-icon" id="drawerArrow">▼</div>
+    </div>
+    <div class="drawer-content" id="drawerBody">
+      <div class="tech-metric-card">
+        <div class="metric-name">
+          <span>流向紊乱度</span>
+          <span>Flow Tortuosity</span>
+        </div>
+        <div class="metric-val" id="valTortuosity">0.0000</div>
+        <div class="metric-bar-bg">
+          <div class="metric-bar-fill" id="barTortuosity"></div>
+        </div>
+        <div class="metric-desc">流式切键折返与急转弯频率 (Reversals)</div>
+      </div>
+
+      <div class="tech-metric-card">
+        <div class="metric-name">
+          <span>括号/手内剪切度</span>
+          <span>Bracket & Shear</span>
+        </div>
+        <div class="metric-val" id="valBracketShear">0.0000</div>
+        <div class="metric-bar-bg">
+          <div class="metric-bar-fill" id="barBracketShear"></div>
+        </div>
+        <div class="metric-desc">括号相变与抠空手内横向拉扯剪切</div>
+      </div>
+
+      <div class="tech-metric-card">
+        <div class="metric-name">
+          <span>轨位转移熵</span>
+          <span>Spatial Transition Entropy</span>
+        </div>
+        <div class="metric-val" id="valSpatialEntropy">0.0000</div>
+        <div class="metric-bar-bg">
+          <div class="metric-bar-fill" id="barSpatialEntropy"></div>
+        </div>
+        <div class="metric-desc">击键轨位一阶转移香农信息熵</div>
+      </div>
+
+      <div class="tech-metric-card">
+        <div class="metric-name">
+          <span>节奏混乱度</span>
+          <span>Rhythmic Irregularity</span>
+        </div>
+        <div class="metric-val" id="valRhythmIrreg">0.0000</div>
+        <div class="metric-bar-bg">
+          <div class="metric-bar-fill" id="barRhythmIrreg"></div>
+        </div>
+        <div class="metric-desc">拍点变异熵与微观时钟抖动度</div>
+      </div>
+
+      <div class="tech-metric-card">
+        <div class="metric-name">
+          <span>微观极速爆发</span>
+          <span>Micro-Speed Burst</span>
+        </div>
+        <div class="metric-val" id="valSpeedBurst">0.0000</div>
+        <div class="metric-bar-bg">
+          <div class="metric-bar-fill" id="barSpeedBurst"></div>
+        </div>
+        <div class="metric-desc">极小击键时钟 (Δt &lt; 110ms) 神经应变</div>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const statusBadge = document.getElementById("statusBadge");
-    const bmTitle = document.getElementById("bmTitle");
-    const bmMeta = document.getElementById("bmMeta");
-    const srValue = document.getElementById("srValue");
-    const techList = document.getElementById("techList");
-    const canvas = document.getElementById("radarCanvas");
-    const ctx = canvas.getContext("2d");
+    // 1. URL Query Parameter Handling & OBS Overlay Adaptation
+    const urlParams = new URLSearchParams(window.location.search);
+    const isOverlay = urlParams.get("mode") === "overlay";
+    const showRadar = urlParams.get("radar") !== "0";
+    const showStrain = isOverlay ? (urlParams.get("strain") === "1") : (urlParams.get("strain") !== "0");
+    const showMeta = urlParams.get("meta") !== "0";
+    const scaleVal = parseFloat(urlParams.get("scale")) || 1.0;
 
-    let ws;
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${location.host}/ws`;
+    const dashboardContainer = document.getElementById("dashboardContainer");
+    const cardInfo = document.getElementById("cardInfo");
+    const cardRadar = document.getElementById("cardRadar");
+    const cardStrain = document.getElementById("cardStrain");
 
-    function connectWs() {
-      ws = new WebSocket(wsUrl);
+    if (isOverlay) {
+      document.body.classList.add("overlay-mode");
+      if (!showRadar && cardRadar) cardRadar.style.display = "none";
+      if (!showStrain && cardStrain) cardStrain.style.display = "none";
+      if (!showMeta && cardInfo) cardInfo.style.display = "none";
 
-      ws.onopen = () => {
-        statusBadge.textContent = "Live Stream Active";
-        statusBadge.className = "badge connected";
-      };
-
-      ws.onclose = () => {
-        statusBadge.textContent = "Disconnected";
-        statusBadge.className = "badge disconnected";
-        setTimeout(connectWs, 2000);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === "beatmap_update") {
-            renderBeatmap(data);
-          }
-        } catch (err) {
-          console.error("Failed to parse message", err);
-        }
-      };
+      if (scaleVal !== 1.0) {
+        dashboardContainer.style.transform = `scale(${scaleVal})`;
+        dashboardContainer.style.transformOrigin = "top left";
+      }
     }
+
+    // 2. UI Elements
+    const statusBadge = document.getElementById("statusBadge");
+    const statusText = document.getElementById("statusText");
+    const syncStatusTag = document.getElementById("syncStatusTag");
+    const bmTitle = document.getElementById("bmTitle");
+    const bmArtist = document.getElementById("bmArtist");
+    const bmDiff = document.getElementById("bmDiff");
+    const bmCreator = document.getElementById("bmCreator");
+    const srValue = document.getElementById("srValue");
+    const danTierBadge = document.getElementById("danTierBadge");
+    const dominantBadge = document.getElementById("dominantBadge");
+    const statNotes = document.getElementById("statNotes");
+    const statHold = document.getElementById("statHold");
+    const statDuration = document.getElementById("statDuration");
+    const statNps = document.getElementById("statNps");
+    const playheadTime = document.getElementById("playheadTime");
+    const p90Val = document.getElementById("p90Val");
+    const top5Val = document.getElementById("top5Val");
+
+    const valTortuosity = document.getElementById("valTortuosity");
+    const barTortuosity = document.getElementById("barTortuosity");
+    const valBracketShear = document.getElementById("valBracketShear");
+    const barBracketShear = document.getElementById("barBracketShear");
+    const valSpatialEntropy = document.getElementById("valSpatialEntropy");
+    const barSpatialEntropy = document.getElementById("barSpatialEntropy");
+    const valRhythmIrreg = document.getElementById("valRhythmIrreg");
+    const barRhythmIrreg = document.getElementById("barRhythmIrreg");
+    const valSpeedBurst = document.getElementById("valSpeedBurst");
+    const barSpeedBurst = document.getElementById("barSpeedBurst");
+
+    const radarCanvas = document.getElementById("radarCanvas");
+    const radarCtx = radarCanvas.getContext("2d");
+    const strainCanvas = document.getElementById("strainCanvas");
+    const strainCtx = strainCanvas.getContext("2d");
+
+    // Drawer collapse
+    const drawerToggle = document.getElementById("drawerToggle");
+    const drawerBody = document.getElementById("drawerBody");
+    const drawerArrow = document.getElementById("drawerArrow");
+    let drawerOpen = true;
+    if (drawerToggle) {
+      drawerToggle.addEventListener("click", () => {
+        drawerOpen = !drawerOpen;
+        drawerBody.style.display = drawerOpen ? "grid" : "none";
+        drawerArrow.classList.toggle("open", drawerOpen);
+      });
+    }
+
+    // 3. State
+    let currentBeatmapData = null;
+    let currentStrainProfile = null;
+    let currentDurationMs = 0;
+    let currentClock = {
+      status: "idle",
+      start_ms: 0,
+      rate: 1.0,
+      sync_local_time: performance.now(),
+    };
 
     const TECHS = [
       { key: "jack", label: "Jack" },
@@ -237,123 +806,478 @@
       { key: "ln_release", label: "LN Rel" }
     ];
 
-    function renderBeatmap(data) {
-      const meta = data.metadata || {};
-      bmTitle.textContent = `${meta.artist || "Unknown"} - ${meta.title || "Unknown"}`;
-      bmMeta.textContent = `[${meta.version || "7K"}] • mapped by ${meta.creator || "Unknown"} • ${meta.total_notes || 0} notes`;
-      srValue.textContent = `${(data.star_rating || 0).toFixed(2)}★`;
-
-      const radar = data.radar || {};
-      techList.innerHTML = "";
-      TECHS.forEach(({ key, label }) => {
-        const item = document.createElement("div");
-        item.className = "tech-item";
-        const val = (radar[key] || 0).toFixed(2);
-        const isDom = radar.dominant_technique === key;
-        item.innerHTML = `<span>${label}</span><span class="${isDom ? 'dominant' : ''}">${val}★</span>`;
-        techList.appendChild(item);
-      });
-
-      drawRadar(radar);
+    function formatTime(ms) {
+      if (!ms || ms < 0) ms = 0;
+      const totalSec = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSec / 60);
+      const seconds = totalSec % 60;
+      const centis = Math.floor((ms % 1000) / 10);
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
     }
 
-    function drawRadar(radar) {
-      const w = canvas.width;
-      const h = canvas.height;
+    function formatDuration(sec) {
+      if (!sec || sec < 0) return "0:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${String(s).padStart(2, "0")}`;
+    }
+
+    // 4. WebSocket Connection
+    let ws;
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${location.host}/ws`;
+
+    function connectWs() {
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (err) {
+        console.warn("WebSocket init error", err);
+        return;
+      }
+
+      ws.onopen = () => {
+        statusBadge.className = "status-badge connected";
+        statusText.textContent = "Live Stream Active";
+      };
+
+      ws.onclose = () => {
+        statusBadge.className = "status-badge disconnected";
+        statusText.textContent = "Disconnected";
+        setTimeout(connectWs, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "beatmap_update") {
+            handleBeatmapUpdate(msg);
+          } else if (msg.type === "clock_sync") {
+            handleClockSync(msg);
+          }
+        } catch (e) {
+          console.error("Error parsing message", e);
+        }
+      };
+    }
+
+    function handleBeatmapUpdate(data) {
+      currentBeatmapData = data;
+      const meta = data.metadata || {};
+      bmTitle.textContent = meta.title || "Unknown Title";
+      bmArtist.textContent = meta.artist || "Unknown Artist";
+      bmDiff.textContent = meta.version || "7K";
+      bmCreator.textContent = `Mapped by ${meta.creator || "Unknown"}`;
+      srValue.textContent = `${(data.star_rating || 0).toFixed(2)}★`;
+      danTierBadge.textContent = data.dan_tier || meta.dan_tier || "0th Dan";
+
+      const dom = (data.radar && data.radar.dominant_technique) || meta.dominant_technique || "None";
+      dominantBadge.textContent = dom.replace("_", " ").toUpperCase();
+
+      statNotes.textContent = (meta.total_notes || 0).toLocaleString();
+      statHold.textContent = `${((meta.hold_pct || 0) * 100).toFixed(1)}%`;
+      statDuration.textContent = formatDuration(meta.duration_seconds || 0);
+      statNps.textContent = (meta.avg_nps || 0).toFixed(2);
+
+      // 4D Tech breakdown
+      const tech = data.tech_breakdown || meta.tech_breakdown || {};
+      const tort = tech.tortuosity || 0;
+      const shear = tech.bracket_shear || 0;
+      const entropy = tech.spatial_entropy || 0;
+      const rhythm = tech.rhythm_irreg || 0;
+
+      valTortuosity.textContent = tort.toFixed(4);
+      barTortuosity.style.width = `${Math.min(100, (tort / 0.8) * 100)}%`;
+
+      valBracketShear.textContent = shear.toFixed(4);
+      barBracketShear.style.width = `${Math.min(100, (shear / 1.0) * 100)}%`;
+
+      valSpatialEntropy.textContent = entropy.toFixed(4);
+      barSpatialEntropy.style.width = `${Math.min(100, (entropy / 1.0) * 100)}%`;
+
+      valRhythmIrreg.textContent = rhythm.toFixed(4);
+      barRhythmIrreg.style.width = `${Math.min(100, (rhythm / 0.8) * 100)}%`;
+
+      const speedBurst = tech.speed_burst || (data.radar && data.radar.speed) || 0;
+      valSpeedBurst.textContent = speedBurst.toFixed(4);
+      barSpeedBurst.style.width = `${Math.min(100, (speedBurst / 12.5) * 100)}%`;
+
+      // Strain profile
+      currentStrainProfile = data.strain_profile || null;
+      if (currentStrainProfile && currentStrainProfile.sample_times_ms && currentStrainProfile.sample_times_ms.length > 0) {
+        const times = currentStrainProfile.sample_times_ms;
+        currentDurationMs = times[times.length - 1];
+        p90Val.textContent = (currentStrainProfile.p90_strain || 0).toFixed(1);
+        top5Val.textContent = (currentStrainProfile.top5_percent_strain || 0).toFixed(1);
+      } else {
+        currentDurationMs = (meta.duration_seconds || 0) * 1000;
+        p90Val.textContent = "0.0";
+        top5Val.textContent = "0.0";
+      }
+
+      // Reset playhead clock on new beatmap
+      currentClock = {
+        status: "idle",
+        start_ms: 0,
+        rate: 1.0,
+        sync_local_time: performance.now(),
+      };
+      syncStatusTag.textContent = "IDLE";
+      syncStatusTag.style.color = "var(--text-muted)";
+    }
+
+    function handleClockSync(data) {
+      currentClock.status = data.status || "idle";
+      currentClock.start_ms = data.start_ms || 0;
+      currentClock.rate = typeof data.rate === "number" ? data.rate : 1.0;
+      currentClock.sync_local_time = performance.now();
+
+      if (currentClock.status === "playing") {
+        syncStatusTag.textContent = "PLAYING";
+        syncStatusTag.style.color = "var(--accent-green)";
+      } else {
+        syncStatusTag.textContent = "IDLE";
+        syncStatusTag.style.color = "var(--text-muted)";
+      }
+    }
+
+    // 5. Canvas Drawing: 8-Axis Radar Chart
+    function drawRadar(radar, dominantKey, animTime) {
+      const w = radarCanvas.width;
+      const h = radarCanvas.height;
       const cx = w / 2;
       const cy = h / 2;
-      const r = Math.min(cx, cy) - 36;
+      const r = Math.min(cx, cy) - 48;
 
-      ctx.clearRect(0, 0, w, h);
+      radarCtx.clearRect(0, 0, w, h);
 
-      // Rings
-      ctx.strokeStyle = "#30363d";
-      ctx.lineWidth = 1;
-      for (let step = 1; step <= 4; step++) {
-        ctx.beginPath();
-        const curR = (r / 4) * step;
+      // Concentric 8-sided reference rings
+      const rings = 5;
+      for (let s = 1; s <= rings; s++) {
+        const curR = (r / rings) * s;
+        radarCtx.beginPath();
         for (let i = 0; i < 8; i++) {
           const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
           const x = cx + curR * Math.cos(angle);
           const y = cy + curR * Math.sin(angle);
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) radarCtx.moveTo(x, y);
+          else radarCtx.lineTo(x, y);
         }
-        ctx.closePath();
-        ctx.stroke();
+        radarCtx.closePath();
+        radarCtx.strokeStyle = s === rings ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.06)";
+        radarCtx.lineWidth = 1;
+        radarCtx.stroke();
+
+        // Scale label along top axis
+        if (s % 2 === 1 || s === rings) {
+          const labelVal = ((12.5 / rings) * s).toFixed(1);
+          radarCtx.fillStyle = "rgba(148, 163, 184, 0.5)";
+          radarCtx.font = "9px monospace";
+          radarCtx.textAlign = "center";
+          radarCtx.fillText(`${labelVal}★`, cx + 14, cy - curR);
+        }
       }
 
       // Spokes and labels
-      ctx.fillStyle = "#8b949e";
-      ctx.font = "11px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      TECHS.forEach(({ label }, i) => {
+      TECHS.forEach(({ key, label }, i) => {
         const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
         const x = cx + r * Math.cos(angle);
         const y = cy + r * Math.sin(angle);
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(x, y);
-        ctx.stroke();
 
-        const lx = cx + (r + 18) * Math.cos(angle);
-        const ly = cy + (r + 18) * Math.sin(angle);
-        ctx.fillText(label, lx, ly);
+        radarCtx.beginPath();
+        radarCtx.moveTo(cx, cy);
+        radarCtx.lineTo(x, y);
+        radarCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        radarCtx.stroke();
+
+        // Label text positioning
+        const isDom = dominantKey === key;
+        const score = radar ? (radar[key] || 0) : 0;
+        const labelR = r + 24;
+        const lx = cx + labelR * Math.cos(angle);
+        const ly = cy + labelR * Math.sin(angle);
+
+        radarCtx.font = isDom ? "bold 11px sans-serif" : "10px sans-serif";
+        radarCtx.fillStyle = isDom ? "#06b6d4" : "#94a3b8";
+        radarCtx.textAlign = "center";
+        radarCtx.textBaseline = "middle";
+        radarCtx.fillText(label, lx, ly - 6);
+
+        radarCtx.font = "bold 10px monospace";
+        radarCtx.fillStyle = isDom ? "#38bdf8" : "#cbd5e1";
+        radarCtx.fillText(`${score.toFixed(1)}★`, lx, ly + 7);
       });
 
-      // Data polygon
-      ctx.beginPath();
-      ctx.strokeStyle = "#58a6ff";
-      ctx.fillStyle = "rgba(88, 166, 255, 0.25)";
-      ctx.lineWidth = 2;
+      if (!radar) return;
 
+      // Data polygon
+      const points = [];
       TECHS.forEach(({ key }, i) => {
-        const val = Math.min(12.5, radar[key] || 0);
+        const val = Math.min(12.5, Math.max(0, radar[key] || 0));
         const norm = val / 12.5;
         const curR = r * norm;
         const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
         const x = cx + curR * Math.cos(angle);
         const y = cy + curR * Math.sin(angle);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        points.push({ x, y, key, val });
       });
 
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      if (points.length > 0) {
+        radarCtx.beginPath();
+        points.forEach((pt, i) => {
+          if (i === 0) radarCtx.moveTo(pt.x, pt.y);
+          else radarCtx.lineTo(pt.x, pt.y);
+        });
+        radarCtx.closePath();
+
+        // Gradient fill
+        const grad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        grad.addColorStop(0, "rgba(56, 189, 248, 0.45)");
+        grad.addColorStop(1, "rgba(192, 132, 252, 0.15)");
+        radarCtx.fillStyle = grad;
+        radarCtx.fill();
+
+        radarCtx.strokeStyle = "#38bdf8";
+        radarCtx.lineWidth = 2.5;
+        radarCtx.stroke();
+
+        // Vertex points and Dominant Technique Glowing Halo
+        points.forEach((pt) => {
+          const isDom = pt.key === dominantKey;
+          radarCtx.beginPath();
+          radarCtx.arc(pt.x, pt.y, isDom ? 5 : 3.5, 0, Math.PI * 2);
+          radarCtx.fillStyle = isDom ? "#06b6d4" : "#ffffff";
+          radarCtx.fill();
+
+          if (isDom) {
+            // Pulsing halo
+            const pulse = 8 + Math.sin(animTime / 250) * 3;
+            radarCtx.beginPath();
+            radarCtx.arc(pt.x, pt.y, pulse, 0, Math.PI * 2);
+            radarCtx.strokeStyle = "rgba(6, 182, 212, 0.6)";
+            radarCtx.lineWidth = 1.5;
+            radarCtx.stroke();
+          }
+        });
+      }
     }
 
-    // Drag and drop handler
-    const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = "var(--accent)";
-    });
-    dropZone.addEventListener("dragleave", () => {
-      dropZone.style.borderColor = "var(--border)";
-    });
-    dropZone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = "var(--border)";
-      if (e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: "analyze_content",
-              content: reader.result
-            }));
-          }
-        };
-        reader.readAsText(file);
-      }
-    });
+    // 6. Canvas Drawing: Dual-Hand Strain Timeseries & 1.0x Playhead Cursor
+    function drawStrain(profile, currentMs) {
+      const w = strainCanvas.width;
+      const h = strainCanvas.height;
+      strainCtx.clearRect(0, 0, w, h);
 
-    drawRadar({});
+      const padL = 40;
+      const padR = 15;
+      const padT = 20;
+      const padB = 25;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      // Draw gridlines
+      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      strainCtx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = padT + (plotH / 4) * i;
+        strainCtx.beginPath();
+        strainCtx.moveTo(padL, y);
+        strainCtx.lineTo(padL + plotW, y);
+        strainCtx.stroke();
+      }
+
+      if (!profile || !profile.sample_times_ms || profile.sample_times_ms.length === 0) {
+        strainCtx.fillStyle = "rgba(148, 163, 184, 0.4)";
+        strainCtx.font = "12px sans-serif";
+        strainCtx.textAlign = "center";
+        strainCtx.fillText("Waiting for chart strain data...", padL + plotW / 2, padT + plotH / 2);
+        return;
+      }
+
+      const times = profile.sample_times_ms;
+      const lh = profile.left_strains;
+      const rh = profile.right_strains;
+      const len = times.length;
+      const tEnd = Math.max(1, times[len - 1]);
+
+      // Max strain scale
+      const p90 = profile.p90_strain || 0;
+      const top5 = profile.top5_percent_strain || 0;
+      let maxS = Math.max(10.0, p90 * 1.35, top5 * 1.15);
+      for (let i = 0; i < len; i++) {
+        if (lh[i] > maxS) maxS = lh[i];
+        if (rh[i] > maxS) maxS = rh[i];
+      }
+
+      // Draw P90 reference line (dashed gold)
+      if (p90 > 0) {
+        const yP90 = padT + plotH - (p90 / maxS) * plotH;
+        strainCtx.setLineDash([5, 4]);
+        strainCtx.strokeStyle = "#f59e0b";
+        strainCtx.lineWidth = 1.2;
+        strainCtx.beginPath();
+        strainCtx.moveTo(padL, yP90);
+        strainCtx.lineTo(padL + plotW, yP90);
+        strainCtx.stroke();
+        strainCtx.setLineDash([]);
+
+        strainCtx.fillStyle = "#f59e0b";
+        strainCtx.font = "9px monospace";
+        strainCtx.textAlign = "right";
+        strainCtx.fillText(`P90`, padL - 4, yP90 + 3);
+      }
+
+      // Draw Top 5% lethality line (dashed red)
+      if (top5 > 0) {
+        const yTop5 = padT + plotH - (top5 / maxS) * plotH;
+        strainCtx.setLineDash([4, 4]);
+        strainCtx.strokeStyle = "#ef4444";
+        strainCtx.lineWidth = 1.2;
+        strainCtx.beginPath();
+        strainCtx.moveTo(padL, yTop5);
+        strainCtx.lineTo(padL + plotW, yTop5);
+        strainCtx.stroke();
+        strainCtx.setLineDash([]);
+
+        strainCtx.fillStyle = "#ef4444";
+        strainCtx.font = "9px monospace";
+        strainCtx.textAlign = "right";
+        strainCtx.fillText(`Top5%`, padL - 4, yTop5 + 3);
+      }
+
+      function drawSmoothCurve(values, strokeColor) {
+        if (len === 0) return;
+        if (len === 1) {
+          strainCtx.beginPath();
+          strainCtx.arc(padL, padT + plotH - (values[0] / maxS) * plotH, 2, 0, Math.PI * 2);
+          strainCtx.fillStyle = strokeColor;
+          strainCtx.fill();
+          return;
+        }
+
+        strainCtx.beginPath();
+        const p0x = padL + (times[0] / tEnd) * plotW;
+        const p0y = padT + plotH - (values[0] / maxS) * plotH;
+        strainCtx.moveTo(p0x, p0y);
+
+        for (let i = 0; i < len - 1; i++) {
+          const x0 = padL + (times[i] / tEnd) * plotW;
+          const y0 = padT + plotH - (values[i] / maxS) * plotH;
+          const x1 = padL + (times[i + 1] / tEnd) * plotW;
+          const y1 = padT + plotH - (values[i + 1] / maxS) * plotH;
+          const mx = (x0 + x1) / 2;
+          const my = (y0 + y1) / 2;
+          strainCtx.quadraticCurveTo(x0, y0, mx, my);
+        }
+        const lastX = padL + (times[len - 1] / tEnd) * plotW;
+        const lastY = padT + plotH - (values[len - 1] / maxS) * plotH;
+        strainCtx.lineTo(lastX, lastY);
+        strainCtx.strokeStyle = strokeColor;
+        strainCtx.lineWidth = 1.8;
+        strainCtx.stroke();
+      }
+
+      // Draw Left Hand curve (Cyan)
+      drawSmoothCurve(lh, "#38bdf8");
+
+      // Draw Right Hand curve (Purple)
+      drawSmoothCurve(rh, "#c084fc");
+
+      // Bottom time ticks
+      strainCtx.fillStyle = "rgba(148, 163, 184, 0.6)";
+      strainCtx.font = "9px monospace";
+      strainCtx.textAlign = "center";
+      const tickCount = 5;
+      for (let i = 0; i <= tickCount; i++) {
+        const t = (tEnd / tickCount) * i;
+        const x = padL + (i / tickCount) * plotW;
+        strainCtx.fillText(formatDuration(t / 1000), x, padT + plotH + 16);
+      }
+
+      // 1.0x Smooth Cursor Line
+      if (tEnd > 0 && currentMs >= 0) {
+        const normTime = Math.max(0, Math.min(1.0, currentMs / tEnd));
+        const cursorX = padL + normTime * plotW;
+
+        // Glowing cursor line
+        strainCtx.beginPath();
+        strainCtx.moveTo(cursorX, padT - 5);
+        strainCtx.lineTo(cursorX, padT + plotH);
+        strainCtx.strokeStyle = "#ffffff";
+        strainCtx.lineWidth = 2;
+        strainCtx.shadowColor = "#38bdf8";
+        strainCtx.shadowBlur = 8;
+        strainCtx.stroke();
+        strainCtx.shadowBlur = 0;
+
+        // Head dot
+        strainCtx.beginPath();
+        strainCtx.arc(cursorX, padT - 2, 4, 0, Math.PI * 2);
+        strainCtx.fillStyle = "#38bdf8";
+        strainCtx.fill();
+      }
+    }
+
+    // 7. Render Loop with requestAnimationFrame
+    function renderLoop(time) {
+      let playheadMs = 0;
+      if (currentClock.status === "playing") {
+        const elapsed = (performance.now() - currentClock.sync_local_time) * currentClock.rate;
+        playheadMs = currentClock.start_ms + elapsed;
+        if (currentDurationMs > 0 && playheadMs > currentDurationMs) {
+          playheadMs = currentDurationMs;
+        }
+      } else {
+        playheadMs = currentClock.start_ms || 0;
+      }
+
+      playheadTime.textContent = formatTime(playheadMs);
+
+      // Draw radar
+      const radar = currentBeatmapData ? currentBeatmapData.radar : null;
+      const dominantKey = radar ? radar.dominant_technique : "None";
+      drawRadar(radar, dominantKey, time);
+
+      // Draw strain timeseries
+      drawStrain(currentStrainProfile, playheadMs);
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // 8. Drag and drop handler
+    const dropZone = document.getElementById("dropZone");
+    if (dropZone) {
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "var(--accent-blue)";
+        dropZone.style.background = "rgba(56, 189, 248, 0.08)";
+      });
+      dropZone.addEventListener("dragleave", () => {
+        dropZone.style.borderColor = "var(--border-color)";
+        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
+      });
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "var(--border-color)";
+        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
+        if (e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: "analyze_content",
+                content: reader.result
+              }));
+            }
+          };
+          reader.readAsText(file);
+        }
+      });
+    }
+
+    // Initial kick-off
     connectWs();
+    requestAnimationFrame(renderLoop);
   </script>
 </body>
 </html>

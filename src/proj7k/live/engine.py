@@ -11,7 +11,7 @@ from proj7k.cache import TwoLayerCache
 from proj7k.difficulty import DifficultyOptions, evaluate_intrinsic_difficulty
 from proj7k.features import extract_beatmap_features
 from proj7k.parser import parse_osu_7k
-from proj7k.radar import compute_technique_radar
+from proj7k.radar import compute_tech_4d_components, compute_technique_radar
 from proj7k.rating import synthesize_star_rating
 from proj7k.strain import compute_dual_hand_strain
 
@@ -97,6 +97,8 @@ class LiveEngine:
         radar = compute_technique_radar(beatmap, features=features, strain_profile=strain_profile)
         synthesis = synthesize_star_rating(radar, p90_strain=strain_profile.p90_strain)
         dan_tier = estimate_dan_tier(synthesis.star_rating)
+        tech_breakdown = radar.tech_4d.to_dict() if radar.tech_4d else {}
+        tech_breakdown["speed_burst"] = round(radar.speed, 4)
 
         metadata: Dict[str, Any] = {
             "title": beatmap.title,
@@ -111,6 +113,7 @@ class LiveEngine:
             "dominant_score": synthesis.dominant_score,
             "synergy_bonus": synthesis.synergy_bonus,
             "dan_tier": dan_tier,
+            "tech_breakdown": tech_breakdown,
         }
 
         frame = {
@@ -122,6 +125,7 @@ class LiveEngine:
             "radar": radar.to_dict(),
             "synthesis": synthesis.to_dict(),
             "strain_profile": strain_profile.to_dict(),
+            "tech_breakdown": tech_breakdown,
             "metadata": metadata,
         }
 

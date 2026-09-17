@@ -173,3 +173,21 @@ def test_live_engine_analyze_file(tmp_path: Path):
     # Second call on same file
     frame2 = engine.analyze_file(osu_file)
     assert frame2["cached"] is True
+
+
+def test_live_engine_includes_tech_breakdown(tmp_path: Path):
+    cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
+    engine = LiveEngine(cache=cache)
+
+    content = _make_dummy_osu_content("4D Tech Song")
+    frame = engine.analyze_content(content)
+
+    assert "tech_breakdown" in frame
+    tech = frame["tech_breakdown"]
+    for key in ("tortuosity", "bracket_shear", "spatial_entropy", "rhythm_irreg"):
+        assert key in tech
+        assert isinstance(tech[key], (int, float))
+
+    # Also verify it is present in metadata for client convenience
+    assert "tech_breakdown" in frame["metadata"]
+    assert frame["metadata"]["tech_breakdown"] == tech
