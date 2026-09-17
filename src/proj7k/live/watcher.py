@@ -17,11 +17,16 @@ logger = logging.getLogger("proj7k.live.watcher")
 DEFAULT_LOGS_DIR = Path.home() / "Library" / "Application Support" / "osu" / "logs"
 
 # Regex matching working beatmap update in osu!lazer logs:
-# e.g. "Game-wide working beatmap updated to Artist - Title [Difficulty] (Creator)."
-# Uses greedy match for difficulty to handle nested brackets in diff names
-BEATMAP_UPDATED_PATTERN = re.compile(
+# Canonical osu!lazer format: "Game-wide working beatmap updated to Artist - Title (Creator) [Difficulty]"
+# Legacy/alternative format: "Game-wide working beatmap updated to Artist - Title [Difficulty] (Creator)"
+BEATMAP_UPDATED_LAZER_PATTERN = re.compile(
+    r"Game-wide working beatmap updated to (?P<artist_title>.*?)\s+\((?P<creator>[^)]*)\)\s*\[(?P<diff>.*)\]\.?$"
+)
+BEATMAP_UPDATED_LEGACY_PATTERN = re.compile(
     r"Game-wide working beatmap updated to (?P<artist_title>.*?)\s*\[(?P<diff>.*)\]\s*\((?P<creator>[^)]*)\)\.?$"
 )
+BEATMAP_UPDATED_PATTERN = BEATMAP_UPDATED_LAZER_PATTERN
+
 
 # Regex matching gameplay clock events in osu!lazer logs
 CLOCK_STARTED_PATTERN = re.compile(
@@ -85,7 +90,9 @@ def parse_log_line(line: str) -> Optional[LiveWatcherEvent]:
 
     # 1. Beatmap change event
     if "Game-wide working beatmap updated to" in clean_line:
-        match = BEATMAP_UPDATED_PATTERN.search(clean_line)
+        match = BEATMAP_UPDATED_LAZER_PATTERN.search(
+            clean_line
+        ) or BEATMAP_UPDATED_LEGACY_PATTERN.search(clean_line)
         if match:
             artist_title = match.group("artist_title").strip()
             difficulty = match.group("diff").strip()

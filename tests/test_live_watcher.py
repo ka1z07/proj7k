@@ -71,6 +71,45 @@ def test_parse_log_line_beatmap_update():
     assert parse_log_line("Loading database...") is None
 
 
+def test_parse_real_lazer_log_format():
+    """
+    Verifies parsing real osu!lazer log lines where creator is in parentheses
+    before difficulty in brackets:
+    'Game-wide working beatmap updated to <Artist> - <Title> (<Creator>) [<Difficulty>]'
+    """
+    line1 = (
+        "2026-09-17 12:14:42 [verbose]: Game-wide working beatmap updated to "
+        "Kyutatsuki - Sea of Stars (tyrcs) [Interstellar Expedition (12.23★ LN_Inverse)]"
+    )
+    event1 = parse_log_line(line1)
+    assert event1 is not None, f"Failed to parse real lazer line: {line1}"
+    assert event1.artist == "Kyutatsuki"
+    assert event1.title == "Sea of Stars"
+    assert event1.creator == "tyrcs"
+    assert event1.difficulty == "Interstellar Expedition (12.23★ LN_Inverse)"
+
+    line2 = (
+        "2026-09-17 09:13:55 [verbose]: Game-wide working beatmap updated to "
+        "xi - Blue Zenith (Jinjin) [jakads' Dimensions (7.36★ Stream)]"
+    )
+    event2 = parse_log_line(line2)
+    assert event2 is not None
+    assert event2.artist == "xi"
+    assert event2.title == "Blue Zenith"
+    assert event2.creator == "Jinjin"
+    assert event2.difficulty == "jakads' Dimensions (7.36★ Stream)"
+
+    # Nested brackets in difficulty with creator
+    line3 = (
+        "2026-09-17 12:10:19 [verbose]: Game-wide working beatmap updated to "
+        "sun3 / BGA:Johnny / OBJ:K-SPIN - Synth Stream(RUNOTHER7) (5ynt3ck) [[BMS] [i_13] (6.30★ Stream)]"
+    )
+    event3 = parse_log_line(line3)
+    assert event3 is not None
+    assert event3.creator == "5ynt3ck"
+    assert event3.difficulty == "[BMS] [i_13] (6.30★ Stream)"
+
+
 def test_watcher_tail_and_log_rotation(tmp_path: Path):
     async def _run():
         logs_dir = tmp_path / "logs"
