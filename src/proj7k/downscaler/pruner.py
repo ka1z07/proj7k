@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import math
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
-from proj7k.parser import Beatmap7K, HitObject
+from proj7k.parser import Beatmap7K, HitObject, NoteType
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
 from proj7k.downscaler.mutation import apply_pure_deletion
 from proj7k.downscaler.skeleton import MetricSkeletonDetector
@@ -188,13 +188,22 @@ class WindowedPeakBatchPruner:
             for c in range(7):
                 col_times[c].sort()
 
+            time_seen: Set[float] = set()
             scored_candidates: List[Tuple[float, HitObject]] = []
             for ho in allowed_cands:
                 t_key = round(ho.time, 1)
                 chord_size = time_counts.get(t_key, 1)
 
                 # Marginal strain component 1: Chord density
-                chord_component = 1.0 + (chord_size - 1) * 0.60
+                # Thin at most one note per multi-note chord in each round to maintain continuity
+                if chord_size >= 2:
+                    if t_key not in time_seen:
+                        chord_component = 1.0 + (chord_size - 1) * 0.60
+                        time_seen.add(t_key)
+                    else:
+                        chord_component = 0.60
+                else:
+                    chord_component = 1.0
 
                 # Marginal strain component 2: Jack & Burst intensity on same column
                 times = col_times[ho.column]
@@ -221,31 +230,53 @@ class WindowedPeakBatchPruner:
                     tech_bias = 1.3
                 elif dominant_technique in ("stream", "speed") and chord_size == 1:
                     tech_bias = 1.1
+                elif dominant_technique and dominant_technique.lower().startswith("ln_"):
+                    if ho.note_type == NoteType.RICE:
+                        tech_bias = 1.3
+                    else:
+                        tech_bias = 0.7
 
                 score = (chord_component * jack_component * tech_bias) / max(0.01, hand_pen)
                 scored_candidates.append((score, ho))
 
-            scored_candidates.sort(key=lambda x: x[0], reverse=True)
-            sorted_candidates = [x[1] for x in scored_candidates]
+            # 5. Windowed Batch pruning (15% ~ 25% per peak window slice)
+            window_ms = max(500.0, self.strain_options.window_s * 1000.0)
+            cands_by_win: Dict[int, List[Tuple[float, HitObject]]] = {}
+            for score, ho in scored_candidates:
+                win_idx = int(ho.time // window_ms)
+                cands_by_win.setdefault(win_idx, []).append((score, ho))
 
-            # 5. Batch pruning (15% ~ 25%)
-            batch_size = max(1, int(round(len(sorted_candidates) * self.prune_ratio)))
-            batch = sorted_candidates[:batch_size]
+            batch: List[HitObject] = []
+            for win_idx, win_scored in cands_by_win.items():
+                win_scored.sort(key=lambda x: x[0], reverse=True)
+                k = max(1, int(round(len(win_scored) * self.prune_ratio)))
+                batch.extend(x[1] for x in win_scored[:k])
+
+            if not batch and scored_candidates:
+                scored_candidates.sort(key=lambda x: x[0], reverse=True)
+                batch = [scored_candidates[0][1]]
 
             cand_bm = apply_pure_deletion(current_bm, notes_to_remove=batch)
 
             # 6. Validate with DualGateValidator (Rollback on violation)
             val_res = self.validator.validate(beatmap, cand_bm)
             if not val_res.passed:
-                if batch_size > 1:
-                    smaller_size = max(1, batch_size // 2)
-                    smaller_batch = sorted_candidates[:smaller_size]
+                if len(batch) > 1:
+                    smaller_batch = batch[::2]
                     cand_bm = apply_pure_deletion(current_bm, notes_to_remove=smaller_batch)
                     val_res = self.validator.validate(beatmap, cand_bm)
+                    if not val_res.passed and len(smaller_batch) > 1:
+                        smaller_batch_4 = smaller_batch[::2]
+                        cand_bm = apply_pure_deletion(current_bm, notes_to_remove=smaller_batch_4)
+                        val_res = self.validator.validate(beatmap, cand_bm)
+                        if val_res.passed:
+                            batch = smaller_batch_4
+                    elif val_res.passed:
+                        batch = smaller_batch
+
                     if not val_res.passed:
                         warnings.append(f"Pruning stopped at iteration {it} to preserve technique invariants.")
                         break
-                    batch = smaller_batch
                 else:
                     warnings.append(f"Pruning stopped at iteration {it} due to technique gate constraint.")
                     break
