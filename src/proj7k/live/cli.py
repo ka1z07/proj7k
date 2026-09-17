@@ -17,8 +17,11 @@ from typing import Optional, Sequence
 import webbrowser
 
 from proj7k.cache import DEFAULT_CACHE_DIR, TwoLayerCache
+from proj7k.live.coordinator import LiveSessionCoordinator
 from proj7k.live.engine import LiveEngine
+from proj7k.live.index import LazerRealmIndex
 from proj7k.live.server import LiveServer
+from proj7k.live.watcher import LazerLogWatcher
 
 logger = logging.getLogger("proj7k.live")
 
@@ -92,6 +95,23 @@ async def run_live_service(
     logger.info(f"Dashboard available at {url}")
     print(f"proj7k live dashboard running at {url}")
 
+    coordinator: Optional[LiveSessionCoordinator] = None
+    if not args.no_watch:
+        lazer_dir = args.lazer_dir
+        realm_path = (lazer_dir / "client.realm") if lazer_dir else None
+        files_dir = (lazer_dir / "files") if lazer_dir else None
+        logs_dir = (lazer_dir / "logs") if lazer_dir else None
+
+        index = LazerRealmIndex(realm_path=realm_path, files_dir=files_dir)
+        watcher = LazerLogWatcher(logs_dir=logs_dir)
+        coordinator = LiveSessionCoordinator(
+            server=server,
+            engine=engine,
+            index=index,
+            watcher=watcher,
+        )
+        await coordinator.start()
+
     if args.open:
         try:
             webbrowser.open(url)
@@ -116,6 +136,8 @@ async def run_live_service(
         await stop_event.wait()
     finally:
         logger.info("Stopping proj7k.live server...")
+        if coordinator is not None:
+            await coordinator.stop()
         await server.stop()
         logger.info("Server stopped.")
 

@@ -65,6 +65,28 @@ def test_cli_run_no_watch():
     asyncio.run(_test())
 
 
+def test_cli_run_with_watch_graceful_fallback(tmp_path: Path):
+    parser = build_parser()
+    lazer_dir = tmp_path / "lazer"
+    lazer_dir.mkdir()
+    args = parser.parse_args([
+        "--port", "7778",
+        "--lazer-dir", str(lazer_dir),
+        "--cache-dir", str(tmp_path / "cache"),
+    ])
+
+    stop_event = asyncio.Event()
+
+    async def _test():
+        task = asyncio.create_task(run_live_service(args, stop_event=stop_event))
+        await asyncio.sleep(0.1)
+        stop_event.set()
+        await task
+
+    asyncio.run(_test())
+
+
+
 def test_cli_main_success():
     with patch("proj7k.live.cli.run_live_service") as mock_run:
         mock_run.return_value = None
