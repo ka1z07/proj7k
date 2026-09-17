@@ -2,7 +2,7 @@
 
 - **Issue**: [#28](https://github.com/ka1z07/proj7k/issues/28)
 - **ID**: `SPEC-P5.1-02`
-- **状态**: `open`
+- **状态**: `closed`
 - **标签**: `ready-for-agent`
 - **阻塞依赖 (Blocked by)**: [#27](https://github.com/ka1z07/proj7k/issues/27)
 - **所属父规格**: [`docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md`](file:///Users/kz/proj7k/docs/specs/phase5.1-beatmap-downscaler-and-practice-generator.md)
@@ -21,7 +21,7 @@
 
 ## Acceptance criteria
 
-- [ ] 实现 `MetricSkeletonDetector`，基于拍号和拍长精准计算音符拍位，对 1/1 强拍及多押最后 1 个音符建立不可变保护；
-- [ ] 实现 `BimanualFluxBalancer`，实时计算两手击键通量，输出非对称惩罚因子；
-- [ ] 在施加骨架过滤与双手平衡后，验证高难谱面不会出现突兀小节空白，且两手通量比收敛在 $[45\%, 55\%]$ 内；
-- [ ] 编写单元测试，使用非对称偏载谱面验证失衡惩罚能够自适应优先修剪高负荷手。
+- [x] 实现 `MetricSkeletonDetector`，基于拍号和拍长精准计算音符拍位，对 1/1 强拍及多押最后 1 个音符建立不可变保护；
+- [x] 实现 `BimanualFluxBalancer`，实时计算两手击键通量，输出非对称惩罚因子；
+- [x] 在施加骨架过滤与双手平衡后，验证高难谱面不会出现突兀小节空白，且两手通量比收敛在 $[45\%, 55\%]$ 内；
+- [x] 编写单元测试，使用非对称偏载谱面验证失衡惩罚能够自适应优先修剪高负荷手。
