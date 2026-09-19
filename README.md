@@ -25,7 +25,10 @@
 - **📊 客观 Star Rating**：告别虚高与低估，严密锚定全球权威 Jinjin 7K Dan 考核梯级；
 - **🖥️ 实时网页仪表盘**：一边选歌打歌，一边在旁侧屏幕实时展示动态雷达与难度流；
 - **🔄 osu!lazer 数据库安全同步**：一键将游戏内失衡星级替换为客观星级，并提供随时一键无痕还原；
-- **🛠️ 自适应降级练习器 (Downscaler)**：打不过神图？智能保留手型骨架，原汁原味降至适合你的专属段位/星级。
+- **🛠️ 自适应降级练习器 (Downscaler)**：打不过神图？智能保留手型骨架，原汁原味降至适合你的专属段位/星级；
+- **🩺 回放微观病理诊断 (Player Profiler)**：因果时序判定击键，量化各轨 UR、双手偏载、Jack 疲劳漂移斜率与 LN 释放粘键，严格隔离惊慌鬼键；
+- **📈 8 维承压雷达与段位映射**：点对点对齐微观瞬时应变与击键偏差，拟合生理承压拐点输出 8 维 Jinjin Dan 段位；
+- **🎯 双教练模式与三阶梯练习包 (Closed-Loop Coaching)**：支持“短板突破”与“长板专精”双策略（严禁段位考题，本地曲库精准召回）；自动截取致死高应变切片（$t_{\text{fatal}}-10\text{s}, +5\text{s}$），闭环生成 Recovery、Bridge、Push 三阶梯练习包（打包为独立 `.osz`）。
 
 ---
 
@@ -89,6 +92,23 @@ PYTHONPATH=src python3 -m proj7k.sync
 > 随时想还原官方原始星级？只需一条指令：  
 > `PYTHONPATH=src python3 -m proj7k.sync --revert`
 
+### 5. 诊断玩家回放并生成靶向降阶练习包 (15秒)
+分析 `.osr` 回放文件，诊断微观病理并针对断连/致死段落直接生成 Recovery、Bridge、Push 三阶梯专属 `.osz` 练习包：
+```bash
+PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --recommend --bundle
+```
+**终端输出效果：**
+- 诊断各轨击键偏差均值与 UR、左右手偏载比例、连叠漂移疲劳告警；
+- 点对点对齐 8 维瞬时应变与击键偏差，输出有效承压上限与 8 维 Jinjin Dan 段位雷达；
+- 运用双教练策略（短板突破 / 长板专精），扫描本地已装曲库（严格排除段位考题）推荐针对性练习谱；
+- 自动截取致死高应变切片（$-10\text{s}, +5\text{s}$），并在 `./practice_bundles/` 生成独立三阶梯练习谱面及 `.osz` 包。
+
+### 6. 查询玩家宏观技能画像与历史趋势 (5秒)
+查询近 30 天滑动窗口竞技状态（Recent Rolling Form）并对比全历史巅峰（All-Time Peak）：
+```bash
+PYTHONPATH=src python3 -m proj7k.profiler -p "YourUsername" --horizon-days 30 --recommend
+```
+
 ---
 
 ## 🎛️ 玩家常用命令速查
@@ -102,6 +122,12 @@ PYTHONPATH=src python3 -m proj7k.sync
 | **还原 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync --revert` | 彻底还原为官方原始星级 |
 | **降级练习** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "7th" -o ./out` | 降级到指定 Jinjin 段位 |
 | **指定星级降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -s 6.5 -o ./out` | 降级到指定连续星级 |
+| **回放微观诊断** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu"` | 诊断离散度、双手偏载、Jack漂移与8维承压段位 |
+| **双教练智能推荐** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --recommend` | 推荐本地曲库练习谱（短板突破/长板专精，严格排除考题） |
+| **致死降阶练习包** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --bundle` | 自动切出致死高应变切片并导出 Recovery/Bridge/Push 三阶梯 .osz |
+| **近期30天画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --horizon-days 30` | 聚合近 30 天竞技状态并对比全历史巅峰 |
+| **全历史巅峰画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --all-time` | 查看全历史极限承压雷达与各技法巅峰 |
+| **批量对局回放入库** | `PYTHONPATH=src python3 -m proj7k.profiler --batch-dir ./replays --beatmap-dir ./beatmaps` | 批量过滤重试脏数据并持久化到本地 SQLite 档案库 |
 
 ---
 
