@@ -113,6 +113,46 @@ def _determine_clock_rate(mods: int) -> float:
     return 1.0
 
 
+def _scale_beatmap_clock_rate(beatmap: Beatmap7K, clock_rate: float) -> Beatmap7K:
+    """Scales beatmap hit object and timing point timestamps to real physical playback time."""
+    if abs(clock_rate - 1.0) < 1e-4:
+        return beatmap
+    import copy
+    bm = copy.deepcopy(beatmap)
+    for ho in bm.hit_objects:
+        ho.time = ho.time / clock_rate
+        if ho.end_time is not None:
+            ho.end_time = ho.end_time / clock_rate
+    for tp in bm.timing_points:
+        tp.time = tp.time / clock_rate
+        if tp.beat_length > 0:
+            tp.beat_length = tp.beat_length / clock_rate
+    return bm
+
+
+def _scale_alignment_clock_rate(alignment: HitAlignmentResult, clock_rate: float) -> HitAlignmentResult:
+    """Scales hit alignment target and hit timestamps to match scaled beatmap physical time."""
+    if abs(clock_rate - 1.0) < 1e-4:
+        return alignment
+    import copy
+    scaled_hits = []
+    for h in alignment.aligned_hits:
+        sh = copy.copy(h)
+        sh.target_time = h.target_time / clock_rate
+        if h.hit_time is not None:
+            sh.hit_time = h.hit_time / clock_rate
+        scaled_hits.append(sh)
+    return HitAlignmentResult(
+        aligned_hits=scaled_hits,
+        ghost_taps=alignment.ghost_taps,
+        judgment_counts=alignment.judgment_counts,
+        total_hits=alignment.total_hits,
+        miss_count=alignment.miss_count,
+        total_ghost_taps=alignment.total_ghost_taps,
+        ghost_taps_by_column=alignment.ghost_taps_by_column,
+    )
+
+
 def run_ingestion(
     replay_path: Path | str,
     beatmap_path: Path | str,
@@ -166,11 +206,17 @@ def run_ingestion(
         "miss": replay.miss,
     }
 
+
     # 5. Micro-Biomechanics & Pathology Analysis (ADR-0012)
     pathology = analyze_pathology(alignment, beatmap)
 
     # 6. Strain-Error Response & 8-Dim Dan Radar (ADR-0012)
-    skill_radar = analyze_strain_response(alignment, beatmap)
+    if abs(clock_rate - 1.0) > 1e-4:
+        bm_strain = _scale_beatmap_clock_rate(beatmap, clock_rate)
+        align_strain = _scale_alignment_clock_rate(alignment, clock_rate)
+        skill_radar = analyze_strain_response(align_strain, bm_strain)
+    else:
+        skill_radar = analyze_strain_response(alignment, beatmap)
 
     return ProfilerIngestionReport(
         player_name=replay.player_name,

@@ -348,6 +348,19 @@ def analyze_strain_response(
             effective_cap = float(np.clip(fitted_inflection, 0.0, peak_strain))
             has_inflection = True
 
+            # Competence Gating: capacity cannot exceed the highest strain where the player
+            # demonstrated controlled execution (miss rate <= 15% and UR <= 350)
+            clean_bins = [
+                b for b in bins_list
+                if b.miss_rate <= 0.15 and b.ur <= 350.0 and b.total_notes >= opts.min_samples_per_bin
+            ]
+            if clean_bins:
+                max_clean_strain = max(b.strain_max for b in clean_bins)
+                effective_cap = min(effective_cap, max_clean_strain)
+            elif bins_list and any(b.total_notes >= 5 for b in bins_list):
+                # No clean bins exist: player failed across all strain levels
+                effective_cap = 0.0
+
         raw_sr = compute_raw_strain_star_rating(effective_cap)
         sr = apply_tanh_soft_cap(raw_sr)
         dan = estimate_canonical_dan(sr)

@@ -669,18 +669,27 @@ def compute_8d_strain_timeseries(
         radar_score = getattr(radar, d, 0.0)
         target_strain = star_rating_to_strain(radar_score) if radar_score > 0.15 else 0.0
         raw_c = raw_curves[d]
-        p90_raw = _calculate_percentile(raw_c, 90.0)
+        peak_raw = max(raw_c) if raw_c else 0.0
 
-        if target_strain > 0.0 and p90_raw > 1e-4:
-            scale = target_strain / p90_raw
-            calibrated_curves[d] = [round(max(0.0, v * scale), 3) for v in raw_c]
-        elif target_strain > 0.0:
-            # Fallback when raw impulses were very sparse
-            peak_raw = max(raw_c) if raw_c else 0.0
-            scale = target_strain / max(1e-4, peak_raw)
-            calibrated_curves[d] = [round(max(0.0, v * scale), 3) for v in raw_c]
-        else:
+        if target_strain <= 0.0 or peak_raw <= 1e-4:
             calibrated_curves[d] = [0.0] * len(raw_c)
+            continue
+
+        active_vals = [v for v in raw_c if v > 1e-3]
+        if active_vals:
+            p90_active = _calculate_percentile(active_vals, 90.0)
+        else:
+            p90_active = peak_raw
+
+        p90_all = _calculate_percentile(raw_c, 90.0)
+        p_base = max(p90_all, p90_active)
+
+        scale = target_strain / max(1e-4, p_base)
+        # Safety bound: maximum peak strain cannot exceed 2.0x target strain
+        max_allowed_scale = (2.0 * target_strain) / max(1e-4, peak_raw)
+        scale = min(scale, max_allowed_scale)
+
+        calibrated_curves[d] = [round(max(0.0, v * scale), 3) for v in raw_c]
 
     return TechniqueStrainTimeseries(
         step_seconds=step_s,

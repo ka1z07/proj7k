@@ -176,12 +176,10 @@ def parse_osr(source: Union[bytes, BinaryIO, Path, str]) -> OSRReplay:
                 if len(tokens) >= 2:
                     delta_ms = float(tokens[0])
                     raw_keys = int(float(tokens[1]))
-                    # Real osu! replays start with RNG/seed marker frame having negative delta
-                    if delta_ms < 0 and current_time == 0.0:
+                    # Legacy osu! replays may start with an RNG seed marker frame (e.g. -123456)
+                    if delta_ms <= -10000 and current_time == 0.0:
                         continue
                     current_time += delta_ms
-                    if current_time < 0.0:
-                        continue
                     # Mask to 7K mania valid keys (bits 0..6)
                     action_frames.append(ReplayFrame(time_ms=current_time, keys=raw_keys & 0x7F))
         except Exception as e:
