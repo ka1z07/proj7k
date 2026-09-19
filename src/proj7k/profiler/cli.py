@@ -18,12 +18,13 @@ from proj7k.profiler.matcher import (
     column_to_canonical_lane,
 )
 from proj7k.profiler.osr import OSRReplay, parse_osr
+from proj7k.profiler.pathology import PathologyReport, analyze_pathology
 
 
 @dataclass
 class ProfilerIngestionReport:
     """
-    Structured ingestion and alignment report.
+    Structured ingestion, alignment, and pathology report.
     """
     player_name: str
     beatmap_hash: str
@@ -43,6 +44,8 @@ class ProfilerIngestionReport:
     judgment_counts: Dict[HitJudgment, int]
     ghost_taps_by_column: Dict[int, int]
     alignment_result: HitAlignmentResult
+    pathology: Optional[PathologyReport] = None
+
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -68,7 +71,9 @@ class ProfilerIngestionReport:
             },
             "aligned_hits": [h.to_dict() for h in self.alignment_result.aligned_hits],
             "ghost_taps": [g.to_dict() for g in self.alignment_result.ghost_taps],
+            "pathology": self.pathology.to_dict() if self.pathology else None,
         }
+
 
 
 def _determine_clock_rate(mods: int) -> float:
@@ -137,6 +142,9 @@ def run_ingestion(
         "miss": replay.miss,
     }
 
+    # 5. Micro-Biomechanics & Pathology Analysis (ADR-0012)
+    pathology = analyze_pathology(alignment, beatmap)
+
     return ProfilerIngestionReport(
         player_name=replay.player_name,
         beatmap_hash=replay.beatmap_hash,
@@ -156,7 +164,12 @@ def run_ingestion(
         judgment_counts=alignment.judgment_counts,
         ghost_taps_by_column=alignment.ghost_taps_by_column,
         alignment_result=alignment,
+        pathology=pathology,
     )
+
+
+run_profiler = run_ingestion
+
 
 
 def format_ingestion_report(report: ProfilerIngestionReport) -> str:
@@ -204,8 +217,43 @@ def format_ingestion_report(report: ProfilerIngestionReport) -> str:
     if not report.is_valid_play:
         lines.append("  [NOTICE] Aborted or retry run (<30s or <50% completion; filtered from baseline)")
 
+    if report.pathology:
+        path = report.pathology
+        lines.extend([
+            "------------------------------------------------------------",
+            "Micro-Pathology Diagnostics:",
+            "  Per-Track Variance & Timing Error:",
+            "    Lane | Hits | Mean Error | Std Dev |    UR",
+            "    -----+------+------------+---------+------",
+        ])
+        for lane, trk in path.tracks.items():
+            lines.append(
+                f"    {lane:<4} | {trk.hit_count:>4} | {trk.mean_error_ms:>+9.1f}ms | {trk.std_error_ms:>6.1f}ms | {trk.ur:>5.1f}"
+            )
+        lines.extend([
+            "  Bimanual Load & UR:",
+            f"    Left  Hand (L3..L1): UR {path.bimanual.left_ur:>5.1f} | Hits: {path.bimanual.left_hit_count:>4} | Mean: {path.bimanual.left_mean_error_ms:+.1f}ms",
+            f"    Right Hand (R1..R3): UR {path.bimanual.right_ur:>5.1f} | Hits: {path.bimanual.right_hit_count:>4} | Mean: {path.bimanual.right_mean_error_ms:+.1f}ms",
+            f"    Load Asymmetry:      {path.bimanual.load_asymmetry_ratio:.2f} | UR Asymmetry: {path.bimanual.ur_asymmetry_ratio:.2f}",
+            "  Jack Stagnation Drift:",
+            f"    Drift Slope:  {path.jack_drift.slope_ms_per_s:+.3f} ms/s | R²: {path.jack_drift.r_squared:.3f} | Notes: {path.jack_drift.stagnation_jack_count}",
+            f"    Exhaustion:   {'ALERT (Fatigue drift detected)' if path.jack_drift.fatigue_alert else 'Normal'}",
+            "  LN Release Decoupling:",
+            f"    Total LNs:    {path.ln_release.total_lns} | Head UR: {path.ln_release.head_ur:.1f} | Tail UR: {path.ln_release.tail_ur:.1f}",
+            f"    Tail Offset:  {path.ln_release.mean_tail_offset_ms:+.1f}ms (Early Panic: {path.ln_release.panic_release_count}, Sticky: {path.ln_release.sticky_count})",
+        ])
+        if path.cascade_precursor and path.cascade_precursor.fatal_time_ms is not None:
+            pre = path.cascade_precursor
+            lines.extend([
+                "  Cascade Failure Precursor:",
+                f"    Fatal Break:  At {pre.fatal_time_ms:.1f}ms on {column_to_canonical_lane(pre.fatal_column) if pre.fatal_column is not None else 'Unknown'}",
+                f"    500ms Motif:  {pre.dominant_technique} ({pre.precursor_note_count} notes in window)",
+            ])
+
+
     lines.append("============================================================")
     return "\n".join(lines)
+
 
 
 def build_parser() -> argparse.ArgumentParser:
