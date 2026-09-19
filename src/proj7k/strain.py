@@ -421,3 +421,277 @@ def compute_dual_hand_strain(
         p95_strain=p95,
         peak_strain=peak,
     )
+
+
+@dataclass(frozen=True)
+class TechniqueStrainTimeseries:
+    """
+    Continuous 8-dimensional instantaneous technique strain curves S_d(t) (ADR-0012).
+    """
+    step_seconds: float
+    times: List[float]
+    jack: List[float]
+    tech: List[float]
+    speed: List[float]
+    stream: List[float]
+    ln_general: List[float]
+    ln_tech: List[float]
+    ln_inverse: List[float]
+    ln_release: List[float]
+
+    def get_strains_at(self, time_s: float) -> Dict[str, float]:
+        """Interpolates instantaneous 8-dimension strain values at time_s (in seconds)."""
+        dims = ["jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release"]
+        if not self.times:
+            return {tech: 0.0 for tech in dims}
+
+        if time_s <= self.times[0]:
+            return {d: float(getattr(self, d)[0]) for d in dims}
+        if time_s >= self.times[-1]:
+            return {d: float(getattr(self, d)[-1]) for d in dims}
+
+        rel = (time_s - self.times[0]) / self.step_seconds
+        idx = int(math.floor(rel))
+        idx = max(0, min(len(self.times) - 2, idx))
+        w = rel - idx
+
+        res: Dict[str, float] = {}
+        for d in dims:
+            curve = getattr(self, d)
+            val = (1.0 - w) * curve[idx] + w * curve[idx + 1]
+            res[d] = float(max(0.0, val))
+        return res
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "step_seconds": self.step_seconds,
+            "times": self.times,
+            "jack": [round(v, 3) for v in self.jack],
+            "tech": [round(v, 3) for v in self.tech],
+            "speed": [round(v, 3) for v in self.speed],
+            "stream": [round(v, 3) for v in self.stream],
+            "ln_general": [round(v, 3) for v in self.ln_general],
+            "ln_tech": [round(v, 3) for v in self.ln_tech],
+            "ln_inverse": [round(v, 3) for v in self.ln_inverse],
+            "ln_release": [round(v, 3) for v in self.ln_release],
+        }
+
+
+def compute_8d_strain_timeseries(
+    beatmap: Beatmap7K,
+    options: Optional[StrainOptions] = None,
+    radar: Optional[Any] = None,
+) -> TechniqueStrainTimeseries:
+    """
+    Computes continuous 8-dimensional instantaneous strain curves S_d(t) across all 8
+    technique dimensions (Jack, Tech, Speed, Stream, LN General, LN Tech, LN Inverse, LN Release)
+    calibrated against the physical strain scale and Canonical Dan Progression Hierarchy (ADR-0012).
+    """
+    from proj7k.radar import TECHNIQUE_NAMES, compute_technique_radar
+    from proj7k.downscaler.mapper import star_rating_to_strain
+
+    opts = options or StrainOptions()
+    hit_objects = sorted(beatmap.hit_objects, key=lambda x: (x.time, x.column))
+    dims = ["jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release"]
+
+    if not hit_objects:
+        return TechniqueStrainTimeseries(
+            step_seconds=opts.step_s,
+            times=[0.0],
+            jack=[0.0],
+            tech=[0.0],
+            speed=[0.0],
+            stream=[0.0],
+            ln_general=[0.0],
+            ln_tech=[0.0],
+            ln_inverse=[0.0],
+            ln_release=[0.0],
+        )
+
+    if radar is None:
+        radar = compute_technique_radar(beatmap)
+
+    # Time grid matching dual-hand strain profile
+    start_s = min(ho.time for ho in hit_objects) / 1000.0
+    end_s = max(
+        (ho.end_time if ho.note_type == NoteType.LN and ho.end_time else ho.time)
+        for ho in hit_objects
+    ) / 1000.0
+    end_s = max(end_s, start_s + 0.5)
+
+    step_s = opts.step_s
+    num_steps = max(1, int(math.ceil((end_s - start_s) / step_s)) + 1)
+    times_s = [round(start_s + k * step_s, 5) for k in range(num_steps)]
+
+    # 1. Jack impulse collection
+    col_state: Dict[int, Tuple[float, int]] = {c: (-1e9, 1) for c in range(7)}
+    jack_impulses: List[Tuple[float, float]] = []
+    for ho in hit_objects:
+        c = ho.column
+        t_ms = ho.time
+        last_t, run_len = col_state[c]
+        dt = t_ms - last_t
+        if dt <= opts.jack_threshold_ms:
+            new_run = run_len + 1
+            w_l = 1.0 + 1.5 * math.tanh((new_run - 2) / 3.0)
+            s_f = math.pow(opts.jack_threshold_ms / max(35.0, dt), 1.25)
+            imp = s_f * w_l
+            jack_impulses.append((t_ms / 1000.0, imp))
+            col_state[c] = (t_ms, new_run)
+        else:
+            col_state[c] = (t_ms, 1)
+
+    # 2. Speed impulse collection
+    speed_impulses: List[Tuple[float, float]] = []
+    for i in range(len(hit_objects) - 1):
+        h1 = hit_objects[i]
+        h2 = hit_objects[i + 1]
+        if h1.column != h2.column:
+            dt = h2.time - h1.time
+            if 5.0 < dt < opts.speed_burst_threshold_ms:
+                imp = math.pow((opts.speed_burst_threshold_ms - dt) / 50.0, 1.35)
+                speed_impulses.append((h2.time / 1000.0, imp))
+
+    # 3. Stream impulse collection (flow notes across active lanes)
+    stream_impulses: List[Tuple[float, float]] = []
+    for i in range(len(hit_objects) - 1):
+        h1 = hit_objects[i]
+        h2 = hit_objects[i + 1]
+        if h1.column != h2.column:
+            dt = h2.time - h1.time
+            if 50.0 < dt < 250.0:
+                stream_impulses.append((h2.time / 1000.0, 1.0))
+
+    # 4. LN intervals and releases
+    col_lns: Dict[int, List[Tuple[float, float]]] = {c: [] for c in range(7)}
+    col_releases: List[Tuple[float, int]] = []
+    for ho in hit_objects:
+        if ho.note_type == NoteType.LN and ho.end_time:
+            st = ho.time / 1000.0
+            et = ho.end_time / 1000.0
+            col_lns[ho.column].append((st, et))
+            col_releases.append((et, ho.column))
+
+    col_releases.sort(key=lambda x: x[0])
+
+    # Decay constants
+    tau_s = opts.tau_time_constant_s
+    decay = math.exp(-step_s / tau_s)
+
+    raw_curves: Dict[str, List[float]] = {d: [] for d in dims}
+
+    jack_acc = 0.0
+    speed_acc = 0.0
+    stream_acc = 0.0
+    ln_rel_acc = 0.0
+
+    j_idx = 0
+    sp_idx = 0
+    st_idx = 0
+    rel_idx = 0
+
+    half_w = opts.window_s / 2.0
+
+    for t in times_s:
+        # Decay
+        jack_acc *= decay
+        speed_acc *= decay
+        stream_acc *= decay
+        ln_rel_acc *= decay
+
+        # Jack impulses up to t
+        while j_idx < len(jack_impulses) and jack_impulses[j_idx][0] <= t:
+            jack_acc += jack_impulses[j_idx][1]
+            j_idx += 1
+
+        # Speed impulses up to t
+        while sp_idx < len(speed_impulses) and speed_impulses[sp_idx][0] <= t:
+            speed_acc += speed_impulses[sp_idx][1]
+            sp_idx += 1
+
+        # Stream impulses up to t
+        while st_idx < len(stream_impulses) and stream_impulses[st_idx][0] <= t:
+            stream_acc += stream_impulses[st_idx][1]
+            st_idx += 1
+
+        # LN Releases up to t
+        while rel_idx < len(col_releases) and col_releases[rel_idx][0] <= t:
+            ln_rel_acc += 1.0
+            rel_idx += 1
+
+        # Window notes for concurrent density
+        w_start = t - half_w
+        w_end = t + half_w
+        notes_in_w = [ho for ho in hit_objects if (w_start * 1000.0) <= ho.time < (w_end * 1000.0)]
+        local_nps = len(notes_in_w) / opts.window_s
+
+        # Locked fingers at time t
+        locked_fingers = sum(
+            1 for c in range(7)
+            if any(st <= t <= et for st, et in col_lns[c])
+        )
+        has_ln = sum(1 for ho in notes_in_w if ho.note_type == NoteType.LN)
+        hold_ratio = (has_ln / len(notes_in_w)) if notes_in_w else 0.0
+
+        # Tech permutation metric Omega_irreg in window
+        reversals = 0
+        if len(notes_in_w) >= 3:
+            for k in range(len(notes_in_w) - 2):
+                c0 = notes_in_w[k].column
+                c1 = notes_in_w[k + 1].column
+                c2 = notes_in_w[k + 2].column
+                d1 = c1 - c0
+                d2 = c2 - c1
+                if (d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0):
+                    reversals += 1
+        tort = reversals / max(1, len(notes_in_w))
+        omega_local = 1.0 + 0.5 * tort + 0.25 * (1.0 if locked_fingers > 0 else 0.0)
+
+        # Base kinetic strain at t
+        k_base = max(stream_acc, speed_acc, jack_acc * 0.8)
+
+        # Instantaneous raw dimensions
+        raw_curves["jack"].append(jack_acc)
+        raw_curves["speed"].append(speed_acc)
+        raw_curves["stream"].append(stream_acc)
+        raw_curves["tech"].append(k_base * max(0.0, omega_local - 1.0) * 2.5)
+
+        # LN dimensions
+        raw_curves["ln_general"].append(hold_ratio * local_nps * (1.0 + 0.3 * locked_fingers))
+        raw_curves["ln_tech"].append(hold_ratio * k_base * max(0.0, omega_local - 1.0) * 2.0)
+        inv_load = math.pow(max(0.0, locked_fingers - 1.5) / 1.5, 2.0) if locked_fingers >= 2 else 0.0
+        raw_curves["ln_inverse"].append(local_nps * hold_ratio * inv_load)
+        raw_curves["ln_release"].append(ln_rel_acc + (1.0 if locked_fingers > 0 else 0.0))
+
+    # Calibrate each curve to the benchmark strain matching its calibrated radar score
+    calibrated_curves: Dict[str, List[float]] = {}
+    for d in dims:
+        radar_score = getattr(radar, d, 0.0)
+        target_strain = star_rating_to_strain(radar_score) if radar_score > 0.15 else 0.0
+        raw_c = raw_curves[d]
+        p90_raw = _calculate_percentile(raw_c, 90.0)
+
+        if target_strain > 0.0 and p90_raw > 1e-4:
+            scale = target_strain / p90_raw
+            calibrated_curves[d] = [round(max(0.0, v * scale), 3) for v in raw_c]
+        elif target_strain > 0.0:
+            # Fallback when raw impulses were very sparse
+            peak_raw = max(raw_c) if raw_c else 0.0
+            scale = target_strain / max(1e-4, peak_raw)
+            calibrated_curves[d] = [round(max(0.0, v * scale), 3) for v in raw_c]
+        else:
+            calibrated_curves[d] = [0.0] * len(raw_c)
+
+    return TechniqueStrainTimeseries(
+        step_seconds=step_s,
+        times=times_s,
+        jack=calibrated_curves["jack"],
+        tech=calibrated_curves["tech"],
+        speed=calibrated_curves["speed"],
+        stream=calibrated_curves["stream"],
+        ln_general=calibrated_curves["ln_general"],
+        ln_tech=calibrated_curves["ln_tech"],
+        ln_inverse=calibrated_curves["ln_inverse"],
+        ln_release=calibrated_curves["ln_release"],
+    )
+

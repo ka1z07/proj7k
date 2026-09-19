@@ -14,6 +14,13 @@ from proj7k.profiler.pathology import (
     TrackPathology,
     analyze_pathology,
 )
+from proj7k.profiler.response import (
+    DimensionCapacityResult,
+    SkillRadarReport,
+    StrainBin,
+    StrainResponseOptions,
+    analyze_strain_response,
+)
 
 __all__ = [
     "ProfilerIngestionReport",
@@ -31,5 +38,10 @@ __all__ = [
     "CascadePrecursor",
     "PathologyReport",
     "analyze_pathology",
+    "StrainBin",
+    "DimensionCapacityResult",
+    "SkillRadarReport",
+    "StrainResponseOptions",
+    "analyze_strain_response",
 ]
 

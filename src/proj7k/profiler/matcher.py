@@ -77,9 +77,10 @@ class AlignedHit:
     end_time: Optional[float] = None
     tail_release_time: Optional[float] = None
     tail_offset_ms: Optional[float] = None
+    strains: Optional[Dict[str, float]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "column": self.column,
             "lane": column_to_canonical_lane(self.column),
             "target_time": self.target_time,
@@ -91,6 +92,9 @@ class AlignedHit:
             "tail_release_time": self.tail_release_time,
             "tail_offset_ms": self.tail_offset_ms,
         }
+        if self.strains is not None:
+            d["strains"] = {k: round(v, 2) for k, v in self.strains.items()}
+        return d
 
 
 @dataclass

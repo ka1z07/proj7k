@@ -19,12 +19,13 @@ from proj7k.profiler.matcher import (
 )
 from proj7k.profiler.osr import OSRReplay, parse_osr
 from proj7k.profiler.pathology import PathologyReport, analyze_pathology
+from proj7k.profiler.response import SkillRadarReport, analyze_strain_response
 
 
 @dataclass
 class ProfilerIngestionReport:
     """
-    Structured ingestion, alignment, and pathology report.
+    Structured ingestion, alignment, pathology, and skill radar report.
     """
     player_name: str
     beatmap_hash: str
@@ -45,6 +46,7 @@ class ProfilerIngestionReport:
     ghost_taps_by_column: Dict[int, int]
     alignment_result: HitAlignmentResult
     pathology: Optional[PathologyReport] = None
+    skill_radar: Optional[SkillRadarReport] = None
 
 
     def to_dict(self) -> Dict[str, Any]:
@@ -72,6 +74,7 @@ class ProfilerIngestionReport:
             "aligned_hits": [h.to_dict() for h in self.alignment_result.aligned_hits],
             "ghost_taps": [g.to_dict() for g in self.alignment_result.ghost_taps],
             "pathology": self.pathology.to_dict() if self.pathology else None,
+            "skill_radar": self.skill_radar.to_dict() if self.skill_radar else None,
         }
 
 
@@ -145,6 +148,9 @@ def run_ingestion(
     # 5. Micro-Biomechanics & Pathology Analysis (ADR-0012)
     pathology = analyze_pathology(alignment, beatmap)
 
+    # 6. Strain-Error Response & 8-Dim Dan Radar (ADR-0012)
+    skill_radar = analyze_strain_response(alignment, beatmap)
+
     return ProfilerIngestionReport(
         player_name=replay.player_name,
         beatmap_hash=replay.beatmap_hash,
@@ -165,6 +171,7 @@ def run_ingestion(
         ghost_taps_by_column=alignment.ghost_taps_by_column,
         alignment_result=alignment,
         pathology=pathology,
+        skill_radar=skill_radar,
     )
 
 
@@ -250,6 +257,27 @@ def format_ingestion_report(report: ProfilerIngestionReport) -> str:
                 f"    500ms Motif:  {pre.dominant_technique} ({pre.precursor_note_count} notes in window)",
             ])
 
+    if report.skill_radar:
+        radar = report.skill_radar
+        lines.extend([
+            "------------------------------------------------------------",
+            "8-Dimension Skill Radar & Dan Breakdown:",
+            f"  Overall Dan: {radar.overall_dan} | Dominant: {radar.dominant_technique.capitalize()} | Bottleneck: {radar.bottleneck_technique.capitalize()}",
+            "  Dimension    | Capacity | Star Rating | Dan Tier  | Status",
+            "  -------------+----------+-------------+-----------+-------------------------",
+        ])
+        for dim, cap in radar.dimensions.items():
+            dim_name = dim.replace("_", " ").title()
+            if not cap.tested:
+                status = f"Untested (Peak: {cap.peak_chart_strain:.1f})"
+            elif cap.has_inflection:
+                status = f"Inflection @ {cap.effective_capacity:.1f}"
+            else:
+                status = f"Stable (Peak: {cap.peak_chart_strain:.1f})"
+
+            lines.append(
+                f"  {dim_name:<12} | {cap.effective_capacity:>8.1f} | {cap.star_rating:>10.2f}★ | {cap.dan_tier:<9} | {status}"
+            )
 
     lines.append("============================================================")
     return "\n".join(lines)
