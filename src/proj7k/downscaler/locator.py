@@ -201,6 +201,44 @@ def locate_beatmap_in_lazer(
     audio_file_info = record.get("audio_file") or {}
     bg_file_info = record.get("bg_file") or {}
 
+    # Inspect .osu file for accurate audio and background filenames
+    expected_audio_name: Optional[str] = None
+    expected_bg_name: Optional[str] = None
+    if osu_path and osu_path.exists():
+        try:
+            with open(osu_path, "r", encoding="utf-8", errors="ignore") as fh:
+                for line in fh:
+                    s = line.strip()
+                    if s.startswith("AudioFilename:"):
+                        parts = s.split(":", 1)
+                        if len(parts) > 1 and parts[1].strip():
+                            expected_audio_name = parts[1].strip()
+                    elif (s.startswith("0,0,") or s.startswith("Video,")) and '"' in s:
+                        toks = s.split('"')
+                        if len(toks) >= 2 and toks[1].strip():
+                            expected_bg_name = toks[1].strip()
+        except Exception:
+            pass
+
+    # If files_list is present, prefer matching against expected names from .osu
+    if files_list:
+        if expected_audio_name:
+            for f in files_list:
+                if f.get("filename", "").strip().lower() == expected_audio_name.lower() and f.get("hash"):
+                    cand = _resolve_lazer_hashed_file(target_files_dir, f["hash"])
+                    if cand and cand.exists():
+                        audio_path = cand
+                        audio_file_info = {"filename": expected_audio_name, "hash": f["hash"]}
+                        break
+        if expected_bg_name:
+            for f in files_list:
+                if f.get("filename", "").strip().lower() == expected_bg_name.lower() and f.get("hash"):
+                    cand = _resolve_lazer_hashed_file(target_files_dir, f["hash"])
+                    if cand and cand.exists():
+                        bg_path = cand
+                        bg_file_info = {"filename": expected_bg_name, "hash": f["hash"]}
+                        break
+
     return ResolvedBeatmapAsset(
         osu_path=osu_path,
         title=record.get("title", ""),
@@ -208,13 +246,14 @@ def locate_beatmap_in_lazer(
         creator=record.get("creator", ""),
         difficulty_name=record.get("difficulty_name", ""),
         audio_path=audio_path,
-        audio_filename=audio_file_info.get("filename") or "audio.mp3",
+        audio_filename=audio_file_info.get("filename") or expected_audio_name or "audio.mp3",
         bg_path=bg_path,
-        bg_filename=bg_file_info.get("filename") or "bg.png",
+        bg_filename=bg_file_info.get("filename") or expected_bg_name or "bg.png",
         beatmap_id=info.beatmap_id or record.get("online_id"),
         beatmapset_id=info.beatmapset_id or record.get("set_online_id"),
         file_hash=matched_osu_hash,
     )
+
 
 
 def fetch_beatmap_from_web(
@@ -260,20 +299,44 @@ def package_into_osz(
     """
     output_osz_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Inspect the practice .osu to ensure archive file names align with what the beatmap references
+    expected_audio_filename: Optional[str] = None
+    expected_bg_filename: Optional[str] = None
+    if practice_osu_path.exists():
+        try:
+            content = practice_osu_path.read_text(encoding="utf-8", errors="ignore")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("AudioFilename:"):
+                    parts = stripped.split(":", 1)
+                    if len(parts) > 1 and parts[1].strip():
+                        expected_audio_filename = parts[1].strip()
+                elif (stripped.startswith("0,0,") or stripped.startswith("Video,")) and '"' in stripped:
+                    tokens = stripped.split('"')
+                    if len(tokens) >= 2 and tokens[1].strip():
+                        expected_bg_filename = tokens[1].strip()
+        except Exception as e:
+            logger.debug(f"Could not extract expected media names from .osu: {e}")
+
     with zipfile.ZipFile(output_osz_path, "w", compression=zipfile.ZIP_DEFLATED) as z:
         # 1. Practice .osu file
         z.write(practice_osu_path, arcname=practice_osu_path.name)
 
         # 2. Audio file
         if audio_path and audio_path.exists():
-            target_audio_name = audio_filename or "audio.mp3"
+            target_audio_name = expected_audio_filename or audio_filename or "audio.mp3"
             z.write(audio_path, arcname=target_audio_name)
+            # Include alias if audio_filename was explicitly passed and differs from target
+            if audio_filename and audio_filename != target_audio_name:
+                z.write(audio_path, arcname=audio_filename)
 
         # 3. Background image
         if bg_path and bg_path.exists():
             default_bg_name = "bg.png" if bg_path.suffix.lower() == ".png" else "bg.jpg"
-            target_bg_name = bg_filename or default_bg_name
+            target_bg_name = expected_bg_filename or bg_filename or default_bg_name
             z.write(bg_path, arcname=target_bg_name)
+            if bg_filename and bg_filename != target_bg_name:
+                z.write(bg_path, arcname=bg_filename)
 
         # 4. Extra files if any
         if extra_files:
@@ -282,3 +345,4 @@ def package_into_osz(
                     z.write(p, arcname=arcname)
 
     return output_osz_path
+

@@ -153,7 +153,7 @@ def downscale_beatmap(
     final_strain = compute_dual_hand_strain(practice_bm, options=strain_opts)
     final_rating = synthesize_star_rating(final_radar, p90_strain=final_strain.p90_strain, options=rating_opts)
 
-    validation_res = validator.validate(orig_radar, practice_bm, target=target)
+    validation_res = validator.validate(beatmap, practice_bm, target=target)
     if not validation_res.passed:
         warnings.append("Technique preservation validation reported non-conforming metrics.")
 

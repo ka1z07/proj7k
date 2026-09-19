@@ -86,13 +86,16 @@ def resolve_beatmap_file(files_dir: Path, record: LazerBeatmapRecord) -> Optiona
     return None
 
 
-_EXTRACT_INJECTED_PATTERN = re.compile(r"\s*\((\d+\.\d+)★\s+([A-Za-z_]+)\)$")
+_EXTRACT_INJECTED_PATTERN = re.compile(
+    r"\s*\((\d+\.\d+)★(?:\s+[A-Za-z0-9_]+)?\s+([A-Za-z_]+)\)$"
+)
 
 
 def try_extract_annotated_metadata(record: LazerBeatmapRecord) -> Optional[Tuple[float, str]]:
     """
     If a record was previously annotated by proj7k and its attributes match,
     extract (star_rating, dominant_tech) directly without re-evaluating the chart.
+    Supports both historical single-word suffixes and new Dan-tier suffixes.
     """
     match = _EXTRACT_INJECTED_PATTERN.search(record.difficulty_name)
     if not match:
@@ -139,9 +142,16 @@ class LazerSyncManager:
             enabled=True,
         )
 
-    def sync_once(self, wait_for_lock: bool = False) -> SyncSummary:
+    def sync_once(
+        self,
+        wait_for_lock: bool = False,
+        preheat_on_locked: bool = False,
+    ) -> SyncSummary:
         """
         Execute a single incremental synchronization pass within a safe flush window.
+        If preheat_on_locked=True and osu!lazer is holding the database lock,
+        dump beatmaps in read-only mode and pre-evaluate into TwoLayerCache,
+        deferring batch write transactions until the lock is released.
         """
         if not self.realm_path.exists():
             return SyncSummary(
@@ -161,25 +171,20 @@ class LazerSyncManager:
                 return SyncSummary(success=False, error=f"Bridge environment setup failed: {e}")
 
         timeout = 60.0 if wait_for_lock else self.options.lock_timeout_s
-        if not probe_realm_lock(self.lock_path):
-            if timeout > 0.0:
-                with SafeFlushWindow(self.lock_path, timeout_s=timeout, raise_on_busy=False) as win:
-                    if not win.is_acquired:
-                        return SyncSummary(
-                            success=False,
-                            error=(
-                                f"Safe flush window is closed: osu!lazer database lock at '{self.lock_path}' "
-                                "is held by the game process."
-                            ),
-                        )
-            else:
-                return SyncSummary(
-                    success=False,
-                    error=(
-                        f"Safe flush window is closed: osu!lazer database lock at '{self.lock_path}' "
-                        "is held by the game process."
-                    ),
-                )
+        is_locked = not probe_realm_lock(self.lock_path)
+        if is_locked and timeout > 0.0:
+            with SafeFlushWindow(self.lock_path, timeout_s=timeout, raise_on_busy=False) as win:
+                if win.is_acquired:
+                    is_locked = False
+
+        if is_locked and not preheat_on_locked:
+            return SyncSummary(
+                success=False,
+                error=(
+                    f"Safe flush window is closed: osu!lazer database lock at '{self.lock_path}' "
+                    "is held by the game process."
+                ),
+            )
 
 
         # 1. Dump 7K beatmap records from Realm
@@ -189,6 +194,14 @@ class LazerSyncManager:
                 auto_setup=False,
             )
         except Exception as e:
+            if is_locked:
+                return SyncSummary(
+                    success=False,
+                    error=(
+                        f"Safe flush window is closed: osu!lazer database lock at '{self.lock_path}' "
+                        "is held by the game process."
+                    ),
+                )
             return SyncSummary(success=False, error=f"Failed to dump 7K beatmaps: {e}")
 
         mania_7k = [b for b in beatmaps if b.is_7k_mania]
@@ -209,26 +222,23 @@ class LazerSyncManager:
                     f"({len(items_to_update)} to update, {skipped_count} unchanged)..."
                 )
 
-            # Fast-path: check if chart is already annotated and matches
+            # Fast-path: check if chart was already annotated (historical or new format)
             extracted = try_extract_annotated_metadata(rec)
             if extracted is not None:
                 sr, dom_tech = extracted
-                already_annotated_items.append((rec, sr, dom_tech))
-                skipped_count += 1
-                continue
+            else:
+                osu_path = resolve_beatmap_file(self.files_dir, rec)
+                if not osu_path:
+                    failed_count += 1
+                    continue
 
-            osu_path = resolve_beatmap_file(self.files_dir, rec)
-            if not osu_path:
-                failed_count += 1
-                continue
-
-            try:
-                result = evaluate_intrinsic_difficulty(osu_path)
-                sr = result.star_rating
-                dom_tech = result.radar.dominant_technique
-            except Exception:
-                failed_count += 1
-                continue
+                try:
+                    result = evaluate_intrinsic_difficulty(osu_path)
+                    sr = result.star_rating
+                    dom_tech = result.radar.dominant_technique
+                except Exception:
+                    failed_count += 1
+                    continue
 
             target_name = format_injected_difficulty_name(rec.difficulty_name, sr, dom_tech)
             target_tags = inject_binned_skill_tags(rec.tags, dom_tech, sr)
@@ -267,6 +277,20 @@ class LazerSyncManager:
         collections = build_biaxial_collection_map(collection_entries)
         updates, _ = annotate_batch_and_build_collections(items_to_update)
 
+
+        if is_locked:
+            return SyncSummary(
+                success=False,
+                total_7k=len(mania_7k),
+                evaluated_count=len(items_to_update),
+                updated_count=0,
+                skipped_count=skipped_count,
+                failed_count=failed_count,
+                error=(
+                    f"Safe flush window is closed: osu!lazer database lock at '{self.lock_path}' "
+                    "is held by the game process."
+                ),
+            )
 
         # 3. Enter safe flush window for atomic write transactions
         with SafeFlushWindow(self.lock_path, timeout_s=timeout, raise_on_busy=False) as window:
@@ -353,9 +377,19 @@ class LazerDaemon:
         stop = stop_event or self._stop_event
         logger.info(f"Starting LazerDaemon (polling interval: {self.interval_s:.1f}s)...")
 
+        waiting_for_lock = False
+        last_lock_log_time = 0.0
+
         while not stop.is_set():
-            summary = self.manager.sync_once(wait_for_lock=False)
+            try:
+                summary = self.manager.sync_once(wait_for_lock=False, preheat_on_locked=True)
+            except TypeError:
+                summary = self.manager.sync_once(wait_for_lock=False)
             if summary.success:
+                if waiting_for_lock:
+                    logger.info("Safe flush window opened (osu!lazer released lock). Resuming normal sync.")
+                    waiting_for_lock = False
+
                 if summary.updated_count > 0:
                     logger.info(
                         f"Successfully synced {summary.updated_count} beatmaps "
@@ -369,7 +403,21 @@ class LazerDaemon:
                     )
             else:
                 if "Safe flush window is closed" in (summary.error or ""):
-                    logger.debug("Safe flush window closed (osu!lazer running). Waiting for next cycle...")
+                    now = time.time()
+                    if summary.evaluated_count > 0:
+                        logger.info(
+                            f"Pre-evaluated {summary.evaluated_count} new 7K beatmap(s) into cache while osu!lazer is running."
+                        )
+
+                    if not waiting_for_lock or (now - last_lock_log_time >= 60.0):
+                        logger.info(
+                            "Safe flush window is closed: osu!lazer is running (database lock held). "
+                            "Daemon will automatically flush updates once osu!lazer closes or releases lock."
+                        )
+                        waiting_for_lock = True
+                        last_lock_log_time = now
+                    else:
+                        logger.debug("Safe flush window closed (osu!lazer running). Waiting for next cycle...")
                 else:
                     logger.warning(f"Sync cycle warning: {summary.error}")
 

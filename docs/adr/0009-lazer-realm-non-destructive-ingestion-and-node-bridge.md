@@ -12,8 +12,8 @@
    - 直接介入 osu!lazer 的本地数据库 `client.realm`，将目标 7K 谱面（`Ruleset.OnlineID == 3 && Difficulty.CircleSize == 7`）的 `BeatmapInfo.StarRating` 原地改写为 `proj7k` 合成的 Intrinsic SR。
 
 2. **游戏内交互与呈现三位一体 (Biaxial Presentation Contract)**：
-   - **难度名直观标注**：在 `BeatmapInfo.DifficultyName` 追加后缀 `{original} ({SR:.2f}★ {Dominant})`（如 `Hard (6.42★ Jack)`），并在更新时利用正则表达式 `\s*\(\d+\.\d+★\s+[A-Za-z_]+\)$` 实现幂等清洗替换。
-   - **离散星级桶标签注入**：在 `BeatmapMetadata.Tags` 注入 `dominant_{tech}` 与离散化分值桶（如 `jack_6★`、`tech_5★`），绕过 osu!lazer 搜索解析器无法解析自定义属性动态数值比较（如 `jack>6.0`）的局限，实现搜索栏文本秒搜。
+   - **难度名直观标注**：在 `BeatmapInfo.DifficultyName` 追加后缀 `{original} ({SR:.2f}★ {Dan} {Dominant})`（如 `Hard (6.42★ 7th Jack)`），并在更新时利用正则表达式 `\s*\(\d+\.\d+★(?:\s+[A-Za-z0-9_]+){1,2}\)$` 实现历史旧格式与新格式的双向幂等清洗替换。
+   - **离散星级桶与段位标签注入**：在 `BeatmapMetadata.Tags` 注入 `dominant_{tech}`、离散化星级桶（如 `jack_6★`）以及所属段位标签 `dan_{tier}`（如 `dan_7th`、`dan_gamma`），绕过 osu!lazer 搜索解析器无法解析自定义属性动态数值比较（如 `jack>6.0`）的局限，实现搜索栏文本秒搜（可直接通过 `dan_7th` 精准过滤对应段位铺面）。
    - **双轴矩阵收藏夹**：在 `BeatmapCollection` 中自动同步 8 大技法专项收藏夹（`7K Jack`、`7K Tech` 等）与 4 档段位阶梯收藏夹（`7K Dan 00th-03rd` 等），共计 12 个聚合收藏夹。
 
 3. **安全刷盘窗与并发互斥防护 (Safe Flush Window)**：

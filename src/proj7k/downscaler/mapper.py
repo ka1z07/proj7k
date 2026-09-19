@@ -22,29 +22,12 @@ from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar, compute_technique_rada
 from proj7k.rating import RatingOptions
 from proj7k.strain import compute_raw_strain_star_rating
 
-CANONICAL_DAN_TIERS: List[str] = [
-    "0th", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
-    "8th", "9th", "10th", "Gamma", "Azimuth", "Zenith", "Stellium",
-]
-
-# Canonical Dan benchmark star ratings (ADR-0011, CONTEXT.md)
-CANONICAL_DAN_SR: Dict[str, float] = {
-    "0th": 3.2,
-    "1st": 3.7,
-    "2nd": 4.1,
-    "3rd": 4.5,
-    "4th": 4.9,
-    "5th": 5.3,
-    "6th": 5.7,
-    "7th": 6.1,
-    "8th": 6.5,
-    "9th": 6.9,
-    "10th": 7.4,
-    "Gamma": 8.0,
-    "Azimuth": 8.8,
-    "Zenith": 9.7,
-    "Stellium": 10.5,
-}
+from proj7k.dan import (
+    CANONICAL_DAN_SR,
+    CANONICAL_DAN_TIERS,
+    estimate_canonical_dan,
+    parse_dan_tier,
+)
 
 TECH_ALIAS_MAP: Dict[str, str] = {
     "jack": "Regular Jack",
@@ -92,42 +75,6 @@ def normalize_technique_name(tech: str) -> str:
     return tech
 
 
-def parse_dan_tier(dan_str: str) -> str:
-    """
-    Parses a user-supplied Dan tier string into canonical Dan name.
-    Supports formats like '7th', '7th Dan', 'Dan 7', '7', 'p-7th', 'Gamma', etc.
-    """
-    clean = dan_str.strip().lower()
-    clean = re.sub(r"^\[?p-?", "", clean)
-    clean = re.sub(r"\]$", "", clean)
-    clean = clean.replace("dan", "").strip()
-
-    tier_synonyms: Dict[str, str] = {
-        "0": "0th", "0th": "0th", "zero": "0th", "zeroth": "0th",
-        "1": "1st", "1st": "1st", "first": "1st",
-        "2": "2nd", "2nd": "2nd", "second": "2nd",
-        "3": "3rd", "3rd": "3rd", "third": "3rd",
-        "4": "4th", "4th": "4th", "fourth": "4th",
-        "5": "5th", "5th": "5th", "fifth": "5th",
-        "6": "6th", "6th": "6th", "sixth": "6th",
-        "7": "7th", "7th": "7th", "seventh": "7th",
-        "8": "8th", "8th": "8th", "eighth": "8th",
-        "9": "9th", "9th": "9th", "ninth": "9th",
-        "10": "10th", "10th": "10th", "tenth": "10th",
-        "gamma": "Gamma",
-        "azimuth": "Azimuth",
-        "zenith": "Zenith",
-        "stellium": "Stellium",
-    }
-
-    if clean in tier_synonyms:
-        return tier_synonyms[clean]
-
-    for t in CANONICAL_DAN_TIERS:
-        if t.lower() == clean:
-            return t
-
-    raise ValueError(f"Unrecognized Dan tier: '{dan_str}'")
 
 
 def star_rating_to_strain(

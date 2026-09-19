@@ -462,8 +462,8 @@ def test_sync_manager_incremental_preserves_existing_collections(tmp_path: Path)
         md5_hash="md5-old",
         file_hash="hash-old",
         star_rating=5.50,
-        difficulty_name="Hard (5.50★ Jack)",
-        tags="dominant_jack jack_5★",
+        difficulty_name="Hard (5.50★ 5th Jack)",
+        tags="dominant_jack jack_5★ dan_5th",
         title="Old Song",
         artist="Artist",
         ruleset_id=3,
@@ -518,6 +518,68 @@ def test_sync_manager_incremental_preserves_existing_collections(tmp_path: Path)
     # rec-new is also in its respective collections
     found_new = any("md5-new" in hashes for hashes in collections.values())
     assert found_new is True
+
+
+def test_sync_manager_preheats_when_locked(tmp_path: Path):
+    """
+    User symptom 3 (ADR-0009): While osu! is running and lock is held,
+    sync_once with preheat_on_locked=True should still read beatmaps in read-only mode
+    and preheat evaluation into cache, returning success=False (window closed) but evaluated_count > 0.
+    """
+    import fcntl
+    realm_file = tmp_path / "client.realm"
+    realm_file.touch()
+    lock_file = tmp_path / "client.realm.lock"
+    lock_file.touch()
+    files_dir = tmp_path / "files"
+    files_dir.mkdir(parents=True)
+
+    # 1 new 7K beatmap
+    h = "abc12345"
+    osu_file = files_dir / h
+    osu_file.write_text(
+        "osu file format v14\n[General]\nMode: 3\n[Difficulty]\nCircleSize: 7\n[HitObjects]\n"
+        "64,192,1000,1,0,0:0:0:0:\n"
+    )
+    rec = LazerBeatmapRecord(
+        id="rec-1",
+        hash=h,
+        md5_hash="md5-1",
+        file_hash=h,
+        star_rating=1.0,
+        difficulty_name="Normal",
+        tags="",
+        title="Title",
+        artist="Artist",
+        ruleset_id=3,
+        circle_size=7.0,
+    )
+
+    mock_bridge = MagicMock(spec=RealmBridgeClient)
+    mock_bridge.dump_7k_beatmaps.return_value = [rec]
+
+    # Hold the lock
+    with open(lock_file, "r+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            opts = SyncOptions(
+                realm_path=realm_file,
+                files_dir=files_dir,
+                cache_dir=tmp_path / "cache",
+                lock_path=lock_file,
+                auto_setup=False,
+            )
+            manager = LazerSyncManager(options=opts, bridge_client=mock_bridge)
+            summary = manager.sync_once(preheat_on_locked=True)
+
+            assert summary.success is False
+            assert "Safe flush window is closed" in summary.error
+            assert summary.evaluated_count == 1
+            # Batch update was NOT called because window was closed
+            mock_bridge.apply_batch_update.assert_not_called()
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
 
 
 

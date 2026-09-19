@@ -145,9 +145,19 @@ def update_practice_metadata(
         k: dict(v) for k, v in beatmap.extra_sections.items()
     }
 
-    if "Metadata" in new_bm.extra_sections:
-        new_bm.extra_sections["Metadata"]["Version"] = new_version
-        new_bm.extra_sections["Metadata"]["Tags"] = new_tags
+    if "Metadata" not in new_bm.extra_sections:
+        new_bm.extra_sections["Metadata"] = {}
+
+    meta = new_bm.extra_sections["Metadata"]
+    meta["Version"] = new_version
+    meta["Tags"] = new_tags
+    # Enforce Independent Local Beatmap identity (ADR-0011 / CONTEXT.md)
+    # BeatmapID: 0 marks an unsubmitted local diff, BeatmapSetID: -1 marks an independent local set
+    meta["BeatmapID"] = "0"
+    meta["BeatmapSetID"] = "-1"
+    # Remove any online IDs to prevent osu! client from replacing or conflicting with original online beatmap
+    for online_key in ["BeatmapOnlineID", "BeatmapSetOnlineID"]:
+        meta.pop(online_key, None)
 
     return new_bm
 

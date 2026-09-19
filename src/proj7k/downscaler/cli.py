@@ -115,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=None,
-        help="Directory to write derivative practice beatmap(s). Defaults to same folder as original (or 'practice_maps' for URL inputs).",
+        help="Directory to write derivative practice beatmap(s) and .osz package(s). Defaults to 'practice_maps'.",
     )
     out_group.add_argument(
         "--output",
@@ -126,8 +126,14 @@ def build_parser() -> argparse.ArgumentParser:
     out_group.add_argument(
         "--package-osz",
         action="store_true",
+        default=True,
+        help="Package practice beatmap into a standalone .osz archive (enabled by default unless --no-package is specified).",
+    )
+    out_group.add_argument(
+        "--no-package",
+        action="store_true",
         default=False,
-        help="Package practice beatmap into an .osz archive along with audio and background image.",
+        help="Disable .osz packaging and only emit raw .osu beatmap file(s).",
     )
     out_group.add_argument(
         "--osz-output",
@@ -582,7 +588,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
 
     effective_output_dir = args.output_dir
-    if effective_output_dir is None and is_url_or_id:
+    if effective_output_dir is None:
         effective_output_dir = Path("practice_maps")
 
     downscale_opts = DownscaleOptions(
@@ -596,7 +602,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         min_cosine_similarity=args.min_cosine_similarity,
     )
 
-    results: List[Tuple[DownscaleResult, Optional[Path]]] = []
+    results: List[Tuple[DownscaleResult, Optional[Path], Path]] = []
     failed_count = 0
 
     for idx, path in enumerate(beatmap_files, start=1):
@@ -608,7 +614,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 explicit_output=args.output if len(beatmap_files) == 1 else None,
                 dry_run=args.dry_run,
             )
-            results.append((res, out_path))
+            results.append((res, out_path, path))
         except Exception as e:
             logger.error(f"Failed to downscale '{path}': {e}")
             failed_count += 1
@@ -617,35 +623,76 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Error: No beatmaps were successfully downscaled.", file=sys.stderr)
         return 1
 
-    # Packaging into .osz archive if requested or if from URL/ID
-    should_package_osz = (args.package_osz or bool(args.osz_output) or is_url_or_id) and not args.dry_run
+    # Standalone practice .osz packaging is enabled by default unless --no-package or --dry-run
+    should_package_osz = (not args.no_package) and not args.dry_run
 
     osz_map: Dict[Path, Path] = {}
     if should_package_osz:
-        for res, out_p in results:
+        for res, out_p, src_p in results:
             if not out_p or not out_p.exists():
                 continue
             osz_target = args.osz_output if (args.osz_output and len(results) == 1) else out_p.with_suffix(".osz")
 
-            # Resolve audio & bg
+            # 1. Start with resolved assets if available (from URL / lazer DB lookup)
             audio_path = resolved_asset.audio_path if resolved_asset else None
-            audio_filename = resolved_asset.audio_filename if resolved_asset else "audio.mp3"
+            audio_filename = resolved_asset.audio_filename if resolved_asset else (res.downscaled_beatmap.audio_filename or "audio.mp3")
             bg_path = resolved_asset.bg_path if resolved_asset else None
             bg_filename = resolved_asset.bg_filename if resolved_asset else "bg.png"
 
-            # If not already found, look in out_p or source directory
-            if not audio_path and out_p.parent.exists():
-                for f in out_p.parent.iterdir():
-                    if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
-                        audio_path = f
-                        audio_filename = f.name
+            # 2. Check source directory (src_p.parent) and output directory (out_p.parent)
+            search_dirs = [src_p.parent]
+            if out_p.parent != src_p.parent:
+                search_dirs.append(out_p.parent)
+
+            # Audio resolution
+            if not audio_path or not audio_path.exists():
+                candidate_audio = None
+                expected_audio = res.downscaled_beatmap.audio_filename or "audio.mp3"
+                for s_dir in search_dirs:
+                    if (s_dir / expected_audio).is_file():
+                        candidate_audio = s_dir / expected_audio
+                        audio_filename = expected_audio
                         break
-            if not bg_path and out_p.parent.exists():
-                for f in out_p.parent.iterdir():
-                    if f.suffix.lower() in [".png", ".jpg", ".jpeg"]:
-                        bg_path = f
-                        bg_filename = f.name
-                        break
+                if not candidate_audio:
+                    for s_dir in search_dirs:
+                        if s_dir.exists():
+                            for f in s_dir.iterdir():
+                                if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
+                                    candidate_audio = f
+                                    audio_filename = f.name
+                                    break
+                        if candidate_audio:
+                            break
+                audio_path = candidate_audio
+
+            # Background resolution
+            if not bg_path or not bg_path.exists():
+                candidate_bg = None
+                expected_bg = None
+                for ev in res.downscaled_beatmap.raw_events:
+                    ev_str = ev.strip()
+                    if (ev_str.startswith("0,0,") or ev_str.startswith("Video,")) and '"' in ev_str:
+                        parts = ev_str.split('"')
+                        if len(parts) >= 2 and parts[1].strip():
+                            expected_bg = parts[1].strip()
+                            break
+                if expected_bg:
+                    for s_dir in search_dirs:
+                        if (s_dir / expected_bg).is_file():
+                            candidate_bg = s_dir / expected_bg
+                            bg_filename = expected_bg
+                            break
+                if not candidate_bg:
+                    for s_dir in search_dirs:
+                        if s_dir.exists():
+                            for f in s_dir.iterdir():
+                                if f.suffix.lower() in [".png", ".jpg", ".jpeg"]:
+                                    candidate_bg = f
+                                    bg_filename = f.name
+                                    break
+                        if candidate_bg:
+                            break
+                bg_path = candidate_bg
 
             try:
                 created_osz = package_into_osz(
@@ -663,8 +710,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # Synchronization with osu!lazer if requested
     sync_result: Optional[LazerPracticeSyncResult] = None
     if args.sync_lazer and not args.dry_run:
+        # Trigger native OS import if on macOS (Q3 - A)
+        if sys.platform == "darwin" and osz_map:
+            for osz_file in osz_map.values():
+                if osz_file.exists():
+                    logger.info(f"Triggering osu!lazer native import via system open: {osz_file.name}")
+                    try:
+                        import subprocess
+                        subprocess.run(["open", str(osz_file)], check=False)
+                    except Exception as e:
+                        logger.warning(f"Failed to trigger system open for {osz_file}: {e}")
+
         sync_result = sync_practice_beatmaps_to_lazer(
-            results=[r for r, _ in results],
+            results=[r for r, _, _ in results],
             realm_path=args.realm,
             lock_path=args.lock_path,
         )
@@ -683,7 +741,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "output_file": str(out_p) if out_p else None,
                     "osz_file": str(osz_map.get(out_p)) if (out_p and out_p in osz_map) else None,
                 }
-                for res, out_p in results
+                for res, out_p, _ in results
             ],
             "sync": (
                 {
@@ -698,11 +756,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }
         print(json.dumps(output_data, indent=2, ensure_ascii=False))
     else:
-        for res, out_path in results:
+        for res, out_path, _ in results:
             osz_p = osz_map.get(out_path) if out_path else None
             print(format_downscale_report(res, output_path=out_path, sync_result=sync_result, osz_path=osz_p))
 
     return 0
+
 
 
 if __name__ == "__main__":

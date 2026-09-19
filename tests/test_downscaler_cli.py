@@ -61,7 +61,7 @@ def test_cli_missing_target(tmp_path, capsys):
 
 def test_cli_single_beatmap_success(tmp_path, capsys):
     osu_file = _create_synthetic_osu_file(tmp_path / "test.osu")
-    code = main(["--input", str(osu_file), "--target-dan", "7th"])
+    code = main(["--input", str(osu_file), "--target-dan", "7th", "--output-dir", str(tmp_path)])
     assert code == 0
 
     captured = capsys.readouterr()
@@ -69,14 +69,20 @@ def test_cli_single_beatmap_success(tmp_path, capsys):
     assert "Star Rating" in captured.out
     assert "8-DIMENSION TECHNIQUE RADAR" in captured.out.upper()
 
-    # Verify output file generated in same directory
-    practice_files = list(tmp_path.glob("*.osu"))
-    assert len(practice_files) == 2
-    derivative_file = [f for f in practice_files if f.name != "test.osu"][0]
+    # Verify both derivative .osu and standalone .osz generated in output directory
+    practice_files = [f for f in tmp_path.glob("*.osu") if f.name != "test.osu"]
+    assert len(practice_files) == 1
+    osz_files = list(tmp_path.glob("*.osz"))
+    assert len(osz_files) == 1
+
+    derivative_file = practice_files[0]
     parsed = parse_osu_7k(str(derivative_file))
     assert "[P-7th" in parsed.version
     assert "proj7k_downscaled" in parsed.tags
     assert "target_7th" in parsed.tags
+    # Verify Independent Local Beatmap metadata (BeatmapID=0, BeatmapSetID=-1)
+    assert parsed.extra_sections["Metadata"].get("BeatmapID") == "0"
+    assert parsed.extra_sections["Metadata"].get("BeatmapSetID") == "-1"
 
 
 def test_cli_output_dir_and_target_sr(tmp_path, capsys):
@@ -107,6 +113,7 @@ def test_cli_batch_directory(tmp_path, capsys):
     code = main([
         "--input", str(songs_dir),
         "--target-dan", "6th",
+        "--output-dir", str(songs_dir),
     ])
     assert code == 0
 
@@ -299,6 +306,8 @@ def test_cli_subprocess_invocation(tmp_path):
         str(osu_file),
         "--target-dan",
         "7th",
+        "--output-dir",
+        str(tmp_path),
     ]
     proc = subprocess.run(
         cmd,
@@ -312,3 +321,36 @@ def test_cli_subprocess_invocation(tmp_path):
     # Verify file was written
     out_files = [f for f in tmp_path.glob("*.osu") if f.name != "subproc.osu"]
     assert len(out_files) == 1
+    out_osz = list(tmp_path.glob("*.osz"))
+    assert len(out_osz) == 1
+
+
+def test_cli_default_practice_maps_and_osz(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    osu_file = _create_synthetic_osu_file(tmp_path / "origin_default.osu")
+    code = main([
+        "--input", str(osu_file),
+        "--target-dan", "7th",
+    ])
+    assert code == 0
+    practice_dir = tmp_path / "practice_maps"
+    assert practice_dir.exists()
+    osu_in_practice = list(practice_dir.glob("*.osu"))
+    assert len(osu_in_practice) == 1
+    osz_in_practice = list(practice_dir.glob("*.osz"))
+    assert len(osz_in_practice) == 1
+
+
+def test_cli_no_package_flag(tmp_path):
+    osu_file = _create_synthetic_osu_file(tmp_path / "raw_export.osu")
+    code = main([
+        "--input", str(osu_file),
+        "--target-dan", "7th",
+        "--output-dir", str(tmp_path),
+        "--no-package",
+    ])
+    assert code == 0
+    practice_files = [f for f in tmp_path.glob("*.osu") if f.name != "raw_export.osu"]
+    assert len(practice_files) == 1
+    osz_files = list(tmp_path.glob("*.osz"))
+    assert len(osz_files) == 0

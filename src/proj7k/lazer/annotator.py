@@ -14,14 +14,15 @@ from proj7k.lazer.bridge import (
     BeatmapUpdatePayload,
     LazerBeatmapRecord,
 )
+from proj7k.dan import estimate_canonical_dan
 
 # Regular expression matching injected difficulty name suffix
-# Format: " ({star_rating:.2f}★ {dominant_title})"
-INJECTED_SUFFIX_PATTERN = re.compile(r"\s*\(\d+\.\d+★\s+[A-Za-z_]+\)$")
+# Format: " ({star_rating:.2f}★ {dominant_title})" or " ({star_rating:.2f}★ {dan_tier} {dominant_title})"
+INJECTED_SUFFIX_PATTERN = re.compile(r"\s*\(\d+\.\d+★(?:\s+[A-Za-z0-9_]+){1,2}\)$")
 
 # Regular expression matching injected binned skill tags
-# e.g., "dominant_jack", "jack_6★", "dominant_ln_general", "ln_general_7★"
-BINNED_TAG_PATTERN = re.compile(r"^(?:dominant_[a-z0-9_]+|[a-z0-9_]+_\d+★)$")
+# e.g., "dominant_jack", "jack_6★", "dan_7th", "dan_gamma"
+BINNED_TAG_PATTERN = re.compile(r"^(?:dominant_[a-z0-9_]+|[a-z0-9_]+_\d+★|dan_[a-z0-9_]+)$")
 
 # Canonical technique title mapping for the 8 technique radar dimensions
 TECHNIQUE_TITLE_MAP: Dict[str, str] = {
@@ -104,28 +105,36 @@ def format_injected_difficulty_name(
     difficulty_name: str,
     star_rating: float,
     dominant_title: str,
+    dan_tier: Optional[str] = None,
 ) -> str:
     """
-    Format a difficulty name with injected star rating and dominant technique suffix.
+    Format a difficulty name with injected star rating, canonical Dan tier, and dominant technique suffix.
     First strips any existing injected suffix to guarantee idempotence.
+    Format: "{base} ({star_rating:.2f}★ {dan_tier} {title})"
     """
     base = strip_injected_suffix(difficulty_name)
     title = format_dominant_title(dominant_title)
-    suffix = f"({star_rating:.2f}★ {title})"
+    tier = (dan_tier or estimate_canonical_dan(star_rating)).strip()
+    suffix = f"({star_rating:.2f}★ {tier} {title})"
     if base:
         return f"{base} {suffix}"
     return suffix
 
 
-def generate_binned_skill_tags(dominant_tech: str, star_rating: float) -> List[str]:
+def generate_binned_skill_tags(
+    dominant_tech: str,
+    star_rating: float,
+    dan_tier: Optional[str] = None,
+) -> List[str]:
     """
     Generate discrete skill bucket tags for searchability in osu!lazer.
-    Returns [f"dominant_{tech_key}", f"{tech_key}_{floor_star}★"].
+    Returns [f"dominant_{tech_key}", f"{tech_key}_{floor_star}★", f"dan_{clean_dan}"].
     Properly sanitizes spaces to underscores to maintain valid space-delimited tags.
     """
     tech_key = _normalize_tech_key(dominant_tech)
     floor_star = max(0, int(star_rating))
-    return [f"dominant_{tech_key}", f"{tech_key}_{floor_star}★"]
+    tier = (dan_tier or estimate_canonical_dan(star_rating)).strip().lower().replace(" ", "_")
+    return [f"dominant_{tech_key}", f"{tech_key}_{floor_star}★", f"dan_{tier}"]
 
 
 def strip_binned_skill_tags(tags: str) -> str:
@@ -143,13 +152,14 @@ def inject_binned_skill_tags(
     existing_tags: str,
     dominant_tech: str,
     star_rating: float,
+    dan_tier: Optional[str] = None,
 ) -> str:
     """
     Inject discrete skill bucket tags into existing tags string without duplicating.
     Replaces any old proj7k bucket tags with the new ones.
     """
     base_tags = strip_binned_skill_tags(existing_tags)
-    new_tags = generate_binned_skill_tags(dominant_tech, star_rating)
+    new_tags = generate_binned_skill_tags(dominant_tech, star_rating, dan_tier=dan_tier)
     tokens = base_tags.split() if base_tags else []
     for tag in new_tags:
         if tag not in tokens:

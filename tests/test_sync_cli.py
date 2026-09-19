@@ -182,3 +182,79 @@ def test_cli_daemon_invocation():
         mock_run_daemon.assert_called_once()
         args, kwargs = mock_run_daemon.call_args
         assert kwargs.get("interval_s") == 2.5 or (len(args) >= 2 and args[1] == 2.5)
+
+
+def test_cli_positional_actions():
+    """Verify that positional subcommands (daemon, once, revert, setup) are supported."""
+    with patch("proj7k.sync.run_daemon") as mock_run_daemon:
+        assert main(["daemon", "--interval", "1.0"]) == 0
+        mock_run_daemon.assert_called_once()
+
+    with patch("proj7k.sync.LazerSyncManager") as mock_mgr_cls:
+        instance = mock_mgr_cls.return_value
+        instance.sync_once.return_value = SyncSummary(success=True)
+        assert main(["once"]) == 0
+        instance.sync_once.assert_called_once()
+
+    with patch("proj7k.sync.LazerSyncManager") as mock_mgr_cls:
+        instance = mock_mgr_cls.return_value
+        instance.revert_all.return_value = BatchUpdateResult(success=True)
+        assert main(["revert"]) == 0
+        instance.revert_all.assert_called_once()
+
+    with patch("proj7k.sync.RealmBridgeClient") as mock_bridge_cls:
+        instance = mock_bridge_cls.return_value
+        instance.ensure_installed.return_value = None
+        assert main(["setup"]) == 0
+        instance.ensure_installed.assert_called_once()
+
+
+def test_daemon_reports_lock_status_at_info_level(tmp_path: Path):
+    """When osu! is running and holds the lock, LazerDaemon logs an informative INFO message."""
+    import fcntl
+    import io
+    import logging
+    realm_file = tmp_path / "client.realm"
+    realm_file.touch()
+    lock_file = tmp_path / "client.realm.lock"
+    lock_file.touch()
+    files_dir = tmp_path / "files"
+    files_dir.mkdir(parents=True)
+
+    with open(lock_file, "r+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            log_capture = io.StringIO()
+            handler = logging.StreamHandler(log_capture)
+            logger = logging.getLogger("proj7k.lazer.daemon")
+            logger.setLevel(logging.INFO)
+            logger.addHandler(handler)
+
+            opts = SyncOptions(
+                realm_path=realm_file,
+                files_dir=files_dir,
+                lock_path=lock_file,
+                auto_setup=False,
+            )
+            from proj7k.lazer.daemon import LazerSyncManager
+            manager = LazerSyncManager(options=opts)
+            daemon = LazerDaemon(manager=manager, interval_s=0.01)
+
+            stop_event = threading.Event()
+
+            def stop_soon():
+                time.sleep(0.05)
+                stop_event.set()
+
+            t = threading.Thread(target=stop_soon)
+            t.start()
+            daemon.run(stop_event=stop_event)
+            t.join()
+
+            logger.removeHandler(handler)
+            output = log_capture.getvalue()
+            assert "Safe flush window is closed" in output or "osu!lazer is running" in output, (
+                f"Expected lock status to be visible in INFO logs, got:\n{output}"
+            )
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)

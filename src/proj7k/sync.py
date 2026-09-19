@@ -33,6 +33,14 @@ def build_parser() -> argparse.ArgumentParser:
         description="proj7k - osu!lazer database synchronization and background daemon.",
     )
 
+    parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["once", "daemon", "revert", "setup"],
+        default=None,
+        help="Optional positional action: once (default), daemon, revert, setup.",
+    )
+
     action_group = parser.add_argument_group("Actions (default: --once)")
     action_group.add_argument(
         "--once",
@@ -120,9 +128,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     cache_dir = args.cache_dir
     lock_path = args.lock_path
 
+    pos_action = args.action
+    is_setup = args.setup or (pos_action == "setup")
+    is_revert = args.revert or (pos_action == "revert")
+    is_daemon = args.daemon or (pos_action == "daemon")
+    is_once = args.once or (pos_action == "once") or (not is_setup and not is_revert and not is_daemon)
 
-    # 1. Action: --setup
-    if args.setup:
+    # 1. Action: setup
+    if is_setup:
         logging.info("Setting up Node.js Realm companion bridge environment...")
         bridge = RealmBridgeClient(default_realm_path=realm_path)
         try:
@@ -145,8 +158,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     manager = LazerSyncManager(options=options)
 
-    # 2. Action: --revert
-    if args.revert:
+    # 2. Action: revert
+    if is_revert:
         logging.info(f"Reverting all proj7k modifications on '{realm_path}'...")
         res = manager.revert_all()
         if res.success:
@@ -160,8 +173,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(err, file=sys.stderr)
             return 1
 
-    # 3. Action: --daemon
-    if args.daemon:
+    # 3. Action: daemon
+    if is_daemon:
         stop_event = threading.Event()
 
         def _handle_signal(signum, frame):
@@ -178,7 +191,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         run_daemon(manager=manager, interval_s=args.interval, stop_event=stop_event)
         return 0
 
-    # 4. Action: --once (default)
+    # 4. Action: once (default)
     logging.info(f"Synchronizing osu!lazer database at '{realm_path}'...")
     summary = manager.sync_once(wait_for_lock=args.wait)
     if summary.success:

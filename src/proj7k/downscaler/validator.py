@@ -123,18 +123,18 @@ class DualGateValidator:
         gate2_passed = True
         gate2_violations: List[str] = []
 
-        # 2a. Rice vs LN mode collapse check:
-        if feat_orig and feat_orig.hold_pct < 0.15:
-            if feat_downscaled.hold_pct > 0.25:
+        # 2a. Rice vs LN mode collapse check (hold_pct in percentage [0.0, 100.0]%):
+        if feat_orig and feat_orig.hold_pct < 15.0:
+            if feat_downscaled.hold_pct > 25.0:
                 gate2_passed = False
                 gate2_violations.append(
-                    f"Rice chart mutated into LN: hold_pct jumped from {feat_orig.hold_pct:.3f} to {feat_downscaled.hold_pct:.3f}"
+                    f"Rice chart mutated into LN: hold_pct jumped from {feat_orig.hold_pct:.3f}% to {feat_downscaled.hold_pct:.3f}%"
                 )
-        if feat_orig and feat_orig.hold_pct >= 0.40:
-            if feat_downscaled.hold_pct < 0.15:
+        if feat_orig and feat_orig.hold_pct >= 40.0:
+            if feat_downscaled.hold_pct < 15.0:
                 gate2_passed = False
                 gate2_violations.append(
-                    f"LN chart lost holds: hold_pct dropped from {feat_orig.hold_pct:.3f} to {feat_downscaled.hold_pct:.3f}"
+                    f"LN chart lost holds: hold_pct dropped from {feat_orig.hold_pct:.3f}% to {feat_downscaled.hold_pct:.3f}%"
                 )
 
         # 2b. Minimum note count sanity check (not wiped to empty)
@@ -145,18 +145,24 @@ class DualGateValidator:
         # 2c. Target Dan Microscopic Centroid Confidence Band Verification
         if target and target.features:
             tgt_hold = target.features.get("hold_pct", 0.0)
-            # If target specifies pure Rice chart (hold_pct <= 0.05), downscaled chart must satisfy hold_pct <= 0.20
-            if tgt_hold <= 0.05 and feat_downscaled.hold_pct > 0.20:
+            orig_is_rice = (feat_orig is None) or (feat_orig.hold_pct <= 20.0)
+            orig_is_ln = (feat_orig is None) or (feat_orig.hold_pct >= 25.0)
+
+            # If target specifies pure Rice chart (hold_pct <= 5.0%), downscaled chart must satisfy hold_pct <= 20.0%
+            # (Only enforced if original chart was also a rice chart)
+            if orig_is_rice and tgt_hold <= 5.0 and feat_downscaled.hold_pct > 20.0:
                 gate2_passed = False
                 gate2_violations.append(
-                    f"Hold percentage {feat_downscaled.hold_pct:.3f} exceeded target Rice confidence ceiling 0.20"
+                    f"Hold percentage {feat_downscaled.hold_pct:.3f}% exceeded target Rice confidence ceiling 20.0%"
                 )
-            # If target specifies LN chart (hold_pct >= 0.30), downscaled chart must satisfy hold_pct >= 0.15
-            if tgt_hold >= 0.30 and feat_downscaled.hold_pct < 0.15:
+            # If target specifies LN chart (hold_pct >= 30.0%), downscaled chart must satisfy hold_pct >= 15.0%
+            # (Only enforced if original chart was also an LN chart)
+            if orig_is_ln and tgt_hold >= 30.0 and feat_downscaled.hold_pct < 15.0:
                 gate2_passed = False
                 gate2_violations.append(
-                    f"Hold percentage {feat_downscaled.hold_pct:.3f} fell below target LN confidence floor 0.15"
+                    f"Hold percentage {feat_downscaled.hold_pct:.3f}% fell below target LN confidence floor 15.0%"
                 )
+
 
         overall_passed = gate1_passed and gate2_passed
 

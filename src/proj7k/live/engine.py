@@ -16,41 +16,15 @@ from proj7k.rating import synthesize_star_rating
 from proj7k.strain import compute_dual_hand_strain
 
 
+from proj7k.dan import estimate_canonical_dan
+
+
 def estimate_dan_tier(star_rating: float) -> str:
     """
     Estimates canonical Jinjin 7K Dan benchmark tier from intrinsic star rating.
-    Anchored to [0th Dan ~ 3.5★, 5th Dan ~ 5.5★, 10th Dan ~ 7.5★, Stellium >= 10.2★].
+    Delegates directly to canonical proj7k.dan.estimate_canonical_dan.
     """
-    if star_rating < 3.5:
-        return "0th Dan"
-    elif star_rating < 3.9:
-        return "1st Dan"
-    elif star_rating < 4.3:
-        return "2nd Dan"
-    elif star_rating < 4.7:
-        return "3rd Dan"
-    elif star_rating < 5.1:
-        return "4th Dan"
-    elif star_rating < 5.5:
-        return "5th Dan"
-    elif star_rating < 5.9:
-        return "6th Dan"
-    elif star_rating < 6.3:
-        return "7th Dan"
-    elif star_rating < 6.7:
-        return "8th Dan"
-    elif star_rating < 7.1:
-        return "9th Dan"
-    elif star_rating < 7.6:
-        return "10th Dan"
-    elif star_rating < 8.3:
-        return "Gamma"
-    elif star_rating < 9.2:
-        return "Azimuth"
-    elif star_rating < 10.2:
-        return "Zenith"
-    else:
-        return "Stellium"
+    return estimate_canonical_dan(star_rating)
 
 
 class LiveEngine:
