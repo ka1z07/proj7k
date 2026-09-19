@@ -40,6 +40,21 @@ from proj7k.profiler.storage import (
     is_noise_match,
 )
 
+from proj7k.profiler.coach import (
+    CandidateBeatmap,
+    CoachingRecommendation,
+    CoachingStrategy,
+    PracticeBundleResult,
+    ProgressionTierResult,
+    extract_high_strain_slice,
+    format_bundle_report,
+    format_coaching_report,
+    generate_coaching_recommendations,
+    generate_targeted_practice_bundle,
+    is_dan_beatmap,
+    recall_candidate_beatmaps,
+)
+
 __all__ = [
     "ProfilerIngestionReport",
     "run_ingestion",
@@ -71,4 +86,16 @@ __all__ = [
     "DimensionMacroMetric",
     "MacroProfile",
     "aggregate_macro_profile",
+    "CoachingStrategy",
+    "CandidateBeatmap",
+    "CoachingRecommendation",
+    "ProgressionTierResult",
+    "PracticeBundleResult",
+    "is_dan_beatmap",
+    "recall_candidate_beatmaps",
+    "generate_coaching_recommendations",
+    "extract_high_strain_slice",
+    "generate_targeted_practice_bundle",
+    "format_coaching_report",
+    "format_bundle_report",
 ]

@@ -28,6 +28,7 @@ class LazerBeatmapRecord:
     artist: str
     ruleset_id: int
     circle_size: float
+    creator: str = ""
 
     @property
     def is_7k_mania(self) -> bool:
@@ -47,6 +48,7 @@ class LazerBeatmapRecord:
             artist=str(data.get("artist", "")),
             ruleset_id=int(data.get("ruleset_id", 0)),
             circle_size=float(data.get("circle_size", 0.0)),
+            creator=str(data.get("creator", "")),
         )
 
 

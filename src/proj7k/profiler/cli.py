@@ -16,6 +16,16 @@ from proj7k.profiler.aggregate import (
     MacroProfile,
     aggregate_macro_profile,
 )
+from proj7k.profiler.coach import (
+    CandidateBeatmap,
+    CoachingRecommendation,
+    CoachingStrategy,
+    PracticeBundleResult,
+    format_bundle_report,
+    format_coaching_report,
+    generate_coaching_recommendations,
+    generate_targeted_practice_bundle,
+)
 from proj7k.profiler.matcher import (
     HitAlignmentResult,
     HitJudgment,
@@ -494,6 +504,39 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Output structured JSON instead of human-readable text.",
     )
+    # Coaching recommendation flags (SPEC-P4.1-05)
+    parser.add_argument(
+        "--recommend",
+        nargs="?",
+        const="both",
+        default=None,
+        choices=["both", "bottleneck", "specialty"],
+        help="Generate adaptive coaching recommendations (bottleneck breaker, specialty push, or both).",
+    )
+    parser.add_argument(
+        "--realm",
+        type=str,
+        default=None,
+        help="Custom path to osu!lazer client.realm database for beatmap recall.",
+    )
+    # Practice bundle flags (SPEC-P4.1-05)
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Generate Three-Tier Targeted Practice Bundle (.osz) from high-strain section slice around fatal failure point.",
+    )
+    parser.add_argument(
+        "--bundle-dir",
+        type=str,
+        default=None,
+        help="Output directory for generated practice bundle .osz and .osu files (default: ./practice_bundles).",
+    )
+    parser.add_argument(
+        "--fatal-time",
+        type=float,
+        default=None,
+        help="Explicit fatal failure timestamp in ms to override automatic detection for practice slice extraction.",
+    )
     return parser
 
 
@@ -541,10 +584,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         finally:
             storage.close()
 
+        coaching_recs: Optional[List[CoachingRecommendation]] = None
+        if args.recommend:
+            realm_p = Path(args.realm) if args.realm else None
+            coaching_recs = generate_coaching_recommendations(
+                profile,
+                strategy=args.recommend,
+                realm_path=realm_p,
+            )
+
         if args.json:
-            print(json.dumps(profile.to_dict(), indent=2, ensure_ascii=False))
+            data = profile.to_dict()
+            if coaching_recs is not None:
+                data["coaching_recommendations"] = [r.to_dict() for r in coaching_recs]
+            print(json.dumps(data, indent=2, ensure_ascii=False))
         else:
             print(format_macro_profile(profile))
+            if coaching_recs:
+                print(format_coaching_report(coaching_recs))
         return 0
 
     # 3. Mode: Single Replay Ingestion
@@ -564,10 +621,86 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             except Exception:
                 pass
 
+        coaching_recs = None
+        if args.recommend:
+            realm_p = Path(args.realm) if args.realm else None
+            coaching_recs = generate_coaching_recommendations(
+                report,
+                strategy=args.recommend,
+                realm_path=realm_p,
+            )
+
+        bundle_result: Optional[PracticeBundleResult] = None
+        if args.bundle:
+            fatal_t = args.fatal_time
+            if fatal_t is None and report.pathology and report.pathology.cascade_precursor:
+                fatal_t = report.pathology.cascade_precursor.fatal_time_ms
+            if fatal_t is None and report.miss_count > 0:
+                for h in report.alignment_result.aligned_hits:
+                    if h.judgment == HitJudgment.MISS:
+                        fatal_t = h.hit_object_time_ms
+                        break
+
+            if fatal_t is not None:
+                beatmap_obj = parse_osu_7k(str(args.beatmap))
+                bm_dir = Path(args.beatmap).parent
+
+                cand_audio = None
+                expected_audio = beatmap_obj.audio_filename or "audio.mp3"
+                if (bm_dir / expected_audio).is_file():
+                    cand_audio = bm_dir / expected_audio
+                else:
+                    for f in bm_dir.iterdir():
+                        if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
+                            cand_audio = f
+                            break
+
+                cand_bg = None
+                for ev in beatmap_obj.raw_events:
+                    ev_str = ev.strip()
+                    if (ev_str.startswith("0,0,") or ev_str.startswith("Video,")) and '"' in ev_str:
+                        toks = ev_str.split('"')
+                        if len(toks) >= 2 and (bm_dir / toks[1].strip()).is_file():
+                            cand_bg = bm_dir / toks[1].strip()
+                            break
+
+                bundle_out = Path(args.bundle_dir or "./practice_bundles")
+
+                player_cap = None
+                dom_tech = None
+                if report.pathology and report.pathology.cascade_precursor:
+                    dom_tech = report.pathology.cascade_precursor.dominant_technique
+                if report.skill_radar:
+                    if dom_tech and dom_tech in report.skill_radar.dimensions:
+                        player_cap = report.skill_radar.dimensions[dom_tech].effective_capacity
+                    elif report.skill_radar.dominant_technique in report.skill_radar.dimensions:
+                        player_cap = report.skill_radar.dimensions[report.skill_radar.dominant_technique].effective_capacity
+
+                bundle_result = generate_targeted_practice_bundle(
+                    beatmap=beatmap_obj,
+                    fatal_time_ms=fatal_t,
+                    player_capacity=player_cap,
+                    dominant_technique=dom_tech,
+                    output_dir=bundle_out,
+                    audio_path=cand_audio,
+                    bg_path=cand_bg,
+                )
+            elif not args.json:
+                print("Notice: No fatal failure point detected in replay. Use --fatal-time <ms> to generate a practice bundle for an explicit section.", file=sys.stderr)
+
         if args.json:
-            print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+            data = report.to_dict()
+            if coaching_recs is not None:
+                data["coaching_recommendations"] = [r.to_dict() for r in coaching_recs]
+            if bundle_result is not None:
+                data["practice_bundle"] = bundle_result.to_dict()
+            print(json.dumps(data, indent=2, ensure_ascii=False))
         else:
             print(format_ingestion_report(report))
+            if coaching_recs:
+                print(format_coaching_report(coaching_recs))
+            if bundle_result:
+                print(format_bundle_report(bundle_result))
         return 0
 
     # If neither query nor ingestion args were provided
