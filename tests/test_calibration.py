@@ -86,9 +86,12 @@ def test_radar_scale_follows_rating_options_calibration():
     )
     assert rescaled.radar.dominant_score == pytest.approx(min(12.0, expected_sr_base), abs=1e-12)
     assert rescaled.star_rating != baseline.star_rating
-    # Every dimension of the vector is rescaled, not just the dominant one.
-    assert abs(rescaled.radar.tech - baseline.radar.tech) > 1.0
-    assert abs(rescaled.radar.stream - baseline.radar.stream) > 1.0
+    # Every dimension of the vector is rescaled, not just the dominant one. Asserted as a ratio
+    # rather than a star delta: what the calibration scales is each score's share of the anchor
+    # law, so the absolute move depends on how big that dimension happened to be — a fixed
+    # number of stars would be an assertion about the fixture's balance, not about the coupling.
+    assert rescaled.radar.tech > baseline.radar.tech * 1.5
+    assert rescaled.radar.stream > baseline.radar.stream * 1.5
 
 
 def test_backpressure_exponent_is_injectable():

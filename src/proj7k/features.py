@@ -95,6 +95,11 @@ class BeatmapFeatures:
     antiphase_count: int = 0
     antiphase_rate: float = 0.0
 
+    # Release articulation (see `_extract` step 5b)
+    isolated_tail_count: int = 0
+    isolated_tail_share: float = 0.0
+    release_lock_depth: float = 0.0
+
     # Action clock window and calibrated inverse score
     delta_t_action: float = 0.0
     inverse_score: float = 0.0
@@ -365,6 +370,46 @@ def extract_beatmap_features(
 
     antiphase_rate = _calc_rate(antiphase_count, duration_s)
 
+    # 5b. Release articulation: the tails that have to be timed on their own.
+    # Antiphase above counts lifts that coincide with a press elsewhere; those ride along with an
+    # action the hands are already making. A tail with nothing else pressed at its own tick has
+    # no such anchor and must be placed by itself — that isolated lift is what ADR-0008 calls
+    # 抬手时基窗口精度, and it is the quantity the LN Release axis reads.
+    isolated_tail_count = sum(
+        1
+        for ho in beatmap.hit_objects
+        if ho.note_type == NoteType.LN
+        and ho.end_time is not None
+        and not (set(notes_by_time.get(int(round(ho.end_time)), ())) - {ho.column})
+    )
+    isolated_tail_share = round(isolated_tail_count / ln_count, 4) if ln_count else 0.0
+
+    # 5c. How tied up the hand is when each lift has to happen (CONTEXT.md 自由度压制).
+    # A lift's difficulty is not the lift alone: it is the lift placed while the same hand is
+    # still holding other keys down — the 尾判难度 + 卡手 the Release ladder is built around. Read
+    # per tail against the LN intervals still open in that hand at the tail's own instant, and
+    # averaged over the tails rather than summed: the mean is a shape of the chart (how deep
+    # into a chord each release lands), while a per-second total mostly restates how dense the
+    # chart is — and restating density is what put this axis on top of every hold chart.
+    # An isolated tail (`isolated_tail_share` above) is one special case of this: nothing else
+    # is pressed anywhere, so nothing anchors the lift either.
+    ln_intervals: Dict[int, List[Tuple[float, float]]] = {}
+    for ho in beatmap.hit_objects:
+        if ho.note_type == NoteType.LN and ho.end_time is not None:
+            ln_intervals.setdefault(ho.column, []).append((ho.time, ho.end_time))
+    locked_lift_count = 0
+    for ho in beatmap.hit_objects:
+        if ho.note_type != NoteType.LN or ho.end_time is None:
+            continue
+        same_hand = (0, 1, 2) if ho.column in (0, 1, 2) else (4, 5, 6)
+        locked_lift_count += sum(
+            1
+            for column in same_hand
+            if column != ho.column
+            and any(start < ho.end_time < end for start, end in ln_intervals.get(column, ()))
+        )
+    release_lock_depth = round(locked_lift_count / ln_count, 4) if ln_count else 0.0
+
     effective_bpm = bpm if (bpm is not None and bpm > 0) else get_dominant_bpm(beatmap)
     delta_t_action = compute_action_window(effective_bpm)
     inverse_score = compute_inverse_score(mean_locked_fingers, bpm=effective_bpm, nps=avg_nps)
@@ -486,6 +531,9 @@ def extract_beatmap_features(
         lockout_profile=lockout_profile,
         antiphase_count=antiphase_count,
         antiphase_rate=antiphase_rate,
+        isolated_tail_count=isolated_tail_count,
+        isolated_tail_share=isolated_tail_share,
+        release_lock_depth=release_lock_depth,
         delta_t_action=delta_t_action,
         inverse_score=inverse_score,
         spatial_entropy=spatial_entropy,

@@ -151,14 +151,17 @@ _FEATURES = [
     ("_calc_rate", {0: 2, 4: 1}, "Zero-duration guard and reported-precision rounding.", {}),
     (
         "extract_beatmap_features",
-        {0: 70, 1: 41, 2: 8, 4: 16, 5: 4, 6: 3, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
-        "Indices, counts and 7-lane topology throughout; ms/s and bpm/beat-length conversions; "
-        "the percentage scaling of hold_pct; the two-class guards; and the 3-way binary/"
-        "ternary/irregular mixing entropy, whose class count is the literal 3.",
+        {0: 75, 1: 45, 2: 10, 4: 19, 5: 5, 6: 4, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
+        "Indices, counts and 7-lane topology throughout — including the left/right hand lane "
+        "tuples the release-articulation terms read, whose members are lane numbers, not "
+        "thresholds; ms/s and bpm/beat-length conversions; the percentage scaling of hold_pct; "
+        "the two-class guards; the counts of isolated LN tails and of same-hand locked keys; and "
+        "the 3-way binary/ternary/irregular mixing entropy, whose class count is the literal 3.",
         {
-            4: "Reported precision (4 decimals); the non-overlapping-interval bookkeeping; and "
-               "the 4-measure window of the peak_4m_nps diagnostic, which that field's name "
-               "pins — it is a diagnostic the star rating never reads.",
+            4: "Reported precision (4 decimals); the non-overlapping-interval bookkeeping; the "
+               "isolated-tail count's reported share; and the 4-measure window of the peak_4m_nps "
+               "diagnostic, which that field's name pins — it is a diagnostic the star rating "
+               "never reads.",
             5: "The 4-measure window needs 5 measure starts to form one window, plus the "
                "reported precision.",
             100.0: "hold_pct is a percentage, read back as a ratio by the operators.",
@@ -216,14 +219,14 @@ _RADAR = [
     ),
     (
         "_compute_speed_raw",
-        {1: 4, 0.0: 2, 1000.0: 1},
-        "Loop offsets into the sorted note list, floors, and the ms/s conversion. The burst law "
-        "comes from physics and the gains from RadarOptions.",
+        {1: 4, 0.0: 1, 1000.0: 1},
+        "Loop offsets into the sorted note list, the accumulator's zero start, and the ms/s "
+        "conversion. The burst law comes from physics and the gain from RadarOptions.",
         {},
     ),
     (
         "compute_raw_technique_drivers",
-        {0.0: 42, 1.0: 16, 4: 4, 100.0: 1},
+        {0.0: 40, 1.0: 16, 4: 4, 100.0: 1},
         "Zero floors of every driver, the identity baselines of the multiplicative modulations "
         "(1 + w * x), reported-precision rounding of the 4D breakdown, and the percent-to-ratio "
         "conversion of hold_pct.",

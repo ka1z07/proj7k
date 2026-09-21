@@ -172,10 +172,8 @@ class RadarOptions:
     stream_tort_weight: float = 0.50
     stream_bracket_weight: float = 0.40
     ln_gen_concurrent_weight: float = 0.30
-    ln_inv_score_weight: float = 2.50
+    ln_inv_score_weight: float = 3.50
     ln_inv_lock_weight: float = 1.30
-    ln_release_rate_weight: float = 0.75
-    ln_release_antiphase_weight: float = 1.20
     tech_coupling_gamma: float = 1.25
     tech_coupling_lambda: float = 2.85
     tech_tort_weight: float = 0.35
@@ -227,11 +225,12 @@ class RadarOptions:
     min_duration_s: float = 0.5
 
     # --- Speed (`_compute_speed_raw`) ---
-    #: burst_rate * RATE_GAIN + max(0, avg_nps - NPS_OFFSET) * NPS_GAIN: the burst rate carries
-    #: the micro-speed signal, the NPS term the sustained density behind it.
-    speed_rate_gain: float = 1.50
-    speed_nps_offset: float = 10.0
-    speed_nps_gain: float = 0.60
+    #: Scale of the micro-speed burst rate, which is the whole driver. A sustained-density term
+    #: (`max(0, avg_nps - offset) * gain`) used to be added to it, and it is what made Speed a
+    #: second copy of Stream: measured over the corpus, the burst rate per flow note is 0.61 on
+    #: the Speed ladder against 0.12 on the Stream ladder, but the note rate behind it is the
+    #: same on both — so the density term buried the one quantity that tells them apart.
+    speed_rate_gain: float = 3.50
 
     # --- Rule C: kinetic-base reconciliation ---
     #: Below this raw jack the speed/stream corrections are skipped entirely.
@@ -262,8 +261,11 @@ class RadarOptions:
 
     # --- Kinetic technique coupling ---
     #: Saturation of the coupling multiplier: 1 + GAIN * tanh((raw - 1) / SCALE) above unity,
-    #: LINEAR_GAIN * raw below it.
-    tech_saturation_gain: float = 0.15
+    #: LINEAR_GAIN * raw below it. GAIN is how far past the carrier the technique load may go on
+    #: an extremely irregular chart — ADR-0008's "反超基础物理动能" — and at 0.15 it capped the
+    #: overtake at 15%, which is inside the noise of everything else the chart is doing. At 0.8
+    #: an unorthodox chart reaches ~1.8x its carrier while an ordinary one stays below it.
+    tech_saturation_gain: float = 0.8
     tech_saturation_scale: float = 0.20
     tech_linear_gain: float = 0.90
     tech_jack_penalty: float = 0.40
@@ -288,11 +290,18 @@ class RadarOptions:
     ln_tech_chart_gap1_freedom_gate: float = 0.80
 
     # --- LN inverse and release ---
-    #: Inverse load ((locked - CENTER) / SPAN) ** EXP, and the release peak-burst gain.
+    #: Inverse load ((locked - CENTER) / SPAN) ** EXP.
     ln_inv_lock_center: float = 2.0
     ln_inv_lock_span: float = 2.0
-    ln_inv_lock_exp: float = 2.0
-    ln_rel_peak_gain: float = 0.08
+    ln_inv_lock_exp: float = 3.0
+
+    #: LN Release's 尾判难度+卡手 modifier on the General flux base (ADR-0008):
+    #: `r_ln_gen * GAIN * (release_lock_depth / REF_DEPTH)`. `REF_DEPTH` is how tied up the hand
+    #: typically is when a lift lands, so the modifier sits at 1.0 on an ordinary hold chart and
+    #: the axis wins exactly where the chart's lifts are more constrained than that — measured on
+    #: the frozen ladder, 13 of the Release ladder's 15 tiers clear the General ladder's own.
+    ln_release_gain: float = 1.0
+    ln_release_ref_depth: float = 0.5
 
     #: A chart is read as hold-dominant once its hold ratio passes this, and the LN dimensions
     #: are then scaled by min(1, hold_ratio * HOLD_PRESENCE_GAIN).
@@ -304,13 +313,19 @@ class RadarOptions:
     ln_decline_span: float = 0.20
 
     #: Genuine jack dominance: the jack rate, the jack-note ratio, and the margins by which a
-    #: dominant jack suppresses stream and tech.
+    #: dominant jack suppresses stream and tech. The suppression is a fractional factor that
+    #: starts at 1.0 at the ratio threshold and decays with how far past it the chart sits, down
+    #: to a floor — the same shape Rule D already uses for a jack's claim on stream noise. It
+    #: used to be a subtraction of a share of the jack driver, which zeroes an axis outright
+    #: whenever the jack is big enough: that is what flattened Tech to 0.00 on `EGOISM 440`
+    #: (jack-note ratio 0.181, barely past the threshold) at the very tier where the technique
+    #: axis is the point of the chart.
     jack_dominance_gate: float = 3.0
     jack_dominance_ratio: float = 0.15
     jack_stream_adv: float = 1.05
-    jack_stream_penalty: float = 0.5
     jack_tech_adv: float = 1.5
-    jack_tech_penalty: float = 0.3
+    jack_dominance_gain: float = 6.0
+    jack_dominance_floor: float = 0.05
 
     #: Charts confined to this many lanes or fewer are pure-jack: no stream, tech or speed.
     pure_lane_gate: int = 2
@@ -523,12 +538,14 @@ def _compute_jack_raw(
     return r_jack
 
 
-def _compute_speed_raw(beatmap: Beatmap7K, avg_nps: float, options: RadarOptions) -> float:
+def _compute_speed_raw(beatmap: Beatmap7K, options: RadarOptions) -> float:
     """
     Computes raw Speed intensity from rapid successive note presses across different columns.
 
-    The burst term is `physics`' micro-speed burst law — the same reference interval and
-    exponent the strain side accumulates — summed over the chart and rated per second.
+    The driver is `physics`' micro-speed burst law — the same reference interval and exponent
+    the strain side accumulates — summed over the chart and rated per second. It is the only
+    term: the speed this axis is about is how fast the fastest presses come, not how many notes
+    the chart holds, and mixing in a note-rate term is what left the axis measuring density.
     """
     hos = sorted(beatmap.hit_objects, key=lambda x: x.time)
     burst = 0.0
@@ -550,9 +567,7 @@ def _compute_speed_raw(beatmap: Beatmap7K, avg_nps: float, options: RadarOptions
         else 1.0
     )
     burst_rate = burst / duration_s
-    return burst_rate * options.speed_rate_gain + max(
-        0.0, avg_nps - options.speed_nps_offset
-    ) * options.speed_nps_gain
+    return burst_rate * options.speed_rate_gain
 
 
 def compute_raw_technique_drivers(
@@ -605,12 +620,13 @@ def compute_raw_technique_drivers(
     ) = _compute_jack_and_stream_raw(beatmap, options)
 
     # Speed (micro-speed burst tapping rate)
-    r_speed = _compute_speed_raw(beatmap, features.avg_nps, options)
+    r_speed = _compute_speed_raw(beatmap, options)
 
     active_lanes = len({ho.column for ho in hos})
 
-    # Rule C on speed and jack before Rule D
-    if r_jack > options.rule_speed_jack_gate:
+    # Rule C on speed and jack before Rule D. Same precondition as the suppression further down:
+    # a jack has to be what the chart is made of before it is allowed to eat the speed axis.
+    if r_jack > options.rule_speed_jack_gate and jack_ratio >= options.jack_dominance_ratio:
         if r_jack > r_speed * options.rule_speed_jack_ratio:
             r_speed = max(0.0, r_speed - (r_jack * options.rule_speed_jack_penalty))
 
@@ -625,8 +641,14 @@ def compute_raw_technique_drivers(
     else:
         eff_jack_base = r_jack
 
-    # Kinetic base energy K_base = max(r_stream, r_speed, min(eff_jack, r_stream * cap)) (ADR-0008)
-    k_base = max(r_stream, r_speed, min(eff_jack_base, r_stream * options.kinetic_jack_stream_cap))
+    # Kinetic base energy K_base = max(r_stream, min(eff_jack, r_stream * cap)) (ADR-0008, revised
+    # by #47). Raw speed used to be the third term of this max, which made every speed chart a
+    # tech chart carrying a speed-shaped carrier: tech is `k_base * multiplier`, and on a chart
+    # whose burst is what makes it hard, `k_base` *is* `r_speed`, so tech came out at 1.07-1.15x
+    # speed and won the Speed ladder on margins of 7-15%. A chart whose load is burst speed is
+    # read by players as speed, not as a tech chart wearing a speed carrier — tech takes over
+    # only where the arrangement itself is what is irregular (see ADR-0008's revision note).
+    k_base = max(r_stream, min(eff_jack_base, r_stream * options.kinetic_jack_stream_cap))
 
     # Four-dimensional Unorthodox Permutation Operator Omega_irreg (ADR-0008)
     # 1. Flow tortuosity (reversals)
@@ -721,14 +743,22 @@ def compute_raw_technique_drivers(
         + features.avg_nps * hold_ratio * lock_load * options.ln_inv_lock_weight
     ) * min(1.0, hold_ratio * options.hold_presence_gain)
 
-    # LN Release (staccato release rate, exclusive antiphase rate, peak burst release) (ADR-0008)
-    duration_s = max(options.min_duration_s, features.duration_seconds)
-    release_rate = features.ln_count / duration_s
+    # LN Release (ADR-0008): the lift-precision load, as a modifier on the General flux base —
+    # "仅在纯跳音释放谱面中超越 General", which is the whole point of the axis. What the modifier
+    # reads is how many of the chart's lifts are *unaccompanied*: a tail with another key pressed
+    # at the same tick rides along with a motion the hand is already making, while an isolated
+    # tail has to be placed on its own. Over half the lifts unaccompanied is what makes a chart
+    # release-dominant, so the reference is the majority point rather than a fitted number.
+    #
+    # The operator this replaces summed release rate, antiphase rate and a peak term. Neither of
+    # the first two is lift precision — antiphase counts lifts that *coincide* with a press, i.e.
+    # the anchored ones — and an addend of that shape cannot exceed the base it is meant to
+    # overtake: 0/15 of its own ladder, at ρ 0.987 with LN General.
     r_ln_rel = (
-        release_rate * options.ln_release_rate_weight
-        + features.antiphase_rate * options.ln_release_antiphase_weight
-        + hold_ratio * features.peak_1b_nps * options.ln_rel_peak_gain
-    ) * min(1.0, hold_ratio * options.hold_presence_gain)
+        r_ln_gen
+        * options.ln_release_gain
+        * (features.release_lock_depth / options.ln_release_ref_depth)
+    )
 
     # --- 2. Orthogonal Cross-Suppression ---
     # Rule A: Pure Rice charts (hold_ratio < min_rice_hold_threshold)
@@ -749,15 +779,19 @@ def compute_raw_technique_drivers(
         r_tech = 0.0
         r_speed = 0.0
     else:
-        # Rule C: Genuine Jack dominance suppresses competing stream/tech dimensions
-        if r_jack > options.jack_dominance_gate:
-            if (
-                jack_ratio >= options.jack_dominance_ratio
-                and r_jack > r_stream * options.jack_stream_adv
-            ):
-                r_stream = max(0.0, r_stream - (r_jack * options.jack_stream_penalty))
+        # Rule C: Genuine Jack dominance suppresses competing stream/tech dimensions. Both
+        # branches need the jack-ratio precondition as well as the magnitude comparison: the
+        # ratio is what says the chart is *built* out of stagnation, and without it a chart
+        # merely carrying one dense jack run has its other axes suppressed.
+        if r_jack > options.jack_dominance_gate and jack_ratio >= options.jack_dominance_ratio:
+            jack_supp = max(
+                options.jack_dominance_floor,
+                1.0 - options.jack_dominance_gain * (jack_ratio - options.jack_dominance_ratio),
+            )
+            if r_jack > r_stream * options.jack_stream_adv:
+                r_stream *= jack_supp
             if r_jack > r_tech * options.jack_tech_adv:
-                r_tech = max(0.0, r_tech - (r_jack * options.jack_tech_penalty))
+                r_tech *= jack_supp
 
     # Rule E: Inverse specialization gating (ADR-0008)
     # When a chart enters the severe inverted state, the motor-cognitive burden is dominated by
