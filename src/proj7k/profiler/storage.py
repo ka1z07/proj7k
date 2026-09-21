@@ -8,6 +8,7 @@ peak strains from mid-song failed runs.
 
 from dataclasses import asdict, dataclass, field
 import json
+import logging
 import os
 from pathlib import Path
 import sqlite3
@@ -17,6 +18,20 @@ from typing import Any, Dict, List, Optional, Union
 from proj7k.parser import Beatmap7K
 from proj7k.radar import TECHNIQUE_NAMES
 from proj7k.strain import compute_8d_strain_timeseries
+
+
+logger = logging.getLogger("proj7k.profiler.storage")
+
+
+def normalize_player_name(player_name: Optional[str]) -> str:
+    """
+    Normalizes player name: strips whitespace.
+    Defaults to 'Unknown' if empty or None.
+    """
+    if not player_name:
+        return "Unknown"
+    normalized = str(player_name).strip()
+    return normalized if normalized else "Unknown"
 
 
 DOTNET_TICKS_EPOCH_DELTA_S = 62135596800.0  # Seconds between 0001-01-01 and 1970-01-01
@@ -128,6 +143,30 @@ def check_replay_lifebar_failed(life_bar_str: str) -> bool:
     return False
 
 
+def infer_is_failed(report: Any) -> bool:
+    """
+    Infers whether a play was abandoned mid-song (Failed) from the .osr life bar
+    and the pathology cascade precursor.
+
+    ADR-0012 mandates that Failed matches retain their pre-fatal peak strains, so this
+    verdict gates the noise filter. Callers that need to apply is_noise_match() before
+    the snapshot exists must use this rather than assuming a value.
+    """
+    lb = getattr(report, "life_bar", "")
+    if check_replay_lifebar_failed(lb):
+        return True
+    if (
+        report.pathology
+        and report.pathology.cascade_precursor
+        and report.pathology.cascade_precursor.fatal_time_ms is not None
+    ):
+        fatal_t = report.pathology.cascade_precursor.fatal_time_ms
+        play_end_ms = report.play_duration_s * 1000.0
+        # If the play aborted prematurely within 3s of fatal break and had misses
+        return report.completion_rate < 0.95 and report.miss_count > 0 and (play_end_ms <= fatal_t + 3000.0)
+    return False
+
+
 def build_snapshot_from_report(
     report: Any,
     is_failed: Optional[bool] = None,
@@ -138,19 +177,7 @@ def build_snapshot_from_report(
     """
     # 1. Infer is_failed if not explicitly supplied
     if is_failed is None:
-        lb = getattr(report, "life_bar", "")
-        if check_replay_lifebar_failed(lb):
-            is_failed = True
-        elif report.pathology and report.pathology.cascade_precursor and report.pathology.cascade_precursor.fatal_time_ms is not None:
-            fatal_t = report.pathology.cascade_precursor.fatal_time_ms
-            play_end_ms = report.play_duration_s * 1000.0
-            # If the play aborted prematurely within 3s of fatal break and had misses
-            if report.completion_rate < 0.95 and report.miss_count > 0 and (play_end_ms <= fatal_t + 3000.0):
-                is_failed = True
-            else:
-                is_failed = False
-        else:
-            is_failed = False
+        is_failed = infer_is_failed(report)
 
     # 2. Extract fatal point and peak strains
     fatal_time_ms = None
@@ -220,11 +247,12 @@ def build_snapshot_from_report(
     if report.pathology and report.pathology.cascade_precursor:
         summary_info["dominant_break_technique"] = report.pathology.cascade_precursor.dominant_technique
 
+    p_name = normalize_player_name(report.player_name)
     return MatchSnapshot(
-        player_name=report.player_name,
+        player_name=p_name,
         timestamp=timestamp_sec,
         beatmap_hash=report.beatmap_hash,
-        replay_hash=getattr(report, "replay_hash", "") or f"{report.player_name}_{timestamp_sec}",
+        replay_hash=getattr(report, "replay_hash", "") or f"{p_name}_{timestamp_sec}",
         play_duration_s=report.play_duration_s,
         completion_rate=report.completion_rate,
         is_valid_play=report.is_valid_play,
@@ -282,15 +310,95 @@ class ProfilerStorage:
                     created_at REAL NOT NULL
                 );
             """)
+            # Replay identity is enforced solely by this explicit unique index. A
+            # column-level UNIQUE would be dead weight on existing databases (CREATE
+            # TABLE IF NOT EXISTS cannot alter one) and would duplicate the index on
+            # fresh ones.
+            #
+            # A database written before replay identity existed can hold the same replay
+            # twice, which would make index creation raise out of this constructor and
+            # take every DB-backed command down. Migrate before building the index, and
+            # guard on the index's absence so the scan runs once per database rather
+            # than on every open.
+            index_ready = self.conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_replay_hash'"
+            ).fetchone() is not None
+            if not index_ready:
+                removed = self._dedupe_replay_hashes()
+                if removed:
+                    logger.warning(
+                        "Removed %d duplicate replay_hash row(s) from %s before building "
+                        "the unique index; the earliest row per replay was kept.",
+                        removed,
+                        self.db_path,
+                    )
             self.conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_player_timestamp
-                ON match_snapshots (player_name, timestamp DESC);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_replay_hash
+                ON match_snapshots (replay_hash);
             """)
+            self._ensure_player_index()
 
-    def save_snapshot(self, snapshot: MatchSnapshot) -> int:
+    def _dedupe_replay_hashes(self) -> int:
         """
-        Inserts a match snapshot directly into SQLite.
+        Deletes all but the earliest row for each duplicated replay_hash, returning the
+        number of rows removed. Rows with a NULL replay_hash are left untouched.
         """
+        duplicate_scope = """
+            replay_hash IS NOT NULL
+            AND id NOT IN (
+                SELECT MIN(id) FROM match_snapshots
+                WHERE replay_hash IS NOT NULL
+                GROUP BY replay_hash
+            )
+        """
+        removed = self.conn.execute(
+            f"SELECT COUNT(*) FROM match_snapshots WHERE {duplicate_scope}"
+        ).fetchone()[0]
+        if removed:
+            self.conn.execute(f"DELETE FROM match_snapshots WHERE {duplicate_scope}")
+        return removed
+
+    def _ensure_player_index(self) -> None:
+        """
+        Builds idx_player_timestamp over LOWER(player_name) so that get_snapshots()'s
+        case-insensitive filter is index-served. The bare-column index created by older
+        versions of this module cannot be used for a LOWER(player_name) = LOWER(?)
+        predicate, so it is replaced when detected.
+        """
+        row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+            ("idx_player_timestamp",),
+        ).fetchone()
+        if row is not None:
+            if "LOWER" in (row["sql"] or "").upper():
+                return
+            self.conn.execute("DROP INDEX idx_player_timestamp;")
+        self.conn.execute("""
+            CREATE INDEX idx_player_timestamp
+            ON match_snapshots (LOWER(player_name), timestamp DESC);
+        """)
+
+    def has_replay(self, replay_hash: str) -> bool:
+        """Checks if a replay has already been ingested into the database."""
+        if not replay_hash:
+            return False
+        cur = self.conn.execute(
+            "SELECT 1 FROM match_snapshots WHERE replay_hash = ? LIMIT 1",
+            (replay_hash,),
+        )
+        return cur.fetchone() is not None
+
+    def save_snapshot(self, snapshot: MatchSnapshot) -> Optional[int]:
+        """
+        Inserts a match snapshot, returning its row id, or None when a snapshot for the
+        same replay_hash is already stored.
+
+        Only a replay_hash conflict is absorbed. Reserved deliberately instead of
+        INSERT OR IGNORE, which would also swallow NOT NULL and CHECK violations and
+        report a malformed snapshot to the caller as a duplicate.
+        """
+        norm_player = normalize_player_name(snapshot.player_name)
+        snapshot.player_name = norm_player
         with self.conn:
             cur = self.conn.execute(
                 """
@@ -300,9 +408,10 @@ class ProfilerStorage:
                     overall_ur, capacities_json, fatal_time_ms, fatal_column,
                     fatal_peak_strains_json, summary_json, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (replay_hash) DO NOTHING
                 """,
                 (
-                    snapshot.player_name,
+                    norm_player,
                     snapshot.timestamp,
                     snapshot.beatmap_hash,
                     snapshot.replay_hash,
@@ -319,6 +428,8 @@ class ProfilerStorage:
                     snapshot.created_at,
                 ),
             )
+            if cur.rowcount == 0:
+                return None
             snapshot.id = cur.lastrowid
             return cur.lastrowid
 
@@ -358,10 +469,13 @@ class ProfilerStorage:
     ) -> List[MatchSnapshot]:
         """
         Retrieves historical match snapshots for a player within [since_timestamp, until_timestamp].
-        Multi-player isolation is enforced via player_name filter.
+        Multi-player isolation is enforced via a case-insensitive player_name filter.
+        SQLite's LOWER() folds ASCII only; osu! usernames are ASCII-restricted, so names
+        outside that range match on exact bytes.
         """
-        query = "SELECT * FROM match_snapshots WHERE player_name = ?"
-        params: List[Any] = [player_name]
+        norm_name = normalize_player_name(player_name)
+        query = "SELECT * FROM match_snapshots WHERE LOWER(player_name) = LOWER(?)"
+        params: List[Any] = [norm_name]
 
         if since_timestamp is not None:
             query += " AND timestamp >= ?"

@@ -39,6 +39,7 @@ from proj7k.profiler.storage import (
     MatchSnapshot,
     ProfilerStorage,
     build_snapshot_from_report,
+    infer_is_failed,
     is_noise_match,
 )
 
@@ -419,10 +420,12 @@ def run_batch_ingestion(
     batch_dir: Path | str,
     beatmap_dir: Path | str,
     db_path: Optional[Path | str] = None,
+    player_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ingests a batch of .osr replays mapped to .osu beatmaps, applies noise filtering,
-    and stores valid snapshots into SQLite.
+    and stores valid snapshots into SQLite. If player_name is provided, replays
+    from other players are skipped.
     """
     batch_p = Path(batch_dir)
     beatmap_p = Path(beatmap_dir)
@@ -443,47 +446,145 @@ def run_batch_ingestion(
         except Exception:
             pass
 
-    storage = ProfilerStorage(db_path=db_path)
+    target_player_norm = player_name.strip().lower() if player_name else None
     stats = {
         "replays_processed": 0,
         "saved": 0,
         "noise_filtered": 0,
         "failed_preserved": 0,
+        "skipped_other_player": 0,
         "errors": 0,
     }
 
     replays = list(batch_p.glob("**/*.osr"))
-    for osr_file in replays:
-        stats["replays_processed"] += 1
-        try:
-            # Parse header to locate beatmap
-            osr_data = parse_osr(osr_file)
-            target_hash = osr_data.beatmap_hash.lower()
-            matching_osu = beatmap_by_hash.get(target_hash)
+    with ProfilerStorage(db_path=db_path) as storage:
+        for osr_file in replays:
+            stats["replays_processed"] += 1
+            try:
+                # Parse header to locate beatmap and inspect player identity
+                osr_data = parse_osr(osr_file)
 
-            if matching_osu is None:
-                # Try matching by filename stem
-                matching_osu = beatmap_by_stem.get(osr_file.stem.lower())
+                if target_player_norm is not None:
+                    osr_player = (osr_data.player_name or "").strip().lower()
+                    if osr_player != target_player_norm:
+                        stats["skipped_other_player"] += 1
+                        continue
 
-            if matching_osu is None:
-                # No matching beatmap
+                target_hash = osr_data.beatmap_hash.lower()
+                matching_osu = beatmap_by_hash.get(target_hash)
+
+                if matching_osu is None:
+                    # Try matching by filename stem
+                    matching_osu = beatmap_by_stem.get(osr_file.stem.lower())
+
+                if matching_osu is None:
+                    # No matching beatmap
+                    stats["errors"] += 1
+                    continue
+
+                report = run_ingestion(osr_file, matching_osu)
+                beatmap = parse_osu_7k(str(matching_osu))
+                saved = storage.save_report_with_filter(report, beatmap=beatmap)
+
+                if saved is not None:
+                    stats["saved"] += 1
+                    if saved.is_failed:
+                        stats["failed_preserved"] += 1
+                else:
+                    stats["noise_filtered"] += 1
+            except Exception:
                 stats["errors"] += 1
+
+    return stats
+
+
+def run_replay_import(
+    player_name: str,
+    realm_path: Optional[Path | str] = None,
+    files_dir: Optional[Path | str] = None,
+    db_path: Optional[Path | str] = None,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Imports 7K mania replays for the specified player from local osu!lazer storage.
+
+    Scans client.realm for the player's 7K scores, resolves each score's physical beatmap
+    and replay files out of the lazer files directory, and ingests them into the profiler
+    SQLite database with replay-hash deduplication and ADR-0012 noise filtering.
+    """
+    from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
+
+    target_realm = Path(realm_path) if realm_path else DEFAULT_REALM_PATH
+    if not target_realm.exists():
+        raise FileNotFoundError(f"osu!lazer realm database not found at {target_realm}")
+
+    target_files_dir = Path(files_dir) if files_dir else (target_realm.parent / "files")
+    if not target_files_dir.exists():
+        raise FileNotFoundError(f"osu!lazer files directory not found at {target_files_dir}")
+
+    client = RealmBridgeClient(default_realm_path=target_realm)
+    scores = client.dump_7k_scores(realm_path=target_realm, user=player_name)
+
+    if limit is not None and limit > 0:
+        scores = scores[:limit]
+
+    stats = {
+        "replays_discovered": len(scores),
+        "saved": 0,
+        "already_exists": 0,
+        "noise_filtered": 0,
+        "failed_preserved": 0,
+        "missing_files": 0,
+        "errors": 0,
+    }
+
+    with ProfilerStorage(db_path=db_path) as storage:
+        for item in scores:
+            b_hash = item.get("beatmap_file_hash", "")
+            r_hash = item.get("replay_file_hash", "")
+
+            if not b_hash or not r_hash:
+                stats["missing_files"] += 1
                 continue
 
-            report = run_ingestion(osr_file, matching_osu)
-            beatmap = parse_osu_7k(str(matching_osu))
-            saved = storage.save_report_with_filter(report, beatmap=beatmap)
+            if storage.has_replay(r_hash):
+                stats["already_exists"] += 1
+                continue
 
-            if saved is not None:
-                stats["saved"] += 1
-                if saved.is_failed:
-                    stats["failed_preserved"] += 1
-            else:
-                stats["noise_filtered"] += 1
-        except Exception:
-            stats["errors"] += 1
+            bp = target_files_dir / b_hash[0] / b_hash[:2] / b_hash
+            rp = target_files_dir / r_hash[0] / r_hash[:2] / r_hash
 
-    storage.close()
+            if not bp.exists() or not rp.exists():
+                stats["missing_files"] += 1
+                continue
+
+            try:
+                report = run_ingestion(rp, bp)
+                # Use Lazer's physical replay file hash to guarantee global deduplication across formats
+                report.replay_hash = r_hash
+                beatmap = parse_osu_7k(str(bp))
+
+                # Resolve the Failed verdict once, so this pre-filter and the persistence
+                # layer agree on it. The verdict is inferred from the life bar and the
+                # cascade precursor rather than assumed. Assuming False here would discard
+                # the short, low-completion aborted runs that ADR-0012 requires us to keep
+                # for their pre-fatal peak strains.
+                is_failed = infer_is_failed(report)
+                if is_noise_match(report.play_duration_s, report.completion_rate, is_failed):
+                    stats["noise_filtered"] += 1
+                    continue
+
+                saved = storage.save_report_with_filter(report, is_failed=is_failed, beatmap=beatmap)
+
+                if saved is not None:
+                    stats["saved"] += 1
+                    if saved.is_failed:
+                        stats["failed_preserved"] += 1
+                else:
+                    stats["already_exists"] += 1
+            except Exception:
+                stats["errors"] += 1
+
     return stats
 
 
@@ -583,6 +684,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Explicit fatal failure timestamp in ms to override automatic detection for practice slice extraction.",
     )
+    # Lazer replay import flags (inbound: client.realm -> SQLite).
+    # Deliberately not "--sync-lazer": the downscaler already owns that flag for the
+    # opposite direction (ADR-0011, injecting practice beatmaps INTO the realm).
+    parser.add_argument(
+        "--import-replays",
+        action="store_true",
+        help="Import 7K mania replays from local osu!lazer client.realm into the profiler SQLite database.",
+    )
+    parser.add_argument(
+        "--import-limit",
+        type=int,
+        default=None,
+        help="Optional maximum number of replays to process during --import-replays.",
+    )
     return parser
 
 
@@ -590,13 +705,53 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # 1. Mode: Batch Replay Ingestion
+    # 1. Mode: Lazer Replay Import
+    if args.import_replays:
+        if not args.player:
+            print("Error: --player <name> is required when running --import-replays.", file=sys.stderr)
+            return 1
+        try:
+            stats = run_replay_import(
+                player_name=args.player,
+                realm_path=args.realm,
+                db_path=args.db,
+                limit=args.import_limit,
+            )
+        except Exception as e:
+            print(f"Lazer replay import error: {e}", file=sys.stderr)
+            return 1
+
+        if args.json:
+            print(json.dumps(stats, indent=2))
+        else:
+            print("============================================================")
+            print("      proj7k osu!lazer 7K Replay Import Completed           ")
+            print("============================================================")
+            print(f"Player Target:        {args.player}")
+            print(f"Replays Discovered:   {stats['replays_discovered']}")
+            print(f"Newly Ingested:       {stats['saved']}")
+            print(f"Already In DB:        {stats['already_exists']}")
+            print(f"Noise Filtered:       {stats['noise_filtered']} (<30s or <50% completion)")
+            print(f"Failed Preserved:     {stats['failed_preserved']}")
+            if stats["missing_files"] > 0:
+                print(f"Missing Files:        {stats['missing_files']}")
+            if stats["errors"] > 0:
+                print(f"Ingestion Errors:     {stats['errors']}")
+            print("============================================================")
+        return 0
+
+    # 2. Mode: Batch Replay Ingestion
     if args.batch_dir:
         if not args.beatmap_dir:
             print("Error: --beatmap-dir is required when using --batch-dir.", file=sys.stderr)
             return 1
         try:
-            stats = run_batch_ingestion(args.batch_dir, args.beatmap_dir, db_path=args.db)
+            stats = run_batch_ingestion(
+                args.batch_dir,
+                args.beatmap_dir,
+                db_path=args.db,
+                player_name=args.player,
+            )
         except Exception as e:
             print(f"Batch ingestion error: {e}", file=sys.stderr)
             return 1
@@ -607,16 +762,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("============================================================")
             print("         proj7k Batch Replay Ingestion Completed            ")
             print("============================================================")
-            print(f"Replays Processed: {stats['replays_processed']}")
-            print(f"Saved:             {stats['saved']}")
-            print(f"Noise Filtered:    {stats['noise_filtered']} (<30s or <50% completion)")
-            print(f"Failed Preserved:  {stats['failed_preserved']}")
+            print(f"Replays Processed:    {stats['replays_processed']}")
+            print(f"Saved:                {stats['saved']}")
+            print(f"Noise Filtered:       {stats['noise_filtered']} (<30s or <50% completion)")
+            print(f"Failed Preserved:     {stats['failed_preserved']}")
+            if stats.get("skipped_other_player", 0) > 0:
+                print(f"Other Player Skipped: {stats['skipped_other_player']}")
             if stats["errors"] > 0:
-                print(f"Errors/Unmatched:  {stats['errors']}")
+                print(f"Errors/Unmatched:     {stats['errors']}")
             print("============================================================")
         return 0
 
-    # 2. Mode: Player Macro Profile Query
+    # 3. Mode: Player Macro Profile Query
     if args.player:
         horizon = None if args.all_time else args.horizon_days
         storage = ProfilerStorage(db_path=args.db)

@@ -1,6 +1,8 @@
 import hashlib
 import json
 from pathlib import Path
+import re
+import sqlite3
 import time
 import pytest
 
@@ -10,6 +12,7 @@ from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
 from proj7k.profiler.storage import (
     MatchSnapshot,
     ProfilerStorage,
+    infer_is_failed,
     is_noise_match,
 )
 from proj7k.profiler.aggregate import (
@@ -17,7 +20,7 @@ from proj7k.profiler.aggregate import (
     MacroProfile,
     aggregate_macro_profile,
 )
-from proj7k.profiler.cli import main, run_ingestion
+from proj7k.profiler.cli import build_parser, main, run_ingestion
 from proj7k.radar import TECHNIQUE_NAMES
 
 
@@ -96,6 +99,42 @@ def create_sample_replay(
     osr_path = tmp_path / f"{player_name}_{replay_hash[:8]}.osr"
     osr_path.write_bytes(serialize_osr(replay))
     return osr_path
+
+
+def make_snapshot(
+    player_name: str = "PlayerA",
+    timestamp: float = 1700000000.0,
+    replay_hash: str = "replay-hash",
+    is_failed: bool = False,
+) -> MatchSnapshot:
+    return MatchSnapshot(
+        player_name=player_name,
+        timestamp=timestamp,
+        beatmap_hash="beatmap-hash",
+        replay_hash=replay_hash,
+        play_duration_s=40.0,
+        completion_rate=1.0,
+        is_valid_play=True,
+        is_failed=is_failed,
+        overall_ur=120.0,
+        capacities={},
+        fatal_time_ms=None,
+        fatal_column=None,
+        fatal_peak_strains={},
+        summary={},
+        created_at=time.time(),
+    )
+
+
+class StubReport:
+    """Minimal stand-in for ProfilerIngestionReport, for infer_is_failed()."""
+
+    def __init__(self, life_bar: str, duration_s: float = 40.0, completion_rate: float = 1.0):
+        self.life_bar = life_bar
+        self.play_duration_s = duration_s
+        self.completion_rate = completion_rate
+        self.miss_count = 0
+        self.pathology = None
 
 
 def test_sqlite_storage_lifecycle_and_multi_player_isolation(tmp_path: Path):
@@ -476,3 +515,179 @@ def test_cli_batch_ingestion_and_profile_query(tmp_path: Path, capsys):
     assert data["total_matches"] == 1
     assert "dimensions" in data
     assert "overall_dan" in data
+
+
+def test_cli_batch_ingestion_with_player_filter(tmp_path: Path, capsys):
+    db_file = tmp_path / "cli_filter_test.db"
+
+    chart_dir = tmp_path / "charts"
+    replay_dir = tmp_path / "replays"
+    chart_dir.mkdir()
+    replay_dir.mkdir()
+
+    c1 = create_sample_chart(chart_dir, bpm=140.0, num_notes=40)
+
+    # Replay 1: Target player "Inawah"
+    create_sample_replay(replay_dir, c1, player_name="Inawah", duration_s=40.0, is_failed=False)
+    # Replay 2: Other player "OtherPlayer"
+    create_sample_replay(replay_dir, c1, player_name="OtherPlayer", duration_s=40.0, is_failed=False)
+
+    # Run batch ingestion specifying --player inawah (case-insensitive)
+    exit_code = main([
+        "--batch-dir", str(replay_dir),
+        "--beatmap-dir", str(chart_dir),
+        "--player", "inawah",
+        "--db", str(db_file),
+    ])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    # Match on label/value rather than exact column padding, which is presentation only.
+    assert re.search(r"Saved:\s+1\b", captured.out)
+    assert re.search(r"Other Player Skipped:\s+1\b", captured.out)
+
+    storage = ProfilerStorage(db_path=db_file)
+    players = storage.list_players()
+    assert players == ["Inawah"]
+    # Check case-insensitive query
+    snaps = storage.get_snapshots("inawah")
+    assert len(snaps) == 1
+    snaps_upper = storage.get_snapshots("INAWAH")
+    assert len(snaps_upper) == 1
+    storage.close()
+
+
+def test_short_failed_replay_keeps_its_peak_strains_per_adr_0012():
+    """
+    ADR-0012 preserves the pre-fatal peak strains of mid-song aborts. Those plays are
+    short and low-completion by nature, so the Failed verdict must gate the noise filter
+    ahead of the duration/completion thresholds.
+    """
+    # A life bar that flatlines to zero marks an abort.
+    aborted = StubReport(life_bar="0|1.0,2000|0.8,12000|0.0", duration_s=15.0, completion_rate=0.25)
+    assert infer_is_failed(aborted) is True
+
+    # Assuming a verdict of False here is the regression: it discards the abort.
+    assert is_noise_match(aborted.play_duration_s, aborted.completion_rate, False) is True
+    # Using the inferred verdict preserves it.
+    assert is_noise_match(
+        aborted.play_duration_s, aborted.completion_rate, infer_is_failed(aborted)
+    ) is False
+
+    # A genuinely clean short warmup is still filtered.
+    warmup = StubReport(life_bar="0|1.0,5000|1.0", duration_s=15.0, completion_rate=1.0)
+    assert infer_is_failed(warmup) is False
+    assert is_noise_match(warmup.play_duration_s, warmup.completion_rate, infer_is_failed(warmup)) is True
+
+
+def test_save_snapshot_only_swallows_replay_hash_conflicts(tmp_path: Path):
+    """
+    Deduplication must absorb a repeated replay_hash only. INSERT OR IGNORE would also
+    swallow a NOT NULL violation and report the dropped row to the caller as a duplicate.
+    """
+    with ProfilerStorage(db_path=tmp_path / "conflict.db") as storage:
+        assert storage.save_snapshot(make_snapshot("PlayerA", 1.0, "hash-1")) is not None
+        # Same replay hash -> deduplicated.
+        assert storage.save_snapshot(make_snapshot("PlayerA", 2.0, "hash-1")) is None
+
+        malformed = make_snapshot("PlayerA", 3.0, "hash-2")
+        malformed.beatmap_hash = None
+        with pytest.raises(sqlite3.IntegrityError):
+            storage.save_snapshot(malformed)
+
+        assert storage.conn.execute("SELECT COUNT(*) FROM match_snapshots").fetchone()[0] == 1
+
+
+def test_legacy_db_with_duplicate_replay_hashes_is_deduped_on_open(tmp_path: Path):
+    """
+    Databases written before replay identity existed can hold the same replay twice, since
+    the historical INSERT had no uniqueness constraint. Opening one must not raise out of
+    the constructor and leave every DB-backed command unusable.
+    """
+    db_file = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(db_file))
+    # The pre-change schema: no UNIQUE on replay_hash, and a bare-column player index.
+    conn.execute("""
+        CREATE TABLE match_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_name TEXT NOT NULL, timestamp REAL NOT NULL,
+            beatmap_hash TEXT NOT NULL, replay_hash TEXT,
+            play_duration_s REAL NOT NULL, completion_rate REAL NOT NULL,
+            is_valid_play INTEGER NOT NULL, is_failed INTEGER NOT NULL,
+            overall_ur REAL, capacities_json TEXT NOT NULL, fatal_time_ms REAL,
+            fatal_column INTEGER, fatal_peak_strains_json TEXT NOT NULL,
+            summary_json TEXT NOT NULL, created_at REAL NOT NULL
+        );
+    """)
+    conn.execute("CREATE INDEX idx_player_timestamp ON match_snapshots (player_name, timestamp DESC);")
+    insert = (
+        "INSERT INTO match_snapshots (player_name, timestamp, beatmap_hash, replay_hash, "
+        "play_duration_s, completion_rate, is_valid_play, is_failed, capacities_json, "
+        "fatal_peak_strains_json, summary_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    conn.execute(insert, ("Legacy", 1.0, "beatmap-hash", "dup", 40.0, 1.0, 1, 0, "{}", "{}", "{}", 0.0))
+    conn.execute(insert, ("Legacy", 2.0, "beatmap-hash", "dup", 40.0, 1.0, 1, 0, "{}", "{}", "{}", 0.0))
+    conn.execute(insert, ("Legacy", 3.0, "beatmap-hash", None, 40.0, 1.0, 1, 0, "{}", "{}", "{}", 0.0))
+    conn.commit()
+    conn.close()
+
+    with ProfilerStorage(db_path=db_file) as storage:
+        # One duplicate removed; the NULL-hash row is untouched.
+        assert storage.conn.execute("SELECT COUNT(*) FROM match_snapshots").fetchone()[0] == 2
+        # The earliest row per hash survives.
+        kept = storage.conn.execute(
+            "SELECT timestamp FROM match_snapshots WHERE replay_hash = 'dup'"
+        ).fetchone()[0]
+        assert kept == 1.0
+        assert storage.has_replay("dup") is True
+        assert len(storage.get_snapshots("Legacy")) == 2
+        # The bare-column index is replaced by the expression form.
+        index_sql = storage.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_player_timestamp'"
+        ).fetchone()[0]
+        assert "LOWER(player_name)" in index_sql
+
+    # Reopening is a no-op: the migration is guarded on the index being absent.
+    with ProfilerStorage(db_path=db_file) as reopened:
+        assert reopened.conn.execute("SELECT COUNT(*) FROM match_snapshots").fetchone()[0] == 2
+
+
+def test_case_insensitive_lookup_is_index_served(tmp_path: Path):
+    """
+    LOWER(player_name) = LOWER(?) cannot use a bare-column index, so it degrades to a full
+    scan plus a temp B-tree for ORDER BY. The index must cover the expression to be used.
+    """
+    with ProfilerStorage(db_path=tmp_path / "plan.db") as storage:
+        storage.save_snapshot(make_snapshot("Inawah", 10.0, "hash-1"))
+        assert len(storage.get_snapshots("inawah")) == 1
+        assert len(storage.get_snapshots("INAWAH")) == 1
+        assert len(storage.get_snapshots("nobody")) == 0
+
+        plan = storage.conn.execute(
+            "EXPLAIN QUERY PLAN SELECT * FROM match_snapshots "
+            "WHERE LOWER(player_name) = LOWER(?) AND timestamp >= ? ORDER BY timestamp DESC",
+            ("inawah", 0.0),
+        ).fetchall()
+        detail = " ".join(row[-1] for row in plan)
+        assert "USING INDEX idx_player_timestamp" in detail
+        assert "SCAN match_snapshots" not in detail
+        assert "TEMP B-TREE" not in detail
+
+
+def test_import_replays_flag_pipeline(capsys):
+    """
+    The profiler owns --import-replays for inbound replay import. --sync-lazer belongs to
+    the downscaler, which uses it for the opposite direction (ADR-0011).
+    """
+    # Missing --player is reported before any realm access.
+    assert main(["--import-replays"]) == 1
+    assert "--player <name> is required" in capsys.readouterr().err
+
+    # The downscaler-only flag is not silently reused by this parser.
+    with pytest.raises(SystemExit):
+        main(["--sync-lazer", "--player", "Someone"])
+
+    parser = build_parser()
+    option_strings = {opt for action in parser._actions for opt in action.option_strings}
+    assert "--import-replays" in option_strings
+    assert "--import-limit" in option_strings
+    assert "--sync-lazer" not in option_strings

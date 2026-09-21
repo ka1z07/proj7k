@@ -22,6 +22,7 @@ function parseArgs() {
     let onlineId = null;
     let fileHash = null;
     let setId = null;
+    let userName = null;
 
     for (let i = 1; i < args.length; i++) {
         if (args[i] === '--realm' && i + 1 < args.length) {
@@ -36,6 +37,9 @@ function parseArgs() {
         } else if (args[i] === '--set-id' && i + 1 < args.length) {
             setId = args[i + 1];
             i++;
+        } else if (args[i] === '--user' && i + 1 < args.length) {
+            userName = args[i + 1];
+            i++;
         }
     }
 
@@ -45,7 +49,7 @@ function parseArgs() {
         realmPath = path.join(homeDir, 'Library', 'Application Support', 'osu', 'client.realm');
     }
 
-    return { command, realmPath, onlineId, fileHash, setId };
+    return { command, realmPath, onlineId, fileHash, setId, userName };
 }
 
 function outputJsonAndExit(obj, exitCode = 0) {
@@ -229,6 +233,69 @@ async function handleDump7k(realmPath) {
             success: true,
             beatmaps: records,
             collections: collections
+        };
+    } catch (err) {
+        result = { success: false, error: err.message };
+    } finally {
+        if (realm && !realm.isClosed) realm.close();
+    }
+    outputJsonAndExit(result);
+}
+
+async function handleDump7kScores(realmPath, targetUser) {
+    let realm;
+    let result;
+    try {
+        realm = new Realm({ path: realmPath, readOnly: true });
+        const scores = realm.objects('Score');
+        const records = [];
+        const normTarget = targetUser ? targetUser.trim().toLowerCase() : null;
+
+        for (let i = 0; i < scores.length; i++) {
+            const s = scores[i];
+            const uName = (s.User && s.User.Username) ? s.User.Username : '';
+            if (normTarget && uName.trim().toLowerCase() !== normTarget) {
+                continue;
+            }
+
+            // Check 7K Mania
+            const bm = s.BeatmapInfo;
+            if (!bm || !bm.Ruleset || bm.Ruleset.OnlineID !== 3) continue;
+            if (!bm.Difficulty || Math.abs((bm.Difficulty.CircleSize || 0) - 7.0) > 0.01) continue;
+
+            // Locate .osr file in s.Files
+            let replayHash = '';
+            if (s.Files) {
+                for (const f of s.Files) {
+                    if (f.Filename && f.Filename.toLowerCase().endsWith('.osr') && f.File && f.File.Hash) {
+                        replayHash = f.File.Hash;
+                        break;
+                    }
+                }
+            }
+            if (!replayHash) continue;
+
+            const bHash = resolveFileHash(bm) || bm.Hash || s.BeatmapHash || '';
+            if (!bHash) continue;
+
+            records.push({
+                player_name: uName || 'Unknown',
+                beatmap_file_hash: bHash,
+                replay_file_hash: replayHash,
+                date: s.Date ? s.Date.toISOString() : '',
+                total_score: typeof s.TotalScore === 'number' ? s.TotalScore : 0,
+                accuracy: typeof s.Accuracy === 'number' ? s.Accuracy : 0.0,
+                rank: typeof s.Rank === 'number' ? s.Rank : -1,
+                star_rating: (bm && typeof bm.StarRating === 'number') ? bm.StarRating : 0.0,
+                title: (bm && bm.Metadata && bm.Metadata.Title) ? bm.Metadata.Title : '',
+                difficulty_name: (bm && bm.DifficultyName) ? bm.DifficultyName : ''
+            });
+        }
+
+        result = {
+            success: true,
+            scores: records,
+            total_found: records.length
         };
     } catch (err) {
         result = { success: false, error: err.message };
@@ -424,7 +491,7 @@ async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId) {
 }
 
 async function main() {
-    const { command, realmPath, onlineId, fileHash, setId } = parseArgs();
+    const { command, realmPath, onlineId, fileHash, setId, userName } = parseArgs();
 
     // Unified realm path existence guard
     if (!fs.existsSync(realmPath)) {
@@ -438,6 +505,9 @@ async function main() {
             break;
         case 'dump-7k':
             await handleDump7k(realmPath);
+            break;
+        case 'dump-7k-scores':
+            await handleDump7kScores(realmPath, userName);
             break;
         case 'dump-collections':
             await handleDumpCollections(realmPath);

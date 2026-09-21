@@ -109,6 +109,19 @@ PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --rec
 PYTHONPATH=src python3 -m proj7k.profiler -p "YourUsername" --horizon-days 30 --recommend
 ```
 
+### 7. 导入 osu!lazer 历史回放 (一次性)
+将本地 osu!lazer 中的历史 7K 对局批量导入本地档案库，作为宏观画像的历史样本：
+```bash
+PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsername"
+```
+
+**要点：**
+- 按**回放指纹**（物理回放文件哈希）幂等去重，重复执行不会产生重复样本；
+- 遵守脏数据清洗规则（ADR-0012）：剔除时长 <30 秒或完成度 <50% 的重试对局，但**保留中途暴毙对局的致死前高应变样本**；
+- 可选 `--import-limit N` 限制单次处理量，`--realm` 指定非默认的 `client.realm` 路径。
+
+> ⚠️ **方向区分**：`--import-replays` 是**读入**方向（lazer → 本地档案库）；反向的 `--sync-lazer` 属于降阶器与 `proj7k.sync`，用于将星级标签与衍生练习谱**写入** lazer 数据库。两者方向相反，不可混用。
+
 ---
 
 ## 🎛️ 玩家常用命令速查
@@ -127,7 +140,8 @@ PYTHONPATH=src python3 -m proj7k.profiler -p "YourUsername" --horizon-days 30 --
 | **致死降阶练习包** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --bundle` | 自动切出致死高应变切片并导出 Recovery/Bridge/Push 三阶梯 .osz |
 | **近期30天画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --horizon-days 30` | 聚合近 30 天竞技状态并对比全历史巅峰 |
 | **全历史巅峰画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --all-time` | 查看全历史极限承压雷达与各技法巅峰 |
-| **批量对局回放入库** | `PYTHONPATH=src python3 -m proj7k.profiler --batch-dir ./replays --beatmap-dir ./beatmaps` | 批量过滤重试脏数据并持久化到本地 SQLite 档案库 |
+| **批量对局回放入库** | `PYTHONPATH=src python3 -m proj7k.profiler --batch-dir ./replays --beatmap-dir ./beatmaps [--player "Username"]` | 批量过滤重试脏数据并持久化到本地 SQLite 档案库（可限定单一玩家） |
+| **Lazer 回放导入** | `PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "Username"` | 从本地 osu!lazer 存储提取该玩家历史 7K 回放，按回放指纹幂等入库 |
 
 ---
 
