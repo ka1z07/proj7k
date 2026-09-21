@@ -118,6 +118,54 @@ def _get_notes_in_window(sorted_times: List[float], start_s: float, end_s: float
     return sorted_times[i_left:i_right]
 
 
+def _build_locked_finger_counts(
+    times_s: List[float],
+    col_lns: Dict[int, List[Tuple[float, float]]],
+    columns: Tuple[int, ...],
+) -> List[int]:
+    """
+    Precomputes the locked-finger step function L(t) over the sampling grid.
+
+    L(t) counts how many of `columns` are held at t, and it is a step function: it only
+    changes at hold-interval boundaries. Building it once with a per-lane difference array
+    costs O(intervals * log samples + samples) instead of rescanning every lane's interval
+    list at every sample, and it produces exactly the same integer sequence — each interval
+    contributes to precisely the samples k with st <= times_s[k] <= et, resolved by binary
+    search against the very grid values the accumulator samples, so no float rounding is
+    introduced.
+    """
+    counts = [0] * len(times_s)
+    if not times_s:
+        return counts
+
+    for col in columns:
+        intervals = col_lns.get(col)
+        if not intervals:
+            continue
+
+        diff = [0] * (len(times_s) + 1)
+        touched = False
+        for st, et in intervals:
+            i_start = bisect_left(times_s, st)
+            i_end = bisect_right(times_s, et)
+            if i_start < i_end:
+                diff[i_start] += 1
+                diff[i_end] -= 1
+                touched = True
+
+        if not touched:
+            continue
+
+        # A finger is locked once, however many of its own intervals overlap here.
+        active = 0
+        for k in range(len(times_s)):
+            active += diff[k]
+            if active > 0:
+                counts[k] += 1
+
+    return counts
+
+
 def compute_judgment_overlap_buffer(bpm: float, w_judg_ms: float = 38.0) -> float:
     """
     Computes judgment window overlap ratio (eta):
@@ -168,10 +216,9 @@ def _compute_hand_load(
     inner_hits: List[float],
     shared_hits: List[float],
     hand_lanes: Tuple[int, int, int],
-    t: float,
+    locked_fingers: int,
     w_start: float,
     w_end: float,
-    col_lns: Dict[int, List[Tuple[float, float]]],
     col_releases: Dict[int, List[float]],
     scaling_factor: float,
     options: StrainOptions,
@@ -229,12 +276,7 @@ def _compute_hand_load(
     )
 
     # Cognitive Impedance (L_cog)
-    # 1. Locked fingers at time t
-    locked_fingers = sum(
-        1 for c in hand_lanes
-        if any(st <= t <= et for st, et in col_lns[c])
-    )
-
+    # 1. Locked fingers at time t (precomputed step function, see _build_locked_finger_counts)
     # 2. Antiphase articulation in current window
     antiphase = 0
     for c1 in hand_lanes:
@@ -362,7 +404,11 @@ def compute_dual_hand_strain(
 
     half_window = options.window_s / 2.0
 
-    for t in times_s:
+    # Locked-finger step function per hand, precomputed once over the whole grid
+    left_locked = _build_locked_finger_counts(times_s, col_lns, LEFT_HAND_LANES)
+    right_locked = _build_locked_finger_counts(times_s, col_lns, RIGHT_HAND_LANES)
+
+    for step_idx, t in enumerate(times_s):
         w_start = t - half_window
         w_end = t + half_window
 
@@ -379,10 +425,9 @@ def compute_dual_hand_strain(
             inner_hits=w_notes[2],
             shared_hits=w_notes[3],
             hand_lanes=LEFT_HAND_LANES,
-            t=t,
+            locked_fingers=left_locked[step_idx],
             w_start=w_start,
             w_end=w_end,
-            col_lns=col_lns,
             col_releases=col_releases,
             scaling_factor=scaling_factor,
             options=options,
@@ -395,10 +440,9 @@ def compute_dual_hand_strain(
             inner_hits=w_notes[4],
             shared_hits=w_notes[3],
             hand_lanes=RIGHT_HAND_LANES,
-            t=t,
+            locked_fingers=right_locked[step_idx],
             w_start=w_start,
             w_end=w_end,
-            col_lns=col_lns,
             col_releases=col_releases,
             scaling_factor=scaling_factor,
             options=options,
@@ -600,7 +644,9 @@ def compute_8d_strain_timeseries(
 
     half_w = opts.window_s / 2.0
 
-    for t in times_s:
+    all_locked = _build_locked_finger_counts(times_s, col_lns, tuple(range(7)))
+
+    for step_idx, t in enumerate(times_s):
         # Decay
         jack_acc *= decay
         speed_acc *= decay
@@ -633,11 +679,8 @@ def compute_8d_strain_timeseries(
         notes_in_w = [ho for ho in hit_objects if (w_start * 1000.0) <= ho.time < (w_end * 1000.0)]
         local_nps = len(notes_in_w) / opts.window_s
 
-        # Locked fingers at time t
-        locked_fingers = sum(
-            1 for c in range(7)
-            if any(st <= t <= et for st, et in col_lns[c])
-        )
+        # Locked fingers at time t (precomputed step function)
+        locked_fingers = all_locked[step_idx]
         has_ln = sum(1 for ho in notes_in_w if ho.note_type == NoteType.LN)
         hold_ratio = (has_ln / len(notes_in_w)) if notes_in_w else 0.0
 

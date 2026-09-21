@@ -204,6 +204,36 @@ def test_quantiles_ordering_and_profile_contract():
     assert isinstance(data["peak_strain"], float)
 
 
+def test_locked_finger_counts_match_per_sample_scan():
+    """
+    The precomputed difference-array step function must reproduce the naive per-sample
+    interval scan exactly, including nested/overlapping holds, holds whose endpoints land
+    exactly on a sample, and holds reaching past either end of the grid.
+    """
+    from proj7k.strain import _build_locked_finger_counts, LEFT_HAND_LANES, RIGHT_HAND_LANES
+
+    times_s = [round(k * 0.25, 5) for k in range(13)]  # 0.00 .. 3.00
+    col_lns = {
+        0: [(0.0, 1.0), (0.5, 1.25)],          # overlapping
+        1: [(1.25, 1.25), (2.0, 5.0)],         # instant hit + running past the grid end
+        2: [],                                  # never held
+        3: [(-1.0, 0.0)],                       # ends exactly on the first sample
+        4: [(0.3, 0.4)],                        # entirely between two samples
+        5: [(3.5, 4.0)],                        # entirely past the grid
+        6: [(0.25, 2.75), (0.5, 1.0)],          # nested
+    }
+
+    for columns in (LEFT_HAND_LANES, RIGHT_HAND_LANES, tuple(range(7))):
+        fast = _build_locked_finger_counts(times_s, col_lns, columns)
+        naive = [
+            sum(1 for c in columns if any(st <= t <= et for st, et in col_lns[c]))
+            for t in times_s
+        ]
+        assert fast == naive, columns
+
+    assert _build_locked_finger_counts([], col_lns, LEFT_HAND_LANES) == []
+
+
 def test_deterministic_and_performance():
     # 1000 notes pattern
     hos = [
