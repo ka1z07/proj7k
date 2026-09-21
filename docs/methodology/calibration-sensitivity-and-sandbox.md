@@ -59,7 +59,7 @@ PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_exp=0.6175 --js
 
 ## 3. 当前标定的基线事实
 
-> 实测于 `main`，`current_engine_version() = ve00d4628`。常数变更后本节全部数字需重测。
+> 实测于 `main`（`c32a2ad`），`current_engine_version() = v341f77d8`。常数变更后本节全部数字需重测——**包括这个版本号本身**：任何一个标定常数的改动都会移它，而本节下面的阶梯统计不会动。版本号是快照，不是稳定标识。
 >
 > 版本号在 #48 之后由 `v2c6bbe75` 变为本值——因为指纹的**取数范围**变了（雷达/特征的字面量已并入），而非因为任何星级的数值变了。本节以下的全部数字（阶梯统计、锚点中位数、星级指纹）**与 #48 之前逐位相同**，这正是本票「纯重构」的验收条件。
 
@@ -173,8 +173,8 @@ engine version AFTER : v2c6bbe75     ← 完全不变
 同一个 `3.6 → 5.0` 的改动，现在落在 `RadarOptions.stream_jack_supp_gain` 上，实测量级完全不变：
 
 ```
-engine version BEFORE: ve00d4628
-engine version AFTER : vbe001950     ← 必变
+engine version BEFORE: v341f77d8
+engine version AFTER : v5a6e117c     ← 必变
 星级变化: 10/120 张，最大 0.0565★   ← 与 8.1 逐位相同，说明这是纯重构
 ```
 
