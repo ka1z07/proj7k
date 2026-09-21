@@ -7,7 +7,6 @@ Implements SPEC-P2.3-03 / ADR-0009.
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-import re
 import threading
 import time
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -23,7 +22,10 @@ from proj7k.lazer.annotator import (
     build_biaxial_collection_map,
     format_injected_difficulty_name,
     inject_binned_skill_tags,
+    InjectedMetadata,
+    parse_injected_metadata,
 )
+from proj7k.difficulty import current_engine_version
 from proj7k.lazer.backup import DEFAULT_CACHE_DIR, LazerBackupManager
 from proj7k.lazer.bridge import (
     BatchUpdateResult,
@@ -58,6 +60,9 @@ class SyncSummary:
     updated_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
+    #: Previously injected charts successfully re-evaluated because their injection is stale
+    #: (older calibration version, or injected before versioning existed).
+    refreshed_count: int = 0
     snapshot_path: Optional[str] = None
     error: Optional[str] = None
 
@@ -86,29 +91,27 @@ def resolve_beatmap_file(files_dir: Path, record: LazerBeatmapRecord) -> Optiona
     return None
 
 
-_EXTRACT_INJECTED_PATTERN = re.compile(
-    r"\s*\((\d+\.\d+)★(?:\s+[A-Za-z0-9_]+)?\s+([A-Za-z_]+)\)$"
-)
-
-
-def try_extract_annotated_metadata(record: LazerBeatmapRecord) -> Optional[Tuple[float, str]]:
+def is_current_injection(
+    injection: Optional[InjectedMetadata],
+    record: LazerBeatmapRecord,
+    engine_version: str,
+) -> bool:
     """
-    If a record was previously annotated by proj7k and its attributes match,
-    extract (star_rating, dominant_tech) directly without re-evaluating the chart.
-    Supports both historical single-word suffixes and new Dan-tier suffixes.
+    True when a record's injected metadata was produced by the current engine methodology and
+    still agrees with the record it sits on.
+
+    Every other injection state must be re-evaluated and refreshed rather than trusted:
+    a suffix carrying a different version token (the calibration moved since it was injected)
+    and a suffix carrying none at all (injected before versioning existed). This is the point
+    of the version token — the old check compared the stored star rating against a freshly
+    computed one from the same formula, an identity that can never fail, so a chart injected by
+    an older formula would have kept its stale rating, Dan tier, and tags forever.
     """
-    match = _EXTRACT_INJECTED_PATTERN.search(record.difficulty_name)
-    if not match:
-        return None
-    try:
-        sr = float(match.group(1))
-        tech_title = match.group(2)
-        dominant_tech = tech_title.lower()
-        if abs(record.star_rating - sr) < 0.01 and f"dominant_{dominant_tech}" in record.tags:
-            return (sr, dominant_tech)
-    except (ValueError, IndexError):
-        return None
-    return None
+    return (
+        injection is not None
+        and injection.matches_version(engine_version)
+        and injection.matches_record(record)
+    )
 
 
 class LazerSyncManager:
@@ -213,6 +216,8 @@ class LazerSyncManager:
         already_annotated_items: List[Tuple[LazerBeatmapRecord, float, str]] = []
         skipped_count = 0
         failed_count = 0
+        refreshed_count = 0
+        engine_version = current_engine_version()
 
         total_maps = len(mania_7k)
         for idx, rec in enumerate(mania_7k, start=1):
@@ -222,10 +227,12 @@ class LazerSyncManager:
                     f"({len(items_to_update)} to update, {skipped_count} unchanged)..."
                 )
 
-            # Fast-path: check if chart was already annotated (historical or new format)
-            extracted = try_extract_annotated_metadata(rec)
-            if extracted is not None:
-                sr, dom_tech = extracted
+            # Fast-path: skip only charts injected by the current methodology. A chart
+            # injected by an older calibration — or before versioning existed — falls
+            # through to re-evaluation so its rating, tier, and tags get refreshed.
+            injection = parse_injected_metadata(rec.difficulty_name)
+            if is_current_injection(injection, rec, engine_version):
+                sr, dom_tech = injection.star_rating, injection.dominant_tech
             else:
                 osu_path = resolve_beatmap_file(self.files_dir, rec)
                 if not osu_path:
@@ -239,6 +246,9 @@ class LazerSyncManager:
                 except Exception:
                     failed_count += 1
                     continue
+
+                if injection is not None:
+                    refreshed_count += 1
 
             target_name = format_injected_difficulty_name(rec.difficulty_name, sr, dom_tech)
             target_tags = inject_binned_skill_tags(rec.tags, dom_tech, sr)
@@ -262,6 +272,7 @@ class LazerSyncManager:
                 updated_count=0,
                 skipped_count=skipped_count,
                 failed_count=failed_count,
+                refreshed_count=refreshed_count,
             )
 
         # Build collections containing ALL 7k beatmaps to prevent purging existing charts
@@ -329,6 +340,7 @@ class LazerSyncManager:
             updated_count=update_res.updated_count,
             skipped_count=skipped_count,
             failed_count=failed_count,
+            refreshed_count=refreshed_count,
             snapshot_path=str(snapshot_path) if snapshot_path else None,
         )
 
@@ -391,10 +403,15 @@ class LazerDaemon:
                     waiting_for_lock = False
 
                 if summary.updated_count > 0:
+                    refreshed_note = (
+                        f", {summary.refreshed_count} re-evaluated by a newer engine version"
+                        if summary.refreshed_count
+                        else ""
+                    )
                     logger.info(
                         f"Successfully synced {summary.updated_count} beatmaps "
-                        f"({summary.skipped_count} unchanged, {summary.failed_count} failed). "
-                        f"Snapshot: {summary.snapshot_path}"
+                        f"({summary.skipped_count} unchanged, {summary.failed_count} failed"
+                        f"{refreshed_note}). Snapshot: {summary.snapshot_path}"
                     )
                 else:
                     logger.debug(

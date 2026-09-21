@@ -17,8 +17,11 @@ from proj7k.lazer.daemon import (
     LazerSyncManager,
     SyncOptions,
     SyncSummary,
+    is_current_injection,
     resolve_beatmap_file,
 )
+from proj7k.lazer.annotator import parse_injected_metadata
+from proj7k.difficulty import current_engine_version
 
 
 def _make_osu_content(title="Test Song", version="Hard", mode=3, cs=7):
@@ -261,6 +264,148 @@ def test_sync_manager_incremental_skips_unchanged(tmp_path: Path):
     mock_bridge.apply_batch_update.assert_not_called()
 
 
+def _annotated_record(star_rating: float, difficulty_name: str, hash_hex: str) -> LazerBeatmapRecord:
+    from proj7k.lazer.annotator import inject_binned_skill_tags
+
+    return LazerBeatmapRecord(
+        id="rec-1",
+        hash=hash_hex,
+        md5_hash="md5-rec-1",
+        file_hash=hash_hex,
+        star_rating=star_rating,
+        difficulty_name=difficulty_name,
+        tags=inject_binned_skill_tags("", "jack", star_rating),
+        title="Test Song",
+        artist="Artist",
+        ruleset_id=3,
+        circle_size=7.0,
+    )
+
+
+def test_is_current_injection_requires_matching_version_and_record():
+    current = current_engine_version()
+    tags = "dominant_jack jack_5★ dan_5th"
+
+    def _record(rid: str, name: str, record_tags: str = tags, sr: float = 5.5):
+        return LazerBeatmapRecord(rid, "h", "m", "f", sr, name, record_tags, "T", "A", 3, 7.0)
+
+    fresh = _record("1", f"Hard (5.50★ 5th Jack {current})")
+    assert is_current_injection(parse_injected_metadata(fresh.difficulty_name), fresh, current) is True
+
+    stale = _record("2", "Hard (5.50★ 5th Jack vdeadbeef)")
+    assert is_current_injection(parse_injected_metadata(stale.difficulty_name), stale, current) is False
+
+    legacy = _record("3", "Hard (5.50★ 5th Jack)")
+    assert is_current_injection(parse_injected_metadata(legacy.difficulty_name), legacy, current) is False
+
+    # Never injected at all
+    pristine = _record("4", "Hard", "")
+    assert is_current_injection(parse_injected_metadata(pristine.difficulty_name), pristine, current) is False
+
+    # Versioned but self-inconsistent (hand-edited star rating / missing dominant tag)
+    drifted = _record("5", f"Hard (5.50★ 5th Jack {current})", sr=9.9)
+    assert is_current_injection(parse_injected_metadata(drifted.difficulty_name), drifted, current) is False
+    untagged = _record("6", f"Hard (5.50★ 5th Jack {current})", record_tags="")
+    assert is_current_injection(parse_injected_metadata(untagged.difficulty_name), untagged, current) is False
+
+
+@pytest.mark.parametrize(
+    "stale_name",
+    [
+        "Hard (5.00★ 5th Jack)",             # injected before versioning existed
+        "Hard (5.00★ 5th Jack vdeadbeef)",   # injected by an older calibration
+    ],
+)
+def test_sync_manager_reevaluates_stale_injections(tmp_path: Path, stale_name: str):
+    """
+    A chart injected by an older engine formula must be re-evaluated and refreshed, not
+    trusted: its star rating, Dan tier, tags, and version token are all recomputed.
+    """
+    realm_file = tmp_path / "client.realm"
+    realm_file.touch()
+    files_dir = tmp_path / "files"
+    files_dir.mkdir(parents=True)
+
+    hash_hex = "staleabcdef123456"
+    osu_file = files_dir / hash_hex
+    osu_file.write_text(_make_osu_content())
+
+    # Stale injection whose self-consistent-looking metadata would otherwise be trusted as-is.
+    record = _annotated_record(5.00, stale_name, hash_hex)
+
+    from proj7k.difficulty import evaluate_intrinsic_difficulty
+
+    expected_sr = evaluate_intrinsic_difficulty(osu_file).star_rating
+
+    mock_bridge = MagicMock(spec=RealmBridgeClient)
+    mock_bridge.dump_7k_beatmaps.return_value = [record]
+    mock_bridge.apply_batch_update.return_value = BatchUpdateResult(success=True, updated_count=1)
+
+    options = SyncOptions(
+        realm_path=realm_file,
+        files_dir=files_dir,
+        cache_dir=tmp_path / "cache",
+        lock_path=tmp_path / "client.realm.lock",
+        auto_setup=False,
+    )
+    manager = LazerSyncManager(options=options, bridge_client=mock_bridge)
+    summary = manager.sync_once()
+
+    assert summary.success is True
+    assert summary.skipped_count == 0
+    assert summary.refreshed_count == 1
+    assert summary.updated_count == 1
+
+    updates = mock_bridge.apply_batch_update.call_args.kwargs["updates"]
+    refreshed = updates[0].difficulty_name
+    assert refreshed.startswith("Hard (")
+    assert refreshed.endswith(f"{current_engine_version()})")
+    assert f"{expected_sr:.2f}★" in refreshed
+    assert updates[0].tags.startswith("dominant_")
+
+
+def test_reevaluation_preserves_pristine_backup_records(tmp_path: Path):
+    """
+    Re-evaluating a stale injection must not overwrite the pristine rollback state recorded
+    when the chart was first injected.
+    """
+    realm_file = tmp_path / "client.realm"
+    realm_file.touch()
+    files_dir = tmp_path / "files"
+    files_dir.mkdir(parents=True)
+
+    hash_hex = "rollbackabcdef"
+    (files_dir / hash_hex).write_text(_make_osu_content())
+
+    record = _annotated_record(5.00, "Hard (5.00★ 5th Jack)", hash_hex)
+
+    mock_bridge = MagicMock(spec=RealmBridgeClient)
+    mock_bridge.dump_7k_beatmaps.return_value = [record]
+    mock_bridge.apply_batch_update.return_value = BatchUpdateResult(success=True, updated_count=1)
+
+    options = SyncOptions(
+        realm_path=realm_file,
+        files_dir=files_dir,
+        cache_dir=tmp_path / "cache",
+        lock_path=tmp_path / "client.realm.lock",
+        auto_setup=False,
+    )
+    manager = LazerSyncManager(options=options, bridge_client=mock_bridge)
+
+    # Pristine state recorded when the chart was first handled.
+    manager.backup_manager.record_original_states([
+        LazerBeatmapRecord("rec-1", "h", "m", "f", 4.20, "Hard", "retro", "T", "A", 3, 7.0)
+    ])
+
+    summary = manager.sync_once()
+    assert summary.refreshed_count == 1
+
+    states = manager.backup_manager.load_backup_states()
+    assert states["rec-1"].original_star_rating == 4.20
+    assert states["rec-1"].original_difficulty_name == "Hard"
+    assert states["rec-1"].original_tags == "retro"
+
+
 def test_resolve_beatmap_file_variants(tmp_path: Path):
     nonexistent_dir = tmp_path / "nonexistent"
     rec = LazerBeatmapRecord("1", "hash1", "md5", "filehash", 3.0, "H", "", "T", "A", 3, 7.0)
@@ -455,14 +600,14 @@ def test_sync_manager_incremental_preserves_existing_collections(tmp_path: Path)
     files_dir = tmp_path / "files"
     files_dir.mkdir(parents=True)
 
-    # Map 1: already annotated
+    # Map 1: already annotated by the current methodology
     rec_old = LazerBeatmapRecord(
         id="rec-old",
         hash="hash-old",
         md5_hash="md5-old",
         file_hash="hash-old",
         star_rating=5.50,
-        difficulty_name="Hard (5.50★ 5th Jack)",
+        difficulty_name=f"Hard (5.50★ 5th Jack {current_engine_version()})",
         tags="dominant_jack jack_5★ dan_5th",
         title="Old Song",
         artist="Artist",

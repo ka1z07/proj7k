@@ -15,10 +15,13 @@ from proj7k.lazer.bridge import (
     LazerBeatmapRecord,
 )
 from proj7k.dan import estimate_canonical_dan
+from proj7k.difficulty import current_engine_version
 
-# Regular expression matching injected difficulty name suffix
-# Format: " ({star_rating:.2f}★ {dominant_title})" or " ({star_rating:.2f}★ {dan_tier} {dominant_title})"
-INJECTED_SUFFIX_PATTERN = re.compile(r"\s*\(\d+\.\d+★(?:\s+[A-Za-z0-9_]+){1,2}\)$")
+# Regular expression matching injected difficulty name suffix, deliberately permissive:
+# it strips every shape this project has ever injected — historical " (6.42★ Jack)",
+# " (6.42★ 7th Jack)", and the current versioned " (6.42★ 7th Jack v1a2b3c4d)".
+# `_INJECTED_METADATA_PATTERN` below is the strict counterpart that reads the components back.
+INJECTED_SUFFIX_PATTERN = re.compile(r"\s*\(\d+\.\d+★(?:\s+[A-Za-z0-9_]+){1,3}\)$")
 
 # Regular expression matching injected binned skill tags
 # e.g., "dominant_jack", "jack_6★", "dan_7th", "dan_gamma"
@@ -101,21 +104,89 @@ def strip_injected_suffix(difficulty_name: str) -> str:
     return INJECTED_SUFFIX_PATTERN.sub("", clean_name).rstrip()
 
 
+# Injected suffix components:
+#   1: star rating
+#   2: Dan tier (optional; absent in historical single-title injections)
+#   3: dominant technique title
+#   4: methodology version token (optional; absent in pre-versioning injections)
+_INJECTED_METADATA_PATTERN = re.compile(
+    r"\(\s*(\d+\.\d+)★(?:\s+([A-Za-z0-9_]+))?\s+([A-Za-z_]+?)"
+    r"(?:\s+(v[0-9a-f]{8}))?\s*\)$"
+)
+
+
+@dataclass(frozen=True)
+class InjectedMetadata:
+    """Metadata read back from a previously injected difficulty name."""
+    star_rating: float
+    dominant_tech: str
+    version: Optional[str] = None  # None for pre-versioning injections
+
+    @property
+    def is_versioned(self) -> bool:
+        return self.version is not None
+
+    def matches_version(self, expected_version: str) -> bool:
+        return self.version == expected_version
+
+    def matches_record(self, record: LazerBeatmapRecord) -> bool:
+        """
+        Self-consistency of the suffix against the record it was read from: the stored star
+        rating and dominant-skill tag must agree with the suffix. Guards against hand-edited
+        or half-applied injections.
+        """
+        return (
+            abs(record.star_rating - self.star_rating) < 0.01
+            and f"dominant_{self.dominant_tech}" in record.tags
+        )
+
+
+def parse_injected_metadata(difficulty_name: str) -> Optional[InjectedMetadata]:
+    """
+    Parse the proj7k suffix of a difficulty name, if one is present.
+
+    Returns None when the name carries no injected suffix. Unversioned (historical) suffixes
+    parse successfully with `version=None`, which lets the daemon treat them as stale
+    injections that need re-evaluation rather than as pristine charts.
+    """
+    if not difficulty_name:
+        return None
+    match = _INJECTED_METADATA_PATTERN.search(difficulty_name)
+    if not match:
+        return None
+    try:
+        star_rating = float(match.group(1))
+    except (TypeError, ValueError):
+        return None
+    return InjectedMetadata(
+        star_rating=star_rating,
+        dominant_tech=match.group(3).lower(),
+        version=match.group(4),
+    )
+
+
 def format_injected_difficulty_name(
     difficulty_name: str,
     star_rating: float,
     dominant_title: str,
     dan_tier: Optional[str] = None,
+    version: Optional[str] = None,
 ) -> str:
     """
-    Format a difficulty name with injected star rating, canonical Dan tier, and dominant technique suffix.
+    Format a difficulty name with injected star rating, canonical Dan tier, dominant technique,
+    and the methodology version the values were produced by.
     First strips any existing injected suffix to guarantee idempotence.
-    Format: "{base} ({star_rating:.2f}★ {dan_tier} {title})"
+    Format: "{base} ({star_rating:.2f}★ {dan_tier} {title} {version})"
+
+    The version token makes an injection self-describing: when the engine calibration changes,
+    the token changes with it, and the daemon can tell which charts were evaluated by the
+    current methodology and which must be re-evaluated (see `proj7k.difficulty.current_engine_version`).
     """
     base = strip_injected_suffix(difficulty_name)
     title = format_dominant_title(dominant_title)
     tier = (dan_tier or estimate_canonical_dan(star_rating)).strip()
-    suffix = f"({star_rating:.2f}★ {tier} {title})"
+    version_token = version or current_engine_version()
+    suffix = f"({star_rating:.2f}★ {tier} {title} {version_token})"
     if base:
         return f"{base} {suffix}"
     return suffix

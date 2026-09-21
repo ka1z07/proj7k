@@ -12,7 +12,7 @@
 1. **物理文件无损**：原始 `.osu` 文件保持 100% 原始只读，哈希绝对不变；
 2. **数据库级注入**：在 `client.realm` 中将 `BeatmapInfo.StarRating` 原地改写为 Intrinsic SR；
 3. **视觉与检索三位一体**：
-   - `DifficultyName` 后缀注入：`{original} ({SR:.2f}★ {Dominant})`，带正则幂等清洗；
+   - `DifficultyName` 后缀注入：`{original} ({SR:.2f}★ {Dan} {Dominant} {version})`（如 `Hard (6.42★ 7th Jack v1a2b3c4d)`），带正则幂等清洗；版本令牌为标定常数派生的方法学哈希（见 [ADR-0014](../../docs/adr/0014-injection-methodology-version-and-reevaluation.md)），供守护进程识别需重评的历史注入；
    - 离散星级桶标签：在 `Metadata.Tags` 注入 `dominant_{tech}` 与 `jack_6★`、`tech_5★` 等；
    - 双轴矩阵收藏夹：自动维护 8 个技法专项收藏夹 + 4 个段位阶梯收藏夹（共 12 个）；
 4. **并发与文件锁互斥防护**：通过 POSIX 文件锁监听 `client.realm.lock`，在游戏退出或未启动的安全刷盘窗（Safe Flush Window）瞬间执行原子落盘；

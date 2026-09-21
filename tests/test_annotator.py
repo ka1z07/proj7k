@@ -9,8 +9,11 @@ from proj7k.lazer.bridge import (
     BeatmapUpdatePayload,
     BeatmapRevertPayload,
 )
+from proj7k.difficulty import current_engine_version
 from proj7k.lazer.annotator import (
     INJECTED_SUFFIX_PATTERN,
+    InjectedMetadata,
+    parse_injected_metadata,
     strip_injected_suffix,
     format_injected_difficulty_name,
     generate_binned_skill_tags,
@@ -55,41 +58,95 @@ def test_strip_injected_suffix_injected_names():
     assert strip_injected_suffix("(5.00★ 4th Speed)") == ""
 
 
+VERSION = "v1a2b3c4d"  # pinned token so these assertions survive calibration changes
+
+
 def test_format_injected_difficulty_name():
     # Automatically derives Dan tier from star rating
-    assert format_injected_difficulty_name("Hard", 6.42, "jack") == "Hard (6.42★ 7th Jack)"
-    assert format_injected_difficulty_name("Hard", 6.42, "Jack") == "Hard (6.42★ 7th Jack)"
-    assert format_injected_difficulty_name("Insane", 8.0, "ln_general") == "Insane (8.00★ 10th LN_General)"
-    assert format_injected_difficulty_name("Master", 9.156, "LN_Release") == "Master (9.16★ Azimuth LN_Release)"
-    assert format_injected_difficulty_name("God", 10.8, "speed") == "God (10.80★ Stellium Speed)"
-    assert format_injected_difficulty_name("Beginner", 2.0, "tech") == "Beginner (2.00★ 0th Tech)"
-    assert format_injected_difficulty_name("", 5.0, "speed") == "(5.00★ 4th Speed)"
+    assert format_injected_difficulty_name("Hard", 6.42, "jack", version=VERSION) == f"Hard (6.42★ 7th Jack {VERSION})"
+    assert format_injected_difficulty_name("Hard", 6.42, "Jack", version=VERSION) == f"Hard (6.42★ 7th Jack {VERSION})"
+    assert format_injected_difficulty_name("Insane", 8.0, "ln_general", version=VERSION) == f"Insane (8.00★ 10th LN_General {VERSION})"
+    assert format_injected_difficulty_name("Master", 9.156, "LN_Release", version=VERSION) == f"Master (9.16★ Azimuth LN_Release {VERSION})"
+    assert format_injected_difficulty_name("God", 10.8, "speed", version=VERSION) == f"God (10.80★ Stellium Speed {VERSION})"
+    assert format_injected_difficulty_name("Beginner", 2.0, "tech", version=VERSION) == f"Beginner (2.00★ 0th Tech {VERSION})"
+    assert format_injected_difficulty_name("", 5.0, "speed", version=VERSION) == f"(5.00★ 4th Speed {VERSION})"
 
     # Explicit dan_tier override
-    assert format_injected_difficulty_name("Hard", 6.42, "jack", dan_tier="6th") == "Hard (6.42★ 6th Jack)"
+    assert format_injected_difficulty_name("Hard", 6.42, "jack", dan_tier="6th", version=VERSION) == f"Hard (6.42★ 6th Jack {VERSION})"
+
+
+def test_injected_suffix_carries_engine_version_by_default():
+    # The injection is self-describing: an unnamed version defaults to the engine calibration version.
+    expected = f"Hard (6.42★ 7th Jack {current_engine_version()})"
+    assert format_injected_difficulty_name("Hard", 6.42, "jack") == expected
+    assert parse_injected_metadata(expected) == InjectedMetadata(6.42, "jack", current_engine_version())
 
 
 def test_difficulty_name_idempotence():
     # 1. Repeated formatting with same values yields exact same result
-    formatted_1 = format_injected_difficulty_name("Insane", 6.42, "jack")
-    formatted_2 = format_injected_difficulty_name(formatted_1, 6.42, "jack")
-    formatted_3 = format_injected_difficulty_name(formatted_2, 6.42, "jack")
-    assert formatted_1 == "Insane (6.42★ 7th Jack)"
+    formatted_1 = format_injected_difficulty_name("Insane", 6.42, "jack", version=VERSION)
+    formatted_2 = format_injected_difficulty_name(formatted_1, 6.42, "jack", version=VERSION)
+    formatted_3 = format_injected_difficulty_name(formatted_2, 6.42, "jack", version=VERSION)
+    assert formatted_1 == f"Insane (6.42★ 7th Jack {VERSION})"
     assert formatted_2 == formatted_1
     assert formatted_3 == formatted_1
 
-    # 2. Re-formatting with updated values replaces suffix without accumulating
-    updated = format_injected_difficulty_name(formatted_1, 7.10, "tech")
-    assert updated == "Insane (7.10★ 9th Tech)"
+    # 2. Re-formatting with updated values replaces suffix without accumulating; the version
+    #    token is refreshed too, so a re-evaluation never leaves a stale version behind.
+    updated = format_injected_difficulty_name(formatted_1, 7.10, "tech", version="vdeadbeef")
+    assert updated == "Insane (7.10★ 9th Tech vdeadbeef)"
 
     # 3. Migration from historical suffix: replaces old suffix cleanly with new Dan suffix
-    migrated = format_injected_difficulty_name("Insane (6.42★ Jack)", 6.42, "jack")
-    assert migrated == "Insane (6.42★ 7th Jack)"
+    migrated = format_injected_difficulty_name("Insane (6.42★ Jack)", 6.42, "jack", version=VERSION)
+    assert migrated == f"Insane (6.42★ 7th Jack {VERSION})"
+    migrated_versioned = format_injected_difficulty_name(f"Insane (6.42★ 7th Jack {VERSION})", 6.42, "jack", version=VERSION)
+    assert migrated_versioned == migrated
 
     # 4. Repeated stripping yields base name
     base = strip_injected_suffix(updated)
     assert base == "Insane"
     assert strip_injected_suffix(base) == "Insane"
+
+
+def test_parse_injected_metadata():
+    # Current versioned format
+    assert parse_injected_metadata("Hard (6.42★ 7th Jack v1a2b3c4d)") == InjectedMetadata(6.42, "jack", "v1a2b3c4d")
+    assert parse_injected_metadata("Master (9.16★ Azimuth LN_Release vdeadbeef)") == InjectedMetadata(9.16, "ln_release", "vdeadbeef")
+
+    # Historical formats: recognized as injections, but carry no version
+    assert parse_injected_metadata("Hard (6.42★ 7th Jack)") == InjectedMetadata(6.42, "jack", None)
+    assert parse_injected_metadata("Special (EX) (7.10★ Tech)") == InjectedMetadata(7.10, "tech", None)
+    assert parse_injected_metadata("(5.00★ Speed)") == InjectedMetadata(5.0, "speed", None)
+
+    # Not an injected suffix at all
+    assert parse_injected_metadata("Another (EX)") is None
+    assert parse_injected_metadata("Difficulty with 7★ star") is None
+    assert parse_injected_metadata("") is None
+
+
+def test_versioned_suffix_stripping_and_revert():
+    versioned = "Freedom Dive (10.52★ Stellium Stream v1a2b3c4d)"
+    assert strip_injected_suffix(versioned) == "Freedom Dive"
+    assert strip_injected_suffix(strip_injected_suffix(versioned)) == "Freedom Dive"
+    assert INJECTED_SUFFIX_PATTERN.search(versioned) is not None
+
+    record = LazerBeatmapRecord(
+        id="rec-v",
+        hash="h",
+        md5_hash="m",
+        file_hash="f",
+        star_rating=10.52,
+        difficulty_name=versioned,
+        tags="dominant_stream stream_10★ dan_stellium",
+        title="Freedom Dive",
+        artist="xi",
+        ruleset_id=3,
+        circle_size=7.0,
+    )
+    revert = create_lazer_revert_payload(record)
+    assert revert.difficulty_name == "Freedom Dive"
+    assert revert.tags == ""
+    assert revert.star_rating == 10.52
 
 
 def test_generate_binned_skill_tags():
@@ -277,7 +334,7 @@ def test_annotate_lazer_beatmap_7k():
     assert isinstance(payload, BeatmapUpdatePayload)
     assert payload.id == record.id
     assert payload.star_rating == 6.78
-    assert payload.difficulty_name == "Hyper (6.78★ 8th Stream)"
+    assert payload.difficulty_name == f"Hyper (6.78★ 8th Stream {current_engine_version()})"
     assert payload.tags == "jubeat dominant_stream stream_6★ dan_8th"
 
 
@@ -325,8 +382,9 @@ def test_annotate_batch_and_build_collections():
 
     updates, collections = annotate_batch_and_build_collections(items)
     assert len(updates) == 2
-    assert updates[0].difficulty_name == "Easy (3.20★ 0th Jack)"
-    assert updates[1].difficulty_name == "Hard (7.50★ 10th LN_Inverse)"
+    version = current_engine_version()
+    assert updates[0].difficulty_name == f"Easy (3.20★ 0th Jack {version})"
+    assert updates[1].difficulty_name == f"Hard (7.50★ 10th LN_Inverse {version})"
 
     assert len(collections) == 12
     assert collections["7K Jack"] == ["md5-1"]
@@ -397,7 +455,7 @@ def test_trailing_whitespace_suffix_idempotence():
     assert strip_injected_suffix(name_with_trailing) == "Hard"
     # Reformatting should not accumulate and upgrades to new Dan suffix
     reformatted = format_injected_difficulty_name(name_with_trailing, 6.42, "Jack")
-    assert reformatted == "Hard (6.42★ 7th Jack)"
+    assert reformatted == f"Hard (6.42★ 7th Jack {current_engine_version()})"
 
 
 def test_complex_and_unicode_difficulty_names_idempotence_sweep():
