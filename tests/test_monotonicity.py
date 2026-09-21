@@ -54,8 +54,17 @@ def test_rank_correlation_with_ties():
     assert 0.8 < rho <= 1.0
 
 
+def test_tier_order_references_canonical_dan_ladder():
+    from proj7k.dan import CANONICAL_DAN_TIERS
+
+    # One shared definition: the lowest tier must not be silently dropped.
+    assert TIER_ORDER == list(CANONICAL_DAN_TIERS)
+    assert TIER_ORDER[0] == "0th"
+    assert len(TIER_ORDER) == 15
+
+
 def test_evaluate_tier_sequence_monotonic():
-    # 14-tier monotonically increasing values: 1st..Stellium
+    # Full canonical ladder, monotonically increasing: 0th..Stellium
     tier_vals = [(tier, float(i + 1) * 2.0) for i, tier in enumerate(TIER_ORDER)]
     report = evaluate_tier_sequence(tier_vals, technique="Regular Jack", metric="avg_nps")
 
@@ -64,24 +73,25 @@ def test_evaluate_tier_sequence_monotonic():
     assert report.is_monotonic is True
     assert report.kendall_tau == 1.0
     assert report.spearman_rho == 1.0
-    assert len(report.steps) == 13
+    assert len(report.steps) == len(TIER_ORDER) - 1
     assert len(report.violations) == 0
 
-    # Verify first step: 1st -> 2nd
+    # Verify first step: 0th -> 1st (the lowest tier is covered)
     step0 = report.steps[0]
-    assert step0.from_tier == "1st"
-    assert step0.to_tier == "2nd"
+    assert step0.from_tier == "0th"
+    assert step0.to_tier == "1st"
     assert step0.delta == 2.0
     assert step0.pct_change == 100.0
 
 
 def test_evaluate_tier_sequence_with_inversion():
-    # Introduce an inversion at 5th -> 6th
+    # Introduce an inversion at 5th -> 6th: 6th lands one point below 5th
+    expected = {tier: float(i + 1) * 2.0 for i, tier in enumerate(TIER_ORDER)}
     tier_vals = []
-    for i, tier in enumerate(TIER_ORDER):
-        val = float(i + 1) * 2.0
+    for tier in TIER_ORDER:
+        val = expected[tier]
         if tier == "6th":
-            val = 9.0  # 5th was 10.0 -> drop of 1.0!
+            val = expected["5th"] - 1.0
         tier_vals.append((tier, val))
 
     report = evaluate_tier_sequence(tier_vals, technique="LN Inverse", metric="mean_locked_fingers")
@@ -94,8 +104,8 @@ def test_evaluate_tier_sequence_with_inversion():
     assert violation.metric == "mean_locked_fingers"
     assert violation.from_tier == "5th"
     assert violation.to_tier == "6th"
-    assert violation.from_value == 10.0
-    assert violation.to_value == 9.0
+    assert violation.from_value == expected["5th"]
+    assert violation.to_value == expected["5th"] - 1.0
     assert violation.drop_magnitude == 1.0
     assert "5th" in violation.advice and "6th" in violation.advice
 

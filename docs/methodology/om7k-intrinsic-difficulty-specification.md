@@ -18,7 +18,7 @@
 ### 1.2 权威尺度公理 (Axiom of Canonical Benchmark)
 **Jinjin 7K Dan**（包括常规米键 **Regular Dan** 与长押 **LN Dan** 两大独立序列及各自 4 类单一技法练习谱面集）被确立为系统内衡量单一技法难度梯度的**唯一权威基准坐标系**。
 - 严禁引入非官方衍生的民间段位或未经严密校验的社区非标铺面作为基准原点；
-- 评价任何铺面的难度向量时，必须投影至 Jinjin Dan 的 14 级进阶梯度（1st Dan 至 Stellium）及 8 类单一技法正交基底上。
+- 评价任何铺面的难度向量时，必须投影至 Jinjin Dan 的 15 级进阶梯度（0th 起步锚点至 Stellium，见 `CONTEXT.md` 与 `docs/adr/0002`）及 8 类单一技法正交基底上。
 
 ---
 
@@ -152,7 +152,7 @@ $$\text{Difficulty}_{\text{Hybrid}}(A \otimes B) = \text{Diff}(A) + \text{Diff}(
 5. **Step 5：四维直觉阻力交叉审问 (Checklist 审查)**
    - 逐项审查：视认组块破坏度、负空间倒错率、`[gap:1]` 生理剪切频次、自由度压制深度、尾判早放级联脆弱点、复合耦合畸变项。
 6. **Step 6：Jinjin Dan 基准对齐与模式库归纳**
-   - 与 Jinjin Regular Dan / LN Dan 14 级段位序列及 8 项单一技法练习集进行难度与风格投影，产出结构化归纳卡片（Induction Card）。
+   - 与 Jinjin Regular Dan / LN Dan 15 级段位序列及 8 项单一技法练习集进行难度与风格投影，产出结构化归纳卡片（Induction Card）。
 
 ---
 
@@ -180,5 +180,5 @@ $$\text{Difficulty}_{\text{Hybrid}}(A \otimes B) = \text{Diff}(A) + \text{Diff}(
 ## 七、规范实施与演进路线 (Evolution Roadmap)
 
 1. **阶段一（当前已就绪）**：确立方法论与描述语言，完成标杆切片工具与分析器开发，通过代表性盲测样本集验证视角复刻一致性；
-2. **阶段二（后续推进）**：以 Jinjin Dan 14 级段位曲目库为基础，批量执行自动化经验蒸馏，沉淀全量 7K 技法模式库；
+2. **阶段二（后续推进）**：以 Jinjin Dan 15 级段位曲目库（含 0th 起步锚点）为基础，批量执行自动化经验蒸馏，沉淀全量 7K 技法模式库；
 3. **阶段三（引擎落地）**：基于沉淀模式库与 4 维阻力模型，实现全自动 om7k 固有难度评估与技法多维雷达引擎。

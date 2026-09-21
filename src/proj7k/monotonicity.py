@@ -1,16 +1,25 @@
 import math
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
+from proj7k.dan import CANONICAL_DAN_TIERS
 from proj7k.scaling import (
     compute_action_window,
     apply_inverse_bpm_scaling,
     ClockWindowRecord,
 )
 
-TIER_ORDER: List[str] = [
-    "1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
-    "8th", "9th", "10th", "Gamma", "Azimuth", "Zenith", "Stellium"
-]
+#: Canonical Dan progression ladder, referenced from its single authoritative definition.
+#: Every tier — including the lowest one, 0th — must be covered by monotonicity evaluation;
+#: a private copy here previously dropped 0th silently.
+TIER_ORDER: List[str] = list(CANONICAL_DAN_TIERS)
+
+#: Metrics that climb with the Dan ladder by construction: physical density quantities.
+#: `hold_pct` and `mean_locked_fingers` are deliberately absent — they describe the technique
+#: regime rather than the tier (pure rice charts are hold-poor, LN charts lock many fingers),
+#: so they are not monotone across tiers at all and must not be gated on by default.
+#: Batch reports still evaluate every metric; this is the set the Monotonicity Guard validates
+#: unless asked for others explicitly.
+DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
 
 
 def compute_kendall_tau(y: List[float]) -> float:
@@ -271,6 +280,12 @@ def evaluate_batch_monotonicity(
     """
     Groups batch results by technique and evaluates monotonicity along canonical tiers
     for the specified feature metrics.
+
+    Evaluates every listed metric; when none are listed, all four baseline metrics are
+    evaluated. Note that `hold_pct` and `mean_locked_fingers` are not monotone across tiers by
+    nature (pure rice charts are hold-poor, LN charts lock many fingers), so they are reported
+    for diagnosis but are excluded from the Monotonicity Guard's default gate — see
+    `DEFAULT_GUARD_METRICS`.
 
     If apply_scaling is True, pre-applies the Inverse BPM Scaling Law gating operator
     for LN Inverse on mean_locked_fingers to eliminate pseudo-inversions caused by low-speed charts,

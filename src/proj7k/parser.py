@@ -61,6 +61,64 @@ class Beatmap7K:
     md5: str = ""
 
 
+def uninherited_timing_points(beatmap: Beatmap7K) -> List[TimingPoint]:
+    """All uninherited (BPM-defining) timing points carrying a positive beat length."""
+    return [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
+
+
+def dominant_timing_point(beatmap: Beatmap7K) -> Optional[TimingPoint]:
+    """
+    Selects the timing point that governs the largest share of the chart's duration:
+    the duration-weighted dominant BPM source.
+
+    A chart with BPM changes has exactly one dominant tempo — the one heard for most of the
+    chart — and every engine stage must read it from here. Taking the *first* uninherited
+    point instead (retired) reports an arbitrary section's tempo for variable-BPM charts.
+    """
+    uninherited = uninherited_timing_points(beatmap)
+    if not uninherited:
+        return None
+    if len(uninherited) == 1:
+        return uninherited[0]
+
+    chart_end_ms: Optional[float] = None
+    if beatmap.hit_objects:
+        chart_end_ms = max(
+            (ho.end_time if (ho.note_type == NoteType.LN and ho.end_time is not None) else ho.time)
+            for ho in beatmap.hit_objects
+        )
+
+    best = uninherited[0]
+    best_span = -1.0
+    for i, tp in enumerate(uninherited):
+        if i + 1 < len(uninherited):
+            end_t = uninherited[i + 1].time
+        elif chart_end_ms is not None:
+            end_t = chart_end_ms
+        else:
+            end_t = tp.time + 10000.0
+        span = max(0.0, end_t - tp.time)
+        if span > best_span:
+            best_span = span
+            best = tp
+    return best
+
+
+def dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
+    """
+    The single dominant BPM of a chart: the unrounded tempo of its dominant timing point.
+
+    Unrounded on purpose — this is the physical quantity fed to strain accumulation and
+    cognitive scaling, where a 1-ulp shift moves every downstream sample. Callers that need
+    a display/checksum-stable form round it themselves.
+    """
+    tp = dominant_timing_point(beatmap)
+    if tp is None:
+        return default
+    bpm = tp.bpm
+    return bpm if (bpm is not None and bpm > 0) else default
+
+
 def _format_num(val: float) -> str:
     if abs(val - round(val)) < 1e-9:
         return str(int(round(val)))

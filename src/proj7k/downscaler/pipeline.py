@@ -100,7 +100,9 @@ def downscale_beatmap(
 
     # 1. Evaluate baseline characteristics of original beatmap
     orig_feat = extract_beatmap_features(beatmap)
-    orig_radar = compute_technique_radar(beatmap, options=radar_opts)
+    orig_radar = compute_technique_radar(
+        beatmap, options=radar_opts, calibration=rating_opts.calibration
+    )
     orig_strain = compute_dual_hand_strain(beatmap, options=strain_opts)
     orig_rating = synthesize_star_rating(orig_radar, p90_strain=orig_strain.p90_strain, options=rating_opts)
 
@@ -149,7 +151,9 @@ def downscale_beatmap(
 
     # 6. Re-evaluate final practice beatmap
     final_feat = extract_beatmap_features(practice_bm)
-    final_radar = compute_technique_radar(practice_bm, options=radar_opts)
+    final_radar = compute_technique_radar(
+        practice_bm, options=radar_opts, calibration=rating_opts.calibration
+    )
     final_strain = compute_dual_hand_strain(practice_bm, options=strain_opts)
     final_rating = synthesize_star_rating(final_radar, p90_strain=final_strain.p90_strain, options=rating_opts)
 

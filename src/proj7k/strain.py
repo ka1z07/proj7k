@@ -12,7 +12,13 @@ from dataclasses import dataclass
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
-from proj7k.parser import Beatmap7K, NoteType
+from proj7k.calibration import DEFAULT_CALIBRATION, StrainStarCalibration
+from proj7k.parser import Beatmap7K, NoteType, dominant_bpm
+from proj7k.physics import (
+    ANTIPHASE_ONSET_WINDOW_S,
+    JACK_INTERVAL_PENALTY_MS,
+    SPEED_BURST_INTERVAL_MS,
+)
 
 # 7K Symmetric Topological Track Layout:
 # L3 (0), L2 (1), L1 (2) | S (3) | R1 (4), R2 (5), R3 (6)
@@ -83,16 +89,21 @@ class StrainTimeseriesProfile:
 
 @dataclass(frozen=True)
 class StrainOptions:
-    """Configuration options for dual-hand strain accumulation and modulation."""
+    """
+    Configuration options for dual-hand strain accumulation and modulation.
+
+    `bpm` is an explicit tempo override; when unset the chart's dominant BPM is read from
+    `parser.dominant_bpm` (the single BPM source).
+    """
     tau_time_constant_s: float = 1.2
     tau_half_life_s: float = 1.2  # Alias for backward compatibility
     window_s: float = 0.5
     step_s: float = 0.25
-    jack_threshold_ms: float = 160.0
+    jack_threshold_ms: float = JACK_INTERVAL_PENALTY_MS
     jack_weight: float = 0.18
     gap1_weight: float = 0.20
     gap1_threshold_s: float = 0.015
-    speed_burst_threshold_ms: float = 110.0
+    speed_burst_threshold_ms: float = SPEED_BURST_INTERVAL_MS
     speed_burst_weight: float = 0.30
     w_judg_ms: float = 38.0
     alpha: float = 0.60
@@ -136,7 +147,7 @@ def compute_high_speed_scaling_factor(bpm: float, eta: float) -> float:
 def compute_micro_speed_burst(
     sorted_hit_times: List[float],
     min_interval_ms: float = 5.0,
-    max_interval_ms: float = 110.0,
+    max_interval_ms: float = SPEED_BURST_INTERVAL_MS,
 ) -> float:
     """
     Computes non-linear micro-speed burst strain:
@@ -235,7 +246,7 @@ def _compute_hand_load(
                             middle_hits if c1 == hand_lanes[1] else inner_hits
                         )
                         for pr in col_hits_c1:
-                            if abs(pr - rl) < 0.025:
+                            if abs(pr - rl) < ANTIPHASE_ONSET_WINDOW_S:
                                 antiphase += 1
 
     l_cog = 0.35 * (locked_fingers / 3.0) * scaling_factor + 0.15 * antiphase
@@ -259,17 +270,18 @@ def _calculate_percentile(values: List[float], q: float) -> float:
 
 def compute_raw_strain_star_rating(
     s_base: float,
-    a: float = 0.268980,
-    b: float = 0.129915,
-    exp: float = 0.65,
+    a: float = DEFAULT_CALIBRATION.strain_a,
+    b: float = DEFAULT_CALIBRATION.strain_b,
+    exp: float = DEFAULT_CALIBRATION.strain_exp,
 ) -> float:
     """
     Maps physical steady-state strain S_base to raw star rating:
     SR_raw = a * S_base^exp + b
+
+    Defaults come from the canonical calibration; the law itself lives in
+    `calibration.StrainStarCalibration.star_rating_from_strain`.
     """
-    if s_base <= 0.0:
-        return 0.0
-    return max(0.0, a * math.pow(s_base, exp) + b)
+    return StrainStarCalibration(a, b, exp).star_rating_from_strain(s_base)
 
 
 def compute_dual_hand_strain(
@@ -296,15 +308,11 @@ def compute_dual_hand_strain(
             peak_strain=0.0,
         )
 
-    # Determine effective BPM
+    # Effective BPM: explicit override, else the chart's single dominant tempo
     if options.bpm is not None and options.bpm > 0:
         bpm = options.bpm
     else:
-        bpm = 150.0
-        for tp in beatmap.timing_points:
-            if tp.uninherited and tp.bpm is not None and tp.bpm > 0:
-                bpm = tp.bpm
-                break
+        bpm = dominant_bpm(beatmap)
 
     eta = compute_judgment_overlap_buffer(bpm, options.w_judg_ms)
     scaling_factor = compute_high_speed_scaling_factor(bpm, eta)

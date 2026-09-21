@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 import pytest
 from proj7k.batch import (
+    BatchSummary,
+    BenchmarkBatchReport,
     BenchmarkItem,
     run_benchmark_pipeline,
     main as batch_cli_main,
@@ -158,6 +160,44 @@ def test_batch_cli_with_guard_flag(tmp_path: Path):
         "--guard-min-rho", "-1.0",
     ])
     assert exit_code_tolerated == 0
+
+
+def test_guard_default_metrics_exclude_structurally_non_monotone_quantities():
+    """
+    The bundled 120-chart benchmark report evaluates hold_pct and mean_locked_fingers.
+    Neither is monotone along the tier ladder (pure rice charts are hold-poor, LN charts
+    lock many fingers), so the guard's default metric set must not validate them — while
+    still validating them on explicit request.
+    """
+    report_path = Path("reports/batch_report.json")
+    if not report_path.exists():
+        pytest.skip("Bundled benchmark report not found.")
+
+    with open(report_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    report = BenchmarkBatchReport(
+        summary=BatchSummary(**data["summary"]),
+        results=[],
+        monotonicity=data.get("monotonicity"),
+        feature_checksum=data.get("feature_checksum"),
+    )
+    assert "hold_pct" in report.monotonicity["Regular Speed"]
+
+    default_res = evaluate_monotonicity_guard(report)
+    default_msg = default_res.error_message or ""
+    assert not default_res.violations_by_technique or all(
+        "hold_pct" not in {v.get("metric") for v in vs}
+        for vs in default_res.violations_by_technique.values()
+    )
+    assert "hold_pct" not in default_msg
+    assert "mean_locked_fingers" not in default_msg
+
+    requested_res = evaluate_monotonicity_guard(
+        report, config=MonotonicityGuardConfig(metrics=["hold_pct"])
+    )
+    assert requested_res.passed is False
+    assert "hold_pct" in requested_res.error_message
 
 
 def test_monotonicity_guard_blocks_on_ingestion_failure():

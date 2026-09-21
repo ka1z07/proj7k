@@ -1,25 +1,11 @@
 import hashlib
 import json
 from typing import List, Dict, Any
+from proj7k.dan import CANONICAL_DAN_TIERS
 from proj7k.features import BeatmapFeatures
 
-TIER_ORDER_MAP: Dict[str, int] = {
-    "0th": 0,
-    "1st": 1,
-    "2nd": 2,
-    "3rd": 3,
-    "4th": 4,
-    "5th": 5,
-    "6th": 6,
-    "7th": 7,
-    "8th": 8,
-    "9th": 9,
-    "10th": 10,
-    "Gamma": 11,
-    "Azimuth": 12,
-    "Zenith": 13,
-    "Stellium": 14,
-}
+#: Tier name to ladder index, derived from the authoritative Dan hierarchy.
+TIER_ORDER_MAP: Dict[str, int] = {tier: i for i, tier in enumerate(CANONICAL_DAN_TIERS)}
 
 
 def _canonicalize_features(features: BeatmapFeatures, precision: int) -> Dict[str, Any]:

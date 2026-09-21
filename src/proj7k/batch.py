@@ -413,7 +413,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--guard-metric",
         action="append",
         dest="guard_metrics",
-        help="Specific metrics to validate in Monotonicity Guard (default: all evaluated metrics)",
+        help="Specific metrics to validate in Monotonicity Guard (default: tier-monotone metrics only)",
     )
     parser.add_argument(
         "--guard-max-violations",
@@ -465,11 +465,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         from proj7k.guard import evaluate_monotonicity_guard, MonotonicityGuardConfig
         guard_cfg = MonotonicityGuardConfig(
             expected_checksum=args.expected_checksum,
-            metrics=args.guard_metrics,
             max_violations=args.guard_max_violations,
             min_kendall_tau=args.guard_min_tau,
             min_spearman_rho=args.guard_min_rho,
         )
+        # Only override the default metric set when the caller asked for specific metrics.
+        if args.guard_metrics:
+            guard_cfg.metrics = list(args.guard_metrics)
         guard_res = evaluate_monotonicity_guard(report, config=guard_cfg)
         if not guard_res.passed:
             print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)

@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any, Tuple
-from proj7k.parser import Beatmap7K, NoteType
+from proj7k.parser import Beatmap7K, NoteType, dominant_bpm, uninherited_timing_points
 from proj7k.window import generate_all_barlines
 from proj7k.scaling import compute_action_window, compute_inverse_score
 
@@ -52,21 +52,13 @@ def _calc_rate(count: int, duration_s: float) -> float:
 
 
 def get_dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
-    """Extracts dominant BPM from uninherited timing points."""
-    uninherited = [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
-    if not uninherited:
-        return default
-    if len(uninherited) == 1:
-        return round(60000.0 / uninherited[0].beat_length, 2)
-    durations: Dict[float, float] = {}
-    for i, tp in enumerate(uninherited):
-        bpm_val = round(60000.0 / tp.beat_length, 2)
-        end_t = uninherited[i + 1].time if (i + 1 < len(uninherited)) else (
-            max(ho.time for ho in beatmap.hit_objects) if beatmap.hit_objects else tp.time + 10000.0
-        )
-        span = max(0.0, end_t - tp.time)
-        durations[bpm_val] = durations.get(bpm_val, 0.0) + span
-    return max(durations.keys(), key=lambda b: durations[b])
+    """
+    Dominant BPM rounded to 2 decimals, for feature/checksum-stable consumption.
+
+    The tempo selection itself lives in `parser.dominant_bpm` (the single source shared with
+    the strain accumulator); only the 2-decimal presentation rounding is applied here.
+    """
+    return round(dominant_bpm(beatmap, default=default), 2)
 
 
 def extract_beatmap_features(
@@ -326,7 +318,7 @@ def extract_beatmap_features(
         spatial_entropy = 0.0
 
     # 7. Rhythmic Irregularity (Snap Variance Entropy, Micro-timing Jerk, and Mixing) (ADR-0008)
-    uninherited = [tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0]
+    uninherited = uninherited_timing_points(beatmap)
     default_bl = (60000.0 / effective_bpm) if effective_bpm > 0 else 400.0
     step_times = sorted(list(set(ho.time for ho in hos_sorted)))
 

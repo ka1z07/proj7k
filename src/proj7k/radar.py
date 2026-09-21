@@ -13,15 +13,20 @@ from dataclasses import dataclass
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+from proj7k.calibration import DEFAULT_CALIBRATION, StrainStarCalibration
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K, HitObject, NoteType
+from proj7k.physics import (
+    BRACKET_PHASE_INVERSION_WINDOW_MS,
+    CHORDJACK_STEP_INTERVAL_MS,
+    SPEED_BURST_INTERVAL_MS,
+)
 from proj7k.scaling import compute_inverse_score
 from proj7k.strain import (
     StrainOptions,
     StrainTimeseriesProfile,
     compute_dual_hand_strain,
     compute_micro_speed_burst,
-    compute_raw_strain_star_rating,
 )
 
 TECHNIQUE_NAMES: Tuple[str, ...] = (
@@ -108,8 +113,8 @@ class TechniqueRadar:
 class RadarOptions:
     """Configuration options for technique radar calibration and suppression."""
     min_rice_hold_threshold: float = 0.05
-    jack_threshold_ms: float = 220.0
-    speed_burst_threshold_ms: float = 110.0
+    jack_threshold_ms: float = CHORDJACK_STEP_INTERVAL_MS
+    speed_burst_threshold_ms: float = SPEED_BURST_INTERVAL_MS
     w_judg_ms: float = 38.0
     chord_eps_ms: float = 8.0
     jack_m_max: float = 1.5
@@ -192,9 +197,9 @@ def _compute_jack_and_stream_raw(
         curr_left = {c for c in step_cols if c in (0, 1, 2)}
         curr_right = {c for c in step_cols if c in (4, 5, 6)}
 
-        # Bracket phase inversion detection between consecutive steps (dt < 120ms per CONTEXT.md)
+        # Bracket phase inversion detection between consecutive steps (CONTEXT.md 括号拓扑相变)
         dt_step = step_time - prev_step_time
-        if 0.0 < dt_step < 120.0:
+        if 0.0 < dt_step < BRACKET_PHASE_INVERSION_WINDOW_MS:
             # Left hand: outer/inner {0, 2} vs mid {1}
             if ({0, 2}.issubset(prev_left_cols) and 1 in curr_left) or (1 in prev_left_cols and {0, 2}.issubset(curr_left)):
                 bracket_inversions += 1
@@ -296,7 +301,10 @@ def _compute_jack_and_stream_raw(
     return r_jack, r_stream, jack_ratio, max_run_length, jack_count, tortuosity, bracket_density
 
 
-def _compute_jack_raw(beatmap: Beatmap7K, jack_threshold_ms: float = 220.0) -> float:
+def _compute_jack_raw(
+    beatmap: Beatmap7K,
+    jack_threshold_ms: float = CHORDJACK_STEP_INTERVAL_MS,
+) -> float:
     """Computes raw Jack intensity via _compute_jack_and_stream_raw."""
     r_jack, *_ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
     return r_jack
@@ -322,12 +330,21 @@ def compute_technique_radar(
     features: Optional[BeatmapFeatures] = None,
     strain_profile: Optional[StrainTimeseriesProfile] = None,
     options: Optional[RadarOptions] = None,
+    calibration: Optional[StrainStarCalibration] = None,
 ) -> TechniqueRadar:
     """
     Computes calibrated 8-dimension technique radar scores with cross-suppression.
+
+    `calibration` carries the star-scale constants (anchor law + driver back-pressure
+    exponent) that every technique score is expressed in. Callers pass the calibration of
+    the options object driving the evaluation (see `rating.RatingOptions.calibration`) so
+    that the radar vector and the synthesized star rating can never drift apart; when
+    omitted, the canonical `calibration.DEFAULT_CALIBRATION` is used.
     """
     if options is None:
         options = RadarOptions()
+    if calibration is None:
+        calibration = DEFAULT_CALIBRATION
 
     hos = beatmap.hit_objects
     if not hos:
@@ -352,7 +369,7 @@ def compute_technique_radar(
 
     hold_ratio = features.hold_pct / 100.0
     p90_strain = strain_profile.p90_strain
-    sr_base = compute_raw_strain_star_rating(p90_strain)
+    sr_base = calibration.star_rating_from_strain(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
     # Decoupled Jack and Stream drivers via discrete step distance, continuous strain decay,
@@ -514,7 +531,7 @@ def compute_technique_radar(
         scores = {k: 0.0 for k in raw_scores}
     else:
         scores = {
-            k: min(12.0, sr_base * math.pow(v / max_raw, 0.75))
+            k: min(12.0, sr_base * math.pow(v / max_raw, calibration.driver_backpressure_exp))
             for k, v in raw_scores.items()
         }
 

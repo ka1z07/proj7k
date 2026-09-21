@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from proj7k.parser import Beatmap7K, HitObject, NoteType
+from proj7k.physics import BRACKET_PHASE_INVERSION_WINDOW_MS, CHORDJACK_STEP_INTERVAL_MS
 from proj7k.profiler.matcher import (
     AlignedHit,
     HitAlignmentResult,
@@ -330,8 +331,6 @@ def _compute_jack_stagnation_drift(
     streak_y: List[float] = []
     total_stagnation_notes = 0
 
-    JACK_MAX_DELTA_MS = 220.0
-
     def _flush_streak(streak: List[AlignedHit]) -> None:
         nonlocal total_stagnation_notes
         if len(streak) >= 2:
@@ -358,8 +357,8 @@ def _compute_jack_stagnation_drift(
                 curr_k = note_to_step_k.get((h.column, h.target_time), -1)
                 delta_k = curr_k - prev_k if (curr_k >= 0 and prev_k >= 0) else 1
 
-                # Stagnation criterion: Delta k = 1 and dt <= 220ms (ADR-0007)
-                if delta_k == 1 and 0.0 < dt <= JACK_MAX_DELTA_MS:
+                # Stagnation criterion: Delta k = 1 and dt <= T_jack (ADR-0007)
+                if delta_k == 1 and 0.0 < dt <= CHORDJACK_STEP_INTERVAL_MS:
                     current_streak.append(h)
                 else:
                     _flush_streak(current_streak)
@@ -429,7 +428,7 @@ def _compute_cascade_precursor(
         s_prev = prec_steps[i - 1]
         s_curr = prec_steps[i]
         dt_step = s_curr[0].time - s_prev[0].time
-        if 0.0 < dt_step < 120.0:
+        if 0.0 < dt_step < BRACKET_PHASE_INVERSION_WINDOW_MS:
             prev_cols = {ho.column for ho in s_prev}
             curr_cols = {ho.column for ho in s_curr}
 
@@ -464,7 +463,7 @@ def _compute_cascade_precursor(
     for col in range(beatmap.circle_size if beatmap.circle_size > 0 else 7):
         c_notes = [ho for ho in precursor_notes if ho.column == col]
         for i in range(1, len(c_notes)):
-            if 0 < (c_notes[i].time - c_notes[i - 1].time) <= 220.0:
+            if 0 < (c_notes[i].time - c_notes[i - 1].time) <= CHORDJACK_STEP_INTERVAL_MS:
                 has_jack = True
                 break
         if has_jack:

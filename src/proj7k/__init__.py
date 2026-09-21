@@ -9,6 +9,19 @@ from proj7k.parser import (
     dump_osu_7k,
 )
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
+from proj7k.parser import dominant_bpm, dominant_timing_point
+from proj7k.calibration import (
+    DEFAULT_CALIBRATION,
+    StrainStarCalibration,
+    compute_methodology_fingerprint,
+)
+from proj7k.physics import (
+    ANTIPHASE_ONSET_WINDOW_S,
+    BRACKET_PHASE_INVERSION_WINDOW_MS,
+    CHORDJACK_STEP_INTERVAL_MS,
+    JACK_INTERVAL_PENALTY_MS,
+    SPEED_BURST_INTERVAL_MS,
+)
 
 from proj7k.batch import (
     BenchmarkItem,
@@ -96,7 +109,12 @@ __version__ = "0.1.0"
 
 
 def __getattr__(name: str):
-    if name in ("DifficultyOptions", "IntrinsicDifficultyResult", "evaluate_intrinsic_difficulty"):
+    if name in (
+        "DifficultyOptions",
+        "IntrinsicDifficultyResult",
+        "evaluate_intrinsic_difficulty",
+        "current_engine_version",
+    ):
         import proj7k.difficulty as _diff
         return getattr(_diff, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -110,6 +128,16 @@ __all__ = [
     "dump_osu_7k",
     "BeatmapFeatures",
     "extract_beatmap_features",
+    "dominant_bpm",
+    "dominant_timing_point",
+    "DEFAULT_CALIBRATION",
+    "StrainStarCalibration",
+    "compute_methodology_fingerprint",
+    "ANTIPHASE_ONSET_WINDOW_S",
+    "BRACKET_PHASE_INVERSION_WINDOW_MS",
+    "CHORDJACK_STEP_INTERVAL_MS",
+    "JACK_INTERVAL_PENALTY_MS",
+    "SPEED_BURST_INTERVAL_MS",
 
     "BenchmarkItem",
     "BatchSummary",
@@ -171,6 +199,7 @@ __all__ = [
     "aggregate_p_norm",
     "apply_tanh_soft_cap",
     "compute_raw_strain_star_rating",
+    "current_engine_version",
     "synthesize_star_rating",
     "DifficultyOptions",
     "IntrinsicDifficultyResult",

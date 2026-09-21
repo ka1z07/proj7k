@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 
 from proj7k.batch import run_benchmark_pipeline, BenchmarkBatchReport, BenchmarkItem
+from proj7k.monotonicity import DEFAULT_GUARD_METRICS
 
 
 class MonotonicityGuardError(Exception):
@@ -17,7 +18,11 @@ class MonotonicityGuardConfig:
     max_violations: int = 0
     max_violation_drop: float = 0.0
     expected_checksum: Optional[str] = None
-    metrics: Optional[List[str]] = None
+    #: Metrics validated by default: only the quantities that are monotone along the Dan
+    #: ladder by construction (see `monotonicity.DEFAULT_GUARD_METRICS`). Reports still carry
+    #: every evaluated metric; passing names here (or `--guard-metric`) gates on them too, and
+    #: an empty list validates every metric present in the report.
+    metrics: List[str] = field(default_factory=lambda: list(DEFAULT_GUARD_METRICS))
 
 
 @dataclass

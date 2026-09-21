@@ -6,15 +6,24 @@ command-line tool `python3 -m proj7k.difficulty <path>`.
 """
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Union
 
+from proj7k.calibration import compute_methodology_fingerprint
 from proj7k.features import extract_beatmap_features
 from proj7k.parser import Beatmap7K, parse_osu_7k
+from proj7k.physics import (
+    ANTIPHASE_ONSET_WINDOW_S,
+    BRACKET_PHASE_INVERSION_WINDOW_MS,
+    CHORDJACK_STEP_INTERVAL_MS,
+    JACK_INTERVAL_PENALTY_MS,
+    SPEED_BURST_INTERVAL_MS,
+)
 from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
 from proj7k.rating import RatingOptions, synthesize_star_rating
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
@@ -25,6 +34,41 @@ class DifficultyOptions:
     strain_options: Optional[StrainOptions] = None
     radar_options: Optional[RadarOptions] = None
     rating_options: Optional[RatingOptions] = None
+
+    @property
+    def engine_fingerprint(self) -> str:
+        """
+        Methodology hash of every constant that can move a star rating: the star calibration
+        and aggregation, the radar and strain option defaults, and the shared physical
+        thresholds. Changing any one of them changes the version stamped into osu!lazer
+        metadata, which marks every previously injected beatmap for re-evaluation
+        (ADR-0014) — so a formula change can never leave stale ratings behind.
+        """
+        return compute_methodology_fingerprint(
+            rating_options=asdict(self.rating_options or RatingOptions()),
+            radar_options=asdict(self.radar_options or RadarOptions()),
+            strain_options=asdict(self.strain_options or StrainOptions()),
+            physics=(
+                JACK_INTERVAL_PENALTY_MS,
+                CHORDJACK_STEP_INTERVAL_MS,
+                ANTIPHASE_ONSET_WINDOW_S,
+                BRACKET_PHASE_INVERSION_WINDOW_MS,
+                SPEED_BURST_INTERVAL_MS,
+            ),
+        )
+
+
+@lru_cache(maxsize=None)
+def current_engine_version() -> str:
+    """
+    Algorithm version of the engine's default configuration, derived entirely from its
+    calibration constants: changing any constant changes this string (see
+    `DifficultyOptions.engine_fingerprint`).
+
+    Format: 'v'-prefixed 8-hex-char methodology hash, e.g. 'v1a2b3c4d'. Stamped into injected
+    difficulty names so stale injections are identifiable after a formula change (ADR-0014).
+    """
+    return f"v{DifficultyOptions().engine_fingerprint}"
 
 
 @dataclass(frozen=True)
@@ -67,18 +111,23 @@ def evaluate_intrinsic_difficulty(
     else:
         raise TypeError(f"Expected str, Path, or Beatmap7K, got {type(content_or_path).__name__}")
 
+    rating_options = options.rating_options or RatingOptions()
+
     features = extract_beatmap_features(beatmap)
     strain_profile = compute_dual_hand_strain(beatmap, options=options.strain_options)
+    # Radar scores and the synthesized star rating are expressed in the same star scale:
+    # both read their calibration from the one rating options object.
     radar = compute_technique_radar(
         beatmap,
         features=features,
         strain_profile=strain_profile,
         options=options.radar_options,
+        calibration=rating_options.calibration,
     )
     synthesis = synthesize_star_rating(
         radar,
         p90_strain=strain_profile.p90_strain,
-        options=options.rating_options,
+        options=rating_options,
     )
 
     metadata: Dict[str, Any] = {
