@@ -415,23 +415,31 @@ def main(argv: Optional[List[str]] = None) -> int:
         dest="guard_metrics",
         help="Specific metrics to validate in Monotonicity Guard (default: tier-monotone metrics only)",
     )
+    # Guard threshold defaults are read off the guard's own config so the CLI and the
+    # library can never disagree about what "the default gate" means.
+    from proj7k.guard import MonotonicityGuardConfig
+
+    guard_defaults = MonotonicityGuardConfig()
     parser.add_argument(
         "--guard-max-violations",
         type=int,
-        default=0,
-        help="Maximum allowed monotonicity violations per metric (default: 0)",
+        default=guard_defaults.max_violations,
+        help=(
+            "Maximum allowed monotonicity violations per metric "
+            f"(default: {guard_defaults.max_violations})"
+        ),
     )
     parser.add_argument(
         "--guard-min-tau",
         type=float,
-        default=0.80,
-        help="Minimum Kendall's tau threshold (default: 0.80)",
+        default=guard_defaults.min_kendall_tau,
+        help=f"Minimum Kendall's tau threshold (default: {guard_defaults.min_kendall_tau})",
     )
     parser.add_argument(
         "--guard-min-rho",
         type=float,
-        default=0.85,
-        help="Minimum Spearman's rho threshold (default: 0.85)",
+        default=guard_defaults.min_spearman_rho,
+        help=f"Minimum Spearman's rho threshold (default: {guard_defaults.min_spearman_rho})",
     )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])

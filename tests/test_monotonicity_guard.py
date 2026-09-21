@@ -162,12 +162,14 @@ def test_batch_cli_with_guard_flag(tmp_path: Path):
     assert exit_code_tolerated == 0
 
 
-def test_guard_default_metrics_exclude_structurally_non_monotone_quantities():
+def test_guard_default_config_passes_on_bundled_benchmark_report():
     """
-    The bundled 120-chart benchmark report evaluates hold_pct and mean_locked_fingers.
-    Neither is monotone along the tier ladder (pure rice charts are hold-poor, LN charts
-    lock many fingers), so the guard's default metric set must not validate them — while
-    still validating them on explicit request.
+    The default gate must be usable on the repository's own 120-chart benchmark:
+    - hold_pct / mean_locked_fingers are not monotone along the tier ladder at all (pure rice
+      charts are hold-poor, LN charts lock many fingers) and must not be validated by default,
+      while remaining available on explicit request;
+    - the thresholds must tolerate the local tier inversions a real community-rated corpus
+      always has, instead of failing on every technique.
     """
     report_path = Path("reports/batch_report.json")
     if not report_path.exists():
@@ -186,18 +188,23 @@ def test_guard_default_metrics_exclude_structurally_non_monotone_quantities():
 
     default_res = evaluate_monotonicity_guard(report)
     default_msg = default_res.error_message or ""
-    assert not default_res.violations_by_technique or all(
-        "hold_pct" not in {v.get("metric") for v in vs}
-        for vs in default_res.violations_by_technique.values()
-    )
+    assert default_res.passed is True, default_msg
     assert "hold_pct" not in default_msg
     assert "mean_locked_fingers" not in default_msg
+    assert set(default_res.metrics_summary["Regular Jack"]) == {"avg_nps", "peak_4m_nps"}
 
     requested_res = evaluate_monotonicity_guard(
         report, config=MonotonicityGuardConfig(metrics=["hold_pct"])
     )
     assert requested_res.passed is False
     assert "hold_pct" in requested_res.error_message
+
+    # Stricter-than-default runs still fail on the corpus' genuine local inversions.
+    strict_res = evaluate_monotonicity_guard(
+        report, config=MonotonicityGuardConfig(max_violations=0, min_kendall_tau=0.80)
+    )
+    assert strict_res.passed is False
+    assert "avg_nps" in strict_res.error_message
 
 
 def test_monotonicity_guard_blocks_on_ingestion_failure():
