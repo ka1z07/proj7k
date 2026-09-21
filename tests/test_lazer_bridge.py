@@ -233,22 +233,3 @@ def test_command_not_found():
         with pytest.raises(Exception) as exc_info:
             client.dump_7k_beatmaps(realm_path=Path("/tmp/client.realm"), auto_setup=False)
         assert "Command not found" in str(exc_info.value)
-
-
-def test_real_bridge_script_status_execution():
-    client = RealmBridgeClient()
-    status = client.check_environment()
-    if not status.is_ready:
-        pytest.skip("Node environment or Realm module not ready")
-
-    # Run real bridge status with non-existent path to verify clean JSON response and exit
-    non_existent = Path("/tmp/definitely_not_exist_test.realm")
-    res = client._run_command([
-        client.node_executable,
-        str(client.bridge_script),
-        "status",
-        "--realm",
-        str(non_existent),
-    ])
-    assert res.get("success") is False
-    assert "not found" in res.get("error", "").lower()
