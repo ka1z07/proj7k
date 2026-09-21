@@ -110,6 +110,36 @@ class TechniqueRadar:
 
 
 @dataclass(frozen=True)
+class RawTechniqueDrivers:
+    """
+    The 8 techniques' physical drivers after orthogonal cross-suppression, still in the raw
+    units each technique operator produces.
+
+    This is what the technique operators measure, before any of it is put on the star scale.
+    Splitting it out gives the driver magnitudes an interface of their own: they can be
+    measured, compared and calibrated without a star mapping in the way — which is what the
+    8 dimensions' separability has to be judged on.
+
+    The eight driver fields follow `TECHNIQUE_NAMES` and are unrounded. `tech_4d` rides along
+    as the diagnostic breakdown of the Tech operator's own inputs: rounded for display, and
+    not one of the eight drivers.
+    """
+    jack: float
+    tech: float
+    speed: float
+    stream: float
+    ln_general: float
+    ln_tech: float
+    ln_inverse: float
+    ln_release: float
+    tech_4d: Tech4DComponents
+
+    def to_dict(self) -> Dict[str, float]:
+        """The eight drivers keyed by technique name, unrounded — the star mapping consumes these."""
+        return {name: getattr(self, name) for name in TECHNIQUE_NAMES}
+
+
+@dataclass(frozen=True)
 class RadarOptions:
     """Configuration options for technique radar calibration and suppression."""
     min_rice_hold_threshold: float = 0.05
@@ -325,30 +355,25 @@ def _compute_speed_raw(beatmap: Beatmap7K, speed_threshold_ms: float, avg_nps: f
     return burst_rate * 1.50 + max(0.0, avg_nps - 10.0) * 0.60
 
 
-def compute_technique_radar(
+def compute_raw_technique_drivers(
     beatmap: Beatmap7K,
     features: Optional[BeatmapFeatures] = None,
-    strain_profile: Optional[StrainTimeseriesProfile] = None,
     options: Optional[RadarOptions] = None,
-    calibration: Optional[StrainStarCalibration] = None,
-) -> TechniqueRadar:
+) -> RawTechniqueDrivers:
     """
-    Computes calibrated 8-dimension technique radar scores with cross-suppression.
+    Computes the 8 techniques' raw physical drivers with orthogonal cross-suppression applied
+    (Rule A rice/LN gating, Rule C lane-spread and jack dominance, Rule D stream noise, Rule E
+    inverse specialization).
 
-    `calibration` carries the star-scale constants (anchor law + driver back-pressure
-    exponent) that every technique score is expressed in. Callers pass the calibration of
-    the options object driving the evaluation (see `rating.RatingOptions.calibration`) so
-    that the radar vector and the synthesized star rating can never drift apart; when
-    omitted, the canonical `calibration.DEFAULT_CALIBRATION` is used.
+    These are the quantities the technique operators actually measure, in their own units. The
+    star mapping that turns a driver into a *score* is a separate step, applied by
+    `compute_technique_radar`; nothing here has been put on the star scale yet.
     """
     if options is None:
         options = RadarOptions()
-    if calibration is None:
-        calibration = DEFAULT_CALIBRATION
 
-    hos = beatmap.hit_objects
-    if not hos:
-        return TechniqueRadar(
+    if not beatmap.hit_objects:
+        return RawTechniqueDrivers(
             jack=0.0,
             tech=0.0,
             speed=0.0,
@@ -357,19 +382,14 @@ def compute_technique_radar(
             ln_tech=0.0,
             ln_inverse=0.0,
             ln_release=0.0,
-            dominant_technique="None",
-            dominant_score=0.0,
+            tech_4d=Tech4DComponents(0.0, 0.0, 0.0, 0.0),
         )
 
     if features is None:
         features = extract_beatmap_features(beatmap)
 
-    if strain_profile is None:
-        strain_profile = compute_dual_hand_strain(beatmap)
-
+    hos = beatmap.hit_objects
     hold_ratio = features.hold_pct / 100.0
-    p90_strain = strain_profile.p90_strain
-    sr_base = calibration.star_rating_from_strain(p90_strain)
 
     # --- 1. Compute Raw Drivers ---
     # Decoupled Jack and Stream drivers via discrete step distance, continuous strain decay,
@@ -515,17 +535,61 @@ def compute_technique_radar(
             r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * 0.35))
             r_ln_tech = max(0.0, r_ln_tech - (r_ln_inv * 0.35))
 
-    raw_scores: Dict[str, float] = {
-        "jack": max(0.0, r_jack),
-        "tech": max(0.0, r_tech),
-        "speed": max(0.0, r_speed),
-        "stream": max(0.0, r_stream),
-        "ln_general": max(0.0, r_ln_gen),
-        "ln_tech": max(0.0, r_ln_tech),
-        "ln_inverse": max(0.0, r_ln_inv),
-        "ln_release": max(0.0, r_ln_rel),
-    }
+    return RawTechniqueDrivers(
+        jack=max(0.0, r_jack),
+        tech=max(0.0, r_tech),
+        speed=max(0.0, r_speed),
+        stream=max(0.0, r_stream),
+        ln_general=max(0.0, r_ln_gen),
+        ln_tech=max(0.0, r_ln_tech),
+        ln_inverse=max(0.0, r_ln_inv),
+        ln_release=max(0.0, r_ln_rel),
+        tech_4d=tech_4d,
+    )
 
+
+def compute_technique_radar(
+    beatmap: Beatmap7K,
+    features: Optional[BeatmapFeatures] = None,
+    strain_profile: Optional[StrainTimeseriesProfile] = None,
+    options: Optional[RadarOptions] = None,
+    calibration: Optional[StrainStarCalibration] = None,
+) -> TechniqueRadar:
+    """
+    Computes calibrated 8-dimension technique radar scores with cross-suppression.
+
+    `calibration` carries the star-scale constants (anchor law + driver back-pressure
+    exponent) that every technique score is expressed in. Callers pass the calibration of
+    the options object driving the evaluation (see `rating.RatingOptions.calibration`) so
+    that the radar vector and the synthesized star rating can never drift apart; when
+    omitted, the canonical `calibration.DEFAULT_CALIBRATION` is used.
+    """
+    if options is None:
+        options = RadarOptions()
+    if calibration is None:
+        calibration = DEFAULT_CALIBRATION
+
+    if not beatmap.hit_objects:
+        return TechniqueRadar(
+            jack=0.0,
+            tech=0.0,
+            speed=0.0,
+            stream=0.0,
+            ln_general=0.0,
+            ln_tech=0.0,
+            ln_inverse=0.0,
+            ln_release=0.0,
+            dominant_technique="None",
+            dominant_score=0.0,
+        )
+
+    if strain_profile is None:
+        strain_profile = compute_dual_hand_strain(beatmap)
+
+    drivers = compute_raw_technique_drivers(beatmap, features=features, options=options)
+    sr_base = calibration.star_rating_from_strain(strain_profile.p90_strain)
+
+    raw_scores = drivers.to_dict()
     max_raw = max(raw_scores.values()) if raw_scores else 0.0
     if max_raw <= 1e-6 or sr_base <= 1e-6:
         scores = {k: 0.0 for k in raw_scores}
@@ -554,7 +618,7 @@ def compute_technique_radar(
         ln_release=scores["ln_release"],
         dominant_technique=max_tech,
         dominant_score=max_score,
-        tech_4d=tech_4d,
+        tech_4d=drivers.tech_4d,
     )
 
 

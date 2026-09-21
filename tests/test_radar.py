@@ -1,8 +1,17 @@
 from typing import List
 import pytest
 
-from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
-from proj7k.radar import TechniqueRadar, RadarOptions, compute_technique_radar
+from proj7k.dan import CANONICAL_DAN_TIERS
+from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint, parse_osu_7k
+from proj7k.rating import RatingOptions
+from proj7k.radar import (
+    TECHNIQUE_NAMES,
+    RawTechniqueDrivers,
+    RadarOptions,
+    TechniqueRadar,
+    compute_raw_technique_drivers,
+    compute_technique_radar,
+)
 
 
 def _make_sample_beatmap(
@@ -154,6 +163,72 @@ def test_radar_data_contract():
         assert key in d
     assert isinstance(d["dominant_technique"], str)
     assert isinstance(d["dominant_score"], float)
+
+
+def _mixed_chart() -> Beatmap7K:
+    """Rice flow with an LN layer, so more than one technique dimension is live."""
+    hos = [HitObject(column=i % 7, time=i * 80.0, note_type=NoteType.RICE) for i in range(60)]
+    hos += [
+        HitObject(column=2, time=5000.0 + i * 90.0, note_type=NoteType.LN, end_time=5400.0 + i * 90.0)
+        for i in range(20)
+    ]
+    return _make_sample_beatmap(hos)
+
+
+def test_raw_drivers_are_the_quantity_the_radar_is_built_from():
+    """
+    The driver extraction is a seam onto the same computation the radar runs, not a second
+    opinion about it: the radar's dominant technique and its zero dimensions are the drivers'
+    own, read off before any star mapping. If the two ever disagree, the drivers stop
+    describing the radar they are supposed to explain.
+    """
+    bm = _mixed_chart()
+    drivers = compute_raw_technique_drivers(bm)
+    radar = compute_technique_radar(bm)
+
+    assert isinstance(drivers, RawTechniqueDrivers)
+    assert set(drivers.to_dict()) == set(TECHNIQUE_NAMES)
+
+    driver_map = drivers.to_dict()
+    dominant = max(driver_map, key=lambda k: driver_map[k])
+    assert radar.dominant_technique == dominant
+    assert radar.dominant_score == getattr(radar, dominant)
+
+    # A dimension the operators found nothing in reads exactly zero, on both sides of the seam.
+    for name in TECHNIQUE_NAMES:
+        assert (getattr(radar, name) == 0.0) == (driver_map[name] == 0.0), name
+
+    assert radar.tech_4d == drivers.tech_4d
+
+
+def test_raw_drivers_are_physical_units_not_star_values(benchmark_manifest, benchmark_corpus):
+    """
+    Drivers are deliberately *not* on the star scale: on the frozen benchmark ladder the
+    strongest driver runs an order of magnitude past the whole star scale's ceiling. That is
+    why a driver's star rating has to be calibrated per technique rather than borrowed from the
+    strain anchor law, whose inputs live in a different range entirely.
+    """
+    ceiling = RatingOptions().max_star_rating
+
+    strongest = max(
+        max(
+            compute_raw_technique_drivers(
+                parse_osu_7k(benchmark_corpus[int(benchmark_manifest[technique][tier]["id"])])
+            ).to_dict().values()
+        )
+        for technique in benchmark_manifest
+        for tier in (CANONICAL_DAN_TIERS[-1],)
+    )
+
+    assert strongest > 10.0 * ceiling
+
+
+def test_raw_drivers_of_an_empty_beatmap_are_all_zero():
+    """An empty chart has no demand in any technique — no drivers, so no star-scale scores."""
+    drivers = compute_raw_technique_drivers(_make_sample_beatmap([]))
+
+    for name in TECHNIQUE_NAMES:
+        assert getattr(drivers, name) == 0.0, name
 
 
 def test_isolated_two_note_jack_not_zeroed_by_stream():

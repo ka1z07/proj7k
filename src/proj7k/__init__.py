@@ -97,7 +97,9 @@ from proj7k.strain import (
 )
 from proj7k.radar import (
     TechniqueRadar,
+    RawTechniqueDrivers,
     RadarOptions,
+    compute_raw_technique_drivers,
     compute_technique_radar,
 )
 from proj7k.rating import (
@@ -201,7 +203,9 @@ __all__ = [
     "compute_high_speed_scaling_factor",
     "compute_micro_speed_burst",
     "TechniqueRadar",
+    "RawTechniqueDrivers",
     "RadarOptions",
+    "compute_raw_technique_drivers",
     "compute_technique_radar",
     "RatingOptions",
     "StarRatingSynthesis",
