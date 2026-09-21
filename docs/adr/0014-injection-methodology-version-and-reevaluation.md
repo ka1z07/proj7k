@@ -15,8 +15,9 @@
    - 清洗正则放宽为 `\s*\(\d+\.\d+★(?:\s+[A-Za-z0-9_]+){1,3}\)$`，同时覆盖历史无段位格式、含段位格式与新增的含版本格式，保持幂等。
 
 2. **版本由标定常数派生 (Calibration-Derived Version)**：
-   - 版本号 = 引擎标定常数的 SHA-256 摘要前 8 位（`calibration.compute_methodology_fingerprint`，入口为 `difficulty.DifficultyOptions.engine_fingerprint`），取数范围覆盖**一切可移动星级的常数**：星级锚定律系数 `a/b/exp`、技法驱动回压指数、p-范数聚合、软上限压缩参数、权威段位锚点表，以及 `RadarOptions` / `StrainOptions` 全部默认参数与共享物理阈值（叠键判据、反相位窗、微爆发窗）；
-   - **常数变更即版本变更**，版本绑定为机械推导，不依赖人工递增，杜绝遗漏。
+   - 版本号 = 引擎标定常数的 SHA-256 摘要前 8 位（`calibration.compute_methodology_fingerprint`，入口为 `difficulty.DifficultyOptions.engine_fingerprint`），取数范围覆盖**一切可移动星级的常数**：星级锚定律系数 `a/b/exp`、技法驱动回压指数、p-范数聚合、软上限压缩参数、权威段位锚点表，以及 `RatingOptions` / `RadarOptions` / `FeatureOptions` / `StrainOptions` 全部默认参数与 `physics` / `scaling` / `strain` 三个具名常数块的全部常数；
+   - **常数变更即版本变更**，版本绑定为机械推导，不依赖人工递增，杜绝遗漏；
+   - 取数范围本身是**被守卫的**，不是一份口头清单。守卫守在常数通往指纹的三条路上：选项对象以其整体入指纹（新增字段即入，且每个字段都必须真被某个算子读取，只在指纹里自我枚举的不算）；常数块以其 `CALIBRATION_CONSTANTS` 申报，守卫断言申报清单与该模块源码里的模块级数值常数完全一致；星级路径函数体内剩下的每一个数值字面量，都必须按 AST 逐值逐次出现在 `tests/test_engine_literal_registry.py` 的登记表里，并写明它不是标定的理由。本条第 2 款原先声称的覆盖范围大于实际，`radar.py` / `features.py` 函数体内约 40 个能移动星级的字面量全在指纹之外（实证见 `docs/methodology/calibration-sensitivity-and-sandbox.md` 第 8 节）；该缺口由 #48 关闭，四道机制见同节第 8.2 小节。
 
 3. **版本失配即重评 (Re-evaluate on Version Mismatch)**：
    - 守护进程仅在「后缀可解析 ∧ 版本匹配 ∧ 与记录自洽（星级与主导技法标签一致）」三者同时成立时走跳过快路径；

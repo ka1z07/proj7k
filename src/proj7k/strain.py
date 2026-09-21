@@ -17,14 +17,71 @@ from proj7k.parser import Beatmap7K, NoteType, dominant_bpm
 from proj7k.physics import (
     ANTIPHASE_ONSET_WINDOW_S,
     JACK_INTERVAL_PENALTY_MS,
+    JUDGMENT_WINDOW_MS,
     SPEED_BURST_INTERVAL_MS,
+    SPEED_BURST_MIN_INTERVAL_MS,
+    SPEED_BURST_REFERENCE_MS,
+    SPEED_BURST_EXPONENT,
+)
+from proj7k.scaling import (
+    DEFAULT_DIVISOR,
+    HIGH_SPEED_BPM_THRESHOLD,
+    LOW_SPEED_BPM_THRESHOLD,
 )
 
 # 7K Symmetric Topological Track Layout:
 # L3 (0), L2 (1), L1 (2) | S (3) | R1 (4), R2 (5), R3 (6)
 LEFT_HAND_LANES: Tuple[int, int, int] = (0, 1, 2)
-CENTER_SHARED_LANE: int = 3
 RIGHT_HAND_LANES: Tuple[int, int, int] = (4, 5, 6)
+
+# ---------------------------------------------------------------------------
+# Judgment-overlap buffer
+# ---------------------------------------------------------------------------
+#: Ceiling of the overlap ratio eta and the narrowest action window it is measured against:
+#: without the floor a fast chart would report eta > 1 and the modulation would invert.
+ETA_CAP: float = 0.75
+ETA_MIN_ACTION_WINDOW_MS: float = 10.0
+
+#: Action window assumed when the tempo is unusable (bpm <= 0), so the helper stays total.
+ETA_FALLBACK_ACTION_WINDOW_MS: float = 100.0
+
+# ---------------------------------------------------------------------------
+# LN high-speed scaling factor
+# ---------------------------------------------------------------------------
+#: The two tempo thresholds are `scaling`'s, deliberately — the LN scaling factor and the
+#: inverse BPM scaling law switch regime at the same BPM, so one definition serves both and
+#: neither can drift from the other.
+#
+#: Low-speed gain and exponent: below the threshold the factor follows
+#: `(bpm / threshold) ** EXPONENT * GAIN`, a damped regime that keeps slow LN charts off the
+#: top of the scale.
+LN_LOW_SPEED_EXPONENT: float = 1.8
+LN_LOW_SPEED_GAIN: float = 0.75
+
+#: Transition and saturation branches, both expressed relative to the low-speed gain.
+LN_TRANSITION_GAIN: float = 0.25
+LN_TRANSITION_SPAN_BPM: float = 35.0
+LN_SATURATION_RAMP_GAIN: float = 0.65
+LN_SATURATION_RAMP_BPM: float = 40.0
+
+#: Dampening the judgment buffer applies to the saturation branch.
+LN_SATURATION_BUFFER_GAIN: float = 0.45
+
+
+#: This block's constants, for the methodology fingerprint — see
+#: `calibration.block_fingerprint_constants`. The coverage guard keeps the list complete.
+CALIBRATION_CONSTANTS: Tuple[str, ...] = (
+    "ETA_CAP",
+    "ETA_MIN_ACTION_WINDOW_MS",
+    "ETA_FALLBACK_ACTION_WINDOW_MS",
+    "LN_LOW_SPEED_EXPONENT",
+    "LN_LOW_SPEED_GAIN",
+    "LN_TRANSITION_GAIN",
+    "LN_TRANSITION_SPAN_BPM",
+    "LN_SATURATION_RAMP_GAIN",
+    "LN_SATURATION_RAMP_BPM",
+    "LN_SATURATION_BUFFER_GAIN",
+)
 
 
 @dataclass(frozen=True)
@@ -96,7 +153,6 @@ class StrainOptions:
     `parser.dominant_bpm` (the single BPM source).
     """
     tau_time_constant_s: float = 1.2
-    tau_half_life_s: float = 1.2  # Alias for backward compatibility
     window_s: float = 0.5
     step_s: float = 0.25
     jack_threshold_ms: float = JACK_INTERVAL_PENALTY_MS
@@ -105,10 +161,26 @@ class StrainOptions:
     gap1_threshold_s: float = 0.015
     speed_burst_threshold_ms: float = SPEED_BURST_INTERVAL_MS
     speed_burst_weight: float = 0.30
-    w_judg_ms: float = 38.0
+    w_judg_ms: float = JUDGMENT_WINDOW_MS
     alpha: float = 0.60
     gamma: float = 1.20
     bpm: Optional[float] = None
+
+    #: Share of a note's load the shared centre lane hands to each of the two hands. One fact,
+    #: read in two places: a note in lane 3 counts half towards a hand's note density, and a
+    #: same-lane re-strike on it accumulates half the jack penalty. Both were the literal 0.5
+    #: before this was named.
+    shared_lane_load: float = 0.5
+
+    #: Cognitive-impedance term L_cog = LOCK_WEIGHT * (locked / LANES) * scaling + ANTIPHASE_WEIGHT * antiphase.
+    #: The locked-finger count is normalised by a hand's three primary lanes.
+    l_cog_lock_weight: float = 0.35
+    l_cog_antiphase_weight: float = 0.15
+
+    #: Quantiles of the combined-strain profile. P90 is the one the star rating is anchored on;
+    #: P95 and the peak ride along as diagnostics of the same distribution.
+    p90_quantile: float = 90.0
+    p95_quantile: float = 95.0
 
 
 def _get_notes_in_window(sorted_times: List[float], start_s: float, end_s: float) -> List[float]:
@@ -166,14 +238,18 @@ def _build_locked_finger_counts(
     return counts
 
 
-def compute_judgment_overlap_buffer(bpm: float, w_judg_ms: float = 38.0) -> float:
+def compute_judgment_overlap_buffer(
+    bpm: float, w_judg_ms: float = JUDGMENT_WINDOW_MS
+) -> float:
     """
     Computes judgment window overlap ratio (eta):
-    eta = min(0.75, W_judg / delta_t_action)
+    eta = min(ETA_CAP, W_judg / delta_t_action)
     where delta_t_action is 16th note striking window at given BPM.
     """
-    delta_t_ms = 60000.0 / (bpm * 4.0) if bpm > 0 else 100.0
-    return min(0.75, w_judg_ms / max(10.0, delta_t_ms))
+    delta_t_ms = (
+        60000.0 / (bpm * DEFAULT_DIVISOR) if bpm > 0 else ETA_FALLBACK_ACTION_WINDOW_MS
+    )
+    return min(ETA_CAP, w_judg_ms / max(ETA_MIN_ACTION_WINDOW_MS, delta_t_ms))
 
 
 def compute_high_speed_scaling_factor(bpm: float, eta: float) -> float:
@@ -183,18 +259,22 @@ def compute_high_speed_scaling_factor(bpm: float, eta: float) -> float:
     - 145 < BPM < 180: linear transition
     - BPM >= 180: sub-linear saturation damped by judgment buffer (1 - 0.45 * eta)
     """
-    if bpm <= 145.0:
-        return ((bpm / 145.0) ** 1.8) * 0.75
-    elif bpm < 180.0:
-        return 0.75 + 0.25 * ((bpm - 145.0) / 35.0)
+    if bpm <= LOW_SPEED_BPM_THRESHOLD:
+        return ((bpm / LOW_SPEED_BPM_THRESHOLD) ** LN_LOW_SPEED_EXPONENT) * LN_LOW_SPEED_GAIN
+    elif bpm < HIGH_SPEED_BPM_THRESHOLD:
+        return LN_LOW_SPEED_GAIN + LN_TRANSITION_GAIN * (
+            (bpm - LOW_SPEED_BPM_THRESHOLD) / LN_TRANSITION_SPAN_BPM
+        )
     else:
-        buffer_factor = 1.0 - 0.45 * eta
-        return 1.0 + 0.65 * ((bpm - 180.0) / 40.0) * buffer_factor
+        buffer_factor = 1.0 - LN_SATURATION_BUFFER_GAIN * eta
+        return 1.0 + LN_SATURATION_RAMP_GAIN * (
+            (bpm - HIGH_SPEED_BPM_THRESHOLD) / LN_SATURATION_RAMP_BPM
+        ) * buffer_factor
 
 
 def compute_micro_speed_burst(
     sorted_hit_times: List[float],
-    min_interval_ms: float = 5.0,
+    min_interval_ms: float = SPEED_BURST_MIN_INTERVAL_MS,
     max_interval_ms: float = SPEED_BURST_INTERVAL_MS,
 ) -> float:
     """
@@ -206,7 +286,9 @@ def compute_micro_speed_burst(
         for k in range(len(sorted_hit_times) - 1):
             dt_ms = (sorted_hit_times[k + 1] - sorted_hit_times[k]) * 1000.0
             if min_interval_ms < dt_ms < max_interval_ms:
-                speed_burst += math.pow((max_interval_ms - dt_ms) / 50.0, 1.35)
+                speed_burst += math.pow(
+                    (max_interval_ms - dt_ms) / SPEED_BURST_REFERENCE_MS, SPEED_BURST_EXPONENT
+                )
     return speed_burst
 
 
@@ -227,7 +309,12 @@ def _compute_hand_load(
     Computes modulated momentary load for a single hand:
     D_hand = L_phys * (1.0 + alpha * L_cog)^gamma
     """
-    notes_count = len(outer_hits) + len(middle_hits) + len(inner_hits) + 0.5 * len(shared_hits)
+    notes_count = (
+        len(outer_hits)
+        + len(middle_hits)
+        + len(inner_hits)
+        + options.shared_lane_load * len(shared_hits)
+    )
     if notes_count == 0.0:
         return 0.0
 
@@ -237,7 +324,7 @@ def _compute_hand_load(
     all_hand_hits = sorted(outer_hits + middle_hits + inner_hits)
     speed_burst = compute_micro_speed_burst(
         all_hand_hits,
-        min_interval_ms=5.0,
+        min_interval_ms=SPEED_BURST_MIN_INTERVAL_MS,
         max_interval_ms=options.speed_burst_threshold_ms,
     )
     speed_multiplier = 1.0 + options.speed_burst_weight * (
@@ -259,7 +346,7 @@ def _compute_hand_load(
         for k in range(len(shared_hits) - 1):
             dt_ms = (shared_hits[k + 1] - shared_hits[k]) * 1000.0
             if dt_ms < jack_thresh:
-                jack_penalty += 0.5 * ((jack_thresh - dt_ms) / jack_thresh)
+                jack_penalty += options.shared_lane_load * ((jack_thresh - dt_ms) / jack_thresh)
 
     # Gap1 penalty: simultaneous outer & inner hits with middle finger unpressed ([gap:1] 抠空中指)
     gap1_penalty = 0
@@ -291,7 +378,12 @@ def _compute_hand_load(
                             if abs(pr - rl) < ANTIPHASE_ONSET_WINDOW_S:
                                 antiphase += 1
 
-    l_cog = 0.35 * (locked_fingers / 3.0) * scaling_factor + 0.15 * antiphase
+    # Normalised by a hand's three primary lanes: that is the locked-finger count at which the
+    # cognitive term saturates.
+    l_cog = (
+        options.l_cog_lock_weight * (locked_fingers / len(hand_lanes)) * scaling_factor
+        + options.l_cog_antiphase_weight * antiphase
+    )
 
     return l_phys * math.pow(1.0 + options.alpha * l_cog, options.gamma)
 
@@ -459,8 +551,8 @@ def compute_dual_hand_strain(
         right_strains.append(right_strain)
         combined_strains.append(combined_strain)
 
-    p90 = _calculate_percentile(combined_strains, 90.0)
-    p95 = _calculate_percentile(combined_strains, 95.0)
+    p90 = _calculate_percentile(combined_strains, options.p90_quantile)
+    p95 = _calculate_percentile(combined_strains, options.p95_quantile)
     peak = max(combined_strains) if combined_strains else 0.0
 
     return StrainTimeseriesProfile(

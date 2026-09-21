@@ -1,9 +1,73 @@
 import math
 from dataclasses import dataclass, asdict, field
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 from proj7k.parser import Beatmap7K, NoteType, dominant_bpm, uninherited_timing_points
+from proj7k.physics import DEFAULT_BPM
 from proj7k.window import generate_all_barlines
 from proj7k.scaling import compute_action_window, compute_inverse_score
+
+
+@dataclass(frozen=True)
+class FeatureOptions:
+    """
+    Configuration of the feature tensor's own calibration.
+
+    The feature tensor is not a neutral summary of a chart: which inter-note gaps count as a
+    snap, how irregular a rhythm has to be before it reads as unorthodox, and how finely the
+    locked-finger step function is sampled are all calibration decisions, and every one of them
+    reaches a star rating through the radar's drivers. They live here, next to the stage that
+    applies them, for the same reason `RadarOptions` and `StrainOptions` do — so a change moves
+    the engine version (ADR-0014) instead of silently leaving stale ratings in the game.
+
+    The three rhythm weights are a convex combination: they are read as a weighted mean of the
+    three irregularity signals, so `snap_variance_weight + jerk_weight + snap_mix_weight = 1`.
+    """
+    #: Resolution, in milliseconds, of the locked-finger step function L(t): the chart is
+    #: sampled on this grid to average how many fingers are held down at once.
+    step_ms: int = 10
+
+    #: How far past the last note the barline generator is asked to run, so the final measure
+    #: has a complete beat grid to close on.
+    barline_overrun_ms: float = 30000.0
+
+    #: Snap matching: an inter-note gap is read as a canonical snap when it lands within
+    #: `abs_tol` or `rel_tol * snap` of it. Used to bucket notes for the snap-variance entropy.
+    snap_match_abs_tol: float = 0.02
+    snap_match_rel_tol: float = 0.10
+
+    #: Snap banding: the looser tolerance that only decides whether a gap is binary, ternary or
+    #: irregular. Deliberately looser than the matching tolerance — this splits the distribution
+    #: into three classes rather than naming the snap.
+    snap_band_abs_tol: float = 0.015
+    snap_band_rel_tol: float = 0.08
+
+    #: The interval band, in milliseconds, of a pair of steps that is read at all: shorter is a
+    #: chord or duplicate, longer is a break in the pattern rather than a rhythm.
+    min_step_ms: float = 10.0
+    max_step_ms: float = 2000.0
+
+    #: Micro-timing jerk: |Δt_next - Δt| / max(Δt, DENOMINATOR_MS), clipped at `jerk_cap` so a
+    #: single torn 1/8 does not dominate the average, then scaled by `jerk_normalizer` on its
+    #: way into the rhythm term.
+    jerk_denominator_ms: float = 25.0
+    jerk_cap: float = 2.5
+    jerk_normalizer: float = 2.5
+
+    #: Weights of the three irregularity signals in `rhythm_irreg` (see the class docstring).
+    snap_variance_weight: float = 0.40
+    jerk_weight: float = 0.30
+    snap_mix_weight: float = 0.30
+
+    #: Canonical snap table: (label, beat-fraction) pairs, in ascending fraction order, with the
+    #: first match winning. The labels are the buckets the snap-variance entropy is taken over.
+    canonical_snaps: Tuple[Tuple[float, float], ...] = (
+        (1 / 16, 0.0625), (1 / 12, 0.0833), (1 / 8, 0.125), (1 / 6, 0.1667),
+        (1 / 4, 0.25), (1 / 3, 0.3333), (1 / 2, 0.5), (3 / 4, 0.75), (1.0, 1.0),
+    )
+
+    #: The binary and ternary subdivisions the snap banding tests against, as beat fractions.
+    binary_snaps: Tuple[float, ...] = (1 / 16, 1 / 8, 1 / 4, 1 / 2, 1.0, 2.0)
+    ternary_snaps: Tuple[float, ...] = (1 / 24, 1 / 12, 1 / 6, 1 / 3, 2 / 3)
 
 
 @dataclass
@@ -47,11 +111,21 @@ class BeatmapFeatures:
         return d
 
 
+def _lands_in_snap_band(
+    frac: float, snaps: Tuple[float, ...], options: FeatureOptions
+) -> bool:
+    """Whether a beat fraction falls within the banding tolerance of any of `snaps`."""
+    return any(
+        abs(frac - snap) <= max(options.snap_band_abs_tol, snap * options.snap_band_rel_tol)
+        for snap in snaps
+    )
+
+
 def _calc_rate(count: int, duration_s: float) -> float:
     return round(count / duration_s, 4) if duration_s > 0 else 0.0
 
 
-def get_dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
+def get_dominant_bpm(beatmap: Beatmap7K, default: float = DEFAULT_BPM) -> float:
     """
     Dominant BPM rounded to 2 decimals, for feature/checksum-stable consumption.
 
@@ -63,8 +137,8 @@ def get_dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
 
 def extract_beatmap_features(
     beatmap: Beatmap7K,
-    step_ms: int = 10,
     bpm: Optional[float] = None,
+    options: Optional[FeatureOptions] = None,
 ) -> BeatmapFeatures:
     """
     Extracts baseline spatiotemporal density and timing features, as well as
@@ -79,7 +153,11 @@ def extract_beatmap_features(
     - adj_count, adj_density
     - mean_locked_fingers, lockout_profile
     - antiphase_count, antiphase_rate
+
+    `bpm` is a call-site override; its fallback is the chart's own dominant tempo.
     """
+    opts = options or FeatureOptions()
+
     total_notes = len(beatmap.hit_objects)
     if total_notes == 0:
         return BeatmapFeatures(
@@ -121,10 +199,10 @@ def extract_beatmap_features(
     duration_s = max((end_ms - start_ms) / 1000.0, 0.0)
     avg_nps = (total_notes / duration_s) if duration_s > 0 else 0.0
 
-    barlines = generate_all_barlines(beatmap, max_time_ms=end_ms + 30000.0)
+    barlines = generate_all_barlines(beatmap, max_time_ms=end_ms + opts.barline_overrun_ms)
     measure_starts = [b for b in barlines if b.is_measure_start]
 
-    # 1. Calculate Peak-4M NPS (4-measure rolling window)
+    # 1. Calculate Peak-4M NPS (4-measure rolling window, as the field name says)
     peak_4m_nps = avg_nps
     if len(measure_starts) >= 5:
         max_window_nps = 0.0
@@ -237,9 +315,9 @@ def extract_beatmap_features(
     total_samples = 0
     sum_locked = 0
 
-    if step_ms > 0 and end_ms >= start_ms:
+    if opts.step_ms > 0 and end_ms >= start_ms:
         import math
-        num_samples = int((end_ms - start_ms) // step_ms) + 1
+        num_samples = int((end_ms - start_ms) // opts.step_ms) + 1
         total_samples = num_samples
 
         if merged_ln_intervals:
@@ -247,8 +325,8 @@ def extract_beatmap_features(
             for st, et in merged_ln_intervals:
                 if et <= start_ms or st >= end_ms:
                     continue
-                j_start = max(0, math.ceil((st - start_ms) / step_ms))
-                j_end = min(num_samples, math.ceil((et - start_ms) / step_ms))
+                j_start = max(0, math.ceil((st - start_ms) / opts.step_ms))
+                j_end = min(num_samples, math.ceil((et - start_ms) / opts.step_ms))
                 if j_start < j_end:
                     diff[j_start] += 1
                     diff[j_end] -= 1
@@ -319,17 +397,12 @@ def extract_beatmap_features(
 
     # 7. Rhythmic Irregularity (Snap Variance Entropy, Micro-timing Jerk, and Mixing) (ADR-0008)
     uninherited = uninherited_timing_points(beatmap)
-    default_bl = (60000.0 / effective_bpm) if effective_bpm > 0 else 400.0
+    # A chart with no usable tempo falls back to the default tempo's beat length rather than a
+    # bare millisecond figure, so the fallback cannot drift from DEFAULT_BPM.
+    default_bl = (60000.0 / effective_bpm) if effective_bpm > 0 else (60000.0 / DEFAULT_BPM)
     step_times = sorted(list(set(ho.time for ho in hos_sorted)))
 
-    BINARY_SNAPS = (1/16, 1/8, 1/4, 1/2, 1.0, 2.0)
-    TERNARY_SNAPS = (1/24, 1/12, 1/6, 1/3, 2/3)
-    CANONICAL_SNAPS = (
-        (1/16, 0.0625), (1/12, 0.0833), (1/8, 0.125), (1/6, 0.1667),
-        (1/4, 0.25), (1/3, 0.3333), (1/2, 0.5), (3/4, 0.75), (1.0, 1.0)
-    )
-
-    snap_counts: Dict[Any, int] = {}
+    snap_counts: Dict[Union[float, str], int] = {}
     jerks: List[float] = []
     tp_idx = 0
     tot_steps = 0
@@ -340,23 +413,23 @@ def extract_beatmap_features(
     for i in range(len(step_times) - 1):
         t1, t2 = step_times[i], step_times[i + 1]
         dt = t2 - t1
-        if dt < 10.0 or dt > 2000.0:
+        if dt < opts.min_step_ms or dt > opts.max_step_ms:
             continue
         while tp_idx + 1 < len(uninherited) and uninherited[tp_idx + 1].time <= t1:
             tp_idx += 1
         bl = uninherited[tp_idx].beat_length if uninherited else default_bl
         frac = dt / bl
 
-        matched: Any = "irr"
-        for s_val, s_num in CANONICAL_SNAPS:
-            if abs(frac - s_num) <= max(0.02, s_num * 0.10):
+        matched: Union[float, str] = "irr"
+        for s_val, s_num in opts.canonical_snaps:
+            if abs(frac - s_num) <= max(opts.snap_match_abs_tol, s_num * opts.snap_match_rel_tol):
                 matched = s_val
                 break
         snap_counts[matched] = snap_counts.get(matched, 0) + 1
         tot_steps += 1
 
-        is_bin = any(abs(frac - s) <= max(0.015, s * 0.08) for s in BINARY_SNAPS)
-        is_ter = any(abs(frac - s) <= max(0.015, s * 0.08) for s in TERNARY_SNAPS)
+        is_bin = _lands_in_snap_band(frac, opts.binary_snaps, opts)
+        is_ter = _lands_in_snap_band(frac, opts.ternary_snaps, opts)
         if is_bin:
             bin_cnt += 1
         elif is_ter:
@@ -366,16 +439,18 @@ def extract_beatmap_features(
 
         if i + 2 < len(step_times):
             dt_next = step_times[i + 2] - t2
-            if 10.0 <= dt_next <= 2000.0:
-                j = abs(dt_next - dt) / max(dt, 25.0)
-                jerks.append(min(j, 2.5))
+            if opts.min_step_ms <= dt_next <= opts.max_step_ms:
+                j = abs(dt_next - dt) / max(dt, opts.jerk_denominator_ms)
+                jerks.append(min(j, opts.jerk_cap))
 
     h_snap = 0.0
     if tot_steps > 0:
         for s_key, cnt in snap_counts.items():
             p = cnt / tot_steps
             h_snap -= p * math.log2(p)
-    snap_variance_entropy = round(h_snap / math.log2(10.0), 4)
+    # The entropy is over the canonical snap buckets plus the irregular bucket, so that is the
+    # distribution's maximum entropy — deriving it keeps the normaliser in step with the table.
+    snap_variance_entropy = round(h_snap / math.log2(len(opts.canonical_snaps) + 1), 4)
     microtiming_jerk = round(sum(jerks) / len(jerks), 4) if jerks else 0.0
 
     p_bin = bin_cnt / max(1, tot_steps)
@@ -388,7 +463,9 @@ def extract_beatmap_features(
     norm_h_mix = h_mix / math.log2(3.0)
 
     rhythm_irreg = round(
-        snap_variance_entropy * 0.40 + min(1.0, microtiming_jerk * 2.5) * 0.30 + norm_h_mix * 0.30,
+        snap_variance_entropy * opts.snap_variance_weight
+        + min(1.0, microtiming_jerk * opts.jerk_normalizer) * opts.jerk_weight
+        + norm_h_mix * opts.snap_mix_weight,
         4,
     )
 

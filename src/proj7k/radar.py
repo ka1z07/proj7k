@@ -19,7 +19,10 @@ from proj7k.parser import Beatmap7K, HitObject, NoteType
 from proj7k.physics import (
     BRACKET_PHASE_INVERSION_WINDOW_MS,
     CHORDJACK_STEP_INTERVAL_MS,
+    SPEED_BURST_EXPONENT,
     SPEED_BURST_INTERVAL_MS,
+    SPEED_BURST_MIN_INTERVAL_MS,
+    SPEED_BURST_REFERENCE_MS,
 )
 from proj7k.scaling import compute_inverse_score
 from proj7k.strain import (
@@ -141,11 +144,24 @@ class RawTechniqueDrivers:
 
 @dataclass(frozen=True)
 class RadarOptions:
-    """Configuration options for technique radar calibration and suppression."""
+    """
+    Configuration options for technique radar calibration and suppression.
+
+    Every number the radar's operators read is a field here. The operators used to carry their
+    calibration as literals inside their own bodies, which meant a change to one of them moved
+    star ratings without moving the engine version — stale ratings surviving in osu!lazer
+    (ADR-0014), the exact failure the version token exists to prevent. Fields added for issue
+    #48 are grouped by the operator that reads them.
+
+    Two kinds of number are deliberately *not* fields, and are registered with a reason in the
+    literal-coverage guard instead: algebraic identities and indices (the 1 in `1 + w * x`, the
+    0 in a floor, `range(7)`'s lane count), and unit conversions (ms to s). Neither is a
+    calibration decision, and neither can be retuned to a different value without the guard
+    failing first.
+    """
     min_rice_hold_threshold: float = 0.05
     jack_threshold_ms: float = CHORDJACK_STEP_INTERVAL_MS
     speed_burst_threshold_ms: float = SPEED_BURST_INTERVAL_MS
-    w_judg_ms: float = 38.0
     chord_eps_ms: float = 8.0
     jack_m_max: float = 1.5
     jack_tau: float = 3.0
@@ -168,8 +184,154 @@ class RadarOptions:
     tech_rhythm_weight: float = 1.20
     ln_tech_coupling_lambda: float = 3.30
 
+    # --- Jack and stream (`_compute_jack_and_stream_raw`) ---
+    #: The jack run-length saturation law W(L) = 1 + M_max * tanh((L - JACK_RUN_OFFSET) / tau),
+    #: and the floor and exponent of its frequency strain (T_jack / max(FLOOR, dt)) ** EXP.
+    jack_run_offset: float = 2.0
+    jack_frequency_floor_ms: float = 35.0
+    jack_frequency_exp: float = 1.25
 
-def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = 8.0) -> List[List[HitObject]]:
+    #: A flow reversal counts when three consecutive flow notes span at most this long.
+    flow_reversal_window_ms: float = 250.0
+
+    #: Step, in seconds, of the decay-accumulation grid the jack strain is sampled on.
+    decay_grid_s: float = 0.25
+
+    #: Quantile pooling of the sampled jack strain: 0.70 * P90 + 0.30 * top-5% mean.
+    jack_p90_index: float = 0.90
+    jack_top5_fraction: float = 0.05
+
+    #: Lane-spread factor (active_lanes - FLOOR) / SPAN, clamped to [0, 1]: a chart spread over
+    #: four or more lanes is read as freely flowing, one confined to the two outer-or-inner
+    #: lanes is not.
+    lane_spread_floor_lanes: float = 2.0
+    lane_spread_span_lanes: float = 2.0
+
+    #: Chord-jack synergy, applied to both jack drivers as c_syn = 1 + GAIN * max(0, ratio - THRESHOLD).
+    jack_chord_syn_threshold: float = 0.08
+    jack_chord_syn_gain: float = 3.0
+
+    #: The two jack drivers: sustained duration rate and locally pooled burst strain.
+    jack_duration_rate_gain: float = 1.48
+    jack_burst_driver_gain: float = 2.0
+
+    #: Stream's dominant-chordjack suppression, max(FLOOR, 1 - GAIN * max(0, ratio - THRESHOLD)),
+    #: and the flow-rate gain it is applied to.
+    stream_jack_supp_threshold: float = 0.11
+    stream_jack_supp_gain: float = 3.6
+    stream_jack_supp_floor: float = 0.05
+    stream_flow_gain: float = 0.85
+
+    #: Shortest chart duration the rate-based drivers divide by, so a near-empty chart cannot
+    #: produce an arbitrarily large per-second rate.
+    min_duration_s: float = 0.5
+
+    # --- Speed (`_compute_speed_raw`) ---
+    #: burst_rate * RATE_GAIN + max(0, avg_nps - NPS_OFFSET) * NPS_GAIN: the burst rate carries
+    #: the micro-speed signal, the NPS term the sustained density behind it.
+    speed_rate_gain: float = 1.50
+    speed_nps_offset: float = 10.0
+    speed_nps_gain: float = 0.60
+
+    # --- Rule C: kinetic-base reconciliation ---
+    #: Below this raw jack the speed/stream corrections are skipped entirely.
+    rule_speed_jack_gate: float = 3.0
+    rule_speed_jack_ratio: float = 0.7
+    rule_speed_jack_penalty: float = 0.6
+
+    #: Stream noise is a jack's, not a stream's, when the jack rate is this high and this many
+    #: jack notes sit in runs of at least `rule_stream_jack_min_run`.
+    rule_stream_jack_gate: float = 3.0
+    rule_stream_jack_ratio: float = 0.14
+    rule_stream_jack_min_run: int = 2
+    rule_stream_jack_min_count: int = 10
+    rule_jack_stream_clamp: float = 0.82
+    rule_jack_stream_penalty: float = 0.40
+
+    #: Ceiling of the effective jack used for the kinetic base, as a multiple of stream.
+    kinetic_jack_stream_cap: float = 1.25
+
+    # --- Four-dimensional unorthodox permutation operator ---
+    tech_tort_offset: float = 0.45
+    tech_adj_shear_weight: float = 0.5
+    tech_bracket_rhythm_scale: float = 2.0
+    tech_shear_weight: float = 0.30
+    tech_spatial_offset: float = 0.88
+    tech_spatial_span: float = 0.12
+    tech_rhythm_offset: float = 0.20
+
+    # --- Kinetic technique coupling ---
+    #: Saturation of the coupling multiplier: 1 + GAIN * tanh((raw - 1) / SCALE) above unity,
+    #: LINEAR_GAIN * raw below it.
+    tech_saturation_gain: float = 0.15
+    tech_saturation_scale: float = 0.20
+    tech_linear_gain: float = 0.90
+    tech_jack_penalty: float = 0.40
+
+    # --- LN flux ---
+    #: hold_ratio * avg_nps * FLUX_GAIN, the LN volume base both LN General and LN Tech build on.
+    ln_gen_flux_gain: float = 1.50
+    ln_tech_flux_gain: float = 1.50
+    ln_tech_freedom_offset: float = 0.8
+    ln_tech_antiphase_gain: float = 0.05
+    ln_tech_excess_exp: float = 1.15
+    ln_tech_saturation_gain: float = 0.15
+    ln_tech_saturation_scale: float = 0.20
+    ln_tech_linear_gain: float = 0.90
+
+    #: The two shapes of a genuine LN-tech chart: permutation-heavy with free fingers, or
+    #: gap-1 dense. Either one lets the LN Tech driver inherit the kinetic base.
+    ln_tech_chart_excess_gate: float = 0.55
+    ln_tech_chart_freedom_gate: float = 0.75
+    ln_tech_chart_lock_gate: float = 2.85
+    ln_tech_chart_gap1_gate: float = 1.60
+    ln_tech_chart_gap1_freedom_gate: float = 0.80
+
+    # --- LN inverse and release ---
+    #: Inverse load ((locked - CENTER) / SPAN) ** EXP, and the release peak-burst gain.
+    ln_inv_lock_center: float = 2.0
+    ln_inv_lock_span: float = 2.0
+    ln_inv_lock_exp: float = 2.0
+    ln_rel_peak_gain: float = 0.08
+
+    #: A chart is read as hold-dominant once its hold ratio passes this, and the LN dimensions
+    #: are then scaled by min(1, hold_ratio * HOLD_PRESENCE_GAIN).
+    hold_presence_gain: float = 2.0
+
+    # --- Orthogonal cross-suppression ---
+    #: Above this hold ratio the jack driver is faded out over the next `ln_decline_span`.
+    ln_decline_start: float = 0.30
+    ln_decline_span: float = 0.20
+
+    #: Genuine jack dominance: the jack rate, the jack-note ratio, and the margins by which a
+    #: dominant jack suppresses stream and tech.
+    jack_dominance_gate: float = 3.0
+    jack_dominance_ratio: float = 0.15
+    jack_stream_adv: float = 1.05
+    jack_stream_penalty: float = 0.5
+    jack_tech_adv: float = 1.5
+    jack_tech_penalty: float = 0.3
+
+    #: Charts confined to this many lanes or fewer are pure-jack: no stream, tech or speed.
+    pure_lane_gate: int = 2
+
+    #: Rule E: at this locked-finger count and hold ratio the chart is severely inverted, and
+    #: LN Inverse displaces LN General over `inv_gen_adv` of its score.
+    inv_lock_gate: float = 4.0
+    inv_hold_gate: float = 0.85
+    inv_gen_adv: float = 0.80
+    inv_gen_penalty: float = 0.35
+
+    # --- Star-scale projection ---
+    #: Ceiling a single technique score is clamped to before p-norm aggregation. It is a
+    #: defensive bound, not the star scale's ceiling: the scale's own ceiling is the soft cap's
+    #: asymptote (`soft_cap_threshold + soft_cap_scale`), which is unreachable by construction.
+    score_ceiling: float = 12.0
+
+
+def _partition_chord_steps(
+    beatmap: Beatmap7K, chord_eps_ms: float = RadarOptions().chord_eps_ms
+) -> List[List[HitObject]]:
     """Partitions beatmap hit objects into discrete chord steps S_0, S_1, ..., S_M."""
     hos = sorted(beatmap.hit_objects, key=lambda x: (x.time, x.column))
     if not hos:
@@ -203,7 +365,9 @@ def _compute_jack_and_stream_raw(
     if not hos:
         return 0.0, 0.0, 0.0, 1, 0
 
-    duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0)
+    duration_s = max(
+        options.min_duration_s, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0
+    )
     steps = _partition_chord_steps(beatmap, options.chord_eps_ms)
 
     # col_state: Dict[column, Tuple[last_step_k, last_time, run_length]]
@@ -255,12 +419,17 @@ def _compute_jack_and_stream_raw(
                 if new_run_length > max_run_length:
                     max_run_length = new_run_length
 
-                # Chordjack run-length saturation W(L) = 1.0 + M_max * tanh((L - 2) / tau)
-                w_l = 1.0 + options.jack_m_max * math.tanh((new_run_length - 2) / options.jack_tau)
+                # Chordjack run-length saturation W(L) = 1.0 + M_max * tanh((L - offset) / tau)
+                w_l = 1.0 + options.jack_m_max * math.tanh(
+                    (new_run_length - options.jack_run_offset) / options.jack_tau
+                )
                 # Multi-key chord arm vibration load
                 c_factor = 1.0 + options.jack_chord_boost * (c_size - 1)
                 # Frequency strain
-                s_factor = math.pow(options.jack_threshold_ms / max(35.0, dt), 1.25)
+                s_factor = math.pow(
+                    options.jack_threshold_ms / max(options.jack_frequency_floor_ms, dt),
+                    options.jack_frequency_exp,
+                )
 
                 imp = s_factor * w_l * c_factor
                 step_impulse += imp
@@ -272,7 +441,7 @@ def _compute_jack_and_stream_raw(
                     t0, c0 = flow_history[-3]
                     t1, c1 = flow_history[-2]
                     t2, c2 = flow_history[-1]
-                    if (t2 - t0) <= 250.0:
+                    if (t2 - t0) <= options.flow_reversal_window_ms:
                         d1 = c1 - c0
                         d2 = c2 - c1
                         if (d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0):
@@ -282,7 +451,7 @@ def _compute_jack_and_stream_raw(
             step_impulses.append((step_time / 1000.0, step_impulse))
 
     # Continuous strain decay accumulation S(t) = S(t - dt) * exp(-dt / tau) + dS (ADR-0008)
-    dt_grid = 0.25
+    dt_grid = options.decay_grid_s
     decay = math.exp(-dt_grid / options.jack_decay_tau_s)
     t_start = min(ho.time for ho in hos) / 1000.0
     t_end = max(ho.time for ho in hos) / 1000.0
@@ -301,14 +470,20 @@ def _compute_jack_and_stream_raw(
 
     # Quantile pooling: 0.70 * P90 + 0.30 * Top5%Mean (ADR-0008)
     sorted_s = sorted(strains) if strains else [0.0]
-    p90 = sorted_s[int(len(sorted_s) * 0.90)]
-    n_top5 = max(1, int(len(sorted_s) * 0.05))
+    p90 = sorted_s[int(len(sorted_s) * options.jack_p90_index)]
+    n_top5 = max(1, int(len(sorted_s) * options.jack_top5_fraction))
     top5_mean = sum(sorted_s[-n_top5:]) / n_top5
     pooled_jack = options.jack_quantile_p90_weight * p90 + options.jack_quantile_top5_weight * top5_mean
 
     total_notes = len(hos)
     active_lanes = len({ho.column for ho in hos})
-    lane_spread = max(0.0, min(1.0, (active_lanes - 2) / 2.0))
+    lane_spread = max(
+        0.0,
+        min(
+            1.0,
+            (active_lanes - options.lane_spread_floor_lanes) / options.lane_spread_span_lanes,
+        ),
+    )
 
     jack_ratio = jack_count / total_notes if total_notes else 0.0
     flow_count = total_notes - jack_count
@@ -319,14 +494,22 @@ def _compute_jack_and_stream_raw(
     t_stream = 1.0 + options.stream_tort_weight * tortuosity + options.stream_bracket_weight * bracket_density
 
     # Jack raw driver combining sustained duration rate and local pooled burst strain
-    c_syn = 1.0 + 3.0 * max(0.0, jack_ratio - 0.08)
-    duration_rate = (sum(x[1] for x in step_impulses) / duration_s) * 1.48 * c_syn
-    burst_driver = pooled_jack * 2.0 * c_syn
+    c_syn = 1.0 + options.jack_chord_syn_gain * max(
+        0.0, jack_ratio - options.jack_chord_syn_threshold
+    )
+    duration_rate = (
+        (sum(x[1] for x in step_impulses) / duration_s) * options.jack_duration_rate_gain * c_syn
+    )
+    burst_driver = pooled_jack * options.jack_burst_driver_gain * c_syn
     r_jack = max(duration_rate, burst_driver)
 
     # Stream raw driver with dominant chordjack suppression
-    supp = max(0.05, 1.0 - 3.6 * max(0.0, jack_ratio - 0.11))
-    r_stream = flow_nps * t_stream * lane_spread * 0.85 * supp
+    supp = max(
+        options.stream_jack_supp_floor,
+        1.0
+        - options.stream_jack_supp_gain * max(0.0, jack_ratio - options.stream_jack_supp_threshold),
+    )
+    r_stream = flow_nps * t_stream * lane_spread * options.stream_flow_gain * supp
 
     return r_jack, r_stream, jack_ratio, max_run_length, jack_count, tortuosity, bracket_density
 
@@ -340,19 +523,36 @@ def _compute_jack_raw(
     return r_jack
 
 
-def _compute_speed_raw(beatmap: Beatmap7K, speed_threshold_ms: float, avg_nps: float) -> float:
-    """Computes raw Speed intensity from rapid successive note presses across different columns."""
+def _compute_speed_raw(beatmap: Beatmap7K, avg_nps: float, options: RadarOptions) -> float:
+    """
+    Computes raw Speed intensity from rapid successive note presses across different columns.
+
+    The burst term is `physics`' micro-speed burst law — the same reference interval and
+    exponent the strain side accumulates — summed over the chart and rated per second.
+    """
     hos = sorted(beatmap.hit_objects, key=lambda x: x.time)
     burst = 0.0
     for k in range(len(hos) - 1):
         if hos[k].column != hos[k + 1].column:
             dt_ms = hos[k + 1].time - hos[k].time
-            if 5.0 < dt_ms < speed_threshold_ms:
-                burst += math.pow((speed_threshold_ms - dt_ms) / 50.0, 1.35)
+            if SPEED_BURST_MIN_INTERVAL_MS < dt_ms < options.speed_burst_threshold_ms:
+                burst += math.pow(
+                    (options.speed_burst_threshold_ms - dt_ms) / SPEED_BURST_REFERENCE_MS,
+                    SPEED_BURST_EXPONENT,
+                )
 
-    duration_s = max(0.5, (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0) if hos else 1.0
+    duration_s = (
+        max(
+            options.min_duration_s,
+            (max(ho.time for ho in hos) - min(ho.time for ho in hos)) / 1000.0,
+        )
+        if hos
+        else 1.0
+    )
     burst_rate = burst / duration_s
-    return burst_rate * 1.50 + max(0.0, avg_nps - 10.0) * 0.60
+    return burst_rate * options.speed_rate_gain + max(
+        0.0, avg_nps - options.speed_nps_offset
+    ) * options.speed_nps_gain
 
 
 def compute_raw_technique_drivers(
@@ -405,39 +605,45 @@ def compute_raw_technique_drivers(
     ) = _compute_jack_and_stream_raw(beatmap, options)
 
     # Speed (micro-speed burst tapping rate)
-    r_speed = _compute_speed_raw(beatmap, options.speed_burst_threshold_ms, features.avg_nps)
+    r_speed = _compute_speed_raw(beatmap, features.avg_nps, options)
 
     active_lanes = len({ho.column for ho in hos})
 
     # Rule C on speed and jack before Rule D
-    if r_jack > 3.0:
-        if r_jack > r_speed * 0.7:
-            r_speed = max(0.0, r_speed - (r_jack * 0.6))
+    if r_jack > options.rule_speed_jack_gate:
+        if r_jack > r_speed * options.rule_speed_jack_ratio:
+            r_speed = max(0.0, r_speed - (r_jack * options.rule_speed_jack_penalty))
 
     # Effective Jack for kinetic base (reflecting Rule D soft-cap on stream noise)
-    if r_stream > 3.0 and jack_ratio < 0.14:
-        if max_run >= 2 and jack_count >= 10:
-            eff_jack_base = min(r_jack, r_stream * 0.82)
-            r_jack = min(r_jack, r_stream * 0.82)
+    if r_stream > options.rule_stream_jack_gate and jack_ratio < options.rule_stream_jack_ratio:
+        if max_run >= options.rule_stream_jack_min_run and jack_count >= options.rule_stream_jack_min_count:
+            eff_jack_base = min(r_jack, r_stream * options.rule_jack_stream_clamp)
+            r_jack = min(r_jack, r_stream * options.rule_jack_stream_clamp)
         else:
-            eff_jack_base = max(0.0, r_jack - (r_stream * 0.40))
-            r_jack = max(0.0, r_jack - (r_stream * 0.40))
+            eff_jack_base = max(0.0, r_jack - (r_stream * options.rule_jack_stream_penalty))
+            r_jack = max(0.0, r_jack - (r_stream * options.rule_jack_stream_penalty))
     else:
         eff_jack_base = r_jack
 
-    # Kinetic base energy K_base = max(r_stream, r_speed, min(eff_jack, r_stream * 1.25)) (ADR-0008)
-    k_base = max(r_stream, r_speed, min(eff_jack_base, r_stream * 1.25))
+    # Kinetic base energy K_base = max(r_stream, r_speed, min(eff_jack, r_stream * cap)) (ADR-0008)
+    k_base = max(r_stream, r_speed, min(eff_jack_base, r_stream * options.kinetic_jack_stream_cap))
 
     # Four-dimensional Unorthodox Permutation Operator Omega_irreg (ADR-0008)
     # 1. Flow tortuosity (reversals)
-    t_tort = max(0.0, tortuosity - 0.45)
+    t_tort = max(0.0, tortuosity - options.tech_tort_offset)
     # 2. Bracket and shear
-    shear_ratio = (features.gap1_density + 0.5 * features.adj_density) / max(1.0, features.avg_nps)
-    b_bracket = bracket_density * min(1.0, features.rhythm_irreg * 2.0) + shear_ratio * 0.30
+    shear_ratio = (
+        features.gap1_density + options.tech_adj_shear_weight * features.adj_density
+    ) / max(1.0, features.avg_nps)
+    b_bracket = bracket_density * min(
+        1.0, features.rhythm_irreg * options.tech_bracket_rhythm_scale
+    ) + shear_ratio * options.tech_shear_weight
     # 3. Spatial transition entropy
-    s_spatial = max(0.0, features.spatial_entropy - 0.88) / 0.12
+    s_spatial = (
+        max(0.0, features.spatial_entropy - options.tech_spatial_offset) / options.tech_spatial_span
+    )
     # 4. Rhythmic irregularity
-    r_rhythm = max(0.0, features.rhythm_irreg - 0.20)
+    r_rhythm = max(0.0, features.rhythm_irreg - options.tech_rhythm_offset)
 
     tech_4d = Tech4DComponents(
         tortuosity=round(tortuosity, 4),
@@ -458,51 +664,71 @@ def compute_raw_technique_drivers(
     tech_excess = max(0.0, omega_irreg - 1.0)
     raw_mult = math.pow(tech_excess, options.tech_coupling_gamma) * options.tech_coupling_lambda
     if raw_mult > 1.0:
-        mult = 1.0 + 0.15 * math.tanh((raw_mult - 1.0) / 0.20)
+        mult = 1.0 + options.tech_saturation_gain * math.tanh(
+            (raw_mult - 1.0) / options.tech_saturation_scale
+        )
         r_tech = k_base * mult
-        r_jack = max(0.0, r_jack - (r_tech * 0.40))
+        r_jack = max(0.0, r_jack - (r_tech * options.tech_jack_penalty))
     else:
-        r_tech = k_base * raw_mult * 0.90
+        r_tech = k_base * raw_mult * options.tech_linear_gain
 
     # LN General (overall hold presence, sustained hold chords, and concurrent spatial flux) (ADR-0008)
     concurrent_factor = 1.0 + options.ln_gen_concurrent_weight * features.mean_locked_fingers
-    r_ln_gen = hold_ratio * features.avg_nps * concurrent_factor * 1.50
+    r_ln_gen = hold_ratio * features.avg_nps * concurrent_factor * options.ln_gen_flux_gain
 
     # LN Tech (kinetic coupling with LN flux and unorthodox permutation) (ADR-0008)
-    base_ln_flux = hold_ratio * features.avg_nps * 1.50
-    finger_freedom = (features.gap1_density + 0.8) / max(1.0, features.mean_locked_fingers)
-    antiphase_boost = 1.0 + 0.05 * features.antiphase_rate
+    base_ln_flux = hold_ratio * features.avg_nps * options.ln_tech_flux_gain
+    finger_freedom = (features.gap1_density + options.ln_tech_freedom_offset) / max(
+        1.0, features.mean_locked_fingers
+    )
+    antiphase_boost = 1.0 + options.ln_tech_antiphase_gain * features.antiphase_rate
     raw_ln_mult = (
-        math.pow(tech_excess, 1.15)
+        math.pow(tech_excess, options.ln_tech_excess_exp)
         * options.ln_tech_coupling_lambda
         * finger_freedom
         * antiphase_boost
     )
     is_ln_tech_chart = (
-        (tech_excess >= 0.55 and finger_freedom >= 0.75 and features.mean_locked_fingers < 2.85)
-        or (features.gap1_density >= 1.60 and finger_freedom >= 0.80)
+        (
+            tech_excess >= options.ln_tech_chart_excess_gate
+            and finger_freedom >= options.ln_tech_chart_freedom_gate
+            and features.mean_locked_fingers < options.ln_tech_chart_lock_gate
+        )
+        or (
+            features.gap1_density >= options.ln_tech_chart_gap1_gate
+            and finger_freedom >= options.ln_tech_chart_gap1_freedom_gate
+        )
     )
     if raw_ln_mult > 1.0 and hold_ratio >= options.min_rice_hold_threshold:
-        ln_mult = 1.0 + 0.15 * math.tanh((raw_ln_mult - 1.0) / 0.20)
+        ln_mult = 1.0 + options.ln_tech_saturation_gain * math.tanh(
+            (raw_ln_mult - 1.0) / options.ln_tech_saturation_scale
+        )
         r_ln_tech = max(base_ln_flux, r_ln_gen) * ln_mult if is_ln_tech_chart else (base_ln_flux * ln_mult)
     else:
-        r_ln_tech = (base_ln_flux * raw_ln_mult * 0.90) if hold_ratio >= options.min_rice_hold_threshold else 0.0
+        r_ln_tech = (
+            (base_ln_flux * raw_ln_mult * options.ln_tech_linear_gain)
+            if hold_ratio >= options.min_rice_hold_threshold
+            else 0.0
+        )
 
     # LN Inverse (high locked finger density, inverse score under micro-action scaling) (ADR-0006, ADR-0008)
-    lock_load = math.pow(max(0.0, features.mean_locked_fingers - 2.0) / 2.0, 2.0)
+    lock_load = math.pow(
+        max(0.0, features.mean_locked_fingers - options.ln_inv_lock_center) / options.ln_inv_lock_span,
+        options.ln_inv_lock_exp,
+    )
     r_ln_inv = (
         features.inverse_score * options.ln_inv_score_weight
         + features.avg_nps * hold_ratio * lock_load * options.ln_inv_lock_weight
-    ) * min(1.0, hold_ratio * 2.0)
+    ) * min(1.0, hold_ratio * options.hold_presence_gain)
 
     # LN Release (staccato release rate, exclusive antiphase rate, peak burst release) (ADR-0008)
-    duration_s = max(0.5, features.duration_seconds)
+    duration_s = max(options.min_duration_s, features.duration_seconds)
     release_rate = features.ln_count / duration_s
     r_ln_rel = (
         release_rate * options.ln_release_rate_weight
         + features.antiphase_rate * options.ln_release_antiphase_weight
-        + hold_ratio * features.peak_1b_nps * 0.08
-    ) * min(1.0, hold_ratio * 2.0)
+        + hold_ratio * features.peak_1b_nps * options.ln_rel_peak_gain
+    ) * min(1.0, hold_ratio * options.hold_presence_gain)
 
     # --- 2. Orthogonal Cross-Suppression ---
     # Rule A: Pure Rice charts (hold_ratio < min_rice_hold_threshold)
@@ -511,29 +737,35 @@ def compute_raw_technique_drivers(
         r_ln_tech = 0.0
         r_ln_inv = 0.0
         r_ln_rel = 0.0
-    elif hold_ratio > 0.30:
-        r_jack *= max(0.0, 1.0 - (hold_ratio - 0.30) / 0.20)
+    elif hold_ratio > options.ln_decline_start:
+        r_jack *= max(
+            0.0,
+            1.0 - (hold_ratio - options.ln_decline_start) / options.ln_decline_span,
+        )
 
     # Rule C: Lane spread gating and Pure Jack specialization
-    if active_lanes <= 2:
+    if active_lanes <= options.pure_lane_gate:
         r_stream = 0.0
         r_tech = 0.0
         r_speed = 0.0
     else:
         # Rule C: Genuine Jack dominance suppresses competing stream/tech dimensions
-        if r_jack > 3.0:
-            if jack_ratio >= 0.15 and r_jack > r_stream * 1.05:
-                r_stream = max(0.0, r_stream - (r_jack * 0.5))
-            if r_jack > r_tech * 1.5:
-                r_tech = max(0.0, r_tech - (r_jack * 0.3))
+        if r_jack > options.jack_dominance_gate:
+            if (
+                jack_ratio >= options.jack_dominance_ratio
+                and r_jack > r_stream * options.jack_stream_adv
+            ):
+                r_stream = max(0.0, r_stream - (r_jack * options.jack_stream_penalty))
+            if r_jack > r_tech * options.jack_tech_adv:
+                r_tech = max(0.0, r_tech - (r_jack * options.jack_tech_penalty))
 
     # Rule E: Inverse specialization gating (ADR-0008)
-    # When a chart enters the severe inverted state (mean_locked_fingers >= 4.0 and hold_ratio >= 0.85),
-    # the motor-cognitive burden is dominated by Inverse rather than General hold volume.
-    if features.mean_locked_fingers >= 4.0 and hold_ratio >= 0.85:
-        if r_ln_inv > r_ln_gen * 0.80:
-            r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * 0.35))
-            r_ln_tech = max(0.0, r_ln_tech - (r_ln_inv * 0.35))
+    # When a chart enters the severe inverted state, the motor-cognitive burden is dominated by
+    # Inverse rather than General hold volume.
+    if features.mean_locked_fingers >= options.inv_lock_gate and hold_ratio >= options.inv_hold_gate:
+        if r_ln_inv > r_ln_gen * options.inv_gen_adv:
+            r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * options.inv_gen_penalty))
+            r_ln_tech = max(0.0, r_ln_tech - (r_ln_inv * options.inv_gen_penalty))
 
     return RawTechniqueDrivers(
         jack=max(0.0, r_jack),
@@ -595,7 +827,10 @@ def compute_technique_radar(
         scores = {k: 0.0 for k in raw_scores}
     else:
         scores = {
-            k: min(12.0, sr_base * math.pow(v / max_raw, calibration.driver_backpressure_exp))
+            k: min(
+                options.score_ceiling,
+                sr_base * math.pow(v / max_raw, calibration.driver_backpressure_exp),
+            )
             for k, v in raw_scores.items()
         }
 
@@ -636,8 +871,14 @@ def compute_tech_4d_components(
     """
     opts = options or RadarOptions()
     *_, tortuosity, bracket_density = _compute_jack_and_stream_raw(beatmap, opts)
-    shear_ratio = (features.gap1_density + 0.5 * features.adj_density) / max(1.0, features.avg_nps)
-    b_bracket = bracket_density * min(1.0, features.rhythm_irreg * 2.0) + shear_ratio * 0.30
+    # The same three weights the technique operator applies — read from the options rather than
+    # restated, so the exposed breakdown cannot drift from the driver it breaks down.
+    shear_ratio = (
+        features.gap1_density + opts.tech_adj_shear_weight * features.adj_density
+    ) / max(1.0, features.avg_nps)
+    b_bracket = bracket_density * min(
+        1.0, features.rhythm_irreg * opts.tech_bracket_rhythm_scale
+    ) + shear_ratio * opts.tech_shear_weight
     return Tech4DComponents(
         tortuosity=round(tortuosity, 4),
         bracket_shear=round(b_bracket, 4),

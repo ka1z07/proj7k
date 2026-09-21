@@ -1,7 +1,9 @@
-from typing import List
+import dataclasses
+from typing import Any, List
 
 import pytest
 
+from proj7k import physics, scaling, strain
 from proj7k.calibration import (
     DEFAULT_CALIBRATION,
     StrainStarCalibration,
@@ -12,6 +14,7 @@ from proj7k.difficulty import (
     current_engine_version,
     evaluate_intrinsic_difficulty,
 )
+from proj7k.features import FeatureOptions
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 from proj7k.radar import RadarOptions
 from proj7k.rating import RatingOptions
@@ -132,36 +135,97 @@ def test_current_engine_version_is_calibration_derived():
     assert compute_methodology_fingerprint(a=1, b=2) != compute_methodology_fingerprint(a=2, b=2)
 
 
-def test_engine_fingerprint_covers_every_star_rating_constant():
+#: The option object each `DifficultyOptions` field carries, and the attribute it is passed to.
+OPTION_HOMES = {
+    RatingOptions: "rating_options",
+    RadarOptions: "radar_options",
+    StrainOptions: "strain_options",
+    FeatureOptions: "feature_options",
+}
+
+#: Every calibration block that reports its own constants, keyed by the fingerprint argument it
+#: is folded in under.
+CALIBRATION_BLOCKS = {"physics": physics, "scaling": scaling, "strain_constants": strain}
+
+
+def _different(value: Any) -> Any:
+    """
+    A value that differs from `value`, whatever the field's type is. A type this cannot perturb
+    is a type whose coverage nothing is checking, so it fails loudly rather than passing over it.
+    """
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, (int, float)):
+        return value + 1
+    if isinstance(value, str):
+        return value + "_perturbed"
+    if value is None:
+        return 1
+    if isinstance(value, tuple):
+        return value + (_different(value[0]),) if value else (1,)
+    raise AssertionError(
+        f"no perturbation is defined for {type(value).__name__}: add one so this field's "
+        f"fingerprint coverage is actually exercised"
+    )
+
+
+# One case per field, derived from the dataclasses: a newly declared field is a new case, so a
+# constant cannot be added to an option object and quietly skip the fingerprint.
+@pytest.mark.parametrize(
+    ("options_class", "field_name"),
+    [
+        pytest.param(cls, f.name, id=f"{cls.__name__}.{f.name}")
+        for cls in OPTION_HOMES
+        for f in dataclasses.fields(cls)
+    ],
+)
+def test_every_option_field_moves_the_engine_fingerprint(options_class, field_name):
     """
     The injected version must change whenever anything that moves a star rating changes,
-    otherwise a calibration rewrite would leave stale ratings in the game database.
+    otherwise a calibration rewrite would leave stale ratings in the game database. The option
+    objects are folded in whole, so this is the assertion that the folding is actually total.
     """
     baseline = DifficultyOptions().engine_fingerprint
+    defaults = options_class()
+    perturbed = options_class(**{field_name: _different(getattr(defaults, field_name))})
 
-    moved = {
-        "star anchor": DifficultyOptions(rating_options=RatingOptions(strain_a=0.5)),
-        "back-pressure": DifficultyOptions(rating_options=RatingOptions(driver_backpressure_exp=1.0)),
-        "aggregation": DifficultyOptions(rating_options=RatingOptions(p_norm=3.0)),
-        "radar options": DifficultyOptions(radar_options=RadarOptions(jack_threshold_ms=230.0)),
-        "strain options": DifficultyOptions(strain_options=StrainOptions(tau_time_constant_s=1.5)),
-    }
-    for label, options in moved.items():
-        assert options.engine_fingerprint != baseline, label
+    moved = DifficultyOptions(**{OPTION_HOMES[options_class]: perturbed})
 
-    # Shared physical constants are part of the fingerprint too.
-    import proj7k.difficulty as difficulty_module
-    import proj7k.physics as physics
+    assert moved.engine_fingerprint != baseline, (
+        f"{options_class.__name__}.{field_name} is read by the engine but not by the fingerprint"
+    )
 
-    assert difficulty_module.CHORDJACK_STEP_INTERVAL_MS == physics.CHORDJACK_STEP_INTERVAL_MS
-    assert difficulty_module.JACK_INTERVAL_PENALTY_MS == physics.JACK_INTERVAL_PENALTY_MS
-    assert difficulty_module.ANTIPHASE_ONSET_WINDOW_S == physics.ANTIPHASE_ONSET_WINDOW_S
-    assert difficulty_module.BRACKET_PHASE_INVERSION_WINDOW_MS == physics.BRACKET_PHASE_INVERSION_WINDOW_MS
-    assert difficulty_module.SPEED_BURST_INTERVAL_MS == physics.SPEED_BURST_INTERVAL_MS
 
-    original = difficulty_module.CHORDJACK_STEP_INTERVAL_MS
-    try:
-        difficulty_module.CHORDJACK_STEP_INTERVAL_MS = original + 1.0
-        assert DifficultyOptions().engine_fingerprint != baseline
-    finally:
-        difficulty_module.CHORDJACK_STEP_INTERVAL_MS = original
+@pytest.mark.parametrize(
+    ("block_name", "constant_name"),
+    [
+        pytest.param(name, constant, id=f"{name}.{constant}")
+        for name, module in CALIBRATION_BLOCKS.items()
+        for constant in module.CALIBRATION_CONSTANTS
+    ],
+)
+def test_every_calibration_constant_moves_the_engine_version(
+    block_name: str, constant_name: str, monkeypatch
+):
+    """
+    The version stamped into injected metadata, not just the fingerprint behind it: a constant
+    that moves a star rating without moving this string leaves stale ratings in osu!lazer
+    (ADR-0014), which is the failure issue #48 exists to close.
+    """
+    baseline = current_engine_version()
+    module = CALIBRATION_BLOCKS[block_name]
+
+    monkeypatch.setattr(module, constant_name, _different(getattr(module, constant_name)))
+    current_engine_version.cache_clear()
+
+    assert current_engine_version() != baseline, f"{block_name}.{constant_name} is not covered"
+
+
+def test_the_version_is_the_default_fingerprint():
+    """
+    `current_engine_version` is the cached projection of the default fingerprint. Pinning the
+    identity keeps the two from drifting apart: the coverage assertions above are split between
+    them, and would otherwise be measuring different things.
+    """
+    current_engine_version.cache_clear()
+    assert current_engine_version() == f"v{DifficultyOptions().engine_fingerprint}"

@@ -14,16 +14,10 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, Optional, Union
 
-from proj7k.calibration import compute_methodology_fingerprint
-from proj7k.features import BeatmapFeatures, extract_beatmap_features
+from proj7k import physics, scaling, strain
+from proj7k.calibration import block_fingerprint_constants, compute_methodology_fingerprint
+from proj7k.features import BeatmapFeatures, FeatureOptions, extract_beatmap_features
 from proj7k.parser import Beatmap7K, parse_osu_7k
-from proj7k.physics import (
-    ANTIPHASE_ONSET_WINDOW_S,
-    BRACKET_PHASE_INVERSION_WINDOW_MS,
-    CHORDJACK_STEP_INTERVAL_MS,
-    JACK_INTERVAL_PENALTY_MS,
-    SPEED_BURST_INTERVAL_MS,
-)
 from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
 from proj7k.rating import RatingOptions, synthesize_star_rating
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
@@ -34,27 +28,35 @@ class DifficultyOptions:
     strain_options: Optional[StrainOptions] = None
     radar_options: Optional[RadarOptions] = None
     rating_options: Optional[RatingOptions] = None
+    feature_options: Optional[FeatureOptions] = None
 
     @property
     def engine_fingerprint(self) -> str:
         """
-        Methodology hash of every constant that can move a star rating: the star calibration
-        and aggregation, the radar and strain option defaults, and the shared physical
-        thresholds. Changing any one of them changes the version stamped into osu!lazer
-        metadata, which marks every previously injected beatmap for re-evaluation
+        Methodology hash of every constant that can move a star rating, taken from the four
+        objects that hold them: the star calibration and aggregation, the radar, strain and
+        feature option defaults, and the named constants of the `physics`, `scaling` and
+        `strain` calibration blocks. Changing any one of them changes the version stamped into
+        osu!lazer metadata, which marks every previously injected beatmap for re-evaluation
         (ADR-0014) — so a formula change can never leave stale ratings behind.
+
+        Coverage is not a hand-kept list. Each option object is folded in whole via `asdict`, so
+        a new field is covered the moment it is declared, and each calibration block is read
+        through `calibration.block_fingerprint_constants`, which takes the block's own
+        `CALIBRATION_CONSTANTS` list. Two tests hold that up: every field of every option object
+        must move this hash, and every numeric literal left in the rating path's function bodies
+        must be a registered non-calibration literal (test_engine_literal_registry) — which also
+        asserts each block's list is complete against its module's source. A constant that
+        reaches a star rating without reaching this hash has nowhere left to hide.
         """
         return compute_methodology_fingerprint(
             rating_options=asdict(self.rating_options or RatingOptions()),
             radar_options=asdict(self.radar_options or RadarOptions()),
             strain_options=asdict(self.strain_options or StrainOptions()),
-            physics=(
-                JACK_INTERVAL_PENALTY_MS,
-                CHORDJACK_STEP_INTERVAL_MS,
-                ANTIPHASE_ONSET_WINDOW_S,
-                BRACKET_PHASE_INVERSION_WINDOW_MS,
-                SPEED_BURST_INTERVAL_MS,
-            ),
+            feature_options=asdict(self.feature_options or FeatureOptions()),
+            physics=block_fingerprint_constants(physics),
+            scaling=block_fingerprint_constants(scaling),
+            strain_constants=block_fingerprint_constants(strain),
         )
 
 
@@ -119,7 +121,7 @@ def evaluate_intrinsic_difficulty(
     rating_options = options.rating_options or RatingOptions()
 
     if features is None:
-        features = extract_beatmap_features(beatmap)
+        features = extract_beatmap_features(beatmap, options=options.feature_options)
     strain_profile = compute_dual_hand_strain(beatmap, options=options.strain_options)
     # Radar scores and the synthesized star rating are expressed in the same star scale:
     # both read their calibration from the one rating options object.

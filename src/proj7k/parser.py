@@ -5,6 +5,8 @@ import math
 import os
 from typing import List, Optional, Dict
 
+from proj7k.physics import DEFAULT_BPM
+
 
 class NoteType(Enum):
     RICE = "rice"
@@ -104,7 +106,7 @@ def dominant_timing_point(beatmap: Beatmap7K) -> Optional[TimingPoint]:
     return best
 
 
-def dominant_bpm(beatmap: Beatmap7K, default: float = 150.0) -> float:
+def dominant_bpm(beatmap: Beatmap7K, default: float = DEFAULT_BPM) -> float:
     """
     The single dominant BPM of a chart: the unrounded tempo of its dominant timing point.
 

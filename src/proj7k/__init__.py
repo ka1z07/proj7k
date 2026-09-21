@@ -8,7 +8,7 @@ from proj7k.parser import (
     parse_osu_7k,
     dump_osu_7k,
 )
-from proj7k.features import BeatmapFeatures, extract_beatmap_features
+from proj7k.features import BeatmapFeatures, FeatureOptions, extract_beatmap_features
 from proj7k.parser import dominant_bpm, dominant_timing_point
 from proj7k.calibration import (
     DEFAULT_CALIBRATION,
@@ -133,6 +133,7 @@ __all__ = [
     "parse_osu_7k",
     "dump_osu_7k",
     "BeatmapFeatures",
+    "FeatureOptions",
     "extract_beatmap_features",
     "dominant_bpm",
     "dominant_timing_point",

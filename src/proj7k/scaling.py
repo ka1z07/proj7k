@@ -1,3 +1,12 @@
+"""
+Inverse BPM scaling law: the tempo-dependent factor applied to raw physical metrics.
+
+Every calibration constant of the law is named here and listed in `CALIBRATION_CONSTANTS`,
+so the engine fingerprint covers it (`difficulty.engine_fingerprint`) and the
+literal-coverage guard can tell a named constant apart from a literal baked into an
+operator (issue #48).
+"""
+
 import math
 from typing import Tuple, Dict, Any, Optional, Literal
 from dataclasses import dataclass, asdict
@@ -7,6 +16,27 @@ LOW_SPEED_BPM_THRESHOLD: float = 145.0
 HIGH_SPEED_BPM_THRESHOLD: float = 180.0
 LOW_SPEED_CAP: float = 5.0
 REFERENCE_BPM: float = 170.0
+
+#: Tempo ratio exponent of the scaling law: (bpm / reference) ** REFERENCE_EXPONENT. Carries
+#: the super-linear penalty a faster chart imposes on the same physical metric.
+REFERENCE_EXPONENT: float = 1.5
+
+#: Exponent applied to (bpm / low_speed_threshold) inside the low-speed truncation regime,
+#: which is deliberately shallower than REFERENCE_EXPONENT — that branch is a generous
+#: cognitive-threshold regime, not a penalty.
+LOW_SPEED_EXPONENT: float = 2.0
+
+#: Width, in BPM above HIGH_SPEED_BPM_THRESHOLD, over which the exponential penalty ramps.
+PENALTY_RAMP_BPM: float = 20.0
+
+#: Gain of the exponential penalty per ramp unit, and the weight of the locked-finger
+#: amplification added on top of it once a chart sits in the penalty regime.
+PENALTY_EXP_GAIN: float = 0.55
+LOCK_AMPLIFICATION_GAIN: float = 0.35
+
+#: NPS weight of the inverse score: a denser chart raises the cognitive cost of every locked
+#: finger, so the calibrated metric is multiplied by (1 + INVERSE_NPS_GAIN * nps).
+INVERSE_NPS_GAIN: float = 0.02
 
 ScalingRegime = Literal["LOW_SPEED_TRUNCATION", "STANDARD", "EXPONENTIAL_PENALTY"]
 
@@ -48,18 +78,22 @@ def compute_inverse_scaling_factor(
 
     if bpm <= low_bpm_threshold:
         regime: ScalingRegime = "LOW_SPEED_TRUNCATION"
-        base = ((bpm / low_bpm_threshold) ** 2) * ((low_bpm_threshold / reference_bpm) ** 1.5)
+        base = ((bpm / low_bpm_threshold) ** LOW_SPEED_EXPONENT) * (
+            (low_bpm_threshold / reference_bpm) ** REFERENCE_EXPONENT
+        )
         factor = round(base, 4)
     elif bpm < high_bpm_threshold:
         regime = "STANDARD"
-        base = (bpm / reference_bpm) ** 1.5
+        base = (bpm / reference_bpm) ** REFERENCE_EXPONENT
         factor = round(base, 4)
     else:
         regime = "EXPONENTIAL_PENALTY"
-        base = (high_bpm_threshold / reference_bpm) ** 1.5
-        bpm_ratio = (bpm - high_bpm_threshold) / 20.0
-        exp_penalty = math.exp(0.55 * bpm_ratio)
-        lock_amplification = 1.0 + 0.35 * (min(max(mean_locked_fingers, 0.0), 7.0) / 7.0)
+        base = (high_bpm_threshold / reference_bpm) ** REFERENCE_EXPONENT
+        bpm_ratio = (bpm - high_bpm_threshold) / PENALTY_RAMP_BPM
+        exp_penalty = math.exp(PENALTY_EXP_GAIN * bpm_ratio)
+        lock_amplification = 1.0 + LOCK_AMPLIFICATION_GAIN * (
+            min(max(mean_locked_fingers, 0.0), 7.0) / 7.0
+        )
         factor = round(base * exp_penalty * lock_amplification, 4)
 
     return (factor, regime)
@@ -118,7 +152,7 @@ def compute_inverse_score(
         divisor=divisor,
         low_speed_cap=low_speed_cap,
     )
-    nps_factor = 1.0 + 0.02 * max(nps, 0.0)
+    nps_factor = 1.0 + INVERSE_NPS_GAIN * max(nps, 0.0)
     score = calibrated * nps_factor
     if regime == "LOW_SPEED_TRUNCATION":
         score = min(score, low_speed_cap)
@@ -140,3 +174,20 @@ class ClockWindowRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+#: Names of every calibration constant above, for the methodology fingerprint — see
+#: `calibration.block_fingerprint_constants`. The coverage guard keeps this list complete.
+CALIBRATION_CONSTANTS: Tuple[str, ...] = (
+    "DEFAULT_DIVISOR",
+    "LOW_SPEED_BPM_THRESHOLD",
+    "HIGH_SPEED_BPM_THRESHOLD",
+    "LOW_SPEED_CAP",
+    "REFERENCE_BPM",
+    "REFERENCE_EXPONENT",
+    "LOW_SPEED_EXPONENT",
+    "PENALTY_RAMP_BPM",
+    "PENALTY_EXP_GAIN",
+    "LOCK_AMPLIFICATION_GAIN",
+    "INVERSE_NPS_GAIN",
+)

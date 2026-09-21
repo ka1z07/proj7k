@@ -5,6 +5,12 @@ Implements:
 1. Raw physical strain star rating fit: SR_raw = a * S_base^0.65 + b
 2. Extremum-dominant p-Norm aggregation (p = 4.0) over technique radar vector
 3. C^1 smooth Hyperbolic Tangent (tanh) soft-cap compression above 9.5★
+
+There is no separate hard ceiling on the output, and deliberately so: the soft cap asymptotes to
+`soft_cap_threshold + soft_cap_scale` (12.5★ at the canonical calibration) without ever reaching
+it, so any clamp at or above that value could never bind while any clamp below it would put a
+non-smooth corner into a curve that exists to be smooth. The field that used to carry one
+(`RatingOptions.max_star_rating`) was read by nothing and is gone (issue #48).
 """
 
 from dataclasses import dataclass
@@ -38,7 +44,6 @@ class RatingOptions:
     strain_a: float = DEFAULT_CALIBRATION.strain_a
     strain_b: float = DEFAULT_CALIBRATION.strain_b
     driver_backpressure_exp: float = DEFAULT_CALIBRATION.driver_backpressure_exp
-    max_star_rating: float = 12.5
 
     @property
     def calibration(self) -> StrainStarCalibration:
@@ -58,7 +63,7 @@ class RatingOptions:
         canonical Dan anchors behind the injected tier label.
 
         `difficulty.DifficultyOptions.engine_fingerprint` folds this together with the radar,
-        strain, and physical constants into the version stamped into injected metadata.
+        strain, feature, and physical constants into the version stamped into injected metadata.
         """
         return compute_methodology_fingerprint(
             strain_a=self.strain_a,
@@ -69,10 +74,16 @@ class RatingOptions:
             damping_coeff=self.damping_coeff,
             soft_cap_threshold=self.soft_cap_threshold,
             soft_cap_scale=self.soft_cap_scale,
-            max_star_rating=self.max_star_rating,
             dan_tiers=tuple(CANONICAL_DAN_TIERS),
             dan_sr=tuple(CANONICAL_DAN_SR[t] for t in CANONICAL_DAN_TIERS),
         )
+
+
+#: The canonical field defaults, named once. The standalone operator signatures below read their
+#: defaults from here rather than carrying a second copy of 4.0 / 0.08 / 9.5 / 3.0 — the profiler
+#: calls them without a RatingOptions, so a duplicated literal there would be a live second
+#: definition of the same calibration.
+DEFAULT_RATING_OPTIONS = RatingOptions()
 
 
 @dataclass(frozen=True)
@@ -99,8 +110,8 @@ class StarRatingSynthesis:
 
 def aggregate_p_norm(
     scores: Union[Sequence[float], TechniqueRadar, Dict[str, float]],
-    p: float = 4.0,
-    damping_coeff: float = 0.08,
+    p: float = DEFAULT_RATING_OPTIONS.p_norm,
+    damping_coeff: float = DEFAULT_RATING_OPTIONS.damping_coeff,
 ) -> float:
     """
     Aggregates multi-dimensional technique scores via extremum-dominant p-norm:
@@ -139,8 +150,8 @@ def aggregate_p_norm(
 
 def apply_tanh_soft_cap(
     sr: float,
-    threshold: float = 9.5,
-    scale: float = 3.0,
+    threshold: float = DEFAULT_RATING_OPTIONS.soft_cap_threshold,
+    scale: float = DEFAULT_RATING_OPTIONS.soft_cap_scale,
 ) -> float:
     """
     Applies C^1 smooth hyperbolic tangent soft-cap compression:

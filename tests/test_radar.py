@@ -207,8 +207,12 @@ def test_raw_drivers_are_physical_units_not_star_values(benchmark_manifest, benc
     strongest driver runs an order of magnitude past the whole star scale's ceiling. That is
     why a driver's star rating has to be calibrated per technique rather than borrowed from the
     strain anchor law, whose inputs live in a different range entirely.
+
+    The scale's ceiling is the soft cap's asymptote, not a separate clamp: the compression
+    converges towards `soft_cap_threshold + soft_cap_scale` without reaching it.
     """
-    ceiling = RatingOptions().max_star_rating
+    rating = RatingOptions()
+    ceiling = rating.soft_cap_threshold + rating.soft_cap_scale
 
     strongest = max(
         max(

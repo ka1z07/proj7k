@@ -15,7 +15,7 @@ private copy:
 from dataclasses import dataclass
 import hashlib
 import math
-from typing import Any
+from typing import Any, Dict
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,23 @@ class StrainStarCalibration:
 
 #: Canonical calibration: the constants every engine stage falls back to.
 DEFAULT_CALIBRATION = StrainStarCalibration()
+
+
+def block_fingerprint_constants(module: Any) -> Dict[str, Any]:
+    """
+    A calibration block's constants, keyed by name, for the methodology fingerprint.
+
+    A *calibration block* is a module on the star-rating path that holds its constants as
+    module-level names and lists every one of them in `CALIBRATION_CONSTANTS`. The list is the
+    block's own declaration of what it contributes to the fingerprint, and
+    `tests/test_engine_literal_registry.py` asserts it is complete against the module's source —
+    a constant defined in a block but missing from its list would move a star rating without
+    moving the engine version, which is the staleness ADR-0014 exists to prevent.
+
+    Reading through `getattr` at call time rather than copying at import time is what lets the
+    guards above monkeypatch a constant and watch the version move.
+    """
+    return {name: getattr(module, name) for name in module.CALIBRATION_CONSTANTS}
 
 
 def compute_methodology_fingerprint(**constants: Any) -> str:

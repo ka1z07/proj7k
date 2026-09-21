@@ -188,6 +188,10 @@ _Avoid_: 静态事件率、无速度耦合技巧评分
 由 0th 贯穿至 Stellium 的 15 级严格单调全序难度序列（`0th < 1st < ... < 10th < Gamma < Azimuth < Zenith < Stellium`）。
 _Avoid_: 散乱星级对比、无序段位
 
+**标定登记表 (Calibration Registry)**:
+星级路径上每一个能移动星级的常数所归属的单一来源：`RatingOptions` / `RadarOptions` / `FeatureOptions` / `StrainOptions` 的字段，或 `physics` / `scaling` / `strain` 的具名常数块。选项对象的取数由「整体入方法学指纹」保证，且每个字段都必须真被某个算子读取（只在指纹里自我枚举的空旋钮不算）；常数块的取数由它自报的 `CALIBRATION_CONSTANTS` 清单保证，守卫断言清单与源码里的模块级数值常数一致。落在两者之外的数值字面量只允许是非标定字面量（代数恒等、下标与计数、单位换算、哨兵、epsilon），且必须在 `tests/test_engine_literal_registry.py` 中逐值逐次登记并写明理由。**一个能移动星级的常数，只有两条出路：给出一个家，或写明它为什么不需要家。**
+_Avoid_: 函数体内的裸标定字面量、模块级的未申报常数、手写维护的覆盖清单、只靠星级指纹测试拦截而不动版本令牌
+
 ### 客户端集成与游戏内呈现
 
 **无损注入 (Non-Destructive Ingestion)**:
