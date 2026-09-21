@@ -213,13 +213,14 @@ def load_manifest(
 def process_benchmark_item(
     item: BenchmarkItem,
     cache: Optional[TwoLayerCache] = None,
+    evaluate_rating: bool = True,
 ) -> BenchmarkItemResult:
     """
     Ingests and processes a single benchmark item:
     - Checks Layer 2 feature cache (bypassing feature extraction on hit)
     - Checks Layer 1 AST cache (bypassing raw file parsing on hit)
     - Extracts baseline and physiological features
-    - Computes the engine's star rating over those features
+    - Computes the engine's star rating over those features (evaluate_rating)
     - Fault tolerant: catches exceptions and returns FAILED_INGESTION status.
     """
     try:
@@ -241,19 +242,21 @@ def process_benchmark_item(
         if cache and content_hash and effective_bpm is not None:
             features = cache.get_features(content_hash, bpm=effective_bpm)
 
-        # The rating needs the parsed note stream (the radar reads the notes themselves), so an
-        # item is never answered from the Layer-2 feature cache alone: the AST comes back too.
+        # The rating needs the parsed note stream (the radar reads the notes themselves), so a
+        # rated item is never answered from the Layer-2 feature cache alone: the AST comes back
+        # too. A feature-only run skips the parse when the cached tensor already answered.
         bm: Optional[Beatmap7K] = None
-        if cache and content_hash:
-            bm = cache.get_ast(content_hash)
-        if bm is None:
-            bm = parse_osu_7k(raw_content)
+        if features is None or evaluate_rating:
             if cache and content_hash:
-                cache.put_ast(content_hash, bm)
+                bm = cache.get_ast(content_hash)
+            if bm is None:
+                bm = parse_osu_7k(raw_content)
+                if cache and content_hash:
+                    cache.put_ast(content_hash, bm)
 
         if features is None:
             if effective_bpm is None:
-                if bm.timing_points:
+                if bm is not None and bm.timing_points:
                     effective_bpm = get_dominant_bpm(bm)
                 # Check Layer 2 feature cache once effective_bpm is resolved
                 if cache and content_hash:
@@ -264,7 +267,7 @@ def process_benchmark_item(
                 if cache and content_hash:
                     cache.put_features(content_hash, effective_bpm, features)
 
-        rating = evaluate_intrinsic_difficulty(bm, features=features)
+        rating = evaluate_intrinsic_difficulty(bm, features=features) if evaluate_rating else None
 
         return BenchmarkItemResult(
             technique=item.technique,
@@ -274,9 +277,9 @@ def process_benchmark_item(
             bpm=effective_bpm,
             status="SUCCESS",
             features=features,
-            star_rating=rating.star_rating,
-            uncompressed_star_rating=rating.raw_star_rating,
-            dominant_technique=rating.metadata["dominant_technique"],
+            star_rating=rating.star_rating if rating else None,
+            uncompressed_star_rating=rating.raw_star_rating if rating else None,
+            dominant_technique=rating.metadata["dominant_technique"] if rating else None,
             error=None,
         )
     except Exception as e:
@@ -295,15 +298,15 @@ def process_benchmark_item(
 
 
 def _worker_wrapper(
-    args: Tuple[BenchmarkItem, Optional[TwoLayerCache]],
+    args: Tuple[BenchmarkItem, Optional[TwoLayerCache], bool],
 ) -> Tuple[BenchmarkItemResult, Optional[Dict[str, int]]]:
-    item, cache = args
+    item, cache, evaluate_rating = args
     if cache is not None:
         stats_before = dict(cache.stats)
-        res = process_benchmark_item(item, cache=cache)
+        res = process_benchmark_item(item, cache=cache, evaluate_rating=evaluate_rating)
         delta_stats = {k: cache.stats[k] - stats_before[k] for k in cache.stats}
         return res, delta_stats
-    res = process_benchmark_item(item, cache=None)
+    res = process_benchmark_item(item, cache=None, evaluate_rating=evaluate_rating)
     return res, None
 
 
@@ -314,6 +317,7 @@ def run_benchmark_pipeline(
     corpus: Optional[Union[str, Path, Dict[int, str]]] = None,
     evaluate_monotonicity: bool = True,
     monotonicity_metrics: Optional[List[str]] = None,
+    evaluate_rating: bool = True,
     apply_scaling: bool = True,
     distill_features: bool = True,
     ground_truth_output: Optional[str] = None,
@@ -345,7 +349,7 @@ def run_benchmark_pipeline(
         active_cache.enabled = False
 
     if workers > 1 and len(items) > 1:
-        tasks = [(item, active_cache) for item in items]
+        tasks = [(item, active_cache, evaluate_rating) for item in items]
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
             worker_outputs = list(executor.map(_worker_wrapper, tasks))
 
@@ -363,7 +367,7 @@ def run_benchmark_pipeline(
                 )
     else:
         for idx, item in enumerate(items):
-            res = process_benchmark_item(item, cache=active_cache)
+            res = process_benchmark_item(item, cache=active_cache, evaluate_rating=evaluate_rating)
             results.append(res)
             if log_progress:
                 print(
@@ -433,6 +437,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Path to export Ground Truth distillation benchmark dataset JSON",
     )
     parser.add_argument(
+        "--no-rating",
+        action="store_true",
+        help=(
+            "Skip the star-rating stage and report features only — for re-freezing or "
+            "validating the feature tensor, which is what an unchanged warm cache can answer "
+            "without re-parsing. Leaves the guard nothing to validate, so it rejects that run."
+        ),
+    )
+    parser.add_argument(
         "--no-scaling",
         action="store_true",
         help="Disable Inverse BPM Scaling Law gating operator",
@@ -485,6 +498,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             base_dir=args.base_dir,
             library_dir=args.library_dir,
             corpus=args.corpus,
+            evaluate_rating=not args.no_rating,
             apply_scaling=not args.no_scaling,
             ground_truth_output=args.ground_truth_output,
             enable_cache=not args.no_cache,

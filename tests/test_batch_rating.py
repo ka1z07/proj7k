@@ -1,7 +1,13 @@
+import json
 from pathlib import Path
 import pytest
 
-from proj7k.batch import BenchmarkItem, process_benchmark_item, run_benchmark_pipeline
+from proj7k.batch import (
+    BenchmarkItem,
+    main as batch_cli_main,
+    process_benchmark_item,
+    run_benchmark_pipeline,
+)
 from proj7k.difficulty import evaluate_intrinsic_difficulty
 
 
@@ -63,6 +69,36 @@ def test_batch_rating_survives_a_warm_feature_cache(tmp_path: Path):
     assert warm_cache.stats["feature_hits"] == 1
     assert warm.features.to_dict() == cold.features.to_dict()
     assert warm.star_rating == cold.star_rating
+
+
+def test_batch_can_skip_rating_evaluation():
+    """
+    Feature-only runs opt out of the rating stage without losing the feature tensor.
+
+    The rating cost is the strain accumulation, not the features, and a caller re-freezing or
+    validating features (the checksum path, the distillation export) does not need it.
+    """
+    report = run_benchmark_pipeline(_manifest(), evaluate_rating=False)
+
+    assert report.summary.success == 2
+    for result in report.results:
+        assert result.features is not None
+        assert result.star_rating is None
+        assert result.dominant_technique is None
+
+
+def test_cli_no_rating_flag_skips_the_rating_stage(tmp_path: Path):
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps([{"technique": "Jack", "tier": "0th", "id": 1, "content": SAMPLE_7K}]),
+        encoding="utf-8",
+    )
+    out_file = tmp_path / "report.json"
+
+    assert batch_cli_main(["--manifest", str(manifest_path), "--no-rating", "-o", str(out_file)]) == 0
+
+    payload = json.loads(out_file.read_text(encoding="utf-8"))
+    assert payload["results"][0]["star_rating"] is None
 
 
 def test_failed_ingestion_carries_no_rating():

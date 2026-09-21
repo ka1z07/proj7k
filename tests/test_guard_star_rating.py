@@ -1,7 +1,13 @@
 from typing import List, Optional
 import pytest
 
-from proj7k.batch import BatchSummary, BenchmarkBatchReport, BenchmarkItemResult
+from proj7k.batch import (
+    BatchSummary,
+    BenchmarkBatchReport,
+    BenchmarkItem,
+    BenchmarkItemResult,
+    run_benchmark_pipeline,
+)
 from proj7k.dan import CANONICAL_DAN_SR_BANDS, CANONICAL_DAN_TIERS
 from proj7k.guard import (
     CALIBRATED_METRIC_GATES,
@@ -69,6 +75,40 @@ def test_default_gate_validates_the_star_rating_ladder():
     assert res.passed, res.error_message
     assert set(res.metrics_summary["Regular Jack"]) == {"star_rating"}
     assert res.metrics_summary["Regular Jack"]["star_rating"]["kendall_tau"] == 1.0
+
+
+def test_guard_fails_when_it_has_nothing_to_validate(benchmark_manifest, benchmark_corpus):
+    """
+    A report can carry monotonicity results and still leave the gate nothing to check: a run
+    that skipped the rating stage evaluates the raw metrics but no star ladder at all, and a
+    mistyped --guard-metric matches nothing. Either way an ungated report must not come green —
+    a gate that validated nothing is indistinguishable from a passing one.
+    """
+    manifest = [
+        BenchmarkItem(
+            technique="Regular Jack",
+            tier=tier,
+            id=benchmark_manifest["Regular Jack"][tier]["id"],
+            content=benchmark_corpus[benchmark_manifest["Regular Jack"][tier]["id"]],
+        )
+        for tier in ("0th", "1st")
+    ]
+    unrated = run_benchmark_pipeline(manifest, evaluate_rating=False)
+    assert "avg_nps" in unrated.monotonicity["Regular Jack"]
+    assert "star_rating" not in unrated.monotonicity["Regular Jack"]
+
+    res = evaluate_monotonicity_guard(unrated)
+
+    assert res.passed is False
+    assert "star_rating" in res.error_message
+
+    mistyped = evaluate_monotonicity_guard(
+        _report(_ladder("Regular Jack", _ascending())),
+        config=MonotonicityGuardConfig(metrics=["starrating"]),
+    )
+
+    assert mistyped.passed is False
+    assert "starrating" in mistyped.error_message
 
 
 def test_guard_blocks_a_star_rating_inversion():

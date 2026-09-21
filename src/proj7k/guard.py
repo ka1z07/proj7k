@@ -245,6 +245,15 @@ def evaluate_monotonicity_guard(
                     f"- [{technique}] {metric}: {', '.join(failed_checks)}"
                 )
 
+    # A gate that checked nothing reads exactly like a gate that passed: a report evaluated
+    # without the rated stage carries no star ladder, and a mistyped metric name matches
+    # nothing at all. Both must fail loudly instead of returning green.
+    if not any(summary_by_tech.values()):
+        error_lines.append(
+            "Nothing was validated: no ladder was found for the configured metric(s) "
+            f"({', '.join(config.metrics) if config.metrics else 'any metric'})"
+        )
+
     if error_lines:
         full_msg = "Monotonicity Guard Failure:\n" + "\n".join(error_lines)
         return MonotonicityGuardResult(
