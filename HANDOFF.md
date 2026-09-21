@@ -69,6 +69,10 @@ src/proj7k/
 
 ## 4. 新对话接手后的行动指南 (Immediate Action Plan)
 
+> ⚠️ **本节命令已过期（2026-09-22 标注）**。仓库现在的验证闸门是 `AGENTS.md` 的「验证闸门」两条命令：pytest + `--corpus tests/fixtures/benchmark_corpus.json.gz --guard`，不再需要本机 osu! 安装。
+>
+> 下面那条命令的 `--expected-checksum "sha256:c75ad8f0…"` 与 `--guard-metric peak_4m_nps` 都已失效：该校验和是**陈旧 Layer-2 缓存**的指纹，不是当前特征抽取的产物。`ALGORITHM_VERSION` 始终是 `"1.0.0"`，特征数学变更后缓存从未失效，于是旧引擎算出的特征被当作当前值供应——冷缓存下算出的是 `sha256:fd3ea5c8c8431f903a95cbf3b21132de3bea226f91efaa28b6c746a8f75e65a614`（已用 HEAD 版本独立复核）。因此那条命令只在缓存恰好陈旧时通过，全新克隆下会失败。
+
 新对话开启后，Agent 可以直接从以下路线切入：
 
 ### 路线 A：端到端真实曲库实证跑批（最高测试接缝）
