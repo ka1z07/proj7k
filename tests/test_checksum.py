@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 from proj7k.features import BeatmapFeatures
 from proj7k.batch import BenchmarkItemResult, run_benchmark_pipeline, BenchmarkItem
-from proj7k.checksum import compute_feature_checksum
+from proj7k.checksum import compute_feature_checksum, compute_star_rating_checksum
 
 
 def _dummy_features(nps: float, hold: float) -> BeatmapFeatures:
@@ -101,3 +101,57 @@ Mode: 3
     assert report.feature_checksum is not None
     assert report.feature_checksum.startswith("sha256:")
     assert report.to_dict()["feature_checksum"] == report.feature_checksum
+
+
+def _rated(technique: str, tier: str, star_rating: float) -> BenchmarkItemResult:
+    return BenchmarkItemResult(
+        technique=technique,
+        tier=tier,
+        status="SUCCESS",
+        id=0,
+        star_rating=star_rating,
+    )
+
+
+def test_star_rating_checksum_is_order_independent():
+    ladder = [_rated("Regular Jack", "1st", 3.5), _rated("Regular Jack", "2nd", 4.0)]
+
+    assert compute_star_rating_checksum(ladder).startswith("sha256:")
+    assert compute_star_rating_checksum(ladder) == compute_star_rating_checksum(list(reversed(ladder)))
+
+
+def test_star_rating_checksum_catches_a_formula_change_features_cannot_see():
+    """
+    The fingerprint exists to catch what the feature checksum is blind to: a rating that moved
+    while every input feature stayed identical. Even a change far too small to disturb the
+    ladder's ordering or leave its anchor bands must show up here.
+    """
+    baseline = [_rated("Regular Jack", "1st", 3.5), _rated("Regular Jack", "2nd", 4.0)]
+    nudged = [_rated("Regular Jack", "1st", 3.5001), _rated("Regular Jack", "2nd", 4.0)]
+
+    assert compute_star_rating_checksum(baseline) != compute_star_rating_checksum(nudged)
+
+
+def test_pipeline_includes_star_rating_checksum():
+    manifest = [
+        BenchmarkItem(
+            technique="Regular Jack",
+            tier="1st",
+            id=101,
+            content="""osu file format v14
+[General]
+Mode: 3
+[TimingPoints]
+0,500,4,2,0,50,1,0
+[HitObjects]
+36,192,0,1,0,0:0:0:0:
+""",
+        )
+    ]
+
+    report = run_benchmark_pipeline(manifest)
+
+    assert report.star_rating_checksum is not None
+    assert report.star_rating_checksum.startswith("sha256:")
+    assert report.to_dict()["star_rating_checksum"] == report.star_rating_checksum
+    assert report.star_rating_checksum == compute_star_rating_checksum(report.results)

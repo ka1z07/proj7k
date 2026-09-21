@@ -1,3 +1,5 @@
+import gzip
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -98,6 +100,42 @@ def scan_local_asset_library(library_dir: Union[str, Path]) -> AssetLibraryIndex
             continue
 
     return index
+
+
+def load_corpus_fixture(path: Union[str, Path]) -> Dict[int, str]:
+    """
+    Loads a frozen benchmark corpus: raw `.osu` text keyed by BeatmapID.
+
+    The corpus is the in-repository counterpart of `scan_local_asset_library` — the same
+    benchmark charts, committed alongside the code so end-to-end validation of the engine
+    no longer depends on a local osu! installation. Regenerate it with
+    `tools/export_benchmark_corpus.py`.
+    """
+    with gzip.open(Path(path), "rt", encoding="utf-8") as f:
+        raw: Dict[str, str] = json.load(f)
+    return {int(beatmap_id): content for beatmap_id, content in raw.items()}
+
+
+def bind_manifest_to_corpus(
+    items: List[Any],
+    corpus: Union[Dict[int, str], str, Path],
+) -> List[Any]:
+    """
+    Binds BenchmarkItem instances to a frozen corpus of raw `.osu` content by BeatmapID.
+
+    Items already carrying explicit content are preserved; items whose id is absent from the
+    corpus are left unbound, which the batch pipeline reports as a FAILED_INGESTION rather
+    than silently substituting another chart.
+    """
+    resolved = load_corpus_fixture(corpus) if isinstance(corpus, (str, Path)) else corpus
+
+    for item in items:
+        if item.content is not None:
+            continue
+        if item.id is not None and item.id in resolved:
+            item.content = resolved[item.id]
+
+    return items
 
 
 def bind_manifest_to_library(

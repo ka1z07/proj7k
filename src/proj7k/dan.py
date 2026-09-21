@@ -8,7 +8,7 @@ Implements Canonical Dan Progression Hierarchy (0th to Stellium) as single sourc
 - parse_dan_tier: Robust user input string normalizer.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import re
 
 CANONICAL_DAN_TIERS: List[str] = [
@@ -33,6 +33,27 @@ CANONICAL_DAN_SR: Dict[str, float] = {
     "Azimuth": 8.8,
     "Zenith": 9.7,
     "Stellium": 10.5,
+}
+
+#: Acceptance windows, in star rating, for the engine's output on the benchmark ladder: the
+#: median star rating of the benchmark charts sitting at a tier must land inside its band.
+#: They are checked on the tier's median rather than per chart because an individual chart may
+#: legitimately sit off-anchor — the ladder is a claim about where the scale sits, not about
+#: single maps — while a tier whose centre drifts out of its band means the scale itself moved.
+#: Only tiers with a whole technique roster behind them can carry a median; the rest are
+#: skipped (see the Monotonicity Guard).
+#:
+#: These are the bands of ticket #43, and they are deliberately *wider* than the windows the
+#: Phase 2 specification names for the same tiers (0th [3.2, 3.8], 5th [5.1, 5.8],
+#: 10th [7.2, 8.0]). The engine satisfies the narrower windows today — 0th's median sits at
+#: 3.76 against a 3.8 ceiling — so the spec's numbers are a one-time acceptance measurement,
+#: while these are the standing gate: a 0.04★ margin would turn every later recalibration into
+#: a red CI run for a rating the spec itself still considers in band.
+CANONICAL_DAN_SR_BANDS: Dict[str, Tuple[float, float]] = {
+    "0th": (3.0, 4.0),
+    "5th": (5.0, 6.0),
+    "10th": (7.0, 8.2),
+    "Stellium": (10.0, 12.5),
 }
 
 TIER_SYNONYMS: Dict[str, str] = {

@@ -13,13 +13,18 @@ from proj7k.scaling import (
 #: a private copy here previously dropped 0th silently.
 TIER_ORDER: List[str] = list(CANONICAL_DAN_TIERS)
 
-#: Metrics that climb with the Dan ladder by construction: physical density quantities.
-#: `hold_pct` and `mean_locked_fingers` are deliberately absent — they describe the technique
+#: Metrics gated on by default: the engine's own artifact, the star rating. The raw density
+#: features (`avg_nps`, `peak_4m_nps`) climb with the ladder too, but they are inputs to the
+#: rating rather than its output — a change to the rating formula that leaves the features
+#: untouched would slip past a gate that only watched them. `hold_pct` and
+#: `mean_locked_fingers` are deliberately absent even as inputs: they describe the technique
 #: regime rather than the tier (pure rice charts are hold-poor, LN charts lock many fingers),
-#: so they are not monotone across tiers at all and must not be gated on by default.
-#: Batch reports still evaluate every metric; this is the set the Monotonicity Guard validates
-#: unless asked for others explicitly.
-DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
+#: so they are not monotone across tiers at all. Batch reports still evaluate every metric;
+#: this is the set the Monotonicity Guard validates unless asked for others explicitly.
+DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("star_rating",)
+
+#: Metrics evaluated for diagnosis by default, in addition to `DEFAULT_GUARD_METRICS`.
+DIAGNOSTIC_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
 
 
 def compute_kendall_tau(y: List[float]) -> float:
@@ -159,6 +164,23 @@ class TierMonotonicityReport:
         return d
 
 
+def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
+    """
+    Reads one ladder metric off a batch result.
+
+    Physical quantities live on the feature tensor; the engine's star rating is carried by the
+    result itself. Consulting the features first and the result second lets a single metric
+    name work regardless of which of the two owns it, without either side knowing the other.
+    """
+    for source in (getattr(result, "features", None), result):
+        if source is None:
+            continue
+        value = getattr(source, metric, None)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return None
+
+
 def evaluate_tier_sequence(
     tier_values: List[Tuple[str, float]],
     technique: str = "",
@@ -278,10 +300,12 @@ def evaluate_batch_monotonicity(
     apply_scaling: bool = True,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Groups batch results by technique and evaluates monotonicity along canonical tiers
-    for the specified feature metrics.
+    Groups batch results by technique and evaluates monotonicity along canonical tiers.
 
-    Evaluates every listed metric; when none are listed, all four baseline metrics are
+    Each metric is read from the result's feature tensor when it has one there (physical
+    quantities), and from the result itself otherwise — which is how the engine's star rating,
+    carried by the result rather than by any feature, joins the ladder. Evaluates every listed
+    metric; when none are listed, the gated star rating plus the baseline density metrics are
     evaluated. Note that `hold_pct` and `mean_locked_fingers` are not monotone across tiers by
     nature (pure rice charts are hold-poor, LN charts lock many fingers), so they are reported
     for diagnosis but are excluded from the Monotonicity Guard's default gate — see
@@ -292,13 +316,20 @@ def evaluate_batch_monotonicity(
     and records full before/after metrics and action clock window distribution.
     """
     if metrics is None:
-        metrics = ["avg_nps", "peak_4m_nps", "hold_pct", "mean_locked_fingers"]
+        metrics = [
+            *DEFAULT_GUARD_METRICS,
+            *DIAGNOSTIC_METRICS,
+            "hold_pct",
+            "mean_locked_fingers",
+        ]
 
     tier_indices = {t: i for i, t in enumerate(TIER_ORDER)}
 
     results_by_tech: Dict[str, List[Any]] = {}
     for r in results:
-        if getattr(r, "status", None) == "SUCCESS" and getattr(r, "features", None) is not None:
+        # Every ingested chart joins the ladder; a metric that a given chart cannot supply is
+        # simply absent for its tier, rather than dropping the chart from every other metric.
+        if getattr(r, "status", None) == "SUCCESS":
             results_by_tech.setdefault(r.technique, []).append(r)
 
     reports_by_tech: Dict[str, Dict[str, Any]] = {}
@@ -380,11 +411,9 @@ def evaluate_batch_monotonicity(
             else:
                 tier_vals = []
                 for item in items:
-                    feat = getattr(item, "features", None)
-                    if feat is not None:
-                        val = getattr(feat, metric, None)
-                        if val is not None and isinstance(val, (int, float)):
-                            tier_vals.append((item.tier, float(val)))
+                    val = read_ladder_metric(item, metric)
+                    if val is not None:
+                        tier_vals.append((item.tier, val))
                 if len(tier_vals) >= 2:
                     report = evaluate_tier_sequence(tier_vals, technique=tech, metric=metric)
                     tech_reports[metric] = report.to_dict()

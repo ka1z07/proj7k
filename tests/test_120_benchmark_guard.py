@@ -1,124 +1,180 @@
-import hashlib
-import json
-import os
-from pathlib import Path
-from typing import Dict, List, Tuple
+"""
+End-to-end acceptance of the difficulty engine against the frozen benchmark ladder.
+
+The manifest (`docs/research/structured_index.json`) names the 15 canonical Dan tiers' chart
+sets per technique; the corpus fixture (`tests/fixtures/benchmark_corpus.json.gz`) carries
+their raw `.osu` content, frozen into the repository so this validation runs anywhere instead
+of only on a machine with osu! installed. Together they are the ladder the engine is
+accountable to: the tiers must stay ordered by star rating, and the anchor tiers' medians must
+stay inside their acceptance bands.
+"""
+
+import dataclasses
+import statistics
+from typing import Dict, List
+
 import pytest
-from scipy import stats
 
-from proj7k.assets import scan_local_asset_library
-from proj7k.difficulty import evaluate_intrinsic_difficulty
-from proj7k.parser import parse_osu_7k
-
-
-CANONICAL_TIERS: List[str] = [
-    "0th", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th",
-    "8th", "9th", "10th", "Gamma", "Azimuth", "Zenith", "Stellium"
-]
-TIER_INDICES = {t: i for i, t in enumerate(CANONICAL_TIERS)}
-
-LIBRARY_DIR = Path(os.path.expanduser("~/Library/Application Support/osu/files"))
-MANIFEST_PATH = Path("docs/research/structured_index.json")
+from proj7k.batch import BenchmarkBatchReport, run_benchmark_pipeline
+from proj7k.dan import CANONICAL_DAN_SR_BANDS, CANONICAL_DAN_TIERS
+from proj7k.guard import MonotonicityGuardConfig, evaluate_monotonicity_guard
+from proj7k.monotonicity import evaluate_batch_monotonicity
 
 
-def _evaluate_monotonicity(tier_scores: List[Tuple[int, float]]) -> Tuple[float, float, int]:
-    sorted_items = sorted(tier_scores, key=lambda x: x[0])
-    tiers = [x[0] for x in sorted_items]
-    scores = [x[1] for x in sorted_items]
+#: Every technique in the manifest holds a full 15-tier ladder of charts.
+EXPECTED_TECHNIQUES = (
+    "Regular Jack",
+    "Regular Tech",
+    "Regular Speed",
+    "Regular Stream",
+    "LN General",
+    "LN Tech",
+    "LN Inverse",
+    "LN Release",
+)
+EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 
-    if len(scores) < 2:
-        return 1.0, 1.0, 0
+#: The engine version's star-rating fingerprint — the digest of all 120 ratings.
+#:
+#: The monotonicity and anchor gates below catch a formula change that moves the ladder's shape
+#: or its scale; this catches *every* formula change, including one small enough to leave both
+#: intact, because it pins the numbers themselves. A deliberate calibration change is therefore
+#: a two-part commit: update the constants, then re-baseline this digest (and the acceptance
+#: bars below) after confirming the new ladder is the one you meant.
+EXPECTED_STAR_RATING_CHECKSUM = "sha256:c829be124657dd7df07a1ec9b9b40e6acb1687fa942c7ac4a42cd7b189330023"
 
-    rho, _ = stats.spearmanr(tiers, scores)
-    tau, _ = stats.kendalltau(tiers, scores)
-
-    inversions = 0
-    for i in range(len(scores) - 1):
-        if scores[i + 1] < scores[i] - 1e-4:
-            inversions += 1
-
-    return float(rho), float(tau), inversions
+#: Ladder-level acceptance bar from the Phase 2 specification: the 120 chart ladder must clear
+#: these as a whole, on top of no single technique collapsing (which the guard's per-technique
+#: gates cover). Measured on the frozen corpus: mean rho 0.983 / mean tau 0.940 / 16 inversions.
+LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
+LADDER_MIN_MEAN_KENDALL_TAU = 0.94
+LADDER_MAX_TOTAL_INVERSIONS = 20
 
 
-def test_120_song_full_monotonicity_guard():
-    if not LIBRARY_DIR.exists() or not MANIFEST_PATH.exists():
-        pytest.skip("Local osu! library or structured index manifest not found.")
+@pytest.fixture(scope="module")
+def benchmark_report(
+    benchmark_manifest: Dict[str, Dict[str, dict]],
+    benchmark_corpus: Dict[int, str],
+) -> BenchmarkBatchReport:
+    """The engine's output over the whole frozen ladder, evaluated once for this module."""
+    return run_benchmark_pipeline(benchmark_manifest, corpus=benchmark_corpus, cache_dir=None)
 
-    index = scan_local_asset_library(LIBRARY_DIR)
-    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-        manifest = json.load(f)
 
-    # 1. Evaluate all songs
-    tech_tier_results: Dict[str, List[Tuple[int, str, float]]] = {}
-    tier_all_srs: Dict[str, List[float]] = {t: [] for t in CANONICAL_TIERS}
-    fingerprint_entries: List[str] = []
+def _star_ratings_by_tier(report: BenchmarkBatchReport) -> Dict[str, List[float]]:
+    by_tier: Dict[str, List[float]] = {tier: [] for tier in CANONICAL_DAN_TIERS}
+    for result in report.results:
+        if result.status == "SUCCESS" and result.tier in by_tier and result.star_rating is not None:
+            by_tier[result.tier].append(result.star_rating)
+    return by_tier
 
-    song_count = 0
-    for tech, tiers in manifest.items():
-        tech_tier_results[tech] = []
-        for tier, d in tiers.items():
-            if tier not in TIER_INDICES:
-                continue
-            bid = d["id"]
-            song_name = d["song"]
-            path = index.find_path(bid, song_name)
-            if not path:
-                continue
 
-            res = evaluate_intrinsic_difficulty(str(path))
-            t_idx = TIER_INDICES[tier]
-            sr = res.star_rating
+def test_frozen_ladder_ingests_completely(benchmark_report: BenchmarkBatchReport):
+    assert benchmark_report.summary.total == EXPECTED_CHART_COUNT
+    assert benchmark_report.summary.failed == 0
 
-            tech_tier_results[tech].append((t_idx, tier, sr))
-            tier_all_srs[tier].append(sr)
-            fingerprint_entries.append(f"{tech}:{tier}:{sr:.4f}")
-            song_count += 1
+    counts: Dict[str, int] = {}
+    for result in benchmark_report.results:
+        assert result.status == "SUCCESS", result.error
+        assert result.star_rating is not None
+        counts[result.technique] = counts.get(result.technique, 0) + 1
 
-    assert song_count == 120, f"Expected 120 benchmark songs, found {song_count}"
+    # Every technique contributes one chart per tier — an ingestion that silently dropped a
+    # chart would otherwise show up only as a weaker ladder.
+    assert set(counts) == set(EXPECTED_TECHNIQUES)
+    assert set(counts.values()) == {len(CANONICAL_DAN_TIERS)}
+    assert "star_rating" in benchmark_report.monotonicity["Regular Jack"]
 
-    # 2. Monotonicity metrics
-    all_rhos: List[float] = []
-    all_taus: List[float] = []
-    total_inversions = 0
 
-    for tech, results in tech_tier_results.items():
-        assert len(results) == 15, f"Technique {tech} has {len(results)} tiers, expected 15"
-        rho, tau, inv = _evaluate_monotonicity([(r[0], r[2]) for r in results])
-        all_rhos.append(rho)
-        all_taus.append(tau)
-        total_inversions += inv
+def test_star_rating_ladder_is_monotone_for_every_technique(benchmark_report: BenchmarkBatchReport):
+    """The engine's own output — not the raw density features behind it — orders the ladder."""
+    result = evaluate_monotonicity_guard(benchmark_report)
 
-    mean_rho = sum(all_rhos) / len(all_rhos)
-    mean_tau = sum(all_taus) / len(all_taus)
+    assert result.passed, result.error_message
+    assert set(result.metrics_summary) == set(EXPECTED_TECHNIQUES)
+    for technique, metrics in result.metrics_summary.items():
+        assert set(metrics) == {"star_rating"}, technique
+        assert metrics["star_rating"]["kendall_tau"] >= 0.88, technique
+        assert metrics["star_rating"]["spearman_rho"] >= 0.95, technique
 
-    # Acceptance criteria: Spearman rho >= 0.98, Kendall tau >= 0.94
-    assert mean_rho >= 0.98, f"Mean Spearman rho {mean_rho:.4f} < 0.98"
-    assert mean_tau >= 0.94, f"Mean Kendall tau {mean_tau:.4f} < 0.94"
-    assert total_inversions <= 20, f"Total inversions {total_inversions} exceeded threshold 20"
 
-    # 3. Anchor medians
-    # 0th Dan ≈ 3.5★, 5th Dan ≈ 5.5★, 10th Dan ≈ 7.5★, Stellium ≈ 10.5★ ~ 12.5★
-    def median(vals: List[float]) -> float:
-        s = sorted(vals)
-        mid = len(s) // 2
-        return (s[mid] + s[~mid]) / 2.0
+def test_ladder_ratings_match_the_pinned_engine_fingerprint(benchmark_report: BenchmarkBatchReport):
+    """
+    Pins the engine's actual output for the frozen corpus. The gates above tolerate a rating
+    that drifts a little as long as the ladder's shape and scale hold; this one tolerates
+    nothing, so a calibration change cannot land without the digest being re-baselined on
+    purpose.
+    """
+    assert benchmark_report.star_rating_checksum == EXPECTED_STAR_RATING_CHECKSUM
 
-    m_0th = median(tier_all_srs["0th"])
-    m_5th = median(tier_all_srs["5th"])
-    m_10th = median(tier_all_srs["10th"])
-    m_stellium = median(tier_all_srs["Stellium"])
 
-    assert 3.0 <= m_0th <= 4.0, f"0th Dan median {m_0th:.2f}★ not in [3.0, 4.0]★"
-    assert 5.0 <= m_5th <= 6.0, f"5th Dan median {m_5th:.2f}★ not in [5.0, 6.0]★"
-    assert 7.0 <= m_10th <= 8.2, f"10th Dan median {m_10th:.2f}★ not in [7.0, 8.2]★"
-    assert 10.0 <= m_stellium <= 12.5, f"Stellium median {m_stellium:.2f}★ not in [10.0, 12.5]★"
+def test_ladder_clears_the_phase2_aggregate_acceptance_bar(benchmark_report: BenchmarkBatchReport):
+    """
+    The standing ladder-level acceptance criteria, checked as a whole rather than per technique:
+    a corpus where every technique scrapes past its own gate must still fail here if the ladder
+    as a whole has drifted.
+    """
+    summary = evaluate_monotonicity_guard(benchmark_report).metrics_summary
+    star = {technique: metrics["star_rating"] for technique, metrics in summary.items()}
 
-    # All songs strictly capped at <= 12.5★
-    for tier, srs in tier_all_srs.items():
-        for sr in srs:
-            assert sr <= 12.5, f"Star rating {sr} exceeded 12.5★ ceiling"
+    mean_rho = sum(m["spearman_rho"] for m in star.values()) / len(star)
+    mean_tau = sum(m["kendall_tau"] for m in star.values()) / len(star)
+    total_inversions = sum(m["violations_count"] for m in star.values())
 
-    # 4. Compute deterministic checksum
-    fingerprint_str = "\n".join(sorted(fingerprint_entries))
-    checksum = hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
-    assert len(checksum) == 64
+    assert mean_rho >= LADDER_MIN_MEAN_SPEARMAN_RHO, f"mean Spearman rho {mean_rho:.4f}"
+    assert mean_tau >= LADDER_MIN_MEAN_KENDALL_TAU, f"mean Kendall tau {mean_tau:.4f}"
+    assert total_inversions <= LADDER_MAX_TOTAL_INVERSIONS, f"{total_inversions} inversions"
+
+
+def test_anchor_tier_medians_land_in_their_bands(benchmark_report: BenchmarkBatchReport):
+    by_tier = _star_ratings_by_tier(benchmark_report)
+
+    for tier, (low, high) in CANONICAL_DAN_SR_BANDS.items():
+        samples = by_tier[tier]
+        assert len(samples) == len(EXPECTED_TECHNIQUES), tier
+        median = statistics.median(samples)
+        assert low <= median <= high, f"{tier} median {median:.3f}★ outside [{low}, {high}]★"
+
+
+def test_star_ratings_stay_under_the_soft_cap_ceiling(benchmark_report: BenchmarkBatchReport):
+    for result in benchmark_report.results:
+        assert 0.0 < result.star_rating <= 12.5
+
+
+def test_diagnostic_metrics_stay_available_on_explicit_request(benchmark_report: BenchmarkBatchReport):
+    """
+    The gate defaults to the star rating, but the corpus still evaluates every metric, so a
+    failing ladder can be diagnosed by asking for the raw quantities behind it.
+    """
+    requested = evaluate_monotonicity_guard(
+        benchmark_report, config=MonotonicityGuardConfig(metrics=["avg_nps"])
+    )
+
+    assert set(requested.metrics_summary["Regular Jack"]) == {"avg_nps"}
+    assert requested.passed is True, requested.error_message
+    assert "star_rating" not in requested.metrics_summary["Regular Jack"]
+
+
+def test_guard_blocks_a_rating_regression_on_the_real_ladder(benchmark_report: BenchmarkBatchReport):
+    """
+    A formula change that leaves the features untouched must be caught: this is what gating on
+    the star rating buys over gating on `avg_nps` / `peak_4m_nps`, which such a change does not
+    move at all.
+    """
+    regressed_results = [
+        dataclasses.replace(result, star_rating=12.5 - result.star_rating)
+        if result.technique == "LN Inverse"
+        else result
+        for result in benchmark_report.results
+    ]
+    regressed = BenchmarkBatchReport(
+        summary=benchmark_report.summary,
+        results=regressed_results,
+        monotonicity=evaluate_batch_monotonicity(regressed_results),
+        feature_checksum=benchmark_report.feature_checksum,
+    )
+
+    result = evaluate_monotonicity_guard(regressed)
+
+    assert result.passed is False
+    assert "LN Inverse" in result.error_message
+    assert "star_rating" in result.error_message

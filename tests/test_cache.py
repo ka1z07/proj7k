@@ -66,6 +66,33 @@ def test_two_layer_cache_ast_and_features(tmp_path: Path):
     assert diff_ver_cache.get_features(content_hash, bpm=120.0) is None
 
 
+def test_feature_cache_round_trips_every_field_through_disk(tmp_path: Path):
+    """
+    Layer-2 features must survive the disk round trip whole.
+
+    The in-memory dictionary answers a second lookup from the same instance, so a partial
+    reconstruction on the disk path is invisible unless a fresh cache reads the file back.
+    That is not a cosmetic defect: the batch pipeline feeds these features straight into the
+    engine's star rating, so a field the reconstruction forgets silently changes the rating of
+    every chart whose features came from a warm cache.
+    """
+    # A sparse synthetic chart has zero spatial/rhythm entropy, which would let a lossy
+    # reconstruction pass unnoticed; a real 7K chart exercises every field.
+    chart = (Path(__file__).resolve().parents[1] / "docs" / "sample_7k.osu").read_text(encoding="utf-8")
+    content_hash = TwoLayerCache.compute_content_hash(chart)
+
+    writer = TwoLayerCache(cache_dir=tmp_path / ".cache")
+    features = extract_beatmap_features(parse_osu_7k(chart))
+    assert features.spatial_entropy > 0.0 and features.rhythm_irreg > 0.0
+    writer.put_features(content_hash, bpm=180.0, features=features)
+
+    # A fresh instance has no in-memory entry, so this reads the JSON the writer left behind.
+    restored = TwoLayerCache(cache_dir=tmp_path / ".cache").get_features(content_hash, bpm=180.0)
+
+    assert restored is not None
+    assert restored.to_dict() == features.to_dict()
+
+
 def test_pipeline_uses_cache_and_skips_recomputation(tmp_path: Path, monkeypatch):
     cache_dir = tmp_path / "cache_store"
     manifest = [

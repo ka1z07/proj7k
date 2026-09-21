@@ -8,13 +8,18 @@ import argparse
 import concurrent.futures
 from typing import List, Optional, Dict, Any, Union, Literal, Tuple
 
-from proj7k.parser import parse_osu_7k
+from proj7k.difficulty import evaluate_intrinsic_difficulty
+from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures, get_dominant_bpm
 from proj7k.monotonicity import evaluate_batch_monotonicity
 from proj7k.distillation import distill_benchmark_features
-from proj7k.assets import bind_manifest_to_library, scan_local_asset_library
+from proj7k.assets import (
+    bind_manifest_to_corpus,
+    bind_manifest_to_library,
+    scan_local_asset_library,
+)
 from proj7k.cache import TwoLayerCache
-from proj7k.checksum import compute_feature_checksum
+from proj7k.checksum import compute_feature_checksum, compute_star_rating_checksum
 
 IngestionStatus = Literal["SUCCESS", "FAILED_INGESTION"]
 
@@ -57,6 +62,11 @@ class BenchmarkItemResult:
     song: Optional[str] = None
     bpm: Optional[float] = None
     features: Optional[BeatmapFeatures] = None
+    #: The engine's own output for this chart, carried so the ladder gates validate the
+    #: artifact (star rating) rather than only the raw features behind it.
+    star_rating: Optional[float] = None
+    uncompressed_star_rating: Optional[float] = None
+    dominant_technique: Optional[str] = None
     error: Optional[str] = None
     traceback: Optional[str] = None
 
@@ -69,6 +79,9 @@ class BenchmarkItemResult:
             "song": self.song,
             "bpm": self.bpm,
             "features": self.features.to_dict() if self.features else None,
+            "star_rating": self.star_rating,
+            "uncompressed_star_rating": self.uncompressed_star_rating,
+            "dominant_technique": self.dominant_technique,
             "error": self.error,
             "traceback": self.traceback,
         }
@@ -82,6 +95,9 @@ class BenchmarkBatchReport:
     distillation: Optional[Dict[str, Any]] = None
     cache_stats: Optional[Dict[str, int]] = None
     feature_checksum: Optional[str] = None
+    #: Fingerprint of every chart's star rating — the digest a formula change cannot hide from,
+    #: since it hashes the engine's output rather than its inputs (see `checksum`).
+    star_rating_checksum: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -96,6 +112,8 @@ class BenchmarkBatchReport:
             d["cache_stats"] = self.cache_stats
         if self.feature_checksum is not None:
             d["feature_checksum"] = self.feature_checksum
+        if self.star_rating_checksum is not None:
+            d["star_rating_checksum"] = self.star_rating_checksum
         return d
 
     def to_json(self, indent: int = 2) -> str:
@@ -124,13 +142,15 @@ def load_manifest(
     manifest_input: Union[str, Path, List[Union[BenchmarkItem, Dict[str, Any]]], Dict[str, Any]],
     base_dir: Optional[Union[str, Path]] = None,
     library_dir: Optional[Union[str, Path]] = None,
+    corpus: Optional[Union[str, Path, Dict[int, str]]] = None,
 ) -> List[BenchmarkItem]:
     """
     Parses a manifest input from:
     1. A list of BenchmarkItem instances or dicts.
     2. A structured nested dict: { "Technique Name": { "1st": { "id": ..., ... } } }
     3. A JSON file path pointing to either of the above formats.
-    Optionally binds items against a local asset library directory if library_dir is specified.
+    Optionally binds items against a local asset library directory (library_dir) or a frozen
+    in-repository corpus of raw `.osu` content (corpus), keyed by BeatmapID.
     """
     raw_data: Any = manifest_input
 
@@ -184,6 +204,9 @@ def load_manifest(
     if library_dir is not None:
         items = bind_manifest_to_library(items, library_dir)
 
+    if corpus is not None:
+        items = bind_manifest_to_corpus(items, corpus)
+
     return items
 
 
@@ -193,9 +216,10 @@ def process_benchmark_item(
 ) -> BenchmarkItemResult:
     """
     Ingests and processes a single benchmark item:
-    - Checks Layer 2 feature cache (bypassing AST parsing & feature extraction on hit)
+    - Checks Layer 2 feature cache (bypassing feature extraction on hit)
     - Checks Layer 1 AST cache (bypassing raw file parsing on hit)
     - Extracts baseline and physiological features
+    - Computes the engine's star rating over those features
     - Fault tolerant: catches exceptions and returns FAILED_INGESTION status.
     """
     try:
@@ -217,16 +241,17 @@ def process_benchmark_item(
         if cache and content_hash and effective_bpm is not None:
             features = cache.get_features(content_hash, bpm=effective_bpm)
 
-        if features is None:
-            # Need AST from Layer 1 cache or parser
-            bm = None
+        # The rating needs the parsed note stream (the radar reads the notes themselves), so an
+        # item is never answered from the Layer-2 feature cache alone: the AST comes back too.
+        bm: Optional[Beatmap7K] = None
+        if cache and content_hash:
+            bm = cache.get_ast(content_hash)
+        if bm is None:
+            bm = parse_osu_7k(raw_content)
             if cache and content_hash:
-                bm = cache.get_ast(content_hash)
-            if bm is None:
-                bm = parse_osu_7k(raw_content)
-                if cache and content_hash:
-                    cache.put_ast(content_hash, bm)
+                cache.put_ast(content_hash, bm)
 
+        if features is None:
             if effective_bpm is None:
                 if bm.timing_points:
                     effective_bpm = get_dominant_bpm(bm)
@@ -239,6 +264,8 @@ def process_benchmark_item(
                 if cache and content_hash:
                     cache.put_features(content_hash, effective_bpm, features)
 
+        rating = evaluate_intrinsic_difficulty(bm, features=features)
+
         return BenchmarkItemResult(
             technique=item.technique,
             tier=item.tier,
@@ -247,6 +274,9 @@ def process_benchmark_item(
             bpm=effective_bpm,
             status="SUCCESS",
             features=features,
+            star_rating=rating.star_rating,
+            uncompressed_star_rating=rating.raw_star_rating,
+            dominant_technique=rating.metadata["dominant_technique"],
             error=None,
         )
     except Exception as e:
@@ -281,6 +311,7 @@ def run_benchmark_pipeline(
     manifest: Union[str, Path, List[Union[BenchmarkItem, Dict[str, Any]]], Dict[str, Any]],
     base_dir: Optional[Union[str, Path]] = None,
     library_dir: Optional[Union[str, Path]] = None,
+    corpus: Optional[Union[str, Path, Dict[int, str]]] = None,
     evaluate_monotonicity: bool = True,
     monotonicity_metrics: Optional[List[str]] = None,
     apply_scaling: bool = True,
@@ -304,7 +335,7 @@ def run_benchmark_pipeline(
     - Fault-tolerant: isolates individual beatmap failures as FAILED_INGESTION.
     - Returns standardized BenchmarkBatchReport.
     """
-    items = load_manifest(manifest, base_dir=base_dir, library_dir=library_dir)
+    items = load_manifest(manifest, base_dir=base_dir, library_dir=library_dir, corpus=corpus)
     results: List[BenchmarkItemResult] = []
 
     active_cache = cache
@@ -367,6 +398,7 @@ def run_benchmark_pipeline(
 
     cache_stats_dict = dict(active_cache.stats) if active_cache else None
     feat_checksum = compute_feature_checksum(results)
+    star_checksum = compute_star_rating_checksum(results)
 
     return BenchmarkBatchReport(
         summary=summary,
@@ -375,6 +407,7 @@ def run_benchmark_pipeline(
         distillation=distillation_dict,
         cache_stats=cache_stats_dict,
         feature_checksum=feat_checksum,
+        star_rating_checksum=star_checksum,
     )
 
 
@@ -386,6 +419,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--manifest", required=True, help="Path to benchmark manifest JSON file")
     parser.add_argument("--base-dir", help="Base directory containing .osu files for path resolution")
     parser.add_argument("--library-dir", help="Local asset library directory to scan and automatically bind .osu files")
+    parser.add_argument(
+        "--corpus",
+        help="Frozen benchmark corpus (.json.gz of raw .osu content keyed by BeatmapID) to bind charts from",
+    )
     parser.add_argument("--cache-dir", help="Directory path for persistent two-layer cache")
     parser.add_argument("--no-cache", action="store_true", help="Disable persistent two-layer caching")
     parser.add_argument("-j", "--workers", type=int, default=1, help="Number of worker processes for parallel batch execution")
@@ -413,10 +450,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--guard-metric",
         action="append",
         dest="guard_metrics",
-        help="Specific metrics to validate in Monotonicity Guard (default: tier-monotone metrics only)",
+        help="Specific metrics to validate in Monotonicity Guard (default: the star rating)",
     )
     # Guard threshold defaults are read off the guard's own config so the CLI and the
-    # library can never disagree about what "the default gate" means.
+    # library can never disagree about what "the default gate" means. Each flag is left unset
+    # by default, which defers to the per-metric calibrated gate.
     from proj7k.guard import MonotonicityGuardConfig
 
     guard_defaults = MonotonicityGuardConfig()
@@ -424,22 +462,19 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--guard-max-violations",
         type=int,
         default=guard_defaults.max_violations,
-        help=(
-            "Maximum allowed monotonicity violations per metric "
-            f"(default: {guard_defaults.max_violations})"
-        ),
+        help="Maximum allowed monotonicity violations per metric (default: per-metric calibrated gate)",
     )
     parser.add_argument(
         "--guard-min-tau",
         type=float,
         default=guard_defaults.min_kendall_tau,
-        help=f"Minimum Kendall's tau threshold (default: {guard_defaults.min_kendall_tau})",
+        help="Minimum Kendall's tau threshold, overriding every metric's calibrated gate",
     )
     parser.add_argument(
         "--guard-min-rho",
         type=float,
         default=guard_defaults.min_spearman_rho,
-        help=f"Minimum Spearman's rho threshold (default: {guard_defaults.min_spearman_rho})",
+        help="Minimum Spearman's rho threshold, overriding every metric's calibrated gate",
     )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
@@ -449,6 +484,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.manifest,
             base_dir=args.base_dir,
             library_dir=args.library_dir,
+            corpus=args.corpus,
             apply_scaling=not args.no_scaling,
             ground_truth_output=args.ground_truth_output,
             enable_cache=not args.no_cache,

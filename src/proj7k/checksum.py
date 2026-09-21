@@ -36,13 +36,10 @@ def _canonicalize_features(features: BeatmapFeatures, precision: int) -> Dict[st
     }
 
 
-def compute_feature_checksum(
-    results: List[Any],
-    precision: int = 6,
-) -> str:
+def _sorted_results(results: List[Any]) -> List[Any]:
     """
-    Computes a deterministic SHA-256 checksum across all ingested benchmark items,
-    formatting floats to a fixed precision to ensure cross-platform stability.
+    Orders results by technique, ladder position, tier, id and song, so a digest over them
+    cannot depend on the order the batch happened to finish in.
     """
     def sort_key(r: Any) -> tuple:
         tier_idx = TIER_ORDER_MAP.get(r.tier, 999)
@@ -54,7 +51,18 @@ def compute_feature_checksum(
             r.song or "",
         )
 
-    sorted_items = sorted(results, key=sort_key)
+    return sorted(results, key=sort_key)
+
+
+def compute_feature_checksum(
+    results: List[Any],
+    precision: int = 6,
+) -> str:
+    """
+    Computes a deterministic SHA-256 checksum across all ingested benchmark items,
+    formatting floats to a fixed precision to ensure cross-platform stability.
+    """
+    sorted_items = _sorted_results(results)
 
     canonical_records = []
     for r in sorted_items:
@@ -79,6 +87,41 @@ def compute_feature_checksum(
                 "features": None,
             }
         canonical_records.append(record)
+
+    serialized = json.dumps(canonical_records, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def compute_star_rating_checksum(
+    results: List[Any],
+    precision: int = 4,
+) -> str:
+    """
+    Computes a deterministic SHA-256 fingerprint of every chart's star rating.
+
+    Sibling of `compute_feature_checksum`, and the one a formula change cannot hide from: it
+    hashes the engine's *output*, so a calibration constant that moves a rating while leaving
+    every input feature untouched — a change no feature gate can see — changes this digest.
+    Pinning it turns "the rating formula moved" into a deliberate, reviewable re-baselining
+    instead of a silent shift.
+
+    Ratings are formatted to `precision` (4) decimals, the precision the engine itself reports
+    them at and the spec requires them to agree across platforms.
+    """
+    canonical_records = [
+        {
+            "technique": r.technique,
+            "tier": r.tier,
+            "id": r.id,
+            "star_rating": (
+                f"{float(r.star_rating):.{precision}f}"
+                if getattr(r, "star_rating", None) is not None
+                else None
+            ),
+        }
+        for r in _sorted_results(results)
+    ]
 
     serialized = json.dumps(canonical_records, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()

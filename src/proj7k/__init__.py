@@ -37,6 +37,7 @@ from proj7k.monotonicity import (
     compute_spearman_rho,
     evaluate_tier_sequence,
     evaluate_batch_monotonicity,
+    read_ladder_metric,
     MonotonicityStep,
     MonotonicityViolation,
     DiscontinuityWarning,
@@ -68,15 +69,18 @@ from proj7k.distillation import (
 from proj7k.assets import (
     AssetLibraryIndex,
     scan_local_asset_library,
+    bind_manifest_to_corpus,
     bind_manifest_to_library,
+    load_corpus_fixture,
 )
 from proj7k.cache import (
     TwoLayerCache,
     ALGORITHM_VERSION,
     DEFAULT_CACHE_DIR,
 )
-from proj7k.checksum import compute_feature_checksum
+from proj7k.checksum import compute_feature_checksum, compute_star_rating_checksum
 from proj7k.guard import (
+    MetricGate,
     MonotonicityGuardError,
     MonotonicityGuardConfig,
     MonotonicityGuardResult,
@@ -150,6 +154,7 @@ __all__ = [
     "compute_spearman_rho",
     "evaluate_tier_sequence",
     "evaluate_batch_monotonicity",
+    "read_ladder_metric",
     "MonotonicityStep",
     "MonotonicityViolation",
     "DiscontinuityWarning",
@@ -175,11 +180,15 @@ __all__ = [
     "DistillationResult",
     "AssetLibraryIndex",
     "scan_local_asset_library",
+    "bind_manifest_to_corpus",
     "bind_manifest_to_library",
+    "load_corpus_fixture",
     "TwoLayerCache",
     "ALGORITHM_VERSION",
     "DEFAULT_CACHE_DIR",
     "compute_feature_checksum",
+    "compute_star_rating_checksum",
+    "MetricGate",
     "MonotonicityGuardError",
     "MonotonicityGuardConfig",
     "MonotonicityGuardResult",

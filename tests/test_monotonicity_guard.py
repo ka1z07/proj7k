@@ -2,8 +2,6 @@ import json
 from pathlib import Path
 import pytest
 from proj7k.batch import (
-    BatchSummary,
-    BenchmarkBatchReport,
     BenchmarkItem,
     run_benchmark_pipeline,
     main as batch_cli_main,
@@ -162,49 +160,39 @@ def test_batch_cli_with_guard_flag(tmp_path: Path):
     assert exit_code_tolerated == 0
 
 
-def test_guard_default_config_passes_on_bundled_benchmark_report():
+def test_default_gate_validates_only_the_engine_artifact():
     """
-    The default gate must be usable on the repository's own 120-chart benchmark:
-    - hold_pct / mean_locked_fingers are not monotone along the tier ladder at all (pure rice
-      charts are hold-poor, LN charts lock many fingers) and must not be validated by default,
-      while remaining available on explicit request;
-    - the thresholds must tolerate the local tier inversions a real community-rated corpus
-      always has, instead of failing on every technique.
+    Reports evaluate every metric so a failure can be diagnosed, but the gate defaults to the
+    engine's own output: hold_pct / mean_locked_fingers are not monotone along the tier ladder
+    at all (pure rice charts are hold-poor, LN charts lock many fingers), and the raw density
+    features are inputs to the rating rather than the rating itself. Both remain available on
+    explicit request.
     """
-    report_path = Path("reports/batch_report.json")
-    if not report_path.exists():
-        pytest.skip("Bundled benchmark report not found.")
+    manifest = [
+        BenchmarkItem(
+            technique="Regular Stream",
+            tier=tier,
+            id=500 + i,
+            content=_create_osu(notes_count=20 + i * 10, bpm=120.0 + i * 25),
+            bpm=120.0 + i * 25,
+        )
+        for i, tier in enumerate(["1st", "2nd", "3rd", "4th", "5th"])
+    ]
 
-    with open(report_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    report = BenchmarkBatchReport(
-        summary=BatchSummary(**data["summary"]),
-        results=[],
-        monotonicity=data.get("monotonicity"),
-        feature_checksum=data.get("feature_checksum"),
-    )
-    assert "hold_pct" in report.monotonicity["Regular Speed"]
+    report = run_benchmark_pipeline(manifest)
+    assert "star_rating" in report.monotonicity["Regular Stream"]
+    assert "avg_nps" in report.monotonicity["Regular Stream"]
 
     default_res = evaluate_monotonicity_guard(report)
-    default_msg = default_res.error_message or ""
-    assert default_res.passed is True, default_msg
-    assert "hold_pct" not in default_msg
-    assert "mean_locked_fingers" not in default_msg
-    assert set(default_res.metrics_summary["Regular Jack"]) == {"avg_nps", "peak_4m_nps"}
+
+    assert default_res.passed is True, default_res.error_message
+    assert set(default_res.metrics_summary["Regular Stream"]) == {"star_rating"}
 
     requested_res = evaluate_monotonicity_guard(
-        report, config=MonotonicityGuardConfig(metrics=["hold_pct"])
+        report, config=MonotonicityGuardConfig(metrics=["avg_nps"])
     )
-    assert requested_res.passed is False
-    assert "hold_pct" in requested_res.error_message
-
-    # Stricter-than-default runs still fail on the corpus' genuine local inversions.
-    strict_res = evaluate_monotonicity_guard(
-        report, config=MonotonicityGuardConfig(max_violations=0, min_kendall_tau=0.80)
-    )
-    assert strict_res.passed is False
-    assert "avg_nps" in strict_res.error_message
+    assert set(requested_res.metrics_summary["Regular Stream"]) == {"avg_nps"}
+    assert requested_res.passed is True, requested_res.error_message
 
 
 def test_monotonicity_guard_blocks_on_ingestion_failure():

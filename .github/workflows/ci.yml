@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run test suite
+        run: PYTHONPATH=src pytest -q
+
+      # Validates the engine's own output over the frozen 120-chart benchmark ladder: the
+      # star-rating tiers must stay ordered and the anchor tiers' medians must stay inside
+      # their bands. Runs off the in-repository corpus, so it needs no local osu! install.
+      # A formula change that leaves the raw features untouched is caught here — as is a
+      # calibration change that drifts the whole scale while keeping the tiers ordered.
+      #
+      # The test suite adds the strictest rung of the same ladder: it pins the digest of all
+      # 120 star ratings, so even a change too small to disturb the ordering or the bands has
+      # to be re-baselined on purpose.
+      - name: Monotonicity guard over the frozen benchmark ladder
+        run: |
+          PYTHONPATH=src python3 -m proj7k.batch \
+            --manifest docs/research/structured_index.json \
+            --corpus tests/fixtures/benchmark_corpus.json.gz \
+            -j 4 \
+            --guard

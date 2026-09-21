@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import pickle
 import tempfile
+from dataclasses import fields
 from typing import Optional, Dict, Any, Union
 
 from proj7k.parser import Beatmap7K
@@ -13,6 +14,26 @@ ALGORITHM_VERSION: str = "1.0.0"
 
 
 DEFAULT_CACHE_DIR: Path = Path(".cache/proj7k")
+
+
+def features_from_dict(payload: Dict[str, Any]) -> BeatmapFeatures:
+    """
+    Rebuilds BeatmapFeatures from its serialized form (`BeatmapFeatures.to_dict`).
+
+    Driven by the dataclass' own field list rather than a hand-written one: a hand-written list
+    quietly drops every field added after it was written, and a dropped field reads back as its
+    default — which silently changes any star rating computed from cached features.
+    """
+    known = {f.name for f in fields(BeatmapFeatures)}
+    restored = {name: value for name, value in payload.items() if name in known}
+
+    # JSON stringifies the keys of lockout_profile; the dataclass keys them by finger index.
+    if "lockout_profile" in restored:
+        restored["lockout_profile"] = {
+            int(finger): value for finger, value in restored["lockout_profile"].items()
+        }
+
+    return BeatmapFeatures(**restored)
 
 
 class TwoLayerCache:
@@ -122,27 +143,7 @@ class TwoLayerCache:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         d = json.load(f)
-                    lockout = {int(k): v for k, v in d.get("lockout_profile", {}).items()}
-                    feat = BeatmapFeatures(
-                        total_notes=d["total_notes"],
-                        rice_count=d["rice_count"],
-                        ln_count=d["ln_count"],
-                        hold_pct=d["hold_pct"],
-                        avg_nps=d["avg_nps"],
-                        peak_4m_nps=d["peak_4m_nps"],
-                        duration_seconds=d["duration_seconds"],
-                        peak_1b_nps=d.get("peak_1b_nps", 0.0),
-                        gap1_count=d.get("gap1_count", 0),
-                        gap1_density=d.get("gap1_density", 0.0),
-                        adj_count=d.get("adj_count", 0),
-                        adj_density=d.get("adj_density", 0.0),
-                        mean_locked_fingers=d.get("mean_locked_fingers", 0.0),
-                        lockout_profile=lockout,
-                        antiphase_count=d.get("antiphase_count", 0),
-                        antiphase_rate=d.get("antiphase_rate", 0.0),
-                        delta_t_action=d.get("delta_t_action", 0.0),
-                        inverse_score=d.get("inverse_score", 0.0),
-                    )
+                    feat = features_from_dict(d)
                     self._feat_mem_cache[key] = feat
                     self.stats["feature_hits"] += 1
                     return feat

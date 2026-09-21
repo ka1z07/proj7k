@@ -15,7 +15,7 @@ import sys
 from typing import Any, Dict, Optional, Union
 
 from proj7k.calibration import compute_methodology_fingerprint
-from proj7k.features import extract_beatmap_features
+from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.physics import (
     ANTIPHASE_ONSET_WINDOW_S,
@@ -92,12 +92,17 @@ class IntrinsicDifficultyResult:
 def evaluate_intrinsic_difficulty(
     content_or_path: Union[str, Path, Beatmap7K],
     options: Optional[DifficultyOptions] = None,
+    features: Optional[BeatmapFeatures] = None,
 ) -> IntrinsicDifficultyResult:
     """
     Evaluates the intrinsic difficulty of an osu!mania 7K beatmap.
 
     Accepts file path (str or Path), raw .osu string content, or a Beatmap7K instance.
     Returns the complete IntrinsicDifficultyResult contract.
+
+    `features` lets a caller that has already extracted the feature tensor (the batch
+    pipeline's feature cache) hand it in, so the rating is computed from exactly the features
+    the caller holds instead of a second extraction that could disagree with them.
     """
     if options is None:
         options = DifficultyOptions()
@@ -113,7 +118,8 @@ def evaluate_intrinsic_difficulty(
 
     rating_options = options.rating_options or RatingOptions()
 
-    features = extract_beatmap_features(beatmap)
+    if features is None:
+        features = extract_beatmap_features(beatmap)
     strain_profile = compute_dual_hand_strain(beatmap, options=options.strain_options)
     # Radar scores and the synthesized star rating are expressed in the same star scale:
     # both read their calibration from the one rating options object.
