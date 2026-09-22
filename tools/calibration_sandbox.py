@@ -42,8 +42,18 @@ from proj7k.assets import load_corpus_fixture
 from proj7k.dan import CANONICAL_DAN_SR_BANDS
 from proj7k.difficulty import evaluate_intrinsic_difficulty
 from proj7k.features import extract_beatmap_features
-from proj7k.guard import CALIBRATED_METRIC_GATES, DEFAULT_MIN_ANCHOR_SAMPLES
-from proj7k.monotonicity import TIER_ORDER, compute_kendall_tau, compute_spearman_rho
+from proj7k.guard import (
+    CALIBRATED_METRIC_GATES,
+    DEFAULT_METRIC_GATE,
+    DEFAULT_MIN_ANCHOR_SAMPLES,
+)
+from proj7k.monotonicity import (
+    DRIVER_METRIC_PREFIX,
+    TIER_ORDER,
+    compute_kendall_tau,
+    compute_spearman_rho,
+    evaluate_tier_sequence,
+)
 from proj7k.parser import parse_osu_7k
 from proj7k.radar import (
     TECHNIQUE_NAMES,
@@ -152,30 +162,84 @@ def ratings(records: Sequence[dict], options: RatingOptions) -> Dict[Tuple[str, 
     return out
 
 
-def measure(records: Sequence[dict], options: RatingOptions) -> dict:
-    """Ladder metrics for one calibration point: ordering, anchor medians, and the CI verdict."""
+def measure(
+    records: Sequence[dict],
+    options: RatingOptions,
+    columns: Sequence[str] = ("star_rating",),
+) -> dict:
+    """
+    Ladder metrics for one calibration point: ordering, anchor medians, and the CI verdict.
+
+    `columns` names what each ladder is measured *on*. `"star_rating"` is the default and the
+    one the anchor medians are taken from; any other name is read off the frozen core's raw
+    driver vector (`driver_jack`, `driver_ln_release`, ...) or off a metric the core carries,
+    which is the point of the generalization: the drivers are what the per-technique gates are
+    stated on, and a driver ladder costs arithmetic here because the drivers are already frozen.
+    Every column's thresholds come from `guard.CALIBRATED_METRIC_GATES` — never from a number
+    retyped in this file — so the sandbox and the guard cannot disagree about what a ladder has
+    to clear, and a metric with no registered gate reports the default one it fell back to.
+    """
     stars = ratings(records, options)
 
-    tau_min, rho_min, inversions, inv_max = 1.0, 1.0, 0, 0
-    worst_technique = ""
-    for technique in {r["technique"] for r in records}:
-        values = [
-            stars[(r["technique"], r["tier"])]
-            for r in sorted(
+    ladders: Dict[str, Dict[str, Any]] = {}
+    for column in columns:
+        per_technique: Dict[str, Any] = {}
+        for technique in sorted({r["technique"] for r in records}):
+            ordered = sorted(
                 (r for r in records if r["technique"] == technique),
                 key=lambda r: TIER_ORDER.index(r["tier"]),
             )
-        ]
-        tau = compute_kendall_tau(values)
-        rho = compute_spearman_rho(values)
-        # An adjacency inversion, which is what the guard counts — and per technique, which is
-        # the scope its max_violations ceiling applies at.
-        inv = sum(1 for a, b in zip(values, values[1:]) if b - a < -1e-4)
-        inversions += inv
-        inv_max = max(inv_max, inv)
-        if tau < tau_min:
-            tau_min, worst_technique = tau, technique
-        rho_min = min(rho_min, rho)
+            if column == "star_rating":
+                values = [stars[(r["technique"], r["tier"])] for r in ordered]
+            else:
+                name = column[len(DRIVER_METRIC_PREFIX):] if column.startswith(DRIVER_METRIC_PREFIX) else column
+                values = [
+                    r["drivers"][name]
+                    if name in r["drivers"]
+                    else float(r.get("features", {}).get(name, 0.0))
+                    for r in ordered
+                ]
+            report = evaluate_tier_sequence(
+                [(r["tier"], v) for r, v in zip(ordered, values)], technique=technique, metric=column
+            )
+            gate = CALIBRATED_METRIC_GATES.get(column, DEFAULT_METRIC_GATE)
+            # An axis that reads zero on every tier of a ladder is inert for that technique
+            # rather than badly ordered — the same rule the guard applies before it gates a
+            # metric — so it is reported as inactive instead of as a failure.
+            active = any(v != 0.0 for v in values)
+            per_technique[technique] = {
+                "active": active,
+                "kendall_tau": report.kendall_tau,
+                "spearman_rho": report.spearman_rho,
+                "inversions": len(report.violations),
+                "gate": {
+                    "min_kendall_tau": gate.min_kendall_tau,
+                    "min_spearman_rho": gate.min_spearman_rho,
+                    "max_violations": gate.max_violations,
+                },
+                "passed": (
+                    not active
+                    or (
+                        report.kendall_tau >= gate.min_kendall_tau
+                        and report.spearman_rho >= gate.min_spearman_rho
+                        and len(report.violations) <= gate.max_violations
+                    )
+                ),
+            }
+        passing = [t for t, m in per_technique.items() if m["passed"] and m["active"]]
+        active_techniques = [t for t, m in per_technique.items() if m["active"]]
+        ladders[column] = {
+            "per_technique": per_technique,
+            "passing": passing,
+            "failing": sorted(t for t in active_techniques if t not in passing),
+        }
+
+    star_ladder = ladders["star_rating"]["per_technique"]
+    tau_min = min(m["kendall_tau"] for m in star_ladder.values())
+    rho_min = min(m["spearman_rho"] for m in star_ladder.values())
+    inversions = sum(m["inversions"] for m in star_ladder.values())
+    inv_max = max(m["inversions"] for m in star_ladder.values())
+    worst_technique = min(star_ladder, key=lambda t: star_ladder[t]["kendall_tau"])
 
     medians: Dict[str, Tuple[Optional[float], int]] = {}
     for tier in CANONICAL_DAN_SR_BANDS:
@@ -203,6 +267,7 @@ def measure(records: Sequence[dict], options: RatingOptions) -> dict:
         "medians": medians,
         "anchor_ok": anchor_ok,
         "passed": passed,
+        "ladders": ladders,
     }
 
 
@@ -237,6 +302,35 @@ def format_margins(m: dict) -> str:
             f"up +{high - median:.3f} ({(high - median) / median * 100:5.1f}%)   "
             f"down +{median - low:.3f} ({(median - low) / median * 100:5.1f}%)   ({samples} charts)"
         )
+    return "\n".join(lines)
+
+
+def format_ladder(m: dict, column: str) -> str:
+    """
+    One column's ladder verdict, per technique, against its registered gate.
+
+    This is the generalized view the drivers are read through: the row says what the technique
+    scored on the column, what its gate is, and whether it cleared it — so "which of the 8
+    drivers order their own ladder" is answerable from the sandbox without a bespoke tool.
+    """
+    ladder = m["ladders"][column]
+    lines = [
+        f"=== {column} ===",
+        f"{'technique':14} {'tau':>7} {'rho':>7} {'inv':>4}   gate (tau/rho/inv)   verdict",
+    ]
+    for technique, stats in ladder["per_technique"].items():
+        gate = stats["gate"]
+        verdict = "n/a" if not stats["active"] else ("PASS" if stats["passed"] else "FAIL")
+        lines.append(
+            f"{technique:14} {stats['kendall_tau']:7.4f} {stats['spearman_rho']:7.4f} "
+            f"{stats['inversions']:4d}   {gate['min_kendall_tau']:.2f}/{gate['min_spearman_rho']:.2f}/"
+            f"{gate['max_violations']:<3d}      {verdict}"
+        )
+    lines.append(
+        f"passing {len(ladder['passing'])}/{len(ladder['per_technique'])}: "
+        f"{', '.join(ladder['passing']) or '-'}"
+    )
+    lines.append(f"failing: {', '.join(ladder['failing']) or '-'}")
     return "\n".join(lines)
 
 
@@ -278,13 +372,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--minimal", action="store_true", help="Print one line per evaluation point")
     parser.add_argument("--rebuild", action="store_true", help="Ignore the frozen core and rebuild it")
     parser.add_argument("--json", action="store_true", help="Emit the measurements as JSON")
+    parser.add_argument(
+        "--ladder",
+        action="append",
+        default=[],
+        metavar="COLUMN",
+        help="Print one column's 15-tier ladder against its registered gate. 'star_rating' (the "
+        "default column) or a driver name such as 'driver_ln_inverse'.",
+    )
     args = parser.parse_args(argv)
 
+    columns = ["star_rating", *args.ladder]
     records = build_core(force=args.rebuild)
 
     # The fast path is only allowed to answer if it agrees with the real seam on every chart.
     baseline_options = RatingOptions()
-    baseline = measure(records, baseline_options)
+    baseline = measure(records, baseline_options, columns=columns)
     worst_miss = max(
         abs(baseline["stars"][(r["technique"], r["tier"])] - r["reference_star"]) for r in records
     )
@@ -306,15 +409,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.minimal:
         print(format_margins(baseline))
 
+    for column in args.ladder:
+        print()
+        print(format_ladder(baseline, column))
+
     if args.set:
         overrides = parse_assignments(args.set)
         options = replace(baseline_options, **overrides)
-        candidate = measure(records, options)
+        candidate = measure(records, options, columns=columns)
         print()
         print("CANDIDATE " + " ".join(f"{k}={v}" for k, v in overrides.items()))
         print(f"  {format_verdict(candidate, baseline)}")
         if not args.minimal:
             print(format_margins(candidate))
+        for column in args.ladder:
+            print()
+            print(format_ladder(candidate, column))
 
     if args.sweep:
         print()

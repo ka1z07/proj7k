@@ -1,4 +1,5 @@
 import math
+import statistics
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any, Tuple, Union
 from proj7k.parser import (
@@ -51,6 +52,16 @@ class FeatureOptions:
     #: chord or duplicate, longer is a break in the pattern rather than a rhythm.
     min_step_ms: float = 10.0
     max_step_ms: float = 2000.0
+
+    #: How soon a lane has to be pressed again after its own release for that release to count as
+    #: an **inverse** articulation (CONTEXT.md 全锁反相长条: "立即松手、立即按下"), in
+    #: action-clock windows — the same micro-clock `delta_t_action` the strain accumulator is
+    #: sampled on, so a chart's tempo is divided out by construction and one window is one step
+    #: of the notation the chart is read in. Measured over the 120-chart benchmark, the median
+    #: same-lane tail-to-press gap is 1.0 window on the LN Inverse ladder against 1.5 on LN
+    #: General and 2.0 on LN Release, and one window is the tightest cut that still catches a
+    #: majority of the Inverse ladder's articulations.
+    inverse_press_window_steps: float = 1.0
 
     #: Micro-timing jerk: |Δt_next - Δt| / max(Δt, DENOMINATOR_MS), clipped at `jerk_cap` so a
     #: single torn 1/8 does not dominate the average, then scaled by `jerk_normalizer` on its
@@ -106,9 +117,24 @@ class BeatmapFeatures:
     isolated_tail_share: float = 0.0
     release_lock_depth: float = 0.0
 
+    # Inverse articulation (see step 5d): the same-lane re-press time-distance
+    inverse_press_count: int = 0
+    inverse_press_rate: float = 0.0
+    inverse_press_share: float = 0.0
+    inverse_gap_median: float = 0.0
+
     # Action clock window and calibrated inverse score
     delta_t_action: float = 0.0
     inverse_score: float = 0.0
+
+    #: The chart's tempo on the notation scale the action clock and the Inverse BPM Scaling Law
+    #: are defined on (issue #51) — the number the law's 145 / 180 BPM regime switches are read
+    #: against. Carried explicitly rather than left to be recovered from `delta_t_action`, so a
+    #: consumer that has to re-derive a tempo-driven quantity (the batch monotonicity report's
+    #: calibrated-ladder column) reads the same tempo the tensor itself was built with instead
+    #: of the chart's raw annotation, which is a different number on 1 of the 120 benchmark
+    #: charts and up to 2x off in general.
+    notation_bpm: float = 0.0
 
     # 4D Unorthodox Permutation and Rhythm Features (ADR-0008)
     spatial_entropy: float = 0.0
@@ -190,6 +216,7 @@ def extract_beatmap_features(
             antiphase_rate=0.0,
             delta_t_action=0.0,
             inverse_score=0.0,
+            notation_bpm=0.0,
             spatial_entropy=0.0,
             snap_variance_entropy=0.0,
             microtiming_jerk=0.0,
@@ -419,6 +446,42 @@ def extract_beatmap_features(
     effective_bpm = notation_normalized_bpm(beatmap, override=bpm)
     delta_t_action = compute_action_window(effective_bpm)
     inverse_score = compute_inverse_score(mean_locked_fingers, bpm=effective_bpm, nps=avg_nps)
+    notation_bpm = round(effective_bpm, 4)
+
+    # 5d. Inverse articulation (CONTEXT.md 全锁反相长条): how soon each lane is pressed again
+    # after its own release. This is the time-distance the axis was missing — every other
+    # release-side quantity in the tensor (antiphase coincidence, isolated tails, lift lock
+    # depth) is a *simultaneity*, a *share* or a *count*, and none of them reads the interval
+    # that the community definition of 反键 is actually about: 立即松手、立即按下. The gap is
+    # taken per lane against that lane's own next press and expressed in action-clock windows,
+    # so a faster chart makes the same physical spacing read as a tighter inverse (CONTEXT.md
+    # 反键 BPM 缩放律) without a separate tempo multiplier.
+    press_ticks: Dict[int, List[float]] = {}
+    for ho in beatmap.hit_objects:
+        press_ticks.setdefault(ho.column, []).append(ho.time)
+    for col in press_ticks:
+        press_ticks[col].sort()
+
+    inverse_press_count = 0
+    inverse_gaps: List[float] = []
+    for ho in beatmap.hit_objects:
+        if ho.note_type != NoteType.LN or ho.end_time is None:
+            continue
+        for press_time in press_ticks.get(ho.column, ()):
+            if press_time >= ho.end_time:
+                gap_steps = (
+                    (press_time - ho.end_time) / delta_t_action
+                    if delta_t_action > 0
+                    else float("inf")
+                )
+                inverse_gaps.append(gap_steps)
+                if gap_steps <= opts.inverse_press_window_steps:
+                    inverse_press_count += 1
+                break
+
+    inverse_press_rate = _calc_rate(inverse_press_count, duration_s)
+    inverse_press_share = round(inverse_press_count / len(inverse_gaps), 4) if inverse_gaps else 0.0
+    inverse_gap_median = round(statistics.median(inverse_gaps), 4) if inverse_gaps else 0.0
 
     # 6. Spatial Transition Entropy (7-track conditional transition entropy) (ADR-0008)
     hos_sorted = sorted(beatmap.hit_objects, key=lambda x: x.time)
@@ -540,8 +603,13 @@ def extract_beatmap_features(
         isolated_tail_count=isolated_tail_count,
         isolated_tail_share=isolated_tail_share,
         release_lock_depth=release_lock_depth,
+        inverse_press_count=inverse_press_count,
+        inverse_press_rate=inverse_press_rate,
+        inverse_press_share=inverse_press_share,
+        inverse_gap_median=inverse_gap_median,
         delta_t_action=delta_t_action,
         inverse_score=inverse_score,
+        notation_bpm=notation_bpm,
         spatial_entropy=spatial_entropy,
         snap_variance_entropy=snap_variance_entropy,
         microtiming_jerk=microtiming_jerk,

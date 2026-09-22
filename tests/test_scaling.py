@@ -66,9 +66,11 @@ def test_apply_inverse_bpm_scaling_low_speed_hard_cap():
     assert calibrated_extreme <= LOW_SPEED_CAP
 
 
-def test_apply_inverse_bpm_scaling_high_speed_exponential_penalty():
-    # High speed (200 BPM and 240 BPM, high locked fingers)
-    # Micro tolerance is severely compressed, triggering exponential penalty
+def test_apply_inverse_bpm_scaling_high_speed_penalty_saturates():
+    # High speed (200 BPM and 240 BPM, high locked fingers): micro tolerance is severely
+    # compressed and the penalty regime applies. It compounds sub-linearly rather than
+    # exponentially — the buffer CONTEXT.md describes (判定窗口重叠缓冲 η) absorbs the growth,
+    # which the strain side's own high-speed law has modelled all along.
     calibrated_200, factor_200, regime_200 = apply_inverse_bpm_scaling(4.5, bpm=200.0)
     assert regime_200 == "EXPONENTIAL_PENALTY"
     assert factor_200 > 1.5
@@ -76,8 +78,16 @@ def test_apply_inverse_bpm_scaling_high_speed_exponential_penalty():
 
     calibrated_240, factor_240, regime_240 = apply_inverse_bpm_scaling(5.0, bpm=240.0)
     assert regime_240 == "EXPONENTIAL_PENALTY"
-    assert factor_240 > factor_200 * 1.8
-    assert calibrated_240 > 20.0  # Leaps to extreme high tier load (Stellium)
+    assert factor_240 > factor_200  # still grows with tempo
+    assert factor_240 < factor_200 * 1.8  # but not by a compounding step
+    assert calibrated_240 > 10.0  # still the extreme tier's load (Stellium)
+
+    # The saturation is what keeps an extreme notation tempo from carrying the axis: the
+    # `LN General` Stellium benchmark chart sits at BPM* 357, where the unbounded exponential
+    # reached 130x and drove InverseScore to 830 against a ladder spanning 0.2-10.
+    _, factor_extreme, _ = apply_inverse_bpm_scaling(3.0, bpm=357.0)
+    assert factor_extreme < 5.0
+    assert factor_extreme < factor_240 * 1.5  # past the knee the multiplier barely moves
 
 
 def test_inverse_score_order_reversal_resolution():

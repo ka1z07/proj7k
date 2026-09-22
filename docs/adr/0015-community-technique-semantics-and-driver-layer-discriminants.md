@@ -1,11 +1,75 @@
 # 0015. 社区技法语义与驱动层判别量 (Community Technique Semantics & Driver-Layer Discriminants)
 
-- **状态**：草案（骨架）——2026-09-22 起草。标「待证」的条目尚未落定，**不得据以实施**；每条决策的证据与代价已写在条目内，落定时把本文状态改为 accepted。
+- **状态**：accepted（阶段① 已实施，见「实施记录」；阶段② 与下列开放问题未决）。2026-09-22 起草为草案骨架，同批（工单 #52）实施阶段①并转 accepted。
 - **日期**：2026-09-22
 - **背景**：
   #47 把 8 维驱动改对之后，驱动层暴露出两个彼此纠缠的问题。**其一，驱动排不出本维阶梯**：8 条梯队在 `HEAD 736ca1f` 上有 5 条过不了星级闸门（jack τ 0.829 / ρ 0.943、tech 0.581 / 0.729、speed 0.714 / 0.875、stream 0.790 / 0.904、ln_inverse 0.733 / 0.854），而同组真值 `sr` 对段位的 ρ 全部 ≥ 0.97——**阶梯是单调的，是驱动不单调**。**其二，驱动与技法错配**：56 个跨技法对里 17 对倒挂，即某个驱动把别的技法梯队排得比自己的还准（`ln_release` 把 LN Inverse 梯队排到 ρ 1.000，排自己只有 0.989；`ln_inverse` 把 LN General 排到 0.996；`tech` 把 LN Inverse 排到 0.950，排自己 0.729）。
   病不在刻度：#51 的记谱归一化只把 ln_inverse 自己的 ρ 从 0.700 抬到 0.854，**17 对侵入逐对不变**。真正的缺口是**技法语义从未被写成可判别的量**——`tech` 的算式里一个长条特征量都不出现（`radar.py:677-693`），`ln_release` 按构造是 general 基座的乘性修饰（`radar.py:757-761`），而社区对「速」「反键」「释放」的定义既不在 `CONTEXT.md` 里，也不在任何算式中。
   2026-09-22 的 30 张 LN 谱实测把这层判断钉成了数字：`ln_inverse > ln_release` 判归属的准确率只有 **0.533**（30 张里命中 1 张），且 argmax **反向误导**——**14/15 张 LN Inverse 谱的最高维是 `ln_release`**。机制清楚：`ln_release` 按构造读 `release_lock_depth`，而该量在 LN Inverse 谱上系统性更高（中位 0.936 对 0.575），即**两维在实践中是换位的**——`ln_release` 测的是「锁得深不深」，而那恰是 Inverse 的语义。更棘手的是 `inverse_score`（`ln_inverse` 驱动的最大项，权重 3.50）对反相与释放的判别力 AUC 仅 **0.582**，接近抛硬币。
+
+## 实施记录（工单 #52 阶段①，2026-09-22）
+
+落定的形态与标定值，以及测量推翻或改写的东西。**本段记录已发生的权衡，不是排期表。**
+
+**1. ln_inverse 重构为「全锁程度 + 反相密度」（决策 6 落地）**
+
+新增特征 `features.inverse_press_share` / `inverse_press_rate` / `inverse_gap_median`：同轨「尾点 → 该轨下一次按下」的间隔，以**动作时钟窗**（`gap / delta_t_action`）为单位 —— 换谱即换刻度，所以"立即松手、立即按下"在快谱上按同一物理间距读得更紧（CONTEXT.md 反键 BPM 缩放律），不需要额外的 BPM 乘子。`FeatureOptions.inverse_press_window_steps = 1.0` 是"立即"的定义（一个记谱格）。
+
+三个候选量的分工**分别测量**后才发现（120 谱）：
+
+| 量 | 本维阶梯 τ/ρ | vs 另三条 LN 梯队 AUC |
+| :--- | ---: | ---: |
+| `inverse_score` | 0.905 / 0.975 | **0.526（抛硬币）** |
+| `lock_load`（全锁程度） | 0.505 / 0.664 | 0.887 |
+| `inverse_press_rate` | 0.924 / 0.982 | 0.719 |
+| `inverse_press_share` | **0.086 / 0.107** | **0.997** |
+| `median_gap` | 0.571 / 0.767 | 0.011（方向相反：越小越反相） |
+
+即：**share 是纯形状量**（辨识近完美、排序零能力），**rate / score 是纯水平量**（排序好、辨识差）。因此 share 只做**饱和门**（`ln_inv_share_gate = 0.75`），不做权重：把形状量乘进载体，梯队的非单调性会一起乘进去（实测 `share × (lock + rate)` 只排到 ρ 0.686，低于默认闸门）。门值按语料标定：非反相的 LN 谱无一达到 0.75（LN General 峰值 0.582、LN Tech 0.60、LN Release 0.461）。
+
+`inverse_score` **保留在轴内**（决策 6 把它钉在"验证后再定去留"，而软上限落地后它不再劫持）：轴的本维阶梯由 0.733/0.854 升到 **0.790/0.900**。
+
+**2. 决策 4 的形态落地，但"等长即退化"只对同起同长成立（新发现，推翻 AC7 一半）**
+
+`g = 1 + k·lockd` 与 `ln_release_lock_gain = 1.0` 已落地；`ln_release_gain`（既有字段）承担**交叉点**：`gain × (1 + k·lockd)` 在 `lockd = (1/gain − 1)/k` 处穿过 General 基座，标定为 **0.60**，高于 LN General 阶梯最深锁（Stellium 0.593）——**这是必须的**，否则 General 轴在自家梯队的深锁段全被 release 拿走。
+
+*代价（已测）*：LN Release 本维命中 8/15 → **7/15**（两条 LN 阶梯在锁深上互相交错：Release 阶梯的低段锁得并不比 General 中段深）。决策 7 的"LN 侧接受严格不等号不可达"与 AC1 对 ln_release 的例外都指向同一件事，但 #47 的 `LN_RELEASE_MIN_HITS = 8` 是**验收线**，本票不得重基线化——这条留给票主决定。
+
+*第二项代价（同一条形态的）*：`release = gain·(1 + k·lockd)·gen` 使 release 在**每张长条谱**上都落在 general 的 0.63–1.0 倍之间，于是这些谱的次高/最高比天然贴近 0.8–1.0 —— LN General 组的分离中位 0.712 → **0.867**、LN Release 0.655 → **0.868**（LN Inverse 反向大幅改善：0.736 → **0.301**，本维命中 1/15 → 12/15）。**三项要求在这条形态下无法同时成立**：交叉点 > 0.593（General 保住自家梯队）× Release 命中 ≥ 8（需交叉点 ≤ 0.575）× 分离 ≤ 0.5（需 gain ≤ ~0.3，即交叉点 ≥ 3）。
+
+*推翻*：`release_lock_depth` 的退化点只在**同起同长**（所有长条同起同止，抬手时全手同时松）时读 0。**错开起点的等长谱读 2.11**：包含判据要求"某轨在另一轨开始后被按下且尚未结束"，等长+错开满足该条件。AC7 点名的第二种合成谱（chordstream 米键全换等长 LN）因此在现定义下**不退化**，`tests/test_ln_release_degeneracy.py` 把它写成 strict xfail 并记录实测值。要闭合需要改量的定义（只计"比我更长的长条"）或换量——**未决**。
+
+**3. 决策 2 的形态落地，但 gain 标定到 0（阶段② 的硬前置被测量钉死）**
+
+`tech` 的动能项实现为 `raw_mult = (excess × (1 + gain·tanh(burst_rate / 25))) ** γ × λ` —— 只放大无序度、不进 `K_base`，`_compute_burst_rate` 是**不含速度增益、不含 Rule C 抑制**的纯净动能量（决策 2 的"不得取 `r_speed`"）。
+
+但 `tech_kinetic_gain = 0.0`，因为两个判据窗口不重叠：Regular Tech Stellium 的 tech 只到 speed 的 **0.62**，需要 gain ≈ 0.35 才反超；Regular Stream 10th 的 tech 已到自家 stream 的 **0.89**，gain = 0.1 就被反超。**原因是 Ω_irreg 在 chordstream 上更高**（bracket 相变密度 0.248 对 0.076、异列相邻密度 4.90 对 3.29）——chordstream 的织体正是括号项在数的那个外侧双押/中间单押交替。gain = 1.6 时 tech 本维阶梯确实按设计改善（τ 0.58→0.73、ρ 0.73→0.88），这正是阶段② 拿到分辨力后的收益。
+
+**4. 决策 5 的判别量落地（单边不变量 + 已知边界）**
+
+`tests/test_ln_inverse_discriminant.py`：LN Release 15/15 均不触发 Rule E；LN Inverse 触发集与"0th/1st/2nd 三张低锁谱"**精确互补**（记入已知边界）；门不按语料拟合（最优拟合 4.264 收益为零）。
+
+**5. 实施中新增/改写的常数（标定登记表口径）**
+
+| 常数 | 家 | 值 | 理由 |
+| :--- | :--- | :--- | :--- |
+| `inverse_press_window_steps` | `FeatureOptions` | 1.0 | "立即"的定义；语料中位 1.0 窗（Inverse）/1.5（General）/2.0（Release） |
+| `ln_inv_share_gate` | `RadarOptions` | 0.75 | 非反相 LN 谱无一达到 |
+| `ln_inv_press_rate_weight` | `RadarOptions` | 2.0 | 排序载体 |
+| `ln_release_lock_gain`（k） | `RadarOptions` | 1.0 | 决策 4；取代 `ln_release_ref_depth` |
+| `ln_release_gain` | `RadarOptions` | 1.0 → **0.625** | 交叉点 0.60 |
+| `PENALTY_EXP_CEILING` | `scaling` 常数块 | 3.0 | 反键惩罚因子软上限 |
+| `tech_kinetic_gain` / `tech_kinetic_reference` | `RadarOptions` | 0.0 / 25.0 | 形态已接线、按测量标定为 0（见上） |
+
+**6. 决策 6 之外的独立发现：反键惩罚因子的指数外推（#51 的回归）**
+
+`LN General` Stellium 的标注 180 BPM 在 #51 的记谱归一化后是 BPM* = **357.14**（观测记谱 1/32 级），使无界的 `exp(0.55 · 8.86)` 涨到 **164 倍**、`inverse_score` 到 **830**（本维其余 12 张 0.18–10.29），ln_inverse 原始驱动 **2911** 成为该谱最大维 —— 这才是「LN General Stellium 错判成 ln_inverse」的主因，而不是 release 超 general（工单括注写的 75.61 对 63.81 是次因，且已被 Rule E 顺序修复消除）。修法：惩罚项按 CONTEXT.md 判定窗口重叠缓冲 η 的语义**饱和**（`1 + (CEILING−1)·tanh(gain·ratio/(CEILING−1))`），`PENALTY_EXP_CEILING = 3.0`。应变侧 `compute_high_speed_scaling_factor` 一直是亚线性律，这里是最后一处仍在做指数外推的地方。
+
+**7. 落定后仍然红灯的（移交或未决）**
+
+- 星阶梯：Regular Speed τ 0.809/ρ 0.911（#50 的第二步）；**LN Inverse 新增 0.867/0.943** —— 本维驱动大幅改善（0.733→0.790）而星阶梯反而跌破闸门，因为该梯队的星值此前**由 release 轴的分辨力背着走**（release 当时是每张谱最大的驱动，排序 0.989）；入侵被消掉后，星阶梯必须自己站住。
+- 正交性四阈值：中位分离 0.698 → **0.8095**、>0.8 张数 44 → **61**（Rule E 顺序 + release 仿射式 + inverse 形状门都压缩了 LN 轴之间的动态范围）；LN Release 命中 7/15；Speed 命中 14/15 ✓。前两项与 7/15 都是阶段②/票主决定的事。
+- AC11 的四条错位：LN Inverse 8th ✓（Rule E 顺序）、LN General Stellium ✓（惩罚上限）、Regular Tech Stellium ✗（见上，量化阻塞）、Regular Stream Stellium ✗（speed 轴待重构）。
 
 ## 决策内容（草案）
 

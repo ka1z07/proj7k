@@ -34,6 +34,21 @@ PENALTY_RAMP_BPM: float = 20.0
 PENALTY_EXP_GAIN: float = 0.55
 LOCK_AMPLIFICATION_GAIN: float = 0.35
 
+#: Ceiling of the penalty multiplier. `exp(PENALTY_EXP_GAIN * ratio)` is unbounded, and the
+#: ratio is measured in 20-BPM ramp units — so it is a shape calibrated for the 180-220 BPM
+#: charts the law was written around, and extrapolating it further compounds: the `LN General`
+#: Stellium benchmark chart, annotated at 180 BPM but written in note values that put its
+#: notation tempo at 357 BPM (issue #51), ran to `exp(4.87)` = 130x here, which drove its
+#: InverseScore to 830 against a ladder whose other tiers span 0.2-10 and made the inverse axis
+#: the argmax of a chart with three locked fingers. The penalty saturates instead:
+#: `1 + (CEILING - 1) * tanh(GAIN * ratio / (CEILING - 1))` — the same value and slope as the
+#: exponential at the regime's entry and for the first ramp unit or so, flattening to CEILING
+#: beyond it. Bounded growth is what CONTEXT.md's 判定窗口重叠缓冲 η already says the physics
+#: does ("认知阻抗增长由纯指数级转变为受判定理智缓冲的亚线性饱和收敛"), and the strain side's
+#: `compute_high_speed_scaling_factor` has been the sub-linear law all along; this was the last
+#: place still extrapolating an exponential.
+PENALTY_EXP_CEILING: float = 3.0
+
 #: NPS weight of the inverse score: a denser chart raises the cognitive cost of every locked
 #: finger, so the calibrated metric is multiplied by (1 + INVERSE_NPS_GAIN * nps).
 INVERSE_NPS_GAIN: float = 0.02
@@ -118,7 +133,12 @@ def compute_inverse_scaling_factor(
         regime = "EXPONENTIAL_PENALTY"
         base = (high_bpm_threshold / reference_bpm) ** REFERENCE_EXPONENT
         bpm_ratio = (bpm - high_bpm_threshold) / PENALTY_RAMP_BPM
-        exp_penalty = math.exp(PENALTY_EXP_GAIN * bpm_ratio)
+        span = PENALTY_EXP_CEILING - 1.0
+        exp_penalty = (
+            1.0 + span * math.tanh(PENALTY_EXP_GAIN * bpm_ratio / span)
+            if span > 0.0
+            else 1.0
+        )
         lock_amplification = 1.0 + LOCK_AMPLIFICATION_GAIN * (
             min(max(mean_locked_fingers, 0.0), 7.0) / 7.0
         )
@@ -170,9 +190,14 @@ def compute_inverse_score(
     low_speed_cap: float = LOW_SPEED_CAP,
 ) -> float:
     """
-    Computes InverseScore = f(MeanLocked, delta_t_action, NPS)
-    as specified in ADR-0006 and Master Specification.
-    Strictly preserves the 5★ ceiling under low-speed truncation.
+    InverseScore = f(MeanLocked, BPM*, NPS): the locked-finger load put through the Inverse BPM
+    Scaling Law, then multiplied by the chart's density factor (1 + INVERSE_NPS_GAIN * nps).
+
+    `bpm` is the notation-normalized tempo, BPM* — the output of `normalize_notation_bpm`, which
+    is what the law's 145 / 180 regime switches are stated against (issue #51). The action clock
+    is deliberately not a parameter: `delta_t_action` is the same tempo divided by the divisor,
+    so passing both would let the two disagree. Strictly preserves the 5★ ceiling under
+    low-speed truncation.
     """
     calibrated, _, regime = apply_inverse_bpm_scaling(
         raw_value=mean_locked_fingers,
@@ -216,6 +241,7 @@ CALIBRATION_CONSTANTS: Tuple[str, ...] = (
     "LOW_SPEED_EXPONENT",
     "PENALTY_RAMP_BPM",
     "PENALTY_EXP_GAIN",
+    "PENALTY_EXP_CEILING",
     "LOCK_AMPLIFICATION_GAIN",
     "INVERSE_NPS_GAIN",
 )

@@ -117,10 +117,16 @@ def test_ln_inverse_and_release_dominance():
     radar = compute_technique_radar(bm)
 
     assert radar.ln_inverse > 4.0
-    assert radar.ln_release > 1.5
     assert radar.dominant_technique in ("ln_inverse", "ln_release", "ln_tech", "ln_general")
     # Jack should be suppressed
     assert radar.jack < 1.0
+    # Release is a modifier on the General base, so it reports nothing here: the chart is
+    # inverse-specialised (Rule E has re-attributed the hold volume to Inverse) and its lifts are
+    # uniform, which is the degenerate case the modifier is anchored at. Reading the axis' own
+    # magnitude on the pre-suppression base instead is what used to make this chart's release
+    # driver (3.7x its General base) larger than its inverse driver.
+    assert radar.ln_general == 0.0
+    assert radar.ln_release == 0.0
 
 
 def test_pure_jack_suppresses_stream_and_tech_noise():

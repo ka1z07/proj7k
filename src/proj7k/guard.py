@@ -40,6 +40,32 @@ class MetricGate:
 CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # Measured worst over the benchmark corpus: tau 0.905 / rho 0.964 / 3 inversions.
     "star_rating": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    # --- The raw technique drivers (issue #52) -------------------------------------------------
+    #
+    # One gate per technique, on the technique's *own* ladder (`monotonicity.DRIVER_METRIC_
+    # PREFIX` reads them). Without these entries a driver ladder fell back to
+    # `DEFAULT_METRIC_GATE`, which is how issue #52's starting evidence could be read as "5 of 8
+    # fail" or "3 of 8 fail" depending on which gate the reader assumed — the same table, two
+    # answers.
+    #
+    # The thresholds are the ticket's **red line**, not a fitted floor: they are the bar a
+    # driver has to clear to count as ordering its own ladder at all, and the ticket's bullseye
+    # (tau >= 0.93 / rho >= 0.98) sits above them deliberately — `docs/adr/0015` records that
+    # the official Jinjin ladder's own ratings order at tau 0.886 on Regular Tech, so the
+    # bullseye is a target rather than a property of the ground truth. Measured at registration
+    # (HEAD of issue #52's branch): ln_general 0.905/0.971, ln_tech 0.886/0.961, ln_release
+    # 0.943/0.986 clear the line; jack 0.829/0.943, stream 0.790/0.904, ln_inverse 0.790/0.900,
+    # speed 0.714/0.875, tech 0.581/0.729 do not. A caller that evaluates a driver ladder
+    # therefore gets the shortfall reported, which is the point: the line is where the driver
+    # layer has to arrive, not where it is.
+    "driver_jack": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_speed": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_stream": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_ln_general": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_ln_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_ln_inverse": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "driver_ln_release": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
 }
 #: Applied to any metric without its own calibration entry.
 #: Measured worst for the raw density metrics: tau 0.780 / rho 0.894 / 6 inversions.

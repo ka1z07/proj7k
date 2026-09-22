@@ -2,15 +2,16 @@
 
 > 由 `PYTHONPATH=src python3 tools/radar_orthogonality_report.py` 生成，数据源为
 > `docs/research/structured_index.json` × `tests/fixtures/benchmark_corpus.json.gz`（120 谱）。
-> 生成于 `K_base` 修订（ADR-0008 修订 1）与 `ln_release` 重建之后。手工改动本节数字没有意义——重跑工具。
+> 生成于工单 #52 阶段①（ln_inverse 重构、Rule E 顺序、ln_release 仿射式）之后。
+> 手工改动本节数字没有意义——重跑工具。阈值的 CI 强制在 `tests/test_radar_orthogonality.py`。
 
 ```
 charts: 120
 
 === separation (second-highest / highest driver) ===
-median                    0.7207   (threshold <= 0.5)
-charts > 0.8             47   (threshold <= 10)
-charts > 0.5               97
+median                    0.8095   (threshold <= 0.5)
+charts > 0.8             61   (threshold <= 10)
+charts > 0.5               88
 
 === per group ===
 group            own axis       hits  median sep
@@ -18,26 +19,27 @@ Regular Jack     jack          14/15      0.0281
 Regular Tech     tech           9/15      0.7674
 Regular Speed    speed         14/15      0.5890
 Regular Stream   stream        12/15      0.8200
-LN General       ln_general     9/15      0.7736
-LN Tech          ln_tech        5/15      0.8671
-LN Inverse       ln_inverse     5/15      0.7357
-LN Release       ln_release     8/15      0.6446
+LN General       ln_general    11/15      0.8668
+LN Tech          ln_tech        7/15      0.8696
+LN Inverse       ln_inverse    12/15      0.3009
+LN Release       ln_release     7/15      0.8677
 
 === argmax distribution ===
-jack 16  tech 14  speed 17  stream 17  ln_general 20  ln_tech 5  ln_inverse 8  ln_release 23  None 0
+jack 16  tech 14  speed 17  stream 17  ln_general 26  ln_tech 7  ln_inverse 12  ln_release 11  None 0
 
 === cross-correlation (Spearman rho over the corpus) ===
                        jack       tech      speed     stream  ln_genera    ln_tech  ln_invers  ln_releas
-jack                  1.000     -0.259     -0.101     -0.059     -0.724     -0.667     -0.767     -0.768
-tech                 -0.259      1.000      0.701      0.726      0.264      0.259      0.170      0.224
-speed                -0.101      0.701      1.000      0.853     -0.025      0.004     -0.091     -0.068
-stream               -0.059      0.726      0.853      1.000      0.096      0.098     -0.017      0.019
-ln_general           -0.724      0.264     -0.025      0.096      1.000      0.935      0.844      0.885
-ln_tech              -0.667      0.259      0.004      0.098      0.935      1.000      0.718      0.762
-ln_inverse           -0.767      0.170     -0.091     -0.017      0.844      0.718      1.000      0.982
-ln_release           -0.768      0.224     -0.068      0.019      0.885      0.762      0.982      1.000
+jack                  1.000     -0.259     -0.101     -0.059     -0.754     -0.655     -0.768     -0.755
+tech                 -0.259      1.000      0.701      0.726      0.253      0.224      0.181      0.253
+speed                -0.101      0.701      1.000      0.853     -0.031     -0.019     -0.106     -0.032
+stream               -0.059      0.726      0.853      1.000      0.084      0.070     -0.016      0.081
+ln_general           -0.754      0.253     -0.031      0.084      1.000      0.906      0.896      0.998
+ln_tech              -0.655      0.224     -0.019      0.070      0.906      1.000      0.686      0.885
+ln_inverse           -0.768      0.181     -0.106     -0.016      0.896      0.686      1.000      0.907
+ln_release           -0.755      0.253     -0.032      0.081      0.998      0.885      0.907      1.000
 
 Radar orthogonality: FAILED
-  - median separation 0.7207 > 0.5 (axes are still coupled)
-  - 47 charts above 0.8 > 10
+  - median separation 0.8095 > 0.5 (axes are still coupled)
+  - 61 charts above 0.8 > 10
+  - LN Release own-axis hits 7/15 < 8
 ```

@@ -33,14 +33,6 @@ class BenchmarkItem:
     osu_path: Optional[str] = None
     content: Optional[str] = None
     bpm: Optional[float] = None
-    ref_sr: Optional[float] = None
-    sr: Optional[float] = None
-
-    def __post_init__(self):
-        if self.ref_sr is None and self.sr is not None:
-            self.ref_sr = self.sr
-        elif self.sr is None and self.ref_sr is not None:
-            self.sr = self.ref_sr
 
 
 @dataclass
@@ -67,6 +59,10 @@ class BenchmarkItemResult:
     star_rating: Optional[float] = None
     uncompressed_star_rating: Optional[float] = None
     dominant_technique: Optional[str] = None
+    #: The raw 8-dimension driver vector, keyed by technique name. Carried for the same reason
+    #: the star rating is: the per-technique ladder gates are stated on the drivers, and a gate
+    #: that re-derived them could gate a different vector than the rating read.
+    drivers: Optional[Dict[str, float]] = None
     error: Optional[str] = None
     traceback: Optional[str] = None
 
@@ -82,6 +78,7 @@ class BenchmarkItemResult:
             "star_rating": self.star_rating,
             "uncompressed_star_rating": self.uncompressed_star_rating,
             "dominant_technique": self.dominant_technique,
+            "drivers": self.drivers,
             "error": self.error,
             "traceback": self.traceback,
         }
@@ -179,7 +176,6 @@ def load_manifest(
                         osu_path=resolved_path,
                         content=entry.get("content"),
                         bpm=entry.get("bpm"),
-                        ref_sr=entry.get("ref_sr") or entry.get("sr"),
                     )
                 )
     elif isinstance(raw_data, dict):
@@ -197,7 +193,6 @@ def load_manifest(
                                 osu_path=resolved_path,
                                 content=meta.get("content"),
                                 bpm=meta.get("bpm"),
-                                ref_sr=meta.get("ref_sr") or meta.get("sr"),
                             )
                         )
 
@@ -280,6 +275,7 @@ def process_benchmark_item(
             star_rating=rating.star_rating if rating else None,
             uncompressed_star_rating=rating.raw_star_rating if rating else None,
             dominant_technique=rating.metadata["dominant_technique"] if rating else None,
+            drivers=rating.drivers.to_dict() if rating and rating.drivers else None,
             error=None,
         )
     except Exception as e:

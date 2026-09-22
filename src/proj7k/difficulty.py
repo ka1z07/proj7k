@@ -20,7 +20,13 @@ from proj7k import physics, scaling, strain
 from proj7k.calibration import block_fingerprint_constants, compute_methodology_fingerprint
 from proj7k.features import BeatmapFeatures, FeatureOptions, extract_beatmap_features
 from proj7k.parser import Beatmap7K, parse_osu_7k
-from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
+from proj7k.radar import (
+    RadarOptions,
+    RawTechniqueDrivers,
+    TechniqueRadar,
+    compute_raw_technique_drivers,
+    compute_technique_radar,
+)
 from proj7k.rating import RatingOptions, synthesize_star_rating
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
 
@@ -161,15 +167,24 @@ class IntrinsicDifficultyResult:
     radar: TechniqueRadar
     strain_profile: StrainTimeseriesProfile
     metadata: Dict[str, Any]
+    #: The raw technique drivers the radar was mapped from, in the operators' own units. Carried
+    #: because they are what the per-technique ladder gates are stated on (`guard`): the star
+    #: rating is a monotone per-chart rescaling of these, so a collapsing ladder shows up here
+    #: first, and a gate that had to re-derive them could gate a different vector than the
+    #: rating read.
+    drivers: Optional[RawTechniqueDrivers] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "star_rating": self.star_rating,
             "raw_star_rating": self.raw_star_rating,
             "radar": self.radar.to_dict(),
             "strain_profile": self.strain_profile.to_dict(),
             "metadata": self.metadata,
         }
+        if self.drivers is not None:
+            d["drivers"] = self.drivers.to_dict()
+        return d
 
 
 def evaluate_intrinsic_difficulty(
@@ -205,13 +220,18 @@ def evaluate_intrinsic_difficulty(
         features = extract_beatmap_features(beatmap, options=options.feature_options)
     strain_profile = compute_dual_hand_strain(beatmap, options=options.strain_options)
     # Radar scores and the synthesized star rating are expressed in the same star scale:
-    # both read their calibration from the one rating options object.
+    # both read their calibration from the one rating options object. The raw driver vector is
+    # computed once here and handed to the radar, and carried on the result: the ladder gates
+    # are stated on the drivers, so the vector they gate has to be the vector the rating used.
+    radar_options = options.radar_options or RadarOptions()
+    drivers = compute_raw_technique_drivers(beatmap, features=features, options=radar_options)
     radar = compute_technique_radar(
         beatmap,
         features=features,
         strain_profile=strain_profile,
         options=options.radar_options,
         calibration=rating_options.calibration,
+        drivers=drivers,
     )
     synthesis = synthesize_star_rating(
         radar,
@@ -239,6 +259,7 @@ def evaluate_intrinsic_difficulty(
         radar=radar,
         strain_profile=strain_profile,
         metadata=metadata,
+        drivers=drivers,
     )
 
 

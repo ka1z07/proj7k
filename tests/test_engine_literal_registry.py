@@ -131,9 +131,11 @@ _SCALING = [
     ),
     (
         "compute_inverse_scaling_factor",
-        {0.0: 4, 1.0: 1, 7.0: 2, 4: 3},
-        "Zero floors and the empty-tempo guard; the identity offset of the lock amplification, "
-        "which clamps and normalises over the 7 keys; and reported-precision rounding.",
+        {0.0: 5, 1.0: 4, 7.0: 2, 4: 3},
+        "Zero floors and the empty-tempo guard, plus the zero-span guard on the saturated "
+        "penalty; the identity offsets of the lock amplification and of the penalty's tanh "
+        "saturation, which sits at 1.0 where the exponential it replaces did; the clamp and "
+        "normalisation over the 7 keys; and reported-precision rounding.",
         {7.0: "The keyboard has 7 lanes, so a fully locked chart is 7/7."},
     ),
     (
@@ -150,15 +152,16 @@ _FEATURES = [
     ("_calc_rate", {0: 2, 4: 1}, "Zero-duration guard and reported-precision rounding.", {}),
     (
         "extract_beatmap_features",
-        {0: 74, 1: 45, 2: 10, 4: 19, 5: 5, 6: 4, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
+        {0: 79, 1: 46, 2: 10, 4: 22, 5: 5, 6: 4, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
         "Indices, counts and 7-lane topology throughout — including the left/right hand lane "
         "tuples the release-articulation terms read, whose members are lane numbers, not "
         "thresholds; ms/s and bpm/beat-length conversions; the percentage scaling of hold_pct; "
-        "the two-class guards; the counts of isolated LN tails and of same-hand locked keys; and "
-        "the 3-way binary/ternary/irregular mixing entropy, whose class count is the literal 3.",
+        "the two-class guards; the counts of isolated LN tails and of same-hand locked keys; the "
+        "inverse-articulation counter and its non-positive action-clock guard; and the 3-way "
+        "binary/ternary/irregular mixing entropy, whose class count is the literal 3.",
         {
             4: "Reported precision (4 decimals); the non-overlapping-interval bookkeeping; the "
-               "isolated-tail count's reported share; and the 4-measure window of the peak_4m_nps "
+               "isolated-tail count's reported share; the 4-measure window of the peak_4m_nps "
                "diagnostic, which that field's name pins — it is a diagnostic the star rating "
                "never reads.",
             5: "The 4-measure window needs 5 measure starts to form one window, plus the "
@@ -225,17 +228,21 @@ _RADAR = [
         },
     ),
     (
-        "_compute_speed_raw",
+        "_compute_burst_rate",
         {1: 4, 0.0: 1, 1000.0: 1},
         "Loop offsets into the sorted note list, the accumulator's zero start, and the ms/s "
-        "conversion. The burst law comes from physics and the gain from RadarOptions.",
+        "conversion. The burst law comes from physics and the gain (which this function does not "
+        "apply — the speed driver multiplies it, and the technique operator reads the rate "
+        "itself) is a RadarOptions field.",
         {},
     ),
     (
         "compute_raw_technique_drivers",
-        {0.0: 40, 1.0: 16, 4: 4, 100.0: 1},
-        "Zero floors of every driver, the identity baselines of the multiplicative modulations "
-        "(1 + w * x), reported-precision rounding of the 4D breakdown, and the percent-to-ratio "
+        {0.0: 42, 1.0: 19, 4: 4, 100.0: 1},
+        "Zero floors of every driver, the identity baselines and unit caps of the multiplicative "
+        "modulations (1 + w * x, the release modifier's degeneracy anchor, the inverse "
+        "articulation's saturating share gate, and the kinetic amplification of the technique "
+        "excess), reported-precision rounding of the 4D breakdown, and the percent-to-ratio "
         "conversion of hold_pct.",
         {},
     ),

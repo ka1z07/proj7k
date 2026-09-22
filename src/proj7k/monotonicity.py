@@ -26,6 +26,13 @@ DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("star_rating",)
 #: Metrics evaluated for diagnosis by default, in addition to `DEFAULT_GUARD_METRICS`.
 DIAGNOSTIC_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
 
+#: Prefix of the raw driver metrics: `driver_jack`, `driver_ln_inverse`, ... reads the named
+#: technique's raw driver off the result's driver vector. The drivers are what the per-technique
+#: ladder gates are stated on (see `guard.CALIBRATED_METRIC_GATES`): the star rating is a
+#: monotone per-chart rescaling of them, so a ladder that is collapsing shows up here before it
+#: moves a single star.
+DRIVER_METRIC_PREFIX: str = "driver_"
+
 
 def compute_kendall_tau(y: List[float]) -> float:
     """
@@ -169,9 +176,18 @@ def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
     Reads one ladder metric off a batch result.
 
     Physical quantities live on the feature tensor; the engine's star rating is carried by the
-    result itself. Consulting the features first and the result second lets a single metric
+    result itself, and the raw technique drivers by the result's `drivers` vector under the
+    `driver_` prefix. Consulting the features first and the result second lets a single metric
     name work regardless of which of the two owns it, without either side knowing the other.
     """
+    if metric.startswith(DRIVER_METRIC_PREFIX):
+        drivers = getattr(result, "drivers", None)
+        if isinstance(drivers, dict):
+            value = drivers.get(metric[len(DRIVER_METRIC_PREFIX):])
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+        return None
+
     for source in (getattr(result, "features", None), result):
         if source is None:
             continue
@@ -179,6 +195,29 @@ def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return float(value)
     return None
+
+
+#: Tempo the Inverse BPM Scaling Law falls back to when a result carries neither a notation
+#: tempo nor the chart's own annotation — the regime mid-point, not a chart's tempo.
+DEFAULT_SCALING_BPM: float = 150.0
+
+
+def _notation_bpm(item: Any, features: Any) -> float:
+    """
+    The tempo the Inverse BPM Scaling Law is applied at, for one ladder entry.
+
+    The law's thresholds (145 / 180 BPM) are stated on the notation scale `#51` put every tempo
+    on, so the number to read is the tensor's own `notation_bpm` — the tempo the chart was
+    actually evaluated at. Reading the manifest's annotated tempo instead substituted a
+    different scale: on the benchmark corpus the two agree on 119 of 120 charts but a chart
+    written in short note values is off by up to 2x, and the annotation is what the calibration
+    column was quietly reading before. Older results built before the tensor carried the field
+    fall back to their annotation, then to the regime mid-point.
+    """
+    notation = read_ladder_metric(item, "notation_bpm")
+    if notation:
+        return notation
+    return float(getattr(item, "bpm", None) or DEFAULT_SCALING_BPM)
 
 
 def evaluate_tier_sequence(
@@ -313,7 +352,9 @@ def evaluate_batch_monotonicity(
 
     If apply_scaling is True, pre-applies the Inverse BPM Scaling Law gating operator
     for LN Inverse on mean_locked_fingers to eliminate pseudo-inversions caused by low-speed charts,
-    and records full before/after metrics and action clock window distribution.
+    and records full before/after metrics and action clock window distribution. The tempo it
+    applies the law at is the tensor's notation tempo (`_notation_bpm`), i.e. the same number
+    the engine's own `inverse_score` was computed from — not the chart's raw annotation.
     """
     if metrics is None:
         metrics = [
@@ -363,7 +404,7 @@ def evaluate_batch_monotonicity(
                     feat = getattr(item, "features", None)
                     if feat is not None:
                         raw_val = float(getattr(feat, "mean_locked_fingers", 0.0))
-                        bpm = float(getattr(item, "bpm", None) or 150.0)
+                        bpm = _notation_bpm(item, feat)
                         calibrated_val, factor, regime = apply_inverse_bpm_scaling(raw_val, bpm=bpm)
                         delta_t = compute_action_window(bpm)
 

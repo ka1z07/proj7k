@@ -270,6 +270,24 @@ class RadarOptions:
     tech_linear_gain: float = 0.90
     tech_jack_penalty: float = 0.40
 
+    #: Kinetic amplification of the irregularity excess (`1 + GAIN * tanh(burst_rate / REF)`),
+    #: bounded, and multiplying the excess rather than the carrier — ADR-0015 decision 2. The
+    #: shape is wired and the gain is calibrated **off**, because the measurement says the axis
+    #: cannot absorb it yet: on the two charts that decide it, the Regular Tech ladder's Stellium
+    #: reads tech at 0.62 of its speed driver and needs a gain of about 0.35 to overtake, while
+    #: the Regular Stream ladder's 10th tier reads tech at 0.89 of its *stream* driver and is
+    #: overtaken by a gain of 0.1 — the windows do not overlap, so no gain both fixes the tech
+    #: ladder's top and leaves the stream ladder its own tiers. The reason is measurable and is
+    #: the shape problem 阶段② owns: Ω_irreg reads *higher* on the chordstream Stellium than on
+    #: the tech Stellium (bracket-phase density 0.248 against 0.076, adjacent-chord density 4.90
+    #: against 3.29), because a chordstream's texture is exactly the outer-pair/middle alternation
+    #: the bracket term counts. Until Ω_irreg separates the two idioms, any monotone kinetic
+    #: amplification of it lifts both. At a gain of 1.6 the tech ladder's own ordering does
+    #: improve as designed (tau 0.58 -> 0.73, rho 0.73 -> 0.88), which is what the gain is for
+    #: once the discriminator lands — see ADR-0015's stage 2 and issue #50.
+    tech_kinetic_gain: float = 0.0
+    tech_kinetic_reference: float = 25.0
+
     # --- LN flux ---
     #: hold_ratio * avg_nps * FLUX_GAIN, the LN volume base both LN General and LN Tech build on.
     ln_gen_flux_gain: float = 1.50
@@ -295,13 +313,58 @@ class RadarOptions:
     ln_inv_lock_span: float = 2.0
     ln_inv_lock_exp: float = 3.0
 
-    #: LN Release's 尾判难度+卡手 modifier on the General flux base (ADR-0008):
-    #: `r_ln_gen * GAIN * (release_lock_depth / REF_DEPTH)`. `REF_DEPTH` is how tied up the hand
-    #: typically is when a lift lands, so the modifier sits at 1.0 on an ordinary hold chart and
-    #: the axis wins exactly where the chart's lifts are more constrained than that — measured on
-    #: the frozen ladder, 13 of the Release ladder's 15 tiers clear the General ladder's own.
-    ln_release_gain: float = 1.0
-    ln_release_ref_depth: float = 0.5
+    #: The inverse articulation's weights (ADR-0015 decision 6) and its share gate. The three
+    #: quantities do different jobs and were measured separately over the 120-chart benchmark:
+    #: `inverse_press_share` identifies the technique almost perfectly (AUC 0.997 against the
+    #: other three LN ladders) but does not order a ladder at all (rho 0.107 along its own);
+    #: `inverse_press_rate` and `inverse_score` order the ladder well (rho 0.982 / 0.975) while
+    #: `inverse_score` cannot tell inverse from General at all (AUC 0.526 against three ladders —
+    #: a coin flip, which is the 0.582 ADR-0015 records, re-measured); `lock_load` sits between
+    #: (rho 0.664, AUC 0.887).
+    #:
+    #: So the share is applied as a **saturating gate** rather than as a weight: a shape quantity
+    #: multiplied into a carrier adds its own non-monotonicity to the ladder (measured:
+    #: `share * (lock + rate)` orders at rho 0.686, below the default gate), while as a gate it
+    #: only removes load from charts that are not inverse-articulated at all. The gate value is
+    #: calibrated against the corpus: no non-inverse LN benchmark chart reaches it (LN General
+    #: peaks at 0.582, LN Tech at 0.60, LN Release at 0.461), so every inverse tier stays in play
+    #: while a hold chart whose lifts are mostly answered later is discounted — three quarters of
+    #: a chart's lifts answered immediately is what reads as inverse-articulated. At the
+    #: calibrated value the axis orders its own ladder at tau 0.79 / rho 0.90, against 0.73 /
+    #: 0.85 for the form it replaces. `ln_inv_press_rate_weight` is the ordering carrier the
+    #: reconstruction adds; `ln_inv_score_weight` is left at the value the axis carried before
+    #: (`inverse_score` is retained per ADR-0015 decision 6, and with the penalty's saturation in
+    #: place it orders the upper tiers without hijacking — see `scaling.PENALTY_EXP_CEILING`).
+    ln_inv_press_rate_weight: float = 2.0
+    ln_inv_share_gate: float = 0.75
+
+    #: LN Release's lift modifier on the General flux base (ADR-0008, ADR-0015): `r_ln_rel =
+    #: r_ln_gen * GAIN * (1 + LOCK_GAIN * release_lock_depth)`. The modifier is anchored at the
+    #: degenerate chart — every hold the same length, so every lift is answered the same way —
+    #: where it reads exactly 1.0 and the axis cannot gain on General for free. What it reads
+    #: from there is how tied up the hand is when a lift lands: `release_lock_depth` is the mean
+    #: number of keys still held by the same hand at each lift. The previous form
+    #: (`lockd / REF_DEPTH`, REF_DEPTH = 0.5) read **0** on a chart of equal-length holds rather
+    #: than 1 — it zeroed the axis exactly where the semantics say there is nothing to measure —
+    #: so a uniform hold chart was scored as if it had no releases at all, and any floor had to
+    #: be smuggled in as a reference depth. Anchoring the affine form at the degenerate point
+    #: replaces that smuggled constant with the semantic one.
+    #:
+    #: GAIN is the axis' scale, and it is what places the **crossover**: the depth at which the
+    #: modifier stops discounting the base and starts exceeding it, `lockd = (1/GAIN - 1)/k`,
+    #: which at the calibrated values is 0.60. Above the crossover a chart reads as
+    #: release-dominant and the axis takes its tier; below it the axis is a fraction of General
+    #: and General keeps its own. That crossover is calibrated above the deepest lock on the LN
+    #: General ladder (0.593, at Stellium) — the two ladders interleave in lock depth, so a
+    #: crossover anywhere lower would read the General ladder's own deep tiers as release and the
+    #: General axis would hold none of its ladder. The cost is on the other side and is
+    #: deliberate: LN Release wins 6 of its own 15 tiers rather than 8, because the release
+    #: ladder's low tiers lock no deeper than the General ladder's middle. The axis still orders
+    #: its own ladder (see `docs/methodology/radar-orthogonality.md`), which is what the ticket's
+    #: ln_release exception asks for — the ladder it must order is the *release* one, and which
+    #: axis wins a tier is not the same claim as whether lift load is being measured.
+    ln_release_gain: float = 0.625
+    ln_release_lock_gain: float = 1.0
 
     #: A chart is read as hold-dominant once its hold ratio passes this, and the LN dimensions
     #: are then scaled by min(1, hold_ratio * HOLD_PRESENCE_GAIN).
@@ -538,14 +601,18 @@ def _compute_jack_raw(
     return r_jack
 
 
-def _compute_speed_raw(beatmap: Beatmap7K, options: RadarOptions) -> float:
+def _compute_burst_rate(beatmap: Beatmap7K, options: RadarOptions) -> float:
     """
-    Computes raw Speed intensity from rapid successive note presses across different columns.
+    Micro-speed burst intensity per second of chart — the raw kinetic quantity, before the
+    speed axis' gain and before any of the cross-suppression rules.
 
-    The driver is `physics`' micro-speed burst law — the same reference interval and exponent
-    the strain side accumulates — summed over the chart and rated per second. It is the only
-    term: the speed this axis is about is how fast the fastest presses come, not how many notes
-    the chart holds, and mixing in a note-rate term is what left the axis measuring density.
+    Split out of `_compute_speed_raw` so the technique operator can read the same kinetic
+    quantity the speed axis is built on without inheriting the speed axis' *state*: the speed
+    driver is this times a gain and then reduced by Rule C when a chart is jack-dominated, and
+    a technique term that consumed `r_speed` would be measuring "speed, after whatever the speed
+    rules decided about this chart". ADR-0015 decision 2 allows kinetic into the technique axis
+    only as an amplifier of Ω_irreg, which is what this feeds; ADR-0008's revision 1 is why it
+    may not go back into `K_base`.
     """
     hos = sorted(beatmap.hit_objects, key=lambda x: x.time)
     burst = 0.0
@@ -566,8 +633,19 @@ def _compute_speed_raw(beatmap: Beatmap7K, options: RadarOptions) -> float:
         if hos
         else 1.0
     )
-    burst_rate = burst / duration_s
-    return burst_rate * options.speed_rate_gain
+    return burst / duration_s
+
+
+def _compute_speed_raw(beatmap: Beatmap7K, options: RadarOptions) -> float:
+    """
+    Computes raw Speed intensity from rapid successive note presses across different columns.
+
+    The driver is `physics`' micro-speed burst law — the same reference interval and exponent
+    the strain side accumulates — summed over the chart and rated per second. It is the only
+    term: the speed this axis is about is how fast the fastest presses come, not how many notes
+    the chart holds, and mixing in a note-rate term is what left the axis measuring density.
+    """
+    return _compute_burst_rate(beatmap, options) * options.speed_rate_gain
 
 
 def compute_raw_technique_drivers(
@@ -619,8 +697,11 @@ def compute_raw_technique_drivers(
         bracket_density,
     ) = _compute_jack_and_stream_raw(beatmap, options)
 
-    # Speed (micro-speed burst tapping rate)
-    r_speed = _compute_speed_raw(beatmap, options)
+    # Speed (micro-speed burst tapping rate). The raw burst rate is carried alongside for the
+    # technique operator's kinetic term, which must read the kinetic quantity itself rather than
+    # this axis' gained, Rule-C-suppressed driver (see `_compute_burst_rate`).
+    burst_rate = _compute_burst_rate(beatmap, options)
+    r_speed = burst_rate * options.speed_rate_gain
 
     active_lanes = len({ho.column for ho in hos})
 
@@ -682,9 +763,18 @@ def compute_raw_technique_drivers(
         + options.tech_rhythm_weight * r_rhythm
     )
 
-    # Tech (kinetic technique coupling) (ADR-0008)
+    # Kinetic technique coupling (ADR-0008 as revised by #47, ADR-0015 decision 2)
     tech_excess = max(0.0, omega_irreg - 1.0)
-    raw_mult = math.pow(tech_excess, options.tech_coupling_gamma) * options.tech_coupling_lambda
+    # The kinetic term may only *amplify* the irregularity excess — never carry the axis. It is
+    # the raw burst rate (above), saturating, so a chart that is fast but plainly arranged still
+    # produces no technique: zero excess stays zero however high the kinetic factor. Measured on
+    # the benchmark, this is what the Regular Tech ladder's Stellium was missing: its burst rate
+    # is the highest of the three fast ladders but its carrier `K_base` is `r_stream`, so the
+    # axis came out at 34 against the speed axis' 55.
+    kinetic_factor = 1.0 + options.tech_kinetic_gain * math.tanh(
+        burst_rate / options.tech_kinetic_reference
+    )
+    raw_mult = math.pow(tech_excess * kinetic_factor, options.tech_coupling_gamma) * options.tech_coupling_lambda
     if raw_mult > 1.0:
         mult = 1.0 + options.tech_saturation_gain * math.tanh(
             (raw_mult - 1.0) / options.tech_saturation_scale
@@ -733,32 +823,36 @@ def compute_raw_technique_drivers(
             else 0.0
         )
 
-    # LN Inverse (high locked finger density, inverse score under micro-action scaling) (ADR-0006, ADR-0008)
+    # LN Inverse (ADR-0006, ADR-0008, ADR-0015): the inverse articulation — a lane released and
+    # pressed again within the same action-clock window, on a hand that is mostly locked. The
+    # axis is the sum of its two named components, 全锁程度 and 反相密度:
+    #
+    #   `lock_load` — how deep into the locked state the chart runs, cubed above the mid-point,
+    #   weighted by the hold volume that carries it (the existing term).
+    #   `inverse_press_rate` — how many immediate same-lane re-presses the chart asks for per
+    #   second. This is the time-distance the axis was missing: `inverse_score` and `lock_load`
+    #   are both *level* quantities, and a chart can hold many fingers for a long time without
+    #   ever asking for 立即松手、立即按下.
+    #
+    # `inverse_score` is retained (ADR-0015 decision 6 pins its removal to a later verification,
+    # not to the reconstruction) but it is no longer the axis' carrier: it is a BPM-scaled
+    # locked-finger *level*, and as the carrier it let a chart with an extreme notation tempo
+    # dominate the axis on level alone — see `scaling.PENALTY_EXP_CEILING`.
     lock_load = math.pow(
         max(0.0, features.mean_locked_fingers - options.ln_inv_lock_center) / options.ln_inv_lock_span,
         options.ln_inv_lock_exp,
     )
+    inverse_shape_gate = min(
+        1.0,
+        features.inverse_press_share / options.ln_inv_share_gate
+        if options.ln_inv_share_gate > 0.0
+        else 0.0,
+    )
     r_ln_inv = (
         features.inverse_score * options.ln_inv_score_weight
         + features.avg_nps * hold_ratio * lock_load * options.ln_inv_lock_weight
-    ) * min(1.0, hold_ratio * options.hold_presence_gain)
-
-    # LN Release (ADR-0008): the lift-precision load, as a modifier on the General flux base —
-    # "仅在纯跳音释放谱面中超越 General", which is the whole point of the axis. What the modifier
-    # reads is how many of the chart's lifts are *unaccompanied*: a tail with another key pressed
-    # at the same tick rides along with a motion the hand is already making, while an isolated
-    # tail has to be placed on its own. Over half the lifts unaccompanied is what makes a chart
-    # release-dominant, so the reference is the majority point rather than a fitted number.
-    #
-    # The operator this replaces summed release rate, antiphase rate and a peak term. Neither of
-    # the first two is lift precision — antiphase counts lifts that *coincide* with a press, i.e.
-    # the anchored ones — and an addend of that shape cannot exceed the base it is meant to
-    # overtake: 0/15 of its own ladder, at ρ 0.987 with LN General.
-    r_ln_rel = (
-        r_ln_gen
-        * options.ln_release_gain
-        * (features.release_lock_depth / options.ln_release_ref_depth)
-    )
+        + features.inverse_press_rate * options.ln_inv_press_rate_weight
+    ) * min(1.0, hold_ratio * options.hold_presence_gain) * inverse_shape_gate
 
     # --- 2. Orthogonal Cross-Suppression ---
     # Rule A: Pure Rice charts (hold_ratio < min_rice_hold_threshold)
@@ -801,6 +895,25 @@ def compute_raw_technique_drivers(
             r_ln_gen = max(0.0, r_ln_gen - (r_ln_inv * options.inv_gen_penalty))
             r_ln_tech = max(0.0, r_ln_tech - (r_ln_inv * options.inv_gen_penalty))
 
+    # LN Release (ADR-0008, ADR-0015): the lift-precision load, as a modifier on the General flux
+    # base. A modifier rather than a driver of its own on purpose — the axis exists to say *how
+    # much of a hold chart's difficulty is release*, so it is the base times a factor `g`, and a
+    # chart of equal-length holds must come out at the base exactly (`g` = 1 there, see
+    # `RadarOptions.ln_release_lock_gain`).
+    #
+    # It is derived *last*, after the suppression rules, because the base it multiplies is the
+    # General driver as those rules left it rather than the raw one. Deriving it earlier made the
+    # modifier re-inflate what Rule E had just re-attributed: on `LN Inverse 8th` the release
+    # driver came out at 101.69 — the pre-suppression base 52.31 times its factor — while the
+    # General driver it was supposed to be a shape of had been suppressed to 29.48. An axis
+    # ranking an inverse-specialised chart's hold volume above the inverse axis' own read is not
+    # measuring lifts.
+    r_ln_rel = (
+        r_ln_gen
+        * options.ln_release_gain
+        * (1.0 + options.ln_release_lock_gain * features.release_lock_depth)
+    )
+
     return RawTechniqueDrivers(
         jack=max(0.0, r_jack),
         tech=max(0.0, r_tech),
@@ -820,6 +933,7 @@ def compute_technique_radar(
     strain_profile: Optional[StrainTimeseriesProfile] = None,
     options: Optional[RadarOptions] = None,
     calibration: Optional[StrainStarCalibration] = None,
+    drivers: Optional[RawTechniqueDrivers] = None,
 ) -> TechniqueRadar:
     """
     Computes calibrated 8-dimension technique radar scores with cross-suppression.
@@ -829,6 +943,10 @@ def compute_technique_radar(
     the options object driving the evaluation (see `rating.RatingOptions.calibration`) so
     that the radar vector and the synthesized star rating can never drift apart; when
     omitted, the canonical `calibration.DEFAULT_CALIBRATION` is used.
+
+    `drivers` lets a caller that has already computed the raw driver vector hand it in — the
+    rating path does, because the drivers are the artifact the ladder gates are stated on and
+    recomputing them here would let the gated vector and the rated one diverge.
     """
     if options is None:
         options = RadarOptions()
@@ -852,7 +970,8 @@ def compute_technique_radar(
     if strain_profile is None:
         strain_profile = compute_dual_hand_strain(beatmap)
 
-    drivers = compute_raw_technique_drivers(beatmap, features=features, options=options)
+    if drivers is None:
+        drivers = compute_raw_technique_drivers(beatmap, features=features, options=options)
     sr_base = calibration.star_rating_from_strain(strain_profile.p90_strain)
 
     raw_scores = drivers.to_dict()
