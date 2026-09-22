@@ -101,7 +101,7 @@
    - `LN Inverse 8th`：`ln_inverse` 5.56 ≤ `ln_release` 6.03（驱动侧 inverse > release 仍成立）——**票主实测该谱体感 release 确实比 inverse 难**，故这是**正确的读数**，是断言过期而不是标定错。
    处置：`tests/test_ln_alignment_diagnosis.py` 的该断言改成**双向记录**（`RELEASE_LEADS = {"8th", "10th"}`：记入的 tier 反过来断言 release 领先，其余 tier 仍断言 inverse 领先），「本维主导」仍按驱动判、不变。
    **实测到的翻转比一条谱宽**：LN Inverse 阶梯上 8th/9th/10th/Gamma/Azimuth 五级都是 release 更高；LN General 阶梯自己也在中段来回翻（15 级里 6 级 release 更高，而 general 领先的那些里最薄的余量只有 0.05★（5th）与 0.09★（Stellium））。这与 ADR-0015「两条 LN 阶梯在锁深上互相交错、release 是 general 基座的修饰项」一致——即 LN 两轴的**相对刻度本身就是交错的**。是否要把它们钉成一致的相对序（会牺牲逐维落带），是开放问题 2 的另一半，未定。
-   **跨维可比性本身仍是开放语义**：允许翻转（现状，且已被体感支持）与禁止翻转（需在锚表选择里把「本维主导」提到落带之前，代价是落带数下降）二选一，票主未再要求后者。
+   **票主 2026-09-23 裁定：LN 两轴保持现状**（允许翻转，不钉一致相对序）。即「同一条分值序列在不同轴上不保序」是本设计**接受的语义**——8 个轴测的是 8 件不同的事，交错是信息；代价是分值的 argmax 与驱动的 argmax 只在本维主导的 80/120 上一致，读雷达时必须连 `dominant_technique`（驱动判）一起读。禁止翻转那条路（把「本维主导」提到落带之前）因此**不做**，留作记录而非待办。
    另 2 条（`Regular Tech Stellium`、`Regular Stream Stellium` 被判给 speed）是 #52 已量化的 Ω_irreg 分辨力问题，与本票无关。
    *（记录：选定表把另外两条 `LN General 5th` 与 `Regular Jack 1st` 自愈了——因为选择目标里含「本维主导」这一项；单看逐轴最优拟合时它们会翻红。）*
 
