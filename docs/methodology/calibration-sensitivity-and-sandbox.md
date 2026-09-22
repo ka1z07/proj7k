@@ -229,7 +229,7 @@ engine version AFTER : v5a6e117c     ← 必变
 
 本次出现基线数值对不上时，我先假设了两个外部原因，**均验证为否**：
 
-- *陈旧 Layer-2 缓存*（`HANDOFF.md` 记录过的真实旧疾）：开缓存与完全禁用缓存跑出的星级指纹与四个中位数**完全一致**，当前没有发作。
+- *陈旧 Layer-2 缓存*（真实旧疾，本仓自己复述它的两处：`tools/calibration_sandbox.py:77` 的 `_source_digest` docstring、物证 `src/proj7k/cache.py:13` 的 `ALGORITHM_VERSION`）：开缓存与完全禁用缓存跑出的星级指纹与四个中位数**完全一致**，当前没有发作。
 - *BPM 双源*：manifest BPM 与谱面自身支配 BPM 只有 1 张不同（LN Inverse 6th，78.96 vs 78.85），且 0 张谱星级受影响。
 
 真因是自己的中位数实现（9.1）。
