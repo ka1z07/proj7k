@@ -93,21 +93,25 @@
    - **锚点插值**（在 0th/5th/10th/Stellium 四个 tiers 的实测驱动上做 log-log 插值）：**更差**，8–14/15；且梯形外推会爆（ln_general 的 10th↔Stellium 两结点靠得太近，Stellium 以上外推到 47★、Zenth 47.42 对 9.7）。
    - **单调结点曲线**（结点星值自由、单调约束）：能逼近上界 15/15，但结点间距一大一小就让区间外斜率失控（实测出现 `math range error` 级的外推），**即「把 15 个点拟合了事」的具体代价**——而外推区间正是玩家铺面所在。
    - **两段幂律（一个膝点，4 参数，两侧都是幂律因此外推行为正常）**：jack 10 / tech 10 / speed 11 / stream 13 / ln_general 13 / ln_tech 12 / ln_inverse 10 / ln_release 14 —— **仍只有 3/8 达标**。
-   结论：**±8%/≥13 这条线在「不是把阶梯制表」的前提下达不到**，因此按 (a) 接受边界并写进 CI；要真正达标只剩 (c) 动驱动层（speed/jack 低端形状、jack 0th/1st 倒挂、tech/ln_inverse 的 Ω_irreg）。
+   结论：**±8%/≥13 这条线在「不是把阶梯制表」的前提下达不到**，因此按 (a) 接受边界并写进 CI；要真正达标只剩 (c) 动驱动层。**票主对 (c) 的两条补充更正（2026-09-23）**：
+   - **jack 的 0th/1st 倒挂不是驱动缺陷**：该倒挂曾解决过，残差来自 1st 谱主体是「切中带叠」——属 Jinjin 段**选铺**问题，不该在驱动层追。
+   - LN Inverse 8th 的「release 读数高于 inverse」**与体感一致**（票主实测），故它是正确读数、不是缺陷（见开放问题 2）。
 
-2. **跨维可比性（绝对星级的固有代价，未解）**：每轴独立标定后，同一条分值序列在不同轴上不再保序——实测**本维主导 80/120**（驱动侧 89/120），选定表下 1 条 `*_alignment_diagnosis` 期望因此翻红：
-   - `LN Inverse 8th`：`ln_inverse` 5.56 ≤ `ln_release` 6.03（驱动侧 inverse > release，仍成立）。
+2. **跨维可比性（绝对星级的固有代价，已裁定）**：每轴独立标定后，同一条分值序列在不同轴上不再保序——实测**本维主导 80/120**（驱动侧 89/120）。票主对唯一那条翻红的期望给了体感判据：
+   - `LN Inverse 8th`：`ln_inverse` 5.56 ≤ `ln_release` 6.03（驱动侧 inverse > release 仍成立）——**票主实测该谱体感 release 确实比 inverse 难**，故这是**正确的读数**，是断言过期而不是标定错。
+   处置：`tests/test_ln_alignment_diagnosis.py` 的该断言改成**双向记录**（`RELEASE_LEADS = {"8th", "10th"}`：记入的 tier 反过来断言 release 领先，其余 tier 仍断言 inverse 领先），「本维主导」仍按驱动判、不变。
+   **实测到的翻转比一条谱宽**：LN Inverse 阶梯上 8th/9th/10th/Gamma/Azimuth 五级都是 release 更高；LN General 阶梯自己也在中段来回翻（15 级里 6 级 release 更高，而 general 领先的那些里最薄的余量只有 0.05★（5th）与 0.09★（Stellium））。这与 ADR-0015「两条 LN 阶梯在锁深上互相交错、release 是 general 基座的修饰项」一致——即 LN 两轴的**相对刻度本身就是交错的**。是否要把它们钉成一致的相对序（会牺牲逐维落带），是开放问题 2 的另一半，未定。
+   **跨维可比性本身仍是开放语义**：允许翻转（现状，且已被体感支持）与禁止翻转（需在锚表选择里把「本维主导」提到落带之前，代价是落带数下降）二选一，票主未再要求后者。
    另 2 条（`Regular Tech Stellium`、`Regular Stream Stellium` 被判给 speed）是 #52 已量化的 Ω_irreg 分辨力问题，与本票无关。
-   **这条断言未改**：改它等于替票主回答「绝对星级允许不允许跨维翻转」，而工单明写「两份验收标准同时铆死时，先确认哪一份是本票真正要的」。
    *（记录：选定表把另外两条 `LN General 5th` 与 `Regular Jack 1st` 自愈了——因为选择目标里含「本维主导」这一项；单看逐轴最优拟合时它们会翻红。）*
 
 3. ~~**全库验收线被本次切换压低**~~ **已裁定并落地（票主：「可以放宽」）**：Phase 2 的 `mean ρ ≥ 0.98 / mean τ ≥ 0.94 / 倒挂 ≤ 20` 实测为 **mean ρ 0.9816 ✓ / mean τ 0.9255 / 倒挂 22**，故 `mean τ` 与倒挂上限重基线为 **0.92 / 24**（余量口径同逐技法闸门），`mean ρ` 不动。原因是星阶梯的序现在来自**逐轴驱动**（τ 0.79–0.96），切换前主要来自**应变阶梯**（密度序，ρ 0.968–0.989）；`guard` 里记着旧值（0.94 / 20，实测 0.940 / 16）。
 
 4. **米侧/长条侧的既有未决项不受本 ADR 影响**：ADR-0015 的 `tech` 0.790/0.921、`ln_inverse` 0.790/0.900 仍在红线下方（`tests/test_driver_ladder_gates.py` 双向钉住）。
 
-5. **两处下游在「星级不再锚在应变上」之后需要各自的改动**（票主裁定「再作更改」；两处都是设计级改动，本 ADR 只记形态，动手前需定做法）：
-   - `downscaler/mapper.star_rating_to_strain`（`mapper.py:80`）：把目标星级反解成 `target_strain`，剪枝循环以它为收敛判据（`pruner.py:145`）。合成改成 max(绝对技法星级) 之后，这条反解不再描述任何真实谱面，而剪枝器会照常「收敛」、测试也不会响。
-   - `strain.compute_8d_strain_timeseries`（`strain.py:810+`）：把雷达维分值当星级输入、反解锚定律成应变，用于 profiler 的玩家能力雷达。它消费的雷达量级已从「份额」变成「绝对技法星级」，`tests/test_engine_literal_registry.py` 给它的 EXEMPT 理由（「在星级评级下游」）本就写错（见 #51 交接 §4.7），现在比例尺又换了一把。
+5. **两处下游已按票主裁定落地**（原为「再作更改」，做法如下）：
+   - **降阶器改用「星级对星级」（做法 A，票主选定）**：`WindowedPeakBatchPruner.prune` 新增 `target_sr` / `rating_options` / `radar_options`，给了目标星级时**收敛判据换成引擎自己的星级**（每轮用 `compute_technique_radar` + `synthesize_star_rating` 重评候选，复用该轮已算出的 P90 应变，不重复算应变）；应变阈值降级为**窗口选择器**（`TwoTierDanMapper` 仍按应变锚定律从目标星级推出它，作为「多高的峰算太高」的单调代理）。显式给了 `--target-strain` 的调用保持旧判据（要应变就是要应变）。`PruningResult` 因此多出 `target_sr` / `initial_star` / `final_star`，`pipeline` 在未指定 `target_strain` 时传入目标星级。`mapper.star_rating_to_strain` 本身保留，位置与语义都变了。
+   - **`strain.compute_8d_strain_timeseries` 保留机制、改掉说法（本 ADR 作者决定）**：它把维度分（绝对技法星级）经**应变锚定律**换成应变当曲线电平——读的是「这条维度在应变尺上要多高」。**机制保留的理由**：profiler 用同一条定律把玩家的能力应变再换回星级（`profiler.response`），**往返单调**，所以「玩家的能力是否超过这张谱在该轴上的要求」在哪个空间判都一样；换掉它等于重做 profiler 的按维分解，超出本票范围。**改掉的是说法**：`strain.py` 里写清了这是电平、不是「两条定律是同一个函数」，并记下曲线形状是原始权重块（重述 jack/burst/flow 常数而非读 `RadarOptions`）——即 **issue #49** 仍未闭合的那条。
 
 ## 参考
 

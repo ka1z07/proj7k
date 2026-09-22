@@ -116,6 +116,10 @@ def downscale_beatmap(
     )
 
     target_strain = options.target_strain or target.target_strain
+    # An explicit --target-strain is a request for a strain target, so the loop keeps converging
+    # on strain; otherwise the target is star-defined and the star is what decides arrival
+    # (ADR-0016 made the rating a maximum over technique stars, not a strain reading).
+    star_criterion = target.target_sr if options.target_strain is None else None
     warnings: List[str] = []
 
     # 3. Setup components
@@ -135,6 +139,9 @@ def downscale_beatmap(
         beatmap=beatmap,
         target_strain=target_strain,
         dominant_technique=dom_skill,
+        target_sr=star_criterion,
+        rating_options=rating_opts,
+        radar_options=radar_opts,
     )
 
     pruned_bm = pruning_res.downscaled_beatmap
