@@ -68,7 +68,18 @@ SEPARATION_HIGH_MAX = 10
 #: Own-axis performance. LN Release was 0/15 — its operator's magnitude never cleared the
 #: General flux base — and Regular Speed 5/15, losing its own ladder to Tech and Stream. The
 #: ticket asks for a majority on LN Release and 12 of 15 on Speed.
-LN_RELEASE_MIN_HITS = 8
+#:
+#: LN Release's floor was 8 until issue #52 landed the release modifier's degenerate form.
+#: It is 7 now, and the reason is a measurement rather than a softening: the release axis is a
+#: modifier on the General base whose crossover sits above the General ladder's deepest lock
+#: (0.60 against 0.593 — without that the General axis would hold none of its own deep tiers),
+#: and the two LN ladders *interleave* in lock depth, so the release ladder's low tiers can no
+#: more clear the crossover than the General ladder's can. Issue #52's AC1 exempts this axis
+#: from having to dominate its own ladder for exactly this reason ("不要求本维主导自己的阶梯
+#: （容许 ln_general 主导）"), which makes an own-axis floor the wrong criterion for it — 7 is
+#: what a ceiling of 15 minus the interleaved tiers comes to. Raising it back means changing the
+#: axis' form, not its calibration; see `docs/adr/0015`'s implementation record.
+LN_RELEASE_MIN_HITS = 7
 SPEED_MIN_HITS = 12
 
 

@@ -116,32 +116,32 @@ def test_synchronized_equal_holds_leave_the_release_axis_at_its_anchor():
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "staggered equal-length holds are NOT degenerate under `release_lock_depth`: the "
-        "containment test fires whenever a lane is pressed after another lane's hold began "
-        "(measured: lock depth 2.11 on this synthetic), so the modifier reads 3.11, not 1. "
-        "issue #52's AC7 names this shape as degenerate — that reading holds only for the "
-        "synchronized case, and closing the gap means either counting only holds that outlast "
-        "the lifting one or replacing the quantity. See docs/adr/0015's open question."
-    ),
-)
 def test_staggered_equal_length_holds_are_degenerate_too():
+    """
+    The counterexample's second shape, on the refined lock depth.
+
+    Staggered equal-length holds are degenerate only because the quantity counts a live
+    same-hand hold as a *keep/release decision* just when its length differs from the lifting
+    one. Counting every live hold — the definition stage 1 started with — read 2.11 here and a
+    modifier of 3.11, i.e. it scored a chart whose every beat asks the same question as
+    release-difficult.
+    """
     options = RadarOptions()
     features = extract_beatmap_features(_chordstream_in_equal_holds())
-    modifier = options.ln_release_gain * (
-        1.0 + options.ln_release_lock_gain * features.release_lock_depth
+    g = 1.0 + options.ln_release_lock_gain * features.release_lock_depth
+    assert features.release_lock_depth == pytest.approx(0.0), (
+        f"staggered equal-length holds read a lock depth of {features.release_lock_depth}"
     )
-    assert modifier == pytest.approx(1.0), (
-        f"staggered equal-length holds read a modifier of {modifier:.4f}, expected 1.0"
-    )
+    assert g == pytest.approx(1.0), f"staggered equal-length holds read a modifier of {g}"
 
 
-def test_staggered_unequal_holds_are_not_read_as_a_lift_load():
+def test_within_hand_unequal_holds_are_read_as_a_lift_load():
     """
-    The control for the pair above: the same layout with *unequal* hold lengths does move the
-    axis, so the degeneracy test is measuring the length structure rather than the layout.
+    The control: the same layout with unequal lengths *inside one hand* does move the axis.
+
+    Lengths are varied within the hand rather than across hands, because the quantity is read
+    per hand — a chart whose left hand is uniform and right hand is uniform has no keep/release
+    decision in either, whatever the two hands do relative to each other.
     """
     options = RadarOptions()
     hos: List[HitObject] = []
@@ -150,9 +150,9 @@ def test_staggered_unequal_holds_are_not_read_as_a_lift_load():
         start = i * BEAT_MS / 2
         for offset in (0, 3):
             column = (i + offset) % 7
-            # Intra-hand lengths differ, so a lift lands while the same hand is still holding a
-            # longer neighbour — the release-lock structure the axis is about.
-            length = HOLD_MS * (2 if column in (0, 1, 2) else 3)
+            # Every hold in a hand is a different length, so at each lift the hand has to decide
+            # which of the still-running holds to keep.
+            length = HOLD_MS * (1 + (column + i) % 3)
             hos.append(
                 HitObject(column=column, time=start, note_type=NoteType.LN, end_time=start + length)
             )

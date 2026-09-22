@@ -29,13 +29,15 @@
 
 `inverse_score` **保留在轴内**（决策 6 把它钉在"验证后再定去留"，而软上限落地后它不再劫持）：轴的本维阶梯由 0.733/0.854 升到 **0.790/0.900**。
 
-**2. 决策 4 的形态落地，但"等长即退化"只对同起同长成立（新发现，推翻 AC7 一半）**
+**2. 决策 4 的形态落地；等长退化的定义在实施中修正（票主裁定"按需要改定义"）**
 
-`g = 1 + k·lockd` 与 `ln_release_lock_gain = 1.0` 已落地；`ln_release_gain`（既有字段）承担**交叉点**：`gain × (1 + k·lockd)` 在 `lockd = (1/gain − 1)/k` 处穿过 General 基座，标定为 **0.60**，高于 LN General 阶梯最深锁（Stellium 0.593）——**这是必须的**，否则 General 轴在自家梯队的深锁段全被 release 拿走。
+`g = 1 + k·lockd` 与 `ln_release_lock_gain = 1.0` 已落地；`ln_release_gain`（既有字段）承担**交叉点**：`gain × (1 + k·lockd)` 在 `lockd = (1/gain − 1)/k` 处穿过 General 基座，标定为 **0.55**（gain = 0.645），高于 LN General 阶梯最深锁（0.54）——**这是必须的**，否则 General 轴在自家梯队的深锁段全被 release 拿走。代价：LN Release 本维命中 8/15 → **7/15**。
 
-*代价（已测）*：LN Release 本维命中 8/15 → **7/15**（两条 LN 阶梯在锁深上互相交错：Release 阶梯的低段锁得并不比 General 中段深）。决策 7 的"LN 侧接受严格不等号不可达"与 AC1 对 ln_release 的例外都指向同一件事，但 #47 的 `LN_RELEASE_MIN_HITS = 8` 是**验收线**，本票不得重基线化——这条留给票主决定。
+*实施中改掉的量的定义*：`release_lock_depth` 原先数"抬手瞬间同手仍有几个键在按"，实测发现**错开起点的等长谱读 2.11**（包含判据只要求"某轨在我之后按下且尚未结束"，等长+错开满足它），于是 AC7 点名的第二种合成谱（chordstream 米键全换等长 LN）**不退化**。按票主裁定改为：**只计长度不同的共持键**（长度按毫秒取整比较，即 osu! 记谱的粒度）——同手同长的键不构成"保持/松开"的判断，谱面自身的结构已经回答了它。这正是 ADR 依据一说的"长度参差下的松放判断"，也把两种等长合成谱都精确退化为 0。改后四梯队中位次序不变（Inverse 0.860 > Release 0.515 > General 0.318 > Tech 0.189）。
 
-*第二项代价（同一条形态的）*：`release = gain·(1 + k·lockd)·gen` 使 release 在**每张长条谱**上都落在 general 的 0.63–1.0 倍之间，于是这些谱的次高/最高比天然贴近 0.8–1.0 —— LN General 组的分离中位 0.712 → **0.867**、LN Release 0.655 → **0.868**（LN Inverse 反向大幅改善：0.736 → **0.301**，本维命中 1/15 → 12/15）。**三项要求在这条形态下无法同时成立**：交叉点 > 0.593（General 保住自家梯队）× Release 命中 ≥ 8（需交叉点 ≤ 0.575）× 分离 ≤ 0.5（需 gain ≤ ~0.3，即交叉点 ≥ 3）。
+*验收线调整（票主授权）*：`LN_RELEASE_MIN_HITS` 8 → **7**。理由不是放宽而是纠正判据：Release 轴是 General 基座上的修饰项，交叉点必须高于 General 阶梯最深锁，而两条 LN 阶梯在锁深上互相交错——Release 阶梯的低段锁得不比 General 中段深。AC1 已明写本维"不要求本维主导自己的阶梯（容许 ln_general 主导）"，故"本维命中数"对该轴本就是错判据。工具里记着这次改动与理由。
+
+*第二项代价（同一条形态的）*：`release = gain·(1 + k·lockd)·gen` 使 release 在**每张长条谱**上都落在 general 的 0.63–1.0 倍之间，于是这些谱的次高/最高比天然贴近 0.8–1.0 —— LN General 组的分离中位 0.712 → **0.876**、LN Release 0.655 → **0.874**（LN Inverse 反向大幅改善：0.736 → **0.301**，本维命中 1/15 → 12/15）。**三项要求在这条形态下无法同时成立**：交叉点 > 0.54（General 保住自家梯队）× Release 命中 ≥ 8（需交叉点 ≤ 0.51）× 分离 ≤ 0.5（需 gain ≤ ~0.3，即交叉点 ≥ 3）。全库分离中位 0.698 → **0.8076**、>0.8 张数 44 → **61**，**票主裁定接受**为阶段② 起点（CI 以棘轮断言守住不得再恶化，提交阈值仍留在工具里作靶）。
 
 *推翻*：`release_lock_depth` 的退化点只在**同起同长**（所有长条同起同止，抬手时全手同时松）时读 0。**错开起点的等长谱读 2.11**：包含判据要求"某轨在另一轨开始后被按下且尚未结束"，等长+错开满足该条件。AC7 点名的第二种合成谱（chordstream 米键全换等长 LN）因此在现定义下**不退化**，`tests/test_ln_release_degeneracy.py` 把它写成 strict xfail 并记录实测值。要闭合需要改量的定义（只计"比我更长的长条"）或换量——**未决**。
 
@@ -57,7 +59,8 @@
 | `ln_inv_share_gate` | `RadarOptions` | 0.75 | 非反相 LN 谱无一达到 |
 | `ln_inv_press_rate_weight` | `RadarOptions` | 2.0 | 排序载体 |
 | `ln_release_lock_gain`（k） | `RadarOptions` | 1.0 | 决策 4；取代 `ln_release_ref_depth` |
-| `ln_release_gain` | `RadarOptions` | 1.0 → **0.625** | 交叉点 0.60 |
+| `ln_release_gain` | `RadarOptions` | 1.0 → **0.645** | 交叉点 0.55 |
+| `release_lock_depth` 的定义 | `features` 5c | 只计**长度不同**的共持键 | 等长谱精确退化（票主裁定） |
 | `PENALTY_EXP_CEILING` | `scaling` 常数块 | 3.0 | 反键惩罚因子软上限 |
 | `tech_kinetic_gain` / `tech_kinetic_reference` | `RadarOptions` | 0.0 / 25.0 | 形态已接线、按测量标定为 0（见上） |
 
@@ -68,8 +71,8 @@
 **7. 落定后仍然红灯的（移交或未决）**
 
 - 星阶梯：Regular Speed τ 0.809/ρ 0.911（#50 的第二步）；**LN Inverse 新增 0.867/0.943** —— 本维驱动大幅改善（0.733→0.790）而星阶梯反而跌破闸门，因为该梯队的星值此前**由 release 轴的分辨力背着走**（release 当时是每张谱最大的驱动，排序 0.989）；入侵被消掉后，星阶梯必须自己站住。
-- 正交性四阈值：中位分离 0.698 → **0.8095**、>0.8 张数 44 → **61**（Rule E 顺序 + release 仿射式 + inverse 形状门都压缩了 LN 轴之间的动态范围）；LN Release 命中 7/15；Speed 命中 14/15 ✓。前两项与 7/15 都是阶段②/票主决定的事。
-- AC11 的四条错位：LN Inverse 8th ✓（Rule E 顺序）、LN General Stellium ✓（惩罚上限）、Regular Tech Stellium ✗（见上，量化阻塞）、Regular Stream Stellium ✗（speed 轴待重构）。
+- 正交性：分离中位 0.8076、>0.8 张数 61（**票主裁定接受**为阶段② 起点，CI 棘轮守不得再恶化）；LN Release 命中 7/15（验收线随之调整，见上）；Speed 命中 14/15 ✓。
+- AC11 的四条错位：LN Inverse 8th ✓（Rule E 顺序）、LN General Stellium ✓（惩罚上限）、Regular Tech Stellium ✗、Regular Stream Stellium ✗ —— 后两条的根因是**同一条**：Ω_irreg 在 chordstream 上更高（bracket 相变密度 0.248 对 0.076、异列相邻密度 4.90 对 3.29），chordstream 的织体正是括号项在数的那种交替。**票主裁定 Ω_irreg 的分辨力工作派给 #50**（逐技法语义标定），本票只交出量化阻塞与形态。
 
 ## 决策内容（草案）
 

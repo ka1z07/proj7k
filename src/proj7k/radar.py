@@ -352,18 +352,18 @@ class RadarOptions:
     #:
     #: GAIN is the axis' scale, and it is what places the **crossover**: the depth at which the
     #: modifier stops discounting the base and starts exceeding it, `lockd = (1/GAIN - 1)/k`,
-    #: which at the calibrated values is 0.60. Above the crossover a chart reads as
+    #: which at the calibrated values is 0.55. Above the crossover a chart reads as
     #: release-dominant and the axis takes its tier; below it the axis is a fraction of General
     #: and General keeps its own. That crossover is calibrated above the deepest lock on the LN
-    #: General ladder (0.593, at Stellium) — the two ladders interleave in lock depth, so a
+    #: General ladder (0.54, at Stellium) — the two ladders interleave in lock depth, so a
     #: crossover anywhere lower would read the General ladder's own deep tiers as release and the
     #: General axis would hold none of its ladder. The cost is on the other side and is
-    #: deliberate: LN Release wins 6 of its own 15 tiers rather than 8, because the release
+    #: deliberate: LN Release wins 7 of its own 15 tiers rather than 8, because the release
     #: ladder's low tiers lock no deeper than the General ladder's middle. The axis still orders
     #: its own ladder (see `docs/methodology/radar-orthogonality.md`), which is what the ticket's
     #: ln_release exception asks for — the ladder it must order is the *release* one, and which
     #: axis wins a tier is not the same claim as whether lift load is being measured.
-    ln_release_gain: float = 0.625
+    ln_release_gain: float = 0.645
     ln_release_lock_gain: float = 1.0
 
     #: A chart is read as hold-dominant once its hold ratio passes this, and the LN dimensions

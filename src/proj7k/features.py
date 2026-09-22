@@ -424,8 +424,14 @@ def extract_beatmap_features(
     # averaged over the tails rather than summed: the mean is a shape of the chart (how deep
     # into a chord each release lands), while a per-second total mostly restates how dense the
     # chart is — and restating density is what put this axis on top of every hold chart.
-    # An isolated tail (`isolated_tail_share` above) is one special case of this: nothing else
-    # is pressed anywhere, so nothing anchors the lift either.
+    #
+    # The hold has to be a *differently timed* one (length compared at millisecond precision, the
+    # granularity osu! timings are written in). A same-hand hold of the same length is not a
+    # keep/release decision: the chart's own structure answers it, which is why a chart of
+    # equal-length holds has no lift load at all (ADR-0015's counterexample — "每一拍都要重新判断
+    # 哪一轨需要保持、哪一轨需要松开" is a statement about 长度参差). Counting every live hold
+    # instead made the equal-length charts read a load, and it is what ADR-0015's stage-1
+    # implementation found wrong with the quantity.
     ln_intervals: Dict[int, List[Tuple[float, float]]] = {}
     for ho in beatmap.hit_objects:
         if ho.note_type == NoteType.LN and ho.end_time is not None:
@@ -435,11 +441,15 @@ def extract_beatmap_features(
         if ho.note_type != NoteType.LN or ho.end_time is None:
             continue
         same_hand = (0, 1, 2) if ho.column in (0, 1, 2) else (4, 5, 6)
+        own_length_ms = round(ho.end_time - ho.time)
         locked_lift_count += sum(
             1
             for column in same_hand
             if column != ho.column
-            and any(start < ho.end_time < end for start, end in ln_intervals.get(column, ()))
+            and any(
+                start < ho.end_time < end and round(end - start) != own_length_ms
+                for start, end in ln_intervals.get(column, ())
+            )
         )
     release_lock_depth = round(locked_lift_count / ln_count, 4) if ln_count else 0.0
 
