@@ -9,19 +9,32 @@ tool's docstring pointed at (`tests/test_radar_orthogonality.py`) did not exist.
 Every threshold is imported from the tool rather than restated, so the tool cannot print one
 verdict and CI assert another. Measured over the 120-chart benchmark:
 
-    median separation            0.8076  (threshold <= 0.5)   <- accepted shortfall, see below
-    charts above 0.8             61      (threshold <= 10)    <- accepted shortfall, see below
+    median separation            0.7638  (threshold <= 0.5)   <- accepted shortfall, see below
+    charts above 0.8             55      (threshold <= 10)    <- accepted shortfall, see below
     LN Release own-axis hits     7/15    (threshold >= 7)
     Regular Speed own-axis hits  14/15   (threshold >= 12)
 
-The two separation thresholds are **ratcheted rather than asserted at their committed value**:
-issue #52 measured the LN axes' dynamic range collapsing (0.698 -> 0.8095) as the price of the
-release modifier's degenerate form and the inverse axis' share gate, and the ticket owner
-accepted that state as the stage-2 starting point. So what CI enforces is that it does not get
-*worse* — the accepted figures are upper bounds, and a further regression is a red light. The
-committed thresholds stay in the tool (and in the docstring above) as the target; `count of
-charts above 0.8` is compared against an exact recorded number because the count moves in whole
-charts and a tolerance would let one drift by.
+The two separation thresholds are **ratcheted rather than asserted at their committed value**,
+because the committed pair is not reachable at all in this corpus and the ratchet is what
+actually moves. Issue #52 stage 1 measured the LN axes' dynamic range collapsing
+(0.698 -> 0.8095) as the price of the release modifier's degenerate form and the inverse axis'
+share gate; stage 2 gave the four rice axes a peak-density carrier and brought the median back
+down to 0.7638. So what CI enforces is that it does not get *worse* — the accepted figures are
+upper bounds, and a further regression is a red light. `count of charts above 0.8` is compared
+against an exact recorded number because the count moves in whole charts and a tolerance would
+let it drift by.
+
+**Why 0.5 cannot be reached.** `ln_release` is `ln_general * gain * (1 + k * lockd)` with
+`gain` 0.645 and `lockd >= 0`, so on any chart the release/general pair's separation is
+`gain * (1 + lockd)` when release trails and its reciprocal when release leads. Measured over
+the 60 LN charts that is 0.6663 at the tightest and 0.621 at the widest release lead
+(`lockd` reaches 1.497 on the Inverse ladder), and **37 of the 60** LN charts have this pair as
+their top two — well over a quarter of the corpus pinned at or above 0.62 no matter what else
+changes. Reaching a median of 0.5 would then need 61 of the remaining 83 charts below 0.5
+(32 of 120 are, today, and none of them is one of the pinned 37). Reaching the committed
+threshold means changing the release axis' form, not its calibration — ADR-0015's stage-1
+record holds that trade. The committed thresholds stay in the tool, and in the docstring above,
+as the target.
 """
 
 import statistics
@@ -29,11 +42,12 @@ import statistics
 import pytest
 
 
-#: The separation figures issue #52 measured and the ticket owner accepted as the stage-2
-#: starting point. They are upper bounds, not targets: the committed thresholds are the tool's
-#: `SEPARATION_MEDIAN_MAX` / `SEPARATION_HIGH_MAX`, and the test fails if either bound loosens.
-ACCEPTED_SEPARATION_MEDIAN = 0.8076
-ACCEPTED_CHARTS_ABOVE_HIGH = 61
+#: The separation figures issue #52 measured last. They are upper bounds, not targets: the
+#: committed thresholds are the tool's `SEPARATION_MEDIAN_MAX` / `SEPARATION_HIGH_MAX`, and the
+#: test fails if either bound loosens. Stage 2 (the rice axes' peak-density carrier) moved them
+#: from the 0.8076 / 61 that stage 1 was accepted at to 0.7638 / 55.
+ACCEPTED_SEPARATION_MEDIAN = 0.7638
+ACCEPTED_CHARTS_ABOVE_HIGH = 55
 
 
 def _drivers_of_all(benchmark_drivers, benchmark_manifest):

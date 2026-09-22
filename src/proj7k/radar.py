@@ -225,12 +225,58 @@ class RadarOptions:
     min_duration_s: float = 0.5
 
     # --- Speed (`_compute_speed_raw`) ---
-    #: Scale of the micro-speed burst rate, which is the whole driver. A sustained-density term
-    #: (`max(0, avg_nps - offset) * gain`) used to be added to it, and it is what made Speed a
-    #: second copy of Stream: measured over the corpus, the burst rate per flow note is 0.61 on
-    #: the Speed ladder against 0.12 on the Stream ladder, but the note rate behind it is the
-    #: same on both — so the density term buried the one quantity that tells them apart.
+    #: Scale of the micro-speed burst rate, which is the whole of this axis' *shape* — the
+    #: carrier above puts that shape on the ladder's scale, and the two are different terms for
+    #: different jobs. A sustained-density *addend* (`max(0, avg_nps - offset) * gain`) used to
+    #: be added to the burst rate, and it is what made Speed a second copy of Stream: measured
+    #: over the corpus, the burst rate per flow note is 0.61 on the Speed ladder against 0.12 on
+    #: the Stream ladder, but the note rate behind it is the same on both — so a density addend
+    #: buried the one quantity that tells them apart. The carrier is a multiplier on that shape,
+    #: not an addend, so it cannot bury it: the two axes' cross-correlation is unchanged by it.
     speed_rate_gain: float = 3.50
+
+    # --- Peak-density carrier (issue #52 stage 2; ADR-0015) ---
+    #: Every rice axis multiplies its shape term by `peak_4m_nps / rice_density_reference`.
+    #:
+    #: **Why the rice axes needed it and the LN axes did not.** Each of the eight ladders is
+    #: ordered by the chart's peak 4-measure density: `features.peak_4m_nps` alone reaches
+    #: Spearman rho 0.968-0.989 against all eight tier orders, because a dan ladder is a density
+    #: ladder. A driver that does not read density therefore cannot order its own ladder. The LN
+    #: axes already did read it — `ln_gen_flux` multiplies `avg_nps` — and measured 0.905/0.971
+    #: (General) and 0.886/0.961 (Tech) against a 0.88/0.95 gate. The rice axes had no such term
+    #: and measured 0.714/0.875 (speed), 0.829/0.943 (jack), 0.790/0.904 (stream) and 0.581/0.729
+    #: (tech). The carrier takes them to 0.886/0.957, 0.886/0.971, 0.924/0.982 and 0.79/0.92.
+    #:
+    #: **All four rice axes, on purpose.** Carrying three and not the fourth is not a smaller
+    #: change, it is a different one: the un-carried axis is then the only one whose magnitude is
+    #: off the ladder's density scale, and it silently wins elsewhere. Measured on `Regular Jack
+    #: 1st` — the chart whose defining feature is 41 two-note jacks — leaving `tech` out handed
+    #: it the argmax and dropped jack to 1.91 stars against `test_stream_vs_jack_diagnosis`'s
+    #: floor of 3.0. With all four carried the same factor, the carrier is a common factor
+    #: *within* the rice group, so the rice-internal balance the axes were calibrated to is
+    #: preserved exactly and only the rice-versus-LN balance moves.
+    #:
+    #: **What the carrier is not.** It is not a return of the density term ADR-0008's revision 1
+    #: removed from `K_base`: that term was speed *as a carrier for tech*, and it made every
+    #: speed chart a tech chart. Here density multiplies each axis' own shape, so the axis still
+    #: reads its own idiom — the speed/stream cross-correlation over the corpus is 0.853 before
+    #: the carrier and 0.854 after, and speed x jack moves -0.101 -> -0.077. The shape term keeps
+    #: the cross-chart variance; the carrier only sets the scale.
+    #:
+    #: **The value** is fixed by one testable rule rather than fitted: *the carrier never boosts
+    #: a rice axis on an LN chart*. `peak_4m_nps` counts LN heads as notes (ADR-0015 decision 3
+    #: keeps that counting rule), so a hold-heavy chart's density can exceed a rice chart's, and
+    #: a reference below that ceiling lifts the rice axes on exactly the charts they must not
+    #: win. The benchmark's densest LN chart is `LN General Stellium` at 40.69, and it is also
+    #: where the constraint binds: below about 30 its rice reading overtakes `ln_general`'s, and
+    #: at 40.69 its margin is exactly the pre-carrier one again. The metrics are flat from 40 to
+    #: 70 and break below 30, so the rule's minimum is also comfortably inside the feasible band.
+    #:
+    #: At 40.7 over the 120-chart benchmark: every group holds its own axis at or above its
+    #: pre-carrier count, the separation median falls 0.8076 -> 0.7638, and the count above 0.8
+    #: falls 61 -> 55. See `docs/adr/0015` for the stage-2 record and for what the carrier does
+    #: not fix.
+    rice_density_reference: float = 40.7
 
     # --- Rule C: kinetic-base reconciliation ---
     #: Below this raw jack the speed/stream corrections are skipped entirely.
@@ -596,7 +642,11 @@ def _compute_jack_raw(
     beatmap: Beatmap7K,
     jack_threshold_ms: float = CHORDJACK_STEP_INTERVAL_MS,
 ) -> float:
-    """Computes raw Jack intensity via _compute_jack_and_stream_raw."""
+    """
+    The jack axis' shape term, via `_compute_jack_and_stream_raw`. Like `_compute_speed_raw`
+    this is the driver *before* the peak-density carrier (ADR-0015 stage 2), which
+    `compute_raw_technique_drivers` applies because it needs `BeatmapFeatures`.
+    """
     r_jack, *_ = _compute_jack_and_stream_raw(beatmap, RadarOptions(jack_threshold_ms=jack_threshold_ms))
     return r_jack
 
@@ -638,12 +688,17 @@ def _compute_burst_rate(beatmap: Beatmap7K, options: RadarOptions) -> float:
 
 def _compute_speed_raw(beatmap: Beatmap7K, options: RadarOptions) -> float:
     """
-    Computes raw Speed intensity from rapid successive note presses across different columns.
+    The speed axis' shape term: `physics`' micro-speed burst law — the same reference interval
+    and exponent the strain side accumulates — summed over the chart and rated per second. This
+    is the speed this axis is about: how fast the fastest presses come, not how many notes the
+    chart holds.
 
-    The driver is `physics`' micro-speed burst law — the same reference interval and exponent
-    the strain side accumulates — summed over the chart and rated per second. It is the only
-    term: the speed this axis is about is how fast the fastest presses come, not how many notes
-    the chart holds, and mixing in a note-rate term is what left the axis measuring density.
+    It is the *shape* rather than the driver, because the driver is this times the peak-density
+    carrier `peak_4m_nps / rice_density_reference` (ADR-0015 stage 2), which
+    `compute_raw_technique_drivers` applies — the carrier needs `BeatmapFeatures` and this
+    function deliberately does not take them, the same split as `_compute_burst_rate`. Ordering
+    its own ladder is the carrier's job (`peak_4m_nps` alone orders all eight ladders at rho
+    0.968-0.989); telling the rice axes apart is this term's.
     """
     return _compute_burst_rate(beatmap, options) * options.speed_rate_gain
 
@@ -661,6 +716,14 @@ def compute_raw_technique_drivers(
     These are the quantities the technique operators actually measure, in their own units. The
     star mapping that turns a driver into a *score* is a separate step, applied by
     `compute_technique_radar`; nothing here has been put on the star scale yet.
+
+    The four rice axes carry the peak-density multiplier described on
+    `RadarOptions.rice_density_reference`; it is applied after the rules rather than before
+    them, so the rules' cross-axis comparisons keep the calibration they were tuned against.
+    Each axis' shape term is the quantity its own idiom names — the micro-burst law for speed,
+    the decayed run-length strain for jack, the flow rate with its reversal and bracket
+    modulation for stream, and `K_base` times the Ω_irreg permutation for tech — and the carrier
+    only puts those shapes on the ladder's scale.
     """
     if options is None:
         options = RadarOptions()
@@ -913,6 +976,18 @@ def compute_raw_technique_drivers(
         * options.ln_release_gain
         * (1.0 + options.ln_release_lock_gain * features.release_lock_depth)
     )
+
+    # Peak-density carrier on the four rice axes (ADR-0015 stage 2). Applied last, after the
+    # rules, for the same reason the release modifier is derived last: the rules compare axes'
+    # *technique loads* and are calibrated on those comparisons, so a term that rescales each
+    # axis by the chart's density must not move when a rule fires — that would silently
+    # recalibrate Rule C and Rule D along with it. What the rules leave standing is what the
+    # carrier scales, which is exactly the quantity the argmax and the star mapping read.
+    density_carrier = features.peak_4m_nps / options.rice_density_reference
+    r_speed *= density_carrier
+    r_jack *= density_carrier
+    r_stream *= density_carrier
+    r_tech *= density_carrier
 
     return RawTechniqueDrivers(
         jack=max(0.0, r_jack),

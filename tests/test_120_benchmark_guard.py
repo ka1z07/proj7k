@@ -41,6 +41,13 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #: intact, because it pins the numbers themselves. A deliberate calibration change is therefore
 #: a two-part commit: update the constants, then re-baseline this digest (and the acceptance
 #: bars below) after confirming the new ladder is the one you meant.
+#:
+#: Issue #52's driver-layer work is the first half of that pair, deliberately: the branch moves
+#: the drivers and leaves this digest alone, so this test is expected to be red on it — for the
+#: star-rating checksum (`sha256:9f0fcf8b…` after stage 2, `sha256:6d897f6c…` at the branch tip
+#: stage 1 left) and for the two gates above it, which measure the star
+#: ladders rather than the driver ladders. Re-baselining is issue #50's second step; ADR-0015
+#: records the sequence and why it is split.
 EXPECTED_STAR_RATING_CHECKSUM = "sha256:c829be124657dd7df07a1ec9b9b40e6acb1687fa942c7ac4a42cd7b189330023"
 
 #: Ladder-level acceptance bar from the Phase 2 specification: the 120 chart ladder must clear

@@ -71,14 +71,17 @@ SEPARATION_HIGH_MAX = 10
 #:
 #: LN Release's floor was 8 until issue #52 landed the release modifier's degenerate form.
 #: It is 7 now, and the reason is a measurement rather than a softening: the release axis is a
-#: modifier on the General base whose crossover sits above the General ladder's deepest lock
-#: (0.60 against 0.593 — without that the General axis would hold none of its own deep tiers),
-#: and the two LN ladders *interleave* in lock depth, so the release ladder's low tiers can no
-#: more clear the crossover than the General ladder's can. Issue #52's AC1 exempts this axis
-#: from having to dominate its own ladder for exactly this reason ("不要求本维主导自己的阶梯
-#: （容许 ln_general 主导）"), which makes an own-axis floor the wrong criterion for it — 7 is
-#: what a ceiling of 15 minus the interleaved tiers comes to. Raising it back means changing the
-#: axis' form, not its calibration; see `docs/adr/0015`'s implementation record.
+#: modifier on the General base — `release = gain * (1 + k * lockd) * general` with gain 0.645,
+#: so the crossover where release overtakes General sits at `lockd = 1 / gain - 1` = 0.550 — and
+#: the two LN ladders *interleave* in lock depth (measured medians: Tech 0.189 < General 0.318
+#: < Release 0.515 < Inverse 0.860), so the release ladder's low tiers can no more clear the
+#: crossover than some of the General ladder's tiers can. The crossover is therefore *not* above
+#: the General ladder's deepest lock (0.7365): it takes two of General's fifteen tiers, which
+#: is the price that record states and the reason the exemption below exists. Issue #52's AC1
+#: exempts this axis from having to dominate its own ladder ("不要求本维主导自己的阶梯（容许
+#: ln_general 主导）"), which makes an own-axis floor the wrong criterion for it — 7 is what a
+#: ceiling of 15 minus the interleaved tiers comes to. Raising it back means changing the axis'
+#: form, not its calibration; see `docs/adr/0015`'s implementation record.
 LN_RELEASE_MIN_HITS = 7
 SPEED_MIN_HITS = 12
 

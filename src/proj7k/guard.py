@@ -52,12 +52,20 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # driver has to clear to count as ordering its own ladder at all, and the ticket's bullseye
     # (tau >= 0.93 / rho >= 0.98) sits above them deliberately — `docs/adr/0015` records that
     # the official Jinjin ladder's own ratings order at tau 0.886 on Regular Tech, so the
-    # bullseye is a target rather than a property of the ground truth. Measured at registration
-    # (HEAD of issue #52's branch): ln_general 0.905/0.971, ln_tech 0.886/0.961, ln_release
-    # 0.943/0.986 clear the line; jack 0.829/0.943, stream 0.790/0.904, ln_inverse 0.790/0.900,
-    # speed 0.714/0.875, tech 0.581/0.729 do not. A caller that evaluates a driver ladder
-    # therefore gets the shortfall reported, which is the point: the line is where the driver
-    # layer has to arrive, not where it is.
+    # bullseye is a target rather than a property of the ground truth.
+    #
+    # Measured when issue #52 opened the driver layer (its starting evidence): ln_general
+    # 0.905/0.971, ln_tech 0.886/0.961, ln_release 0.943/0.986 cleared the line; jack
+    # 0.829/0.943, stream 0.790/0.904, ln_inverse 0.790/0.900, speed 0.714/0.875 and tech
+    # 0.581/0.729 did not. Stage 2 gave the four rice axes their peak-density carrier and
+    # closed three of those five: jack 0.886/0.971, speed 0.886/0.957, stream 0.924/0.982
+    # (stream also clears the bullseye). `ln_inverse` 0.790/0.900 stays where it was and `tech`
+    # rose to 0.790/0.921 without clearing the line; both remain issue #50's — ADR-0015 assigns
+    # them to Ω_irreg's resolution, with the tech axis' kinetic term wired and its gain
+    # calibrated off pending that. A caller that evaluates a driver ladder gets the shortfall
+    # reported, which is the point: the line is where the driver layer has to arrive, not where
+    # it is. `tests/test_driver_ladder_gates.py` pins which two are below it, so the handoff
+    # cannot outlive the defect.
     "driver_jack": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
     "driver_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
     "driver_speed": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
