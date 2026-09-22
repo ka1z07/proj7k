@@ -6,13 +6,15 @@ command-line tool `python3 -m proj7k.difficulty <path>`.
 """
 
 import argparse
+import ast
 from dataclasses import asdict, dataclass
 from functools import lru_cache
+import hashlib
 import json
 import os
 from pathlib import Path
 import sys
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 from proj7k import physics, scaling, strain
 from proj7k.calibration import block_fingerprint_constants, compute_methodology_fingerprint
@@ -21,6 +23,80 @@ from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
 from proj7k.rating import RatingOptions, synthesize_star_rating
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
+
+
+#: The modules whose arithmetic decides a chart's star rating, and which are therefore held to
+#: the literal registry. `parser` and `window` are here because they shape the note stream and
+#: the beat grid the operators read; changing either moves ratings on every chart.
+#:
+#: This one list is the definition of "the rating path" for both mechanisms that need one:
+#: `tests/test_engine_literal_registry.py` scans exactly these files for unregistered literals,
+#: and `rating_path_source_digest` hashes exactly these files into the engine version.
+RATING_PATH_MODULES: Tuple[str, ...] = (
+    "calibration.py",
+    "features.py",
+    "parser.py",
+    "radar.py",
+    "rating.py",
+    "scaling.py",
+    "strain.py",
+    "window.py",
+)
+
+
+def _strip_docstrings(node: ast.AST) -> None:
+    """Removes the docstring statement of every module, class and function, in place."""
+    holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    for child in ast.walk(node):
+        if not isinstance(child, holders):
+            continue
+        body = child.body
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            del body[0]
+
+
+def _source_digest(paths: Sequence[Path]) -> str:
+    """
+    Digest of Python source that ignores comments, docstrings and layout but sees every
+    expression.
+
+    Hashing the raw bytes would be simpler and would also close the gap; parsing first is what
+    keeps a reworded comment from marking every injected beatmap stale and rewriting its
+    difficulty name for nothing.
+    """
+    digest = hashlib.sha256()
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        _strip_docstrings(tree)
+        digest.update(path.name.encode("utf-8"))
+        digest.update(ast.dump(tree, include_attributes=False).encode("utf-8"))
+    return digest.hexdigest()
+
+
+@lru_cache(maxsize=None)
+def rating_path_source_digest() -> str:
+    """
+    Digest of the rating path's own source, folded into the engine version.
+
+    The methodology fingerprint summarizes the engine's *constants*, and the guards around it
+    (ADR-0014 §2, issue #48) keep that coverage complete: every option field, every named
+    constant block, every numeric literal left in a function body. None of them can see a change
+    that moves star ratings without introducing or moving a constant — swapping which tempo an
+    operator reads, say. Issue #51 did exactly that: 58 of the 120 benchmark charts moved while
+    the version stayed put, so an injection carrying the old token would have been read as
+    current and kept its stale rating indefinitely. That is the failure ADR-0014 exists to
+    prevent, and this digest is what closes it.
+
+    Scope is `RATING_PATH_MODULES` — the same set the literal registry scans, so "a module whose
+    edits can move a star rating" has exactly one definition.
+    """
+    module_dir = Path(__file__).resolve().parent
+    return _source_digest([module_dir / name for name in RATING_PATH_MODULES])
 
 
 @dataclass(frozen=True)
@@ -48,6 +124,10 @@ class DifficultyOptions:
         must be a registered non-calibration literal (test_engine_literal_registry) — which also
         asserts each block's list is complete against its module's source. A constant that
         reaches a star rating without reaching this hash has nowhere left to hide.
+
+        Constants are the whole story only for changes that introduce one. `rating_path` folds in
+        the digest of the rating path's own source, which is what catches a change that moves star
+        ratings without touching any constant (issue #51).
         """
         return compute_methodology_fingerprint(
             rating_options=asdict(self.rating_options or RatingOptions()),
@@ -57,6 +137,7 @@ class DifficultyOptions:
             physics=block_fingerprint_constants(physics),
             scaling=block_fingerprint_constants(scaling),
             strain_constants=block_fingerprint_constants(strain),
+            rating_path=rating_path_source_digest(),
         )
 
 

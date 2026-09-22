@@ -33,7 +33,13 @@ from typing import Dict, List, Optional, Tuple
 
 import pytest
 
-from proj7k import physics, scaling, strain
+from proj7k import difficulty, physics, scaling, strain
+from proj7k.difficulty import (
+    DifficultyOptions,
+    RATING_PATH_MODULES,
+    _source_digest,
+    rating_path_source_digest,
+)
 from proj7k.features import FeatureOptions
 from proj7k.radar import RadarOptions
 from proj7k.rating import RatingOptions
@@ -42,20 +48,6 @@ from proj7k.strain import StrainOptions
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENGINE_SRC = REPO_ROOT / "src" / "proj7k"
-
-#: The modules whose arithmetic decides a chart's star rating, and which are therefore held to
-#: the registry. `parser` and `window` are here because they shape the note stream and the beat
-#: grid the operators read; changing either moves ratings on every chart.
-RATING_PATH_MODULES: Tuple[str, ...] = (
-    "calibration.py",
-    "features.py",
-    "parser.py",
-    "radar.py",
-    "rating.py",
-    "scaling.py",
-    "strain.py",
-    "window.py",
-)
 
 #: The calibration blocks whose constant lists the fingerprint reads. Same modules as above by
 #: design: a block that is not also scanned for literals would have an unwatched half.
@@ -668,3 +660,67 @@ def test_every_calibration_block_with_operators_is_scanned_for_literals():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)):
             assert path.name in RATING_PATH_MODULES, f"{path.name} has operators but is not scanned"
+
+
+# --------------------------------------------------------------------------------------------
+# The version must move for a change that introduces no constant (issue #51)
+# --------------------------------------------------------------------------------------------
+#
+# Everything above guards what the fingerprint *contains*: the constants of the rating path. A
+# change can move star ratings without touching any of them — swapping which tempo an operator
+# reads did it, and 58 of the 120 benchmark charts moved while the version stayed put. An
+# injection carrying that version would have been read as current and kept its stale rating
+# forever. `rating_path_source_digest` is the answer, and these three tests hold it up: the
+# digest ignores what does not matter, sees what does, and actually reaches the version.
+
+
+def _write_module(tmp_path: Path, variant: str, source: str) -> Path:
+    """Writes `source` to a path whose *name* is constant across variants, so the digest differs
+    only if the source does — the digest deliberately includes the name."""
+    directory = tmp_path / variant
+    directory.mkdir()
+    path = directory / "module.py"
+    path.write_text(source, encoding="utf-8")
+    return path
+
+
+def test_source_digest_ignores_comments_docstrings_and_layout(tmp_path: Path):
+    plain = _write_module(tmp_path, "plain", "def f(bpm):\n    return bpm / 4\n")
+
+    noisy = _write_module(
+        tmp_path,
+        "noisy",
+        '"""A module docstring nobody asked for."""\n'
+        "# A comment that explains nothing.\n"
+        "\n"
+        "\n"
+        "def f(bpm):\n"
+        '    """And a function docstring."""\n'
+        "    return bpm / 4  # trailing note\n",
+    )
+
+    assert _source_digest([plain]) == _source_digest([noisy])
+
+
+def test_source_digest_sees_a_change_that_introduces_no_literal(tmp_path: Path):
+    # The two bodies differ only in *which* value they read — no numeric literal is added,
+    # removed or moved. This is exactly the shape #51 shipped.
+    before = _write_module(
+        tmp_path, "before", "def f(beatmap, bpm):\n    return bpm / 4\n"
+    )
+    after = _write_module(
+        tmp_path,
+        "after",
+        "def f(beatmap, bpm):\n    return normalize(beatmap, override=bpm) / 4\n",
+    )
+
+    assert _source_digest([before]) != _source_digest([after])
+
+
+def test_the_rating_paths_source_reaches_the_engine_version(monkeypatch):
+    before = DifficultyOptions().engine_fingerprint
+    monkeypatch.setattr(difficulty, "rating_path_source_digest", lambda: "a different rating path")
+    assert DifficultyOptions().engine_fingerprint != before
+
+    # ... and the digest actually covers the modules the registry scans, not an empty set.
+    assert rating_path_source_digest() != _source_digest([])
