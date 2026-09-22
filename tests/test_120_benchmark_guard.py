@@ -17,7 +17,13 @@ import pytest
 
 from proj7k.batch import BenchmarkBatchReport, run_benchmark_pipeline
 from proj7k.dan import CANONICAL_DAN_SR_BANDS, CANONICAL_DAN_TIERS
-from proj7k.guard import MonotonicityGuardConfig, evaluate_monotonicity_guard
+from proj7k.guard import (
+    LADDER_MAX_TOTAL_INVERSIONS,
+    LADDER_MIN_MEAN_KENDALL_TAU,
+    LADDER_MIN_MEAN_SPEARMAN_RHO,
+    MonotonicityGuardConfig,
+    evaluate_monotonicity_guard,
+)
 from proj7k.monotonicity import evaluate_batch_monotonicity
 
 
@@ -50,12 +56,8 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #: records the sequence and why it is split.
 EXPECTED_STAR_RATING_CHECKSUM = "sha256:c829be124657dd7df07a1ec9b9b40e6acb1687fa942c7ac4a42cd7b189330023"
 
-#: Ladder-level acceptance bar from the Phase 2 specification: the 120 chart ladder must clear
-#: these as a whole, on top of no single technique collapsing (which the guard's per-technique
-#: gates cover). Measured on the frozen corpus: mean rho 0.983 / mean tau 0.940 / 16 inversions.
-LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
-LADDER_MIN_MEAN_KENDALL_TAU = 0.94
-LADDER_MAX_TOTAL_INVERSIONS = 20
+#: The ladder-level acceptance bar itself lives in `guard`, next to the per-technique gates it
+#: complements, so the calibration tools can weigh the same numbers this module asserts.
 
 
 @pytest.fixture(scope="module")

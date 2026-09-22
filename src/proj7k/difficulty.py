@@ -228,7 +228,6 @@ def evaluate_intrinsic_difficulty(
     radar = compute_technique_radar(
         beatmap,
         features=features,
-        strain_profile=strain_profile,
         options=options.radar_options,
         calibration=rating_options.calibration,
         drivers=drivers,

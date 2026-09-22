@@ -42,7 +42,7 @@
 PYTHONPATH=src python3 tools/calibration_sandbox.py
 
 # 单点评估：给一组常数，看它是否过闸门、阶梯怎么动
-PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_a=0.242 --set p_norm=6.0
+PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_a=0.242 --set soft_cap_scale=2.0
 
 # 全量单因子扫描
 PYTHONPATH=src python3 tools/calibration_sandbox.py --sweep
@@ -108,9 +108,8 @@ PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_exp=0.6175 --js
 | `strain_exp` | 0.65 | ×0.85 ~ ×1.15 | **全部 FAIL** — 最敏感，±5% 即破 10th |
 | `strain_a` | 0.268980 | ×0.75 ~ ×1.25 | ×0.9 过；×1.1 挂 |
 | `strain_b` | 0.129915 | ×0 ~ ×4 | ×0 ~ ×2 过；×4 挂（纯加性偏移，宽容） |
-| `p_norm` | 4.0 | ×0.5 ~ ×2.0 | ×1.5/×2 过；**×0.75 挂**（降低极值占优 → 5th 越顶） |
-| `damping_coeff` | 0.08 | ×0 ~ ×4 | ×0.5/×2 过；**×0 挂**（0th 贴顶）、×4 挂 |
-| `driver_backpressure_exp` | 0.75 | ×0.7 ~ ×1.3 | **全 PASS** — 最不敏感 |
+| `p_norm` / `damping_coeff` / `driver_backpressure_exp` | — | — | **已删除**（#50：合成改 max、分值改绝对标定，见 `docs/adr/0016`）|
+| `technique_anchors`（8×a/exp） | 见 `calibration.py` | — | 不是一维扫描对象：逐轴拟合用 `tools/technique_star_fit.py` |
 | `soft_cap_threshold` | 9.5 | ×0.9 ~ ×1.1 | 全 PASS |
 | `soft_cap_scale` | 3.0 | ×0.5 ~ ×2.5 | 全 PASS |
 | ~~`max_star_rating`~~ | — | — | 字段已随 #48 删除 |
@@ -120,7 +119,7 @@ PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_exp=0.6175 --js
 
 **压缩算子几乎不受约束。** `soft_cap_*` 随便动都过闸门，因为全语料只有 16~24 张谱超过 9.5★，且它们全落在 Stellium 档——那一档的带 [10.0, 12.5] 宽达 2.5★。**真想约束压缩行为，现有四条带是约束不住的。**
 
-**方向性**：几乎所有"抬高难度"的扰动都挂（`strain_a` 上行、`strain_b` 上行、`strain_exp` 上行、`p_norm` 下行、`damping_coeff` 下行），"降低难度"的扰动才有空间。响应是不对称的。
+**方向性**：几乎所有"抬高难度"的扰动都挂（`strain_a` 上行、`strain_b` 上行、`strain_exp` 上行），"降低难度"的扰动才有空间。响应是不对称的。**本节的下表与"上行余量"是 `c32a2ad` 时的快照（见 #51 交接 §4.10），#50 之后应变侧常数只影响 fallback 与 `raw_strain_rating`，扫描已基本饱和**——方法仍有效，数字不再代表当前标定。
 
 ---
 
@@ -129,9 +128,6 @@ PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_exp=0.6175 --js
 扫描中有三个点同时满足"过闸门"与"τmin/ρmin 更高"：
 
 ```
-driver_backpressure_exp  0.75 → 0.975    τmin 0.924  ρmin 0.975   全部锚点带内
-damping_coeff            0.08 → 0.16     τmin 0.924  ρmin 0.975   全部锚点带内
-p_norm                   4.0  → 6.0      τmin 0.924  ρmin 0.975   全部锚点带内
 ```
 
 拆开看，所谓的改善是：

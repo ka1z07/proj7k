@@ -84,6 +84,35 @@ DEFAULT_METRIC_GATE = MetricGate(min_kendall_tau=0.75, min_spearman_rho=0.85, ma
 #: synthetic entry) cannot carry one; the benchmark's full technique roster can.
 DEFAULT_MIN_ANCHOR_SAMPLES: int = 4
 
+# --- The ladder-level (whole-corpus) acceptance bar -------------------------------------------
+#: The Phase 2 specification's bar for the 120-chart ladder *as a whole*, on top of the
+#: per-technique gates above: no single technique collapsing is a different claim from the
+#: ladder being well ordered. Asserted end-to-end by `tests/test_120_benchmark_guard.py` and
+#: readable by the calibration tools (`tools/technique_star_fit.py` weighs it when it selects
+#: an anchor table), so the bar has exactly one definition. Values as measured on the frozen
+#: corpus when the bar was written: mean rho 0.983 / mean tau 0.940 / 16 inversions.
+#:
+#: ADR-0016's switch to absolute technique stars moves the star ladder's order onto the
+#: per-axis drivers and so lands at mean tau 0.9255 with 22 inversions — the bar is currently
+#: missed, deliberately, pending that ADR's open question 3 (re-baselining it means relaxing a
+#: Phase 2 specification line, which is not a silent edit).
+LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
+LADDER_MIN_MEAN_KENDALL_TAU = 0.94
+LADDER_MAX_TOTAL_INVERSIONS = 20
+
+# --- The absolute technique-star band (issue #50, ADR-0016) -----------------------------------
+#: The tolerance the calibration is judged by: a technique's score for a tier-T chart has to sit
+#: within this fraction of `dan.CANONICAL_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
+#: of that ladder's 15 charts. Read by the calibration tool (`tools/technique_star_fit.py`)
+#: and asserted by `tests/test_technique_star_ladder.py`, so the band has one definition.
+#:
+#: The bar is a *layer*, deliberately: it is hard for an axis whose own driver orders its ladder
+#: (its `driver_<axis>` gate), and a recorded boundary for one whose driver does not. The two
+#: axes in the second group are ADR-0015's, and the recorded counts in that test say what the
+#: boundary currently costs rather than leaving it to prose.
+TECHNIQUE_BAND = 0.08
+TECHNIQUE_BAND_MIN_IN_BAND = 13
+
 
 @dataclass
 class MonotonicityGuardConfig:

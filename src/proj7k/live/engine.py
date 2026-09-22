@@ -68,7 +68,7 @@ class LiveEngine:
             self.cache.put_features(content_hash, None, features)
 
         strain_profile = compute_dual_hand_strain(beatmap)
-        radar = compute_technique_radar(beatmap, features=features, strain_profile=strain_profile)
+        radar = compute_technique_radar(beatmap, features=features)
         synthesis = synthesize_star_rating(radar, p90_strain=strain_profile.p90_strain)
         dan_tier = estimate_dan_tier(synthesis.star_rating)
         tech_breakdown = radar.tech_4d.to_dict() if radar.tech_4d else {}
