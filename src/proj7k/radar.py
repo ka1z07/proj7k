@@ -25,12 +25,7 @@ from proj7k.physics import (
     SPEED_BURST_REFERENCE_MS,
 )
 from proj7k.scaling import compute_inverse_score
-from proj7k.strain import (
-    StrainOptions,
-    StrainTimeseriesProfile,
-    compute_dual_hand_strain,
-    compute_micro_speed_burst,
-)
+from proj7k.strain import StrainOptions, compute_micro_speed_burst
 
 TECHNIQUE_NAMES: Tuple[str, ...] = (
     "jack",
@@ -1010,10 +1005,69 @@ def compute_raw_technique_drivers(
     )
 
 
+def technique_star_scores(
+    drivers: Dict[str, float],
+    options: Optional[RadarOptions] = None,
+    calibration: Optional[StrainStarCalibration] = None,
+) -> Dict[str, float]:
+    """
+    The driver vector carried onto the star scale: one **absolute technique star** per axis.
+
+    Every axis is put on the scale by its own anchor law (ADR-0016), so a score says what the
+    chart's load in that technique is worth in the same star units `dan.CANONICAL_DAN_SR` states
+    the ladder in. What this replaced was a *share*: one common `SR_base` (the strain rating)
+    times each driver's fraction of the chart's largest, compressed by a back-pressure exponent
+    — under which the dominant axis' score was `SR_base` on every chart, whatever the chart was,
+    and no axis had a value of its own.
+
+    `RadarOptions.score_ceiling` still clamps, as the defensive bound on a single axis' value:
+    the anchors are fitted on the benchmark's drivers, so an out-of-corpus chart is not bounded
+    by them, and the radar vector is read as per-technique stars by the profiler and the
+    dashboard.
+    """
+    if options is None:
+        options = RadarOptions()
+    if calibration is None:
+        calibration = DEFAULT_CALIBRATION
+    return {
+        name: min(options.score_ceiling, calibration.anchor_for(name).score(value))
+        for name, value in drivers.items()
+    }
+
+
+def technique_radar_from_drivers(
+    drivers: Dict[str, float],
+    options: Optional[RadarOptions] = None,
+    calibration: Optional[StrainStarCalibration] = None,
+    tech_4d: Optional[Tech4DComponents] = None,
+) -> TechniqueRadar:
+    """
+    A radar built from an already-computed driver vector.
+
+    Exposed because the calibration tools hold *frozen* drivers: they answer calibration
+    questions from the frozen core (`benchmark_core`), and the mapping they evaluate has to be
+    the engine's own rather than a second copy of it. The dominant axis is still the one with
+    the largest raw driver — that is a statement about what the chart is *made of*, in the
+    operators' own units, and it is what the downscaler's technique-conservation gate and the
+    ladder hit counts read. The score carried next to it is the calibrated one.
+    """
+    scores = technique_star_scores(drivers, options=options, calibration=calibration)
+    if not drivers or max(drivers.values()) <= 1e-6:
+        dominant, dominant_score = "None", 0.0
+    else:
+        dominant = max(drivers, key=lambda k: drivers[k])
+        dominant_score = scores[dominant]
+    return TechniqueRadar(
+        **scores,
+        dominant_technique=dominant,
+        dominant_score=dominant_score,
+        tech_4d=tech_4d,
+    )
+
+
 def compute_technique_radar(
     beatmap: Beatmap7K,
     features: Optional[BeatmapFeatures] = None,
-    strain_profile: Optional[StrainTimeseriesProfile] = None,
     options: Optional[RadarOptions] = None,
     calibration: Optional[StrainStarCalibration] = None,
     drivers: Optional[RawTechniqueDrivers] = None,
@@ -1021,21 +1075,16 @@ def compute_technique_radar(
     """
     Computes calibrated 8-dimension technique radar scores with cross-suppression.
 
-    `calibration` carries the star-scale constants (anchor law + driver back-pressure
-    exponent) that every technique score is expressed in. Callers pass the calibration of
-    the options object driving the evaluation (see `rating.RatingOptions.calibration`) so
-    that the radar vector and the synthesized star rating can never drift apart; when
-    omitted, the canonical `calibration.DEFAULT_CALIBRATION` is used.
+    `calibration` carries the star scale the scores are expressed in — the per-axis absolute
+    anchors (ADR-0016). Callers pass the calibration of the options object driving the
+    evaluation (see `rating.RatingOptions.calibration`) so that the radar vector and the
+    synthesized star rating can never drift apart; when omitted, the canonical
+    `calibration.DEFAULT_CALIBRATION` is used.
 
     `drivers` lets a caller that has already computed the raw driver vector hand it in — the
     rating path does, because the drivers are the artifact the ladder gates are stated on and
     recomputing them here would let the gated vector and the rated one diverge.
     """
-    if options is None:
-        options = RadarOptions()
-    if calibration is None:
-        calibration = DEFAULT_CALIBRATION
-
     if not beatmap.hit_objects:
         return TechniqueRadar(
             jack=0.0,
@@ -1050,45 +1099,13 @@ def compute_technique_radar(
             dominant_score=0.0,
         )
 
-    if strain_profile is None:
-        strain_profile = compute_dual_hand_strain(beatmap)
-
     if drivers is None:
         drivers = compute_raw_technique_drivers(beatmap, features=features, options=options)
-    sr_base = calibration.star_rating_from_strain(strain_profile.p90_strain)
 
-    raw_scores = drivers.to_dict()
-    max_raw = max(raw_scores.values()) if raw_scores else 0.0
-    if max_raw <= 1e-6 or sr_base <= 1e-6:
-        scores = {k: 0.0 for k in raw_scores}
-    else:
-        scores = {
-            k: min(
-                options.score_ceiling,
-                sr_base * math.pow(v / max_raw, calibration.driver_backpressure_exp),
-            )
-            for k, v in raw_scores.items()
-        }
-
-    # Determine dominant technique and score (based on raw uncompressed intensity to break ceiling ties)
-    if max_raw <= 1e-6:
-        max_tech = "None"
-        max_score = 0.0
-    else:
-        max_tech = max(raw_scores.keys(), key=lambda k: raw_scores[k])
-        max_score = scores[max_tech]
-
-    return TechniqueRadar(
-        jack=scores["jack"],
-        tech=scores["tech"],
-        speed=scores["speed"],
-        stream=scores["stream"],
-        ln_general=scores["ln_general"],
-        ln_tech=scores["ln_tech"],
-        ln_inverse=scores["ln_inverse"],
-        ln_release=scores["ln_release"],
-        dominant_technique=max_tech,
-        dominant_score=max_score,
+    return technique_radar_from_drivers(
+        drivers.to_dict(),
+        options=options,
+        calibration=calibration,
         tech_4d=drivers.tech_4d,
     )
 

@@ -19,6 +19,22 @@ from proj7k.rating import aggregate_p_norm, apply_tanh_soft_cap
 from proj7k.strain import compute_raw_strain_star_rating
 
 
+#: The player-side aggregate's constants (see `rating.aggregate_p_norm`): a player's overall
+#: level across the dimensions they have been tested in. They are not `RatingOptions` fields,
+#: because they move no chart's rating — the chart's own composition is a plain maximum over its
+#: absolute technique stars (issue #50) — and the engine version exists to mark *chart* ratings
+#: stale.
+PLAYER_AGGREGATION_P_NORM: float = 4.0
+PLAYER_AGGREGATION_DAMPING: float = 0.08
+
+
+def player_overall_star(scores: Dict[str, float]) -> float:
+    """A player's overall level across the dimensions they have been tested in."""
+    return aggregate_p_norm(
+        scores, p=PLAYER_AGGREGATION_P_NORM, damping_coeff=PLAYER_AGGREGATION_DAMPING
+    )
+
+
 @dataclass(frozen=True)
 class DimensionMacroMetric:
     """
@@ -227,7 +243,7 @@ def aggregate_macro_profile(
         dominant_tech = max(tested_metrics, key=lambda m: m.star_rating).dimension
         bottleneck_tech = min(tested_metrics, key=lambda m: m.star_rating).dimension
         tested_sr_dict = {m.dimension: m.star_rating for m in tested_metrics}
-        overall_sr = aggregate_p_norm(tested_sr_dict, p=4.0)
+        overall_sr = player_overall_star(tested_sr_dict)
         overall_dan = estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "stream"

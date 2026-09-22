@@ -88,6 +88,13 @@ class LiteralRule:
 _CALIBRATION = [
     ("compute_methodology_fingerprint", {8: 1}, "Hash digest length: 8 hex characters.", {}),
     ("star_rating_from_strain", {0.0: 3}, "Zero floor of the anchor law and the empty-input guard.", {}),
+    (
+        "score",
+        {0.0: 2},
+        "The technique anchor's zero floor: a zero driver is that axis' zero (the radar's "
+        "cross-inhibition), and the returned value is clamped non-negative.",
+        {},
+    ),
 ]
 
 # --- rating.py -------------------------------------------------------------------------------
@@ -256,8 +263,16 @@ _RADAR = [
     ),
     (
         "compute_technique_radar",
-        {0.0: 12, 1e-06: 3},
-        "Zero scores for an empty chart and the zero-driver/zero-base guards.",
+        {0.0: 9},
+        "Zero scores and zero dominant score for an empty chart — the eight dimensions, the "
+        "dominant score, and nothing else: the mapping itself lives in "
+        "`technique_radar_from_drivers`.",
+        {},
+    ),
+    (
+        "technique_radar_from_drivers",
+        {0.0: 1, 1e-06: 1},
+        "The zero score of a chart whose drivers are all zero, and the epsilon that decides it.",
         {},
     ),
     (

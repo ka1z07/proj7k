@@ -25,6 +25,7 @@ def test_compute_raw_strain_star_rating_anchors():
 
 
 def test_aggregate_p_norm_pure_specialization_retention():
+    """The player-side aggregate the profiler reads: no longer the chart's composition."""
     # Pure specialized chart: Dominant = 7.5★, noise in others <= 2.0★
     spec_scores = [7.5, 1.5, 2.0, 1.8, 1.0, 1.2, 1.0, 1.0]
     sr_norm = aggregate_p_norm(spec_scores, p=4.0, damping_coeff=0.08)
@@ -41,6 +42,11 @@ def test_aggregate_p_norm_pure_specialization_retention():
 
 
 def test_aggregate_p_norm_hybrid_synergy_bonus():
+    """
+    The profiler's player-side aggregate keeps its damping term (issue #50 moved only the
+    *chart* composition to a plain maximum), so a player strong across several dimensions still
+    reads above their single best one.
+    """
     # Balanced hybrid chart: Dominant = 6.8★, several secondary dimensions ~6.0-6.5★
     hybrid_scores = [3.5, 6.8, 4.5, 6.5, 3.0, 5.0, 6.0, 2.5]
     sr_norm = aggregate_p_norm(hybrid_scores, p=4.0, damping_coeff=0.08)
@@ -77,7 +83,17 @@ def test_apply_tanh_soft_cap_continuity_and_ceiling():
         assert outputs[i] < outputs[i + 1]
 
 
-def test_synthesize_star_rating_with_radar():
+def test_synthesize_star_rating_composes_as_the_largest_technique_star():
+    """
+    The chart rating is the largest of the eight absolute technique stars (issue #50).
+
+    It used to be an extremum-dominant p-norm of *shares* of the strain rating, which is why
+    this fixture — one strong axis and seven weak ones — came out at 7.2-7.3 rather than at its
+    dominant score: the damping term was a bonus the weaker axes contributed. With the axes on
+    one absolute scale there is no bonus to collect: the chart is as hard as its hardest
+    technique, and `synergy_bonus` is what the composition added on top of the dominant axis'
+    own score, which is now nothing when the dominant axis is the largest.
+    """
     radar = TechniqueRadar(
         jack=7.5,
         tech=1.5,
@@ -92,9 +108,13 @@ def test_synthesize_star_rating_with_radar():
     )
     res = synthesize_star_rating(radar, p90_strain=162.9)
     assert isinstance(res, StarRatingSynthesis)
-    assert 7.20 <= res.star_rating <= 7.30
+    assert res.uncompressed_rating == 7.5
+    assert res.star_rating == 7.5
     assert res.dominant_technique == "jack"
     assert res.dominant_score == 7.5
+    assert res.synergy_bonus == 0.0
+    # The strain rating is still reported, and still on the same scale — it is simply not part
+    # of the composition any more.
     assert 7.45 <= res.raw_strain_rating <= 7.55
 
 
@@ -167,7 +187,7 @@ def test_deterministic_output():
 
 
 def test_aggregate_p_norm_dict_and_empty():
-    assert aggregate_p_norm([]) == 0.0
+    assert aggregate_p_norm([], p=4.0, damping_coeff=0.08) == 0.0
     d_scores = {"jack": 6.0, "stream": 5.8, "tech": 5.5}
-    val = aggregate_p_norm(d_scores)
+    val = aggregate_p_norm(d_scores, p=4.0, damping_coeff=0.08)
     assert val > 6.0

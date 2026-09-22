@@ -3,7 +3,7 @@ Star rating synthesis and soft-cap compression for 7K intrinsic difficulty.
 
 Implements:
 1. Raw physical strain star rating fit: SR_raw = a * S_base^0.65 + b
-2. Extremum-dominant p-Norm aggregation (p = 4.0) over technique radar vector
+2. Extremum-dominant composition over the 8 absolute technique stars: SR_norm = max(R)
 3. C^1 smooth Hyperbolic Tangent (tanh) soft-cap compression above 9.5★
 
 There is no separate hard ceiling on the output, and deliberately so: the soft cap asymptotes to
@@ -15,11 +15,12 @@ non-smooth corner into a curve that exists to be smooth. The field that used to 
 
 from dataclasses import dataclass
 import math
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from proj7k.calibration import (
     DEFAULT_CALIBRATION,
     StrainStarCalibration,
+    TechniqueStarAnchor,
     compute_methodology_fingerprint,
 )
 from proj7k.dan import CANONICAL_DAN_SR, CANONICAL_DAN_TIERS
@@ -33,34 +34,32 @@ class RatingOptions:
     Single options object carrying the star-rating calibration used by the whole engine.
 
     Defaults are read off `calibration.DEFAULT_CALIBRATION` rather than re-typed here, so the
-    anchor law and the driver back-pressure exponent have exactly one definition. The
+    strain anchor law and the eight technique anchors have exactly one definition. The
     `calibration` property exposes them as one value object for the radar to consume.
     """
-    p_norm: float = 4.0
-    damping_coeff: float = 0.08
     soft_cap_threshold: float = 9.5
     soft_cap_scale: float = 3.0
     strain_exp: float = DEFAULT_CALIBRATION.strain_exp
     strain_a: float = DEFAULT_CALIBRATION.strain_a
     strain_b: float = DEFAULT_CALIBRATION.strain_b
-    driver_backpressure_exp: float = DEFAULT_CALIBRATION.driver_backpressure_exp
+    technique_anchors: Tuple[TechniqueStarAnchor, ...] = DEFAULT_CALIBRATION.technique_anchors
 
     @property
     def calibration(self) -> StrainStarCalibration:
-        """Anchor-law and back-pressure constants as a single injectable value object."""
+        """Strain anchor law and technique anchors as a single injectable value object."""
         return StrainStarCalibration(
             strain_a=self.strain_a,
             strain_b=self.strain_b,
             strain_exp=self.strain_exp,
-            driver_backpressure_exp=self.driver_backpressure_exp,
+            technique_anchors=self.technique_anchors,
         )
 
     @property
     def methodology_fingerprint(self) -> str:
         """
-        Algorithm version of the star-rating stage: the strain anchor law, the driver
-        back-pressure exponent, the p-norm aggregation, the soft-cap compression, and the
-        canonical Dan anchors behind the injected tier label.
+        Algorithm version of the star-rating stage: the strain anchor law, the eight absolute
+        technique anchors, the soft-cap compression, and the canonical Dan anchors behind the
+        injected tier label.
 
         `difficulty.DifficultyOptions.engine_fingerprint` folds this together with the radar,
         strain, feature, and physical constants into the version stamped into injected metadata.
@@ -69,9 +68,9 @@ class RatingOptions:
             strain_a=self.strain_a,
             strain_b=self.strain_b,
             strain_exp=self.strain_exp,
-            driver_backpressure_exp=self.driver_backpressure_exp,
-            p_norm=self.p_norm,
-            damping_coeff=self.damping_coeff,
+            technique_anchors=tuple(
+                (anchor.technique, anchor.a, anchor.exp) for anchor in self.technique_anchors
+            ),
             soft_cap_threshold=self.soft_cap_threshold,
             soft_cap_scale=self.soft_cap_scale,
             dan_tiers=tuple(CANONICAL_DAN_TIERS),
@@ -79,10 +78,10 @@ class RatingOptions:
         )
 
 
-#: The canonical field defaults, named once. The standalone operator signatures below read their
-#: defaults from here rather than carrying a second copy of 4.0 / 0.08 / 9.5 / 3.0 — the profiler
-#: calls them without a RatingOptions, so a duplicated literal there would be a live second
-#: definition of the same calibration.
+#: The canonical field defaults, named once. `apply_tanh_soft_cap`'s standalone signature reads
+#: its defaults from here rather than carrying a second copy of 9.5 / 3.0 — the profiler calls it
+#: without a RatingOptions, so a duplicated literal there would be a live second definition of
+#: the same calibration.
 DEFAULT_RATING_OPTIONS = RatingOptions()
 
 
@@ -110,12 +109,20 @@ class StarRatingSynthesis:
 
 def aggregate_p_norm(
     scores: Union[Sequence[float], TechniqueRadar, Dict[str, float]],
-    p: float = DEFAULT_RATING_OPTIONS.p_norm,
-    damping_coeff: float = DEFAULT_RATING_OPTIONS.damping_coeff,
+    p: float,
+    damping_coeff: float,
 ) -> float:
     """
-    Aggregates multi-dimensional technique scores via extremum-dominant p-norm:
+    Aggregates multi-dimensional scores via extremum-dominant p-norm:
     SR_norm = max(R) * (sum((r_k / max(R))^p))^(1/p) * (1.0 + damping_coeff * sum(...))^(-0.5)
+
+    Not the chart-rating composition any more (issue #50): a chart's star rating is the largest
+    of its eight absolute technique stars, exactly (`synthesize_star_rating`). This operator
+    survives for the *player-side* aggregate the profiler reports — a player's overall level
+    across the dimensions they have been tested in, where the damping term expresses that being
+    strong in several dimensions is worth more than being strong in one. Its two constants are
+    therefore the profiler's, p and damping are required arguments, and neither is an engine
+    option field: they do not move a chart's rating and so have no business in its fingerprint.
     """
     if isinstance(scores, TechniqueRadar):
         vals = [
@@ -169,7 +176,20 @@ def synthesize_star_rating(
     options: Optional[RatingOptions] = None,
 ) -> StarRatingSynthesis:
     """
-    Synthesizes final Star Rating from technique radar and p90 strain profile.
+    Synthesizes the final Star Rating from the technique radar and the p90 strain profile.
+
+    The composition is the **largest** of the eight absolute technique stars (issue #50), which
+    is the extremum-dominant p-norm's own limit: the axes are on one scale now, so the chart's
+    difficulty is the difficulty of its hardest technique measured in the units the Dan ladder
+    is stated in. The p-norm's damping term was what let a chart collect a bonus for having
+    several strong axes; measured over the benchmark with absolute anchors it lifts every tier's
+    median clear of its band (0th 4.51 against [3.0, 4.0], 5th 6.05 against [5.0, 6.0], 10th
+    8.36 against [7.0, 8.2]), so the composition retreats to the degenerate case rather than
+    being re-tuned around the new scores — see `docs/adr/0016`.
+
+    The strain rating stays as the fallback for a chart whose drivers are all zero and as the
+    reported `raw_star_rating`: it is the same scale, read directly off the physical load, and
+    is no longer part of the composition.
     """
     if options is None:
         options = RatingOptions()
@@ -181,11 +201,7 @@ def synthesize_star_rating(
         exp=options.strain_exp,
     )
 
-    sr_norm = aggregate_p_norm(
-        radar,
-        p=options.p_norm,
-        damping_coeff=options.damping_coeff,
-    )
+    sr_norm = max(radar.to_vector())
 
     # Fallback to sr_raw if radar scores are all zero but physical strain exists
     if sr_norm <= 1e-9 and sr_raw > 0.0:

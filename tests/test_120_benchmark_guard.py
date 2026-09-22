@@ -17,7 +17,13 @@ import pytest
 
 from proj7k.batch import BenchmarkBatchReport, run_benchmark_pipeline
 from proj7k.dan import CANONICAL_DAN_SR_BANDS, CANONICAL_DAN_TIERS
-from proj7k.guard import MonotonicityGuardConfig, evaluate_monotonicity_guard
+from proj7k.guard import (
+    LADDER_MAX_TOTAL_INVERSIONS,
+    LADDER_MIN_MEAN_KENDALL_TAU,
+    LADDER_MIN_MEAN_SPEARMAN_RHO,
+    MonotonicityGuardConfig,
+    evaluate_monotonicity_guard,
+)
 from proj7k.monotonicity import evaluate_batch_monotonicity
 
 
@@ -42,20 +48,14 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #: a two-part commit: update the constants, then re-baseline this digest (and the acceptance
 #: bars below) after confirming the new ladder is the one you meant.
 #:
-#: Issue #52's driver-layer work is the first half of that pair, deliberately: the branch moves
-#: the drivers and leaves this digest alone, so this test is expected to be red on it — for the
-#: star-rating checksum (`sha256:9f0fcf8b…` after stage 2, `sha256:6d897f6c…` at the branch tip
-#: stage 1 left) and for the two gates above it, which measure the star
-#: ladders rather than the driver ladders. Re-baselining is issue #50's second step; ADR-0015
-#: records the sequence and why it is split.
-EXPECTED_STAR_RATING_CHECKSUM = "sha256:c829be124657dd7df07a1ec9b9b40e6acb1687fa942c7ac4a42cd7b189330023"
+#: Issue #52 left this digest alone on purpose (its branch moved the drivers, not the star
+#: mapping); issue #50 is the second step, and this is its re-baselined value: the eight
+#: dimensions are absolute technique stars now (ADR-0016), so every chart's rating moved.
+EXPECTED_STAR_RATING_CHECKSUM = "sha256:81e4de64b214373012173886b63d7be3ccd9c5d7697abbd79b8317920eee3ee9"
 
-#: Ladder-level acceptance bar from the Phase 2 specification: the 120 chart ladder must clear
-#: these as a whole, on top of no single technique collapsing (which the guard's per-technique
-#: gates cover). Measured on the frozen corpus: mean rho 0.983 / mean tau 0.940 / 16 inversions.
-LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
-LADDER_MIN_MEAN_KENDALL_TAU = 0.94
-LADDER_MAX_TOTAL_INVERSIONS = 20
+#: The ladder-level acceptance bar itself lives in `guard`, next to the per-technique gates it
+#: complements, so the calibration tools can weigh the same numbers this module asserts. It was
+#: re-baselined by issue #50 — see the constant's own comment for what it was and why it moved.
 
 
 @pytest.fixture(scope="module")

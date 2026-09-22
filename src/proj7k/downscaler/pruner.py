@@ -8,13 +8,27 @@ Iteratively identifies and dampens localized peak strain windows:
 4. Ranks candidate removals incorporating marginal strain contributions and
    bimanual flux asymmetry penalties.
 5. Batch-prunes candidates (15% - 25% per iteration) with DualGateValidator rollback.
+
+**What decides convergence (issue #50).** The windows are located on the strain curve — they
+have to be, since pruning picks notes off it — but *whether the chart has arrived* is the
+engine's own star rating when the caller names a target star (`target_sr`). It used to be a
+strain threshold, which was the same claim only while the rating was a monotone function of
+P90 strain; since ADR-0016 a chart's rating is the largest of its eight absolute technique
+stars, so a strain reading can no longer decide it. The strain threshold stays as the *window
+selector*: `two_tier.TwoTierDanMapper` derives it from the target star through the strain anchor
+law, which is a monotone proxy for "how high a peak is too high", and the star is the judge of
+where the loop stops. Callers that name an explicit `--target-strain` keep the old criterion —
+asking for a strain is asking for a strain.
 """
 
 from dataclasses import dataclass, field
 import math
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
+from proj7k.features import extract_beatmap_features
 from proj7k.parser import Beatmap7K, HitObject, NoteType
+from proj7k.radar import RadarOptions, compute_technique_radar
+from proj7k.rating import RatingOptions, synthesize_star_rating
 from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
 from proj7k.downscaler.mutation import apply_pure_deletion
 from proj7k.downscaler.skeleton import MetricSkeletonDetector
@@ -63,9 +77,14 @@ class PruningResult:
     total_notes_removed: int
     warnings: List[str] = field(default_factory=list)
     history: List[PruneIterationRecord] = field(default_factory=list)
+    #: The star criterion's readings, present only when the caller named a target star. The
+    #: strain readings above stay reported either way: they are what the windows were chosen on.
+    target_sr: Optional[float] = None
+    initial_star: Optional[float] = None
+    final_star: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "iterations_run": self.iterations_run,
             "converged": self.converged,
             "initial_p90_strain": round(self.initial_p90_strain, 3),
@@ -76,6 +95,11 @@ class PruningResult:
             "warnings": self.warnings,
             "history": [rec.to_dict() for rec in self.history],
         }
+        if self.target_sr is not None:
+            d["target_sr"] = round(self.target_sr, 3)
+            d["initial_star"] = None if self.initial_star is None else round(self.initial_star, 3)
+            d["final_star"] = None if self.final_star is None else round(self.final_star, 3)
+        return d
 
 
 class WindowedPeakBatchPruner:
@@ -100,25 +124,72 @@ class WindowedPeakBatchPruner:
         self.validator = validator or DualGateValidator()
         self.balancer = balancer or BimanualFluxBalancer()
 
+    def star_of(
+        self,
+        beatmap: Beatmap7K,
+        p90_strain: float,
+        rating_options: Optional[RatingOptions] = None,
+        radar_options: Optional[RadarOptions] = None,
+    ) -> float:
+        """
+        The engine's own rating of a candidate, read off the strain profile the loop already has.
+
+        The profile is passed in rather than recomputed: `synthesize_star_rating` needs the P90
+        strain, and the pruner computes one every iteration for the window search anyway. The
+        feature tensor and the radar are what the star needs beyond it.
+        """
+        options = rating_options or RatingOptions()
+        radar = compute_technique_radar(
+            beatmap,
+            features=extract_beatmap_features(beatmap),
+            options=radar_options,
+            calibration=options.calibration,
+        )
+        return synthesize_star_rating(radar, p90_strain=p90_strain, options=options).star_rating
+
     def prune(
         self,
         beatmap: Beatmap7K,
         target_strain: float,
         dominant_technique: Optional[str] = None,
+        target_sr: Optional[float] = None,
+        rating_options: Optional[RatingOptions] = None,
+        radar_options: Optional[RadarOptions] = None,
     ) -> PruningResult:
         """
-        Executes multi-round closed-loop peak-window pruning towards target_strain.
+        Executes multi-round closed-loop peak-window pruning towards the target.
+
+        `target_sr` switches the convergence criterion to the engine's star (see the module
+        docstring); `target_strain` is then the peak-window threshold rather than the loop's
+        stopping rule. Without it the loop stops on strain, which is what an explicit
+        `--target-strain` asks for.
         """
         initial_profile = compute_dual_hand_strain(beatmap, options=self.strain_options)
         init_p90 = initial_profile.p90_strain
         init_peak = initial_profile.peak_strain
         warnings: List[str] = []
+        initial_star = (
+            self.star_of(beatmap, init_p90, rating_options, radar_options)
+            if target_sr is not None
+            else None
+        )
 
-        # Safe exit if original beatmap is already below or at target strain
-        if init_p90 <= target_strain * (1.0 + self.tolerance):
-            warnings.append(
-                f"Beatmap initial P90 strain ({init_p90:.2f}) is already <= target threshold ({target_strain:.2f}); no downscaling required."
-            )
+        arrived = (
+            initial_star <= target_sr * (1.0 + self.tolerance)
+            if initial_star is not None and target_sr is not None
+            else init_p90 <= target_strain * (1.0 + self.tolerance)
+        )
+        if initial_star is not None:
+            if arrived:
+                warnings.append(
+                    f"Beatmap initial star rating ({initial_star:.3f}) is already <= target "
+                    f"({target_sr:.3f}); no downscaling required."
+                )
+        if arrived:
+            if initial_star is None:
+                warnings.append(
+                    f"Beatmap initial P90 strain ({init_p90:.2f}) is already <= target threshold ({target_strain:.2f}); no downscaling required."
+                )
             return PruningResult(
                 downscaled_beatmap=beatmap,
                 iterations_run=0,
@@ -130,6 +201,9 @@ class WindowedPeakBatchPruner:
                 total_notes_removed=0,
                 warnings=warnings,
                 history=[],
+                target_sr=target_sr,
+                initial_star=initial_star,
+                final_star=initial_star,
             )
 
         current_bm = beatmap
@@ -141,8 +215,17 @@ class WindowedPeakBatchPruner:
         for it in range(1, self.max_iterations + 1):
             prof = compute_dual_hand_strain(current_bm, options=self.strain_options)
 
-            # Check convergence condition
-            if prof.p90_strain <= target_strain * (1.0 + self.tolerance):
+            # Check convergence condition: the star when a target star was named, else strain.
+            current_star = (
+                self.star_of(current_bm, prof.p90_strain, rating_options, radar_options)
+                if target_sr is not None
+                else None
+            )
+            if current_star is not None:
+                if current_star <= target_sr * (1.0 + self.tolerance):
+                    converged = True
+                    break
+            elif prof.p90_strain <= target_strain * (1.0 + self.tolerance):
                 converged = True
                 break
 
@@ -299,11 +382,20 @@ class WindowedPeakBatchPruner:
 
         final_profile = compute_dual_hand_strain(current_bm, options=self.strain_options)
         total_removed = len(beatmap.hit_objects) - len(current_bm.hit_objects)
+        final_star = (
+            self.star_of(current_bm, final_profile.p90_strain, rating_options, radar_options)
+            if target_sr is not None
+            else None
+        )
+        if final_star is not None:
+            arrived_at_end = final_star <= target_sr * (1.0 + self.tolerance)
+        else:
+            arrived_at_end = final_profile.p90_strain <= target_strain * (1.0 + self.tolerance)
 
         return PruningResult(
             downscaled_beatmap=current_bm,
             iterations_run=len(history),
-            converged=converged or (final_profile.p90_strain <= target_strain * (1.0 + self.tolerance)),
+            converged=converged or arrived_at_end,
             initial_p90_strain=init_p90,
             final_p90_strain=final_profile.p90_strain,
             initial_peak_strain=init_peak,
@@ -311,4 +403,7 @@ class WindowedPeakBatchPruner:
             total_notes_removed=total_removed,
             warnings=warnings,
             history=history,
+            target_sr=target_sr,
+            initial_star=initial_star,
+            final_star=final_star,
         )

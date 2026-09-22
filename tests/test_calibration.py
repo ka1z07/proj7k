@@ -16,7 +16,7 @@ from proj7k.difficulty import (
 )
 from proj7k.features import FeatureOptions
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
-from proj7k.radar import RadarOptions
+from proj7k.radar import TECHNIQUE_NAMES, RadarOptions, technique_star_scores
 from proj7k.rating import RatingOptions
 from proj7k.strain import StrainOptions, compute_raw_strain_star_rating
 
@@ -49,7 +49,7 @@ def test_rating_options_defaults_come_from_canonical_calibration():
     assert opts.strain_a == DEFAULT_CALIBRATION.strain_a
     assert opts.strain_b == DEFAULT_CALIBRATION.strain_b
     assert opts.strain_exp == DEFAULT_CALIBRATION.strain_exp
-    assert opts.driver_backpressure_exp == DEFAULT_CALIBRATION.driver_backpressure_exp
+    assert opts.technique_anchors == DEFAULT_CALIBRATION.technique_anchors
     assert opts.calibration == DEFAULT_CALIBRATION
 
 
@@ -62,51 +62,67 @@ def test_anchor_law_has_one_definition():
     assert compute_raw_strain_star_rating(100.0, a=0.4, b=0.2, exp=0.5) == custom.star_rating_from_strain(100.0)
 
 
-def test_radar_scale_follows_rating_options_calibration():
+def test_radar_scores_are_absolute_technique_stars():
     """
-    Radar scores are expressed in the star scale handed to the rating synthesizer, so a
-    non-default RatingOptions must move the radar vector too (previously it kept its own
-    hardcoded copy of the anchor law and silently disagreed).
+    Each dimension is its own anchor law's value at that axis' driver (issue #50), not a share
+    of the strain rating — so the dominant dimension no longer carries the full anchor scale,
+    and its score is a property of the chart rather than of the strain ladder.
+
+    The strain rating is deliberately *not* an input: `strain_a` was rescaled below and the
+    radar is expected not to move at all.
     """
     bm = _dense_chart()
     baseline = evaluate_intrinsic_difficulty(bm)
     assert baseline.radar.dominant_score > 0.0
 
-    # The dominant dimension carries the full anchor scale: its driver ratio is 1.0.
-    sr_base = DEFAULT_CALIBRATION.star_rating_from_strain(baseline.strain_profile.p90_strain)
-    assert baseline.radar.dominant_score == pytest.approx(min(12.0, sr_base), abs=1e-12)
+    scores = technique_star_scores(
+        baseline.drivers.to_dict(),
+        options=RadarOptions(),
+        calibration=DEFAULT_CALIBRATION,
+    )
+    for name in TECHNIQUE_NAMES:
+        assert getattr(baseline.radar, name) == pytest.approx(scores[name], abs=1e-12)
+    assert baseline.radar.dominant_score == scores[baseline.radar.dominant_technique]
 
     rescaled_options = DifficultyOptions(
         rating_options=RatingOptions(strain_a=DEFAULT_CALIBRATION.strain_a * 2.0)
     )
     rescaled = evaluate_intrinsic_difficulty(bm, options=rescaled_options)
-
-    expected_sr_base = rescaled_options.rating_options.calibration.star_rating_from_strain(
-        rescaled.strain_profile.p90_strain
+    assert rescaled.radar.to_vector() == baseline.radar.to_vector()
+    assert rescaled.star_rating == baseline.star_rating
+    # The strain rating itself does move — it is simply not in the composition any more (it is
+    # `strain_profile`/`raw_strain_rating` that carries it, see `difficulty`).
+    assert rescaled.raw_star_rating == baseline.raw_star_rating
+    assert (
+        rescaled_options.rating_options.calibration.star_rating_from_strain(
+            rescaled.strain_profile.p90_strain
+        )
+        != DEFAULT_CALIBRATION.star_rating_from_strain(baseline.strain_profile.p90_strain)
     )
-    assert rescaled.radar.dominant_score == pytest.approx(min(12.0, expected_sr_base), abs=1e-12)
-    assert rescaled.star_rating != baseline.star_rating
-    # Every dimension of the vector is rescaled, not just the dominant one. Asserted as a ratio
-    # rather than a star delta: what the calibration scales is each score's share of the anchor
-    # law, so the absolute move depends on how big that dimension happened to be — a fixed
-    # number of stars would be an assertion about the fixture's balance, not about the coupling.
-    assert rescaled.radar.tech > baseline.radar.tech * 1.5
-    assert rescaled.radar.stream > baseline.radar.stream * 1.5
 
 
-def test_backpressure_exponent_is_injectable():
-    # A larger back-pressure exponent compresses the non-dominant dimensions harder,
-    # while the dominant dimension (ratio 1.0) keeps the full anchor scale.
+def test_technique_anchors_are_injectable():
+    """
+    The anchor table is the calibration, so a caller can hand in its own: rescaling one axis'
+    gain moves that axis' score and, when it is the chart's largest, the chart's rating with it.
+    """
     bm = _dense_chart()
     baseline = evaluate_intrinsic_difficulty(bm)
-    sharper_options = DifficultyOptions(
-        rating_options=RatingOptions(driver_backpressure_exp=1.0)
+    scaled = tuple(
+        dataclasses.replace(anchor, a=anchor.a * 2.0) if anchor.technique == "tech" else anchor
+        for anchor in DEFAULT_CALIBRATION.technique_anchors
     )
-    sharper = evaluate_intrinsic_difficulty(bm, options=sharper_options)
+    louder = evaluate_intrinsic_difficulty(
+        bm, options=DifficultyOptions(rating_options=RatingOptions(technique_anchors=scaled))
+    )
 
-    assert sharper.radar.dominant_score == pytest.approx(baseline.radar.dominant_score, abs=1e-12)
-    assert sharper.radar.tech < baseline.radar.tech
-    assert sharper.radar.speed <= baseline.radar.speed
+    assert louder.radar.tech == pytest.approx(baseline.radar.tech * 2.0, rel=1e-12)
+    for name in TECHNIQUE_NAMES:
+        if name != "tech":
+            assert getattr(louder.radar, name) == pytest.approx(
+                getattr(baseline.radar, name), abs=1e-12
+            )
+    assert louder.star_rating >= baseline.star_rating
 
 
 def test_methodology_fingerprint_tracks_calibration_constants():
@@ -118,9 +134,12 @@ def test_methodology_fingerprint_tracks_calibration_constants():
         {"strain_a": DEFAULT_CALIBRATION.strain_a * 1.01},
         {"strain_b": DEFAULT_CALIBRATION.strain_b + 0.001},
         {"strain_exp": 0.66},
-        {"driver_backpressure_exp": 1.0},
-        {"p_norm": 3.0},
-        {"damping_coeff": 0.09},
+        {
+            "technique_anchors": tuple(
+                dataclasses.replace(anchor, a=anchor.a * 1.01) if anchor.technique == "jack" else anchor
+                for anchor in DEFAULT_CALIBRATION.technique_anchors
+            )
+        },
         {"soft_cap_threshold": 9.0},
         {"soft_cap_scale": 2.0},
     ):
@@ -166,6 +185,13 @@ def _different(value: Any) -> Any:
         return 1
     if isinstance(value, tuple):
         return value + (_different(value[0]),) if value else (1,)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        # A nested value object (the technique anchor table's elements): perturb its first
+        # numeric field, which is the part of it a star rating can move with.
+        for nested in dataclasses.fields(value):
+            current = getattr(value, nested.name)
+            if isinstance(current, (int, float)) and not isinstance(current, bool):
+                return dataclasses.replace(value, **{nested.name: _different(current)})
     raise AssertionError(
         f"no perturbation is defined for {type(value).__name__}: add one so this field's "
         f"fingerprint coverage is actually exercised"

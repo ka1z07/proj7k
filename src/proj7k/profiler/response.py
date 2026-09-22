@@ -15,9 +15,10 @@ from scipy.optimize import curve_fit
 
 from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
 from proj7k.parser import Beatmap7K, NoteType
+from proj7k.profiler.aggregate import player_overall_star
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment
 from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.rating import aggregate_p_norm, apply_tanh_soft_cap
+from proj7k.rating import apply_tanh_soft_cap
 from proj7k.strain import (
     TechniqueStrainTimeseries,
     compute_8d_strain_timeseries,
@@ -383,7 +384,7 @@ def analyze_strain_response(
         dominant_tech = max(tested_results, key=lambda r: r.star_rating).dimension
         bottleneck_technique = min(tested_results, key=lambda r: r.star_rating).dimension
         tested_dict = {r.dimension: r.star_rating for r in tested_results}
-        overall_sr = aggregate_p_norm(tested_dict, p=4.0)
+        overall_sr = player_overall_star(tested_dict)
         overall_dan = estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "None"

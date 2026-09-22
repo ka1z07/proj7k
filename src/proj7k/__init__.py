@@ -13,6 +13,7 @@ from proj7k.parser import dominant_bpm, dominant_timing_point
 from proj7k.calibration import (
     DEFAULT_CALIBRATION,
     StrainStarCalibration,
+    TechniqueStarAnchor,
     compute_methodology_fingerprint,
 )
 from proj7k.physics import (
@@ -101,6 +102,8 @@ from proj7k.radar import (
     RadarOptions,
     compute_raw_technique_drivers,
     compute_technique_radar,
+    technique_radar_from_drivers,
+    technique_star_scores,
 )
 from proj7k.rating import (
     RatingOptions,
@@ -139,6 +142,7 @@ __all__ = [
     "dominant_timing_point",
     "DEFAULT_CALIBRATION",
     "StrainStarCalibration",
+    "TechniqueStarAnchor",
     "compute_methodology_fingerprint",
     "ANTIPHASE_ONSET_WINDOW_S",
     "BRACKET_PHASE_INVERSION_WINDOW_MS",
@@ -208,6 +212,8 @@ __all__ = [
     "RadarOptions",
     "compute_raw_technique_drivers",
     "compute_technique_radar",
+    "technique_radar_from_drivers",
+    "technique_star_scores",
     "RatingOptions",
     "StarRatingSynthesis",
     "aggregate_p_norm",

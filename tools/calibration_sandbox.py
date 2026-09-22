@@ -3,10 +3,15 @@ Sweep the star-rating calibration over the frozen benchmark ladder.
 
 The engine's star rating is a composition of two very different things: everything upstream
 of the star scale (feature extraction, the dual-hand strain accumulator, the 8 raw technique
-drivers) and the pure arithmetic that carries those numbers onto the star scale (the anchor
-law, the driver back-pressure exponent, the p-norm aggregation, the tanh soft cap). Only the
-second half reads the calibration constants — so the first half can be computed once over the
-frozen corpus and frozen, after which a calibration point costs arithmetic alone.
+drivers) and the pure arithmetic that carries those numbers onto the star scale (the eight
+technique anchor laws and the tanh soft cap, plus the strain anchor law behind the reported
+raw rating). Only the second half reads the calibration constants — so the first half can be
+computed once over the frozen corpus and frozen, after which a calibration point costs
+arithmetic alone.
+
+The technique anchors are a *table* — one gain and one exponent per axis — so they are not
+one-at-a-time swept here; `tools/technique_star_fit.py` is what searches them. This tool
+evaluates whatever table the options carry.
 
 That is what makes a sweep cheap: the 120 charts are evaluated in full once, and every
 constant after that is answered from the frozen core. A full one-at-a-time sweep of every
@@ -17,6 +22,10 @@ The tool never writes to the engine. It answers "what would this calibration do 
 ladder" — whether the 15-tier monotonicity, the anchor-tier medians and the CI gate would
 survive — before anyone commits a constant change and re-baselines the star-rating checksum.
 
+The frozen core itself lives in `proj7k.benchmark_core`, shared with
+`tools/technique_star_fit.py`: the sandbox evaluates a calibration forwards, the fitter searches
+for one backwards, and both start from the same freeze.
+
 The fast path is asserted against the real `evaluate_intrinsic_difficulty` seam on every run:
 if the two ever disagree by even 1e-9 of a star, the run aborts rather than reporting numbers
 that describe a different engine. See `docs/methodology/calibration-sensitivity-and-sandbox.md`
@@ -24,24 +33,17 @@ for what the sweep found on the current calibration.
 
     PYTHONPATH=src python3 tools/calibration_sandbox.py                  # baseline only
     PYTHONPATH=src python3 tools/calibration_sandbox.py --sweep          # one-at-a-time sweep
-    PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_a=0.242 --set p_norm=6
+    PYTHONPATH=src python3 tools/calibration_sandbox.py --set strain_a=0.242 --set soft_cap_scale=2
 """
 
 import argparse
 from dataclasses import fields, replace
-import hashlib
-import json
-import math
-from pathlib import Path
-import pickle
 import statistics
 import sys
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from proj7k.assets import load_corpus_fixture
+from proj7k.benchmark_core import build_core
 from proj7k.dan import CANONICAL_DAN_SR_BANDS
-from proj7k.difficulty import evaluate_intrinsic_difficulty
-from proj7k.features import extract_beatmap_features
 from proj7k.guard import (
     CALIBRATED_METRIC_GATES,
     DEFAULT_METRIC_GATE,
@@ -50,104 +52,32 @@ from proj7k.guard import (
 from proj7k.monotonicity import (
     DRIVER_METRIC_PREFIX,
     TIER_ORDER,
-    compute_kendall_tau,
-    compute_spearman_rho,
     evaluate_tier_sequence,
 )
-from proj7k.parser import parse_osu_7k
 from proj7k.radar import (
-    TECHNIQUE_NAMES,
     RadarOptions,
     TechniqueRadar,
-    compute_raw_technique_drivers,
+    technique_radar_from_drivers,
 )
 from proj7k.rating import RatingOptions, synthesize_star_rating
-from proj7k.strain import compute_dual_hand_strain
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = REPO_ROOT / "docs" / "research" / "structured_index.json"
-CORPUS_PATH = REPO_ROOT / "tests" / "fixtures" / "benchmark_corpus.json.gz"
-CACHE_PATH = REPO_ROOT / ".cache" / "proj7k-sandbox" / "core.pkl"
 
 #: The sweep's own gate thresholds come from the CI guard rather than being re-typed here, so
 #: a recalibrated gate moves both at once.
 _GATE = CALIBRATED_METRIC_GATES["star_rating"]
 
 
-def _source_digest() -> str:
-    """
-    Digest of the engine source the frozen core was built from.
-
-    The core is a cache of feature tensors, P90 strain and raw drivers — everything the
-    calibration constants do *not* touch. Keying it by the engine's methodology fingerprint
-    would be the obvious choice and the wrong one: a sweep exists precisely to move constants
-    the fingerprint tracks, but the *upstream* maths has literals the fingerprint does not
-    track at all (see the fingerprint-coverage issue). Hashing the source catches both, so a
-    core built before an upstream edit is rebuilt instead of silently supplying stale numbers
-    — the failure mode the repository's Layer-2 feature cache already lived through.
-    """
-    digest = hashlib.sha256()
-    for path in sorted((REPO_ROOT / "src" / "proj7k").rglob("*.py")):
-        digest.update(path.name.encode("utf-8"))
-        digest.update(path.read_bytes())
-    return digest.hexdigest()
-
-
-def build_core(force: bool = False) -> List[dict]:
-    """Evaluates every benchmark chart in full and freezes everything upstream of the stars."""
-    digest = _source_digest()
-    if CACHE_PATH.exists() and not force:
-        cached = pickle.loads(CACHE_PATH.read_bytes())
-        if cached.get("digest") == digest:
-            return cached["records"]
-
-    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    corpus = load_corpus_fixture(CORPUS_PATH)
-
-    records: List[dict] = []
-    for technique, tiers in manifest.items():
-        for tier, entry in tiers.items():
-            content = corpus[int(entry["id"])]
-            beatmap = parse_osu_7k(content)
-            features = extract_beatmap_features(beatmap)
-            strain = compute_dual_hand_strain(beatmap)
-            records.append(
-                {
-                    "technique": technique,
-                    "tier": tier,
-                    "song": entry["song"],
-                    "p90": strain.p90_strain,
-                    "drivers": compute_raw_technique_drivers(beatmap, features=features).to_dict(),
-                    "reference_star": evaluate_intrinsic_difficulty(content).star_rating,
-                }
-            )
-
-    CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CACHE_PATH.write_bytes(pickle.dumps({"digest": digest, "records": records}))
-    return records
-
-
 def _radar_from_drivers(record: dict, options: RatingOptions) -> TechniqueRadar:
-    """The star mapping of `radar.compute_technique_radar`, over a frozen driver vector."""
-    calibration = options.calibration
-    sr_base = calibration.star_rating_from_strain(record["p90"])
-    drivers = record["drivers"]
-    max_raw = max(drivers.values())
-    if max_raw <= 1e-6 or sr_base <= 1e-6:
-        scores = {name: 0.0 for name in TECHNIQUE_NAMES}
-    else:
-        ceiling = RadarOptions().score_ceiling
-        scores = {
-            name: min(
-                ceiling, sr_base * math.pow(value / max_raw, calibration.driver_backpressure_exp)
-            )
-            for name, value in drivers.items()
-        }
-    dominant = max(drivers, key=lambda k: drivers[k]) if max_raw > 1e-6 else "None"
-    return TechniqueRadar(
-        **{name: scores[name] for name in TECHNIQUE_NAMES},
-        dominant_technique=dominant,
-        dominant_score=scores.get(dominant, 0.0),
+    """
+    The star mapping of `radar.technique_radar_from_drivers`, over a frozen driver vector.
+
+    The mapping itself is the engine's — this used to be a second copy of it, which meant a
+    calibration sweep could describe an engine that no longer existed. Only the *inputs* are the
+    sandbox's: a frozen driver vector and the calibration of the options point being evaluated.
+    """
+    return technique_radar_from_drivers(
+        record["drivers"],
+        options=RadarOptions(),
+        calibration=options.calibration,
     )
 
 
@@ -352,9 +282,6 @@ SWEEP_CASES: List[Tuple[str, List[float]]] = [
     ("strain_a", [0.75, 0.9, 1.1, 1.25]),
     ("strain_b", [0.0, 0.5, 2.0, 4.0]),
     ("strain_exp", [0.85, 0.95, 1.05, 1.15]),
-    ("driver_backpressure_exp", [0.7, 0.85, 1.15, 1.3]),
-    ("p_norm", [0.5, 0.75, 1.5, 2.0]),
-    ("damping_coeff", [0.0, 0.5, 2.0, 4.0]),
     ("soft_cap_threshold", [0.9, 0.97, 1.03, 1.1]),
     ("soft_cap_scale", [0.5, 0.8, 1.5, 2.5]),
 ]

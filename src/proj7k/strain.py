@@ -806,7 +806,17 @@ def compute_8d_strain_timeseries(
         raw_curves["ln_inverse"].append(local_nps * hold_ratio * inv_load)
         raw_curves["ln_release"].append(ln_rel_acc + (1.0 if locked_fingers > 0 else 0.0))
 
-    # Calibrate each curve to the benchmark strain matching its calibrated radar score
+    # Calibrate each curve to the benchmark strain matching its calibrated radar score.
+    #
+    # The dimension's score is an *absolute technique star* (ADR-0016) and this converts it into
+    # a strain level through the strain anchor law — i.e. it reads a technique star as if it were
+    # a strain-anchor star. That is deliberate and it is a *level*, not a claim that the two laws
+    # are the same function: the profiler turns a player's capacity strain back into a star
+    # through the same law (`profiler.response`), and because the round trip is monotone, "this
+    # player's capacity exceeds this chart's demand on that axis" is decided the same way in
+    # either space. What the dimension curve is *not* is a measurement: its shape is the raw
+    # weight block above, which restates the jack/burst/flow constants rather than reading them
+    # from `RadarOptions` — issue #49, filed against this operator, still open.
     calibrated_curves: Dict[str, List[float]] = {}
     for d in dims:
         radar_score = getattr(radar, d, 0.0)
