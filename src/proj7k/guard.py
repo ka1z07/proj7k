@@ -92,13 +92,16 @@ DEFAULT_MIN_ANCHOR_SAMPLES: int = 4
 #: an anchor table), so the bar has exactly one definition. Values as measured on the frozen
 #: corpus when the bar was written: mean rho 0.983 / mean tau 0.940 / 16 inversions.
 #:
-#: ADR-0016's switch to absolute technique stars moves the star ladder's order onto the
-#: per-axis drivers and so lands at mean tau 0.9255 with 22 inversions — the bar is currently
-#: missed, deliberately, pending that ADR's open question 3 (re-baselining it means relaxing a
-#: Phase 2 specification line, which is not a silent edit).
+#: **Re-baselined by issue #50** (ADR-0016, owner-approved): the switch to absolute technique
+#: stars moves the star ladder's order onto the per-axis drivers, and the drivers order their
+#: ladders less sharply than the strain ladder did (the drivers run tau 0.79-0.96; the strain
+#: ladder is the density order). Measured now: mean rho 0.9816 / mean tau 0.9255 / 22
+#: inversions. The bars below sit at the measured worst with the same margin the per-technique
+#: gates keep, and this comment is the record of what the Phase 2 line was before the switch
+#: (rho 0.98 / tau 0.94 / 20 inversions, measured 0.983 / 0.940 / 16).
 LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
-LADDER_MIN_MEAN_KENDALL_TAU = 0.94
-LADDER_MAX_TOTAL_INVERSIONS = 20
+LADDER_MIN_MEAN_KENDALL_TAU = 0.92
+LADDER_MAX_TOTAL_INVERSIONS = 24
 
 # --- The absolute technique-star band (issue #50, ADR-0016) -----------------------------------
 #: The tolerance the calibration is judged by: a technique's score for a tier-T chart has to sit
