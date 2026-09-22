@@ -13,7 +13,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from proj7k.calibration import DEFAULT_CALIBRATION, StrainStarCalibration
-from proj7k.parser import Beatmap7K, NoteType, dominant_bpm
+from proj7k.parser import Beatmap7K, NoteType, notation_normalized_bpm
 from proj7k.physics import (
     ANTIPHASE_ONSET_WINDOW_S,
     JACK_INTERVAL_PENALTY_MS,
@@ -149,8 +149,10 @@ class StrainOptions:
     """
     Configuration options for dual-hand strain accumulation and modulation.
 
-    `bpm` is an explicit tempo override; when unset the chart's dominant BPM is read from
-    `parser.dominant_bpm` (the single BPM source).
+    `bpm` is an explicit tempo annotation; when unset the chart's own annotated tempo is read
+    off the chart. Either way the strain accumulator works from
+    `parser.notation_normalized_bpm`, the single tempo source, which puts both on one notation
+    scale (issue #51).
     """
     tau_time_constant_s: float = 1.2
     window_s: float = 0.5
@@ -442,11 +444,9 @@ def compute_dual_hand_strain(
             peak_strain=0.0,
         )
 
-    # Effective BPM: explicit override, else the chart's single dominant tempo
-    if options.bpm is not None and options.bpm > 0:
-        bpm = options.bpm
-    else:
-        bpm = dominant_bpm(beatmap)
+    # Effective BPM: explicit override, else the chart's single dominant tempo — either way
+    # re-expressed on the action clock's notation scale, since both are annotations (#51).
+    bpm = notation_normalized_bpm(beatmap, override=options.bpm)
 
     eta = compute_judgment_overlap_buffer(bpm, options.w_judg_ms)
     scaling_factor = compute_high_speed_scaling_factor(bpm, eta)

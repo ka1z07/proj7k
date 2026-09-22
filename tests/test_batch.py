@@ -553,13 +553,18 @@ def test_batch_pipeline_monotonicity_evaluation(tmp_path: Path):
 
 def test_batch_pipeline_inverse_bpm_scaling_top_level_seam(tmp_path: Path):
     # Highest testing seam: test end-to-end benchmark pipeline with Inverse BPM scaling law.
-    # Chart 1: 7th Dan, Low-speed 130 BPM, 6 LNs locked simultaneously (mean locked ~ 5.8)
-    # Chart 2: Stellium, High-speed 220 BPM, 4 LNs locked simultaneously (mean locked ~ 3.9)
+    # Chart 1: 7th Dan, Low-speed 30 BPM, 6 LNs locked simultaneously (mean locked ~ 5.8)
+    # Chart 2: Stellium, High-speed 250 BPM, 4 LNs locked simultaneously (mean locked ~ 3.9)
     #
     # Without scaling: 7th (5.8) > Stellium (3.9) -> Pseudo Inversion!
-    # With scaling: Gating operator cuts 7th Dan to <= 5.0 (low-speed cap)
-    #               and applies exponential penalty to 220 BPM Stellium (> 15.0).
+    # With scaling: Gating operator cuts 7th Dan into the low-speed truncation regime
+    #               and applies exponential penalty to the 250 BPM Stellium.
     # Monotonicity is preserved and Kendall's tau reaches 1.0.
+    #
+    # Both charts are annotated in 1/16 (their notes sit a quarter of a beat apart), so the
+    # notation-normalized tempo the engine reads equals the tempo stated here — see ADR-0006
+    # revision 1. Under the pre-#51 code the tempi below were 130 and 220, which put neither
+    # chart where its own note spacing says it belongs.
 
     low_speed_osu = """osu file format v14
 [General]
@@ -571,7 +576,7 @@ Version: 7th
 CircleSize: 7
 OverallDifficulty: 8
 [TimingPoints]
-0,461.538,4,2,0,50,1,0
+0,2000,4,2,0,50,1,0
 [HitObjects]
 36,192,0,128,0,2000:0:0:0:0:
 109,192,0,128,0,2000:0:0:0:0:
@@ -594,16 +599,32 @@ Version: Stellium
 CircleSize: 7
 OverallDifficulty: 8
 [TimingPoints]
-0,272.727,4,2,0,50,1,0
+0,240,4,2,0,50,1,0
 [HitObjects]
 36,192,0,128,0,2000:0:0:0:0:
 109,192,0,128,0,2000:0:0:0:0:
 402,192,0,128,0,2000:0:0:0:0:
 475,192,0,128,0,2000:0:0:0:0:
-256,192,250,1,0,0:0:0:0:
-256,192,500,1,0,0:0:0:0:
-256,192,750,1,0,0:0:0:0:
-256,192,1000,1,0,0:0:0:0:
+256,192,60,1,0,0:0:0:0:
+256,192,120,1,0,0:0:0:0:
+256,192,180,1,0,0:0:0:0:
+256,192,240,1,0,0:0:0:0:
+256,192,300,1,0,0:0:0:0:
+256,192,360,1,0,0:0:0:0:
+256,192,420,1,0,0:0:0:0:
+256,192,480,1,0,0:0:0:0:
+256,192,540,1,0,0:0:0:0:
+256,192,600,1,0,0:0:0:0:
+256,192,660,1,0,0:0:0:0:
+256,192,720,1,0,0:0:0:0:
+256,192,780,1,0,0:0:0:0:
+256,192,840,1,0,0:0:0:0:
+256,192,900,1,0,0:0:0:0:
+256,192,960,1,0,0:0:0:0:
+256,192,1020,1,0,0:0:0:0:
+256,192,1080,1,0,0:0:0:0:
+256,192,1140,1,0,0:0:0:0:
+256,192,1200,1,0,0:0:0:0:
 """
 
     manifest = [
@@ -612,7 +633,7 @@ OverallDifficulty: 8
             tier="7th",
             id=701,
             song="Low Speed High Lock",
-            bpm=130.0,
+            bpm=30.0,
             content=low_speed_osu,
         ),
         BenchmarkItem(
@@ -620,7 +641,7 @@ OverallDifficulty: 8
             tier="Stellium",
             id=1401,
             song="High Speed Modest Lock",
-            bpm=220.0,
+            bpm=250.0,
             content=high_speed_osu,
         ),
     ]
@@ -635,13 +656,14 @@ OverallDifficulty: 8
     # 2. Check item-level results
     res_7th = report.results[0]
     res_stellium = report.results[1]
-    assert res_7th.bpm == 130.0
+    assert res_7th.bpm == 30.0
     assert res_7th.features.mean_locked_fingers >= 5.0
-    assert res_7th.features.delta_t_action == pytest.approx(115.3846, abs=1e-3)
+    # The action clock is the chart's own note spacing (1/16 of the stated tempo): 500 ms.
+    assert res_7th.features.delta_t_action == pytest.approx(500.0, abs=1e-2)
 
-    assert res_stellium.bpm == 220.0
+    assert res_stellium.bpm == 250.0
     assert res_stellium.features.mean_locked_fingers < res_7th.features.mean_locked_fingers
-    assert res_stellium.features.delta_t_action == pytest.approx(68.1818, abs=1e-3)
+    assert res_stellium.features.delta_t_action == pytest.approx(60.0, abs=1e-2)
 
     # 3. Check monotonicity evaluation
     assert report.monotonicity is not None

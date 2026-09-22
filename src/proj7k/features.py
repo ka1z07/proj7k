@@ -1,7 +1,13 @@
 import math
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any, Tuple, Union
-from proj7k.parser import Beatmap7K, NoteType, dominant_bpm, uninherited_timing_points
+from proj7k.parser import (
+    Beatmap7K,
+    NoteType,
+    dominant_bpm,
+    notation_normalized_bpm,
+    uninherited_timing_points,
+)
 from proj7k.physics import DEFAULT_BPM
 from proj7k.window import generate_all_barlines
 from proj7k.scaling import compute_action_window, compute_inverse_score
@@ -410,7 +416,7 @@ def extract_beatmap_features(
         )
     release_lock_depth = round(locked_lift_count / ln_count, 4) if ln_count else 0.0
 
-    effective_bpm = bpm if (bpm is not None and bpm > 0) else get_dominant_bpm(beatmap)
+    effective_bpm = notation_normalized_bpm(beatmap, override=bpm)
     delta_t_action = compute_action_window(effective_bpm)
     inverse_score = compute_inverse_score(mean_locked_fingers, bpm=effective_bpm, nps=avg_nps)
 

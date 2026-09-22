@@ -131,6 +131,13 @@ _SCALING = [
         {},
     ),
     (
+        "normalize_notation_bpm",
+        {0.0: 3},
+        "Non-positive tempo, note-value and divisor guards: any of the three unusable leaves the "
+        "annotated number alone rather than dividing by it.",
+        {},
+    ),
+    (
         "compute_inverse_scaling_factor",
         {0.0: 4, 1.0: 1, 7.0: 2, 4: 3},
         "Zero floors and the empty-tempo guard; the identity offset of the lock amplification, "
@@ -151,7 +158,7 @@ _FEATURES = [
     ("_calc_rate", {0: 2, 4: 1}, "Zero-duration guard and reported-precision rounding.", {}),
     (
         "extract_beatmap_features",
-        {0: 75, 1: 45, 2: 10, 4: 19, 5: 5, 6: 4, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
+        {0: 74, 1: 45, 2: 10, 4: 19, 5: 5, 6: 4, 7: 6, 8: 2, 3.0: 1, 100.0: 2, 1000.0: 3, 60000.0: 2},
         "Indices, counts and 7-lane topology throughout — including the left/right hand lane "
         "tuples the release-articulation terms read, whose members are lane numbers, not "
         "thresholds; ms/s and bpm/beat-length conversions; the percentage scaling of hold_pct; "
@@ -172,6 +179,14 @@ _FEATURES = [
 # --- parser.py --------------------------------------------------------------------------------
 _PARSER = [
     ("dominant_bpm", {0: 1}, "Empty-timing-point guard.", {}),
+    ("notation_normalized_bpm", {0.0: 1}, "Non-positive tempo-override guard.", {}),
+    (
+        "observed_note_value",
+        {0.0: 1, 1: 1, 2: 1},
+        "Non-positive beat-length guard; an interval needs two onsets to exist, so the second "
+        "one is index 1 and the minimum length is 2.",
+        {},
+    ),
     ("uninherited_timing_points", {0: 1}, "Zero-time floor when filtering timing points.", {}),
     ("bpm", {0: 1, 60000.0: 1}, "Milliseconds per minute and the non-positive beat-length guard.", {}),
     (
@@ -290,7 +305,7 @@ _STRAIN = [
     ),
     (
         "compute_dual_hand_strain",
-        {0.0: 12, 1: 3, 3: 2, 4: 1, 5: 2, 6: 1, 7: 5, 2.0: 2, 0.5: 1, 1000.0: 6},
+        {0.0: 11, 1: 3, 3: 2, 4: 1, 5: 2, 6: 1, 7: 5, 2.0: 2, 0.5: 1, 1000.0: 6},
         "Lane topology and column ranges, list indices, the space-parallel L2 norm, zero floors, "
         "and ms/s conversions. The 0.5 is the minimum chart span the sampler will integrate over. "
         "The two 3s index the shared centre lane (L3 | L2 | L1 | S | R1 | R2 | R3).",

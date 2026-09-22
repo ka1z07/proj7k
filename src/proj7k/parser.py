@@ -3,9 +3,11 @@ from enum import Enum
 import hashlib
 import math
 import os
+import statistics
 from typing import List, Optional, Dict
 
 from proj7k.physics import DEFAULT_BPM
+from proj7k.scaling import normalize_notation_bpm
 
 
 class NoteType(Enum):
@@ -110,15 +112,59 @@ def dominant_bpm(beatmap: Beatmap7K, default: float = DEFAULT_BPM) -> float:
     """
     The single dominant BPM of a chart: the unrounded tempo of its dominant timing point.
 
-    Unrounded on purpose — this is the physical quantity fed to strain accumulation and
-    cognitive scaling, where a 1-ulp shift moves every downstream sample. Callers that need
-    a display/checksum-stable form round it themselves.
+    This is the chart's *annotation* and is reported as such; engine stages that need the tempo
+    to compute with want `notation_normalized_bpm` instead, which puts it on one notation scale.
+    Unrounded on purpose — a 1-ulp shift moves every downstream sample. Callers that need a
+    display/checksum-stable form round it themselves.
     """
     tp = dominant_timing_point(beatmap)
     if tp is None:
         return default
     bpm = tp.bpm
     return bpm if (bpm is not None and bpm > 0) else default
+
+
+def observed_note_value(beatmap: Beatmap7K) -> Optional[float]:
+    """
+    The note value a chart is written in: its median inter-onset interval expressed in beats of
+    its dominant timing point.
+
+    Counted over distinct onset times rather than hit objects, so a chord counts once and the
+    figure describes the chart's step rate rather than its note count. This is the chart's own
+    answer to "which note value are these sprites on", and it is what makes two notations of the
+    same physical chart comparable. Returns None when the chart states no usable tempo, or has
+    fewer than two distinct onsets to measure an interval from.
+    """
+    tp = dominant_timing_point(beatmap)
+    if tp is None:
+        return None
+    beat_length = tp.beat_length
+    if beat_length is None or beat_length <= 0.0:
+        return None
+
+    onsets = sorted({ho.time for ho in beatmap.hit_objects})
+    if len(onsets) < 2:
+        return None
+    intervals = [later - earlier for earlier, later in zip(onsets, onsets[1:])]
+    return statistics.median(intervals) / beat_length
+
+
+def notation_normalized_bpm(beatmap: Beatmap7K, override: Optional[float] = None) -> float:
+    """
+    The tempo every tempo-driven engine stage is built from: the chart's annotated tempo,
+    re-expressed on a single notation scale.
+
+    `override` is an annotation supplied by the caller rather than read off the chart — the
+    benchmark manifest carries one per entry — and is normalized by the same rule, because it is
+    an annotation on the same inconsistent scale. Returns the annotated tempo unchanged when the
+    chart's note value cannot be observed, so a chart without a usable tempo keeps the caller's
+    number rather than silently acquiring one.
+    """
+    annotated = override if (override is not None and override > 0.0) else dominant_bpm(beatmap)
+    note_value = observed_note_value(beatmap)
+    if note_value is None:
+        return annotated
+    return normalize_notation_bpm(annotated, note_value)
 
 
 def _format_num(val: float) -> str:

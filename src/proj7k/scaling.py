@@ -50,10 +50,38 @@ class ScalingConfig:
     reference_bpm: float = REFERENCE_BPM
 
 
+def normalize_notation_bpm(
+    annotated_bpm: float, note_value: float, divisor: int = DEFAULT_DIVISOR
+) -> float:
+    """
+    Re-expresses an annotated tempo on the single notation scale the action clock is defined on.
+
+    A timing point states a tempo together with the note value the chart is written in, and
+    charters do not agree on the latter: measured over the 120-chart benchmark corpus, a chart's
+    median inter-onset interval spans 1/12 to 1/1 of its annotated beat, so the same physical
+    spacing is annotated anywhere between four times slower and three times faster. Feeding the
+    annotated number straight into `compute_action_window` — or into the `LOW_SPEED_*` /
+    `HIGH_SPEED_BPM_THRESHOLD` regime switches — therefore reads a different note value per
+    chart and misplaces every tempo-driven operator by up to 2x (issue #51).
+
+    `note_value` is that observed fraction (see `parser.observed_note_value`). The result is the
+    tempo that would state the same physical spacing if the chart were written in `1/divisor`
+    notes, so the two notations of one chart normalize to the same number. It is deliberately
+    unrounded: this number reaches the strain accumulator, where a 1-ulp shift moves every
+    downstream sample.
+    """
+    if annotated_bpm <= 0.0 or note_value <= 0.0 or divisor <= 0:
+        return annotated_bpm
+    return annotated_bpm / (divisor * note_value)
+
+
 def compute_action_window(bpm: float, divisor: int = DEFAULT_DIVISOR) -> float:
     """
     Computes the micro-action clock window in milliseconds:
     delta_t = 60000.0 / (bpm * divisor)
+
+    `bpm` is expected to be on the notation scale this window is defined on, i.e. the output of
+    `normalize_notation_bpm` (via `parser.notation_normalized_bpm`) rather than a raw annotation.
     """
     if bpm <= 0:
         return float("inf")
