@@ -897,10 +897,18 @@ def compute_raw_technique_drivers(
     #   are both *level* quantities, and a chart can hold many fingers for a long time without
     #   ever asking for 立即松手、立即按下.
     #
-    # `inverse_score` is retained (ADR-0015 decision 6 pins its removal to a later verification,
-    # not to the reconstruction) but it is no longer the axis' carrier: it is a BPM-scaled
-    # locked-finger *level*, and as the carrier it let a chart with an extreme notation tempo
-    # dominate the axis on level alone — see `scaling.PENALTY_EXP_CEILING`.
+    # `inverse_score` is retained, and the verification decision 6 asked for has now been run
+    # (ADR-0015's stage-2 record). It is **not** a measure of 反相密度: `compute_inverse_score`
+    # takes `mean_locked_fingers`, BPM* and nps and no inverse-press quantity at all, and on the
+    # 60 LN charts it correlates 0.963 with `notation_bpm` and 0.926 with `peak_4m_nps` against
+    # 0.158 with `inverse_press_share`. What it is, is this axis' *level carrier* — the LN-side
+    # analogue of the rice axes' peak-density carrier, over `lock_load`'s 全锁程度 and
+    # `inverse_press_rate`'s 反相密度. Removing it costs the axis its own ladder (0.79/0.90 ->
+    # 0.66/0.80, below even the default gate) and downweighting degrades it monotonically, so
+    # "delete or downweight" answers itself: the shape terms cannot order a ladder on their own
+    # any more than the rice axes' could. It is no longer the *whole* axis, which is what let a
+    # chart with an extreme notation tempo dominate it on level alone — see
+    # `scaling.PENALTY_EXP_CEILING` for the saturation that closed that.
     lock_load = math.pow(
         max(0.0, features.mean_locked_fingers - options.ln_inv_lock_center) / options.ln_inv_lock_span,
         options.ln_inv_lock_exp,
