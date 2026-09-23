@@ -89,16 +89,25 @@ DEFAULT_MIN_ANCHOR_SAMPLES: int = 4
 #: per-technique gates above: no single technique collapsing is a different claim from the
 #: ladder being well ordered. Asserted end-to-end by `tests/test_120_benchmark_guard.py` and
 #: readable by the calibration tools (`tools/technique_star_fit.py` weighs it when it selects
-#: an anchor table), so the bar has exactly one definition. Values as measured on the frozen
-#: corpus when the bar was written: mean rho 0.983 / mean tau 0.940 / 16 inversions.
+#: an anchor table), so the bar has exactly one definition. The line was written against the
+#: **pre-#47** engine; re-measured at `96a236f` (the last commit before #47 split the drivers
+#: out of the radar) it is mean rho 0.983 / mean tau 0.9405 / 16 inversions, which is what this
+#: comment records.
 #:
-#: **Re-baselined by issue #50** (ADR-0016, owner-approved): the switch to absolute technique
+#: **Re-baselined by issue #50** (ADR-0016, owner-approved). The switch to absolute technique
 #: stars moves the star ladder's order onto the per-axis drivers, and the drivers order their
 #: ladders less sharply than the strain ladder did (the drivers run tau 0.79-0.96; the strain
-#: ladder is the density order). Measured now: mean rho 0.9816 / mean tau 0.9255 / 22
-#: inversions. The bars below sit at the measured worst with the same margin the per-technique
-#: gates keep, and this comment is the record of what the Phase 2 line was before the switch
-#: (rho 0.98 / tau 0.94 / 20 inversions, measured 0.983 / 0.940 / 16).
+#: ladder is the density order).
+#:
+#: **Corrected 2026-09-23 (measured, not transcribed):** the numbers above are *not* the engine
+#: the switch replaced. That engine is `0385e7a` (PR #54's merge base), measured there at mean
+#: rho 0.9706 / mean tau 0.9167 / 17 inversions — it already failed both this rho bar and the
+#: per-technique star gate (`batch --guard` reports Regular Speed tau 0.809 and LN Inverse tau
+#: 0.867 against the 0.88 line; `tests/test_120_benchmark_guard.py` is 3 failed / 5 passed).
+#: The drop to tau ~0.914 belongs to #47's K_base revision, not to the star switch, which
+#: *raised* tau and rho to the current 0.9816 / 0.9255 while adding 5 adjacent inversions.
+#: So the bars below are the standing line, and tau 0.94 / 20 inversions is the Phase 2 line
+#: this engine still does not meet on tau (0.9255 against 0.94).
 LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
 LADDER_MIN_MEAN_KENDALL_TAU = 0.92
 LADDER_MAX_TOTAL_INVERSIONS = 24
