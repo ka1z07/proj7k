@@ -1,0 +1,554 @@
+# osu!mania 7K 难度引擎规格
+
+| | |
+|---|---|
+| 版本 | 0.1（草案） |
+| 日期 | 2026-10-01 |
+| 状态 | 设计完成，**未经图池验证**。所有参数为先验初值，未校准。 |
+| 适用 | osu!mania 7K，无 SV |
+
+---
+
+## 1. 目标与范围
+
+### 1.1 目标
+
+- **G1 总难度**：输出一个星数标度的总难度，与玩家群体对星数的感知对齐。不得以任何现有 SR 算法的输出作为拟合目标。
+- **G2 技法难度**：输出 8 个技法难度，对应 JinJin 7K Dan Course 的 8 个槽位。在每个技法对应的段图池内，该技法难度必须随段位严格单调递增。总难度不要求单调。
+- **G3 主导技法**：输出各技法对总难度的主导度，且该量不得因技法子集更大而被系统性抬高。
+
+### 1.2 八个技法
+
+| 记号 | 段位槽位 | 合格线 |
+|---|---|---|
+| RC-Jack | Regular 第 1 图：小叠、长叠、多押叠 | 96% |
+| RC-Tech | Regular 第 2 图：技术型排列，综合性 | 96% |
+| RC-Speed | Regular 第 3 图：高速串、爆发，手指速度 | 96% |
+| RC-Stamina | Regular 第 4 图：长段 chordstream，耐力与稳定 | 96% |
+| LN-General | LN 第 1 图：常见面条排列 | 95% |
+| LN-Tech | LN 第 2 图：技术型面条排列 | 95% |
+| LN-Inverse | LN 第 3 图：反键，手指独立性 | 95% |
+| LN-Release | LN 第 4 图：面尾释放，读谱与协调 | 95% |
+
+### 1.3 非目标
+
+- 不处理 SV（变速视为不存在）。
+- 不处理 OD、HP 对难度的影响；难度定义在参考判定下。
+- 不处理 3+1+3 以外的键位（见 A4）。
+- 不输出 pp。
+
+### 1.4 规范用语
+
+"必须"表示实现的硬性要求；"应"表示默认做法，偏离需说明理由；"可"表示可选。标注【A*n*】处依赖第 15 节的假设 *n*。
+
+---
+
+## 2. 输入与预处理
+
+所有公式中的时间单位为秒。
+
+### 2.1 输入
+
+物件列表，每个物件为 $(c, t, e)$：列号 $c\in\{0,\dots,6\}$，头时刻 $t$，尾时刻 $e$（米无尾）。倍速 mod 必须在进入引擎前施加到时间轴上。
+
+### 2.2 短面条折算
+
+长度 $\ell=e-t<\ell_{\min}$ 的面条必须按米处理。
+
+### 2.3 事件
+
+- 每个米产生一个**按下**事件。
+- 每个面条产生一个**按下**事件（时刻 $t$）和一个**松开**事件（时刻 $e$）。
+
+事件 $i$ 的属性：时刻 $t_i$、列 $c_i$、类型（按下/松开）、是否属于面条 $\mathrm{isLN}_i$、所属面条长度 $\ell_i$。
+
+### 2.4 行
+
+时刻相同（容差 1 ms）的事件组成一**行**。行 $r$ 的时刻记为 $T_r$。间隔为 0 的事件称为**同时**事件。
+
+### 2.5 指法映射【A4】
+
+| 列 | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| 手指 | 左无名 | 左中 | 左食 | 拇指 | 右食 | 右中 | 右无名 |
+
+拇指归属的手 $h_T\in\{L,R\}$ 不确定。引擎必须对两种归属各完整计算一次，取总难度 $D$ 较小的那次结果作为全部输出。
+
+### 2.6 按住状态
+
+$\mathcal H(t)$ 为时刻 $t$ 正被按住的手指集合，即满足"头 $<t<$ 尾"的面条所在手指。$h_i$ 为事件 $i$ 发生时、除自身所在列以外被按住的列数。
+
+---
+
+## 3. 难度的定义
+
+### 3.1 逐事件损失【A1】
+
+事件 $i$ 的需求为 $d_i(\theta)\ge 0$（第 7 节），玩家水平为 $\theta>0$，二者同单位（等效 Hz）。期望准度损失：
+
+$$p_i(\theta)=\frac{1}{1+\big(\theta/d_i(\theta)\big)^{\beta}},\qquad d_i=0\Rightarrow p_i=0$$
+
+### 3.2 带权集合的难度【A2】【A3】
+
+给定权重 $w_i\in[0,1]$，$W=\sum_i w_i$，$W_+=\sum_{i:\,d_i>0}w_i$。集合难度 $D(w)$ 定义为下式关于 $\theta$ 的根：
+
+$$\sum_i w_i\,p_i(\theta)=\varepsilon\,(W+N_0)$$
+
+- 若 $W_+\le\varepsilon(W+N_0)$，令 $D(w)=0$。
+- 否则根存在且唯一（附录 A.1），必须在 $\ln\theta$ 上二分求解，相对精度不低于 $10^{-4}$。
+
+### 3.3 容差 $\varepsilon$
+
+| 用途 | $\varepsilon$ |
+|---|---|
+| RC 四个技法 | 0.04 |
+| LN 四个技法 | 0.05 |
+| 总难度 | $0.04+0.01\,\bar\lambda$，$\bar\lambda$ 为 $\lambda_i$（8.1 节）的均值 |
+
+### 3.4 性质（规范性，对应验收测试）
+
+- **尺寸无关**：$W\gg N_0$ 时，复制集合不改变 $D$（附录 A.2）。
+- **小子集收缩**：$W\to 0$ 时 $D\to 0$。
+- **单点饱和**：$p_i\le 1$，单个事件对方程左边的贡献有界。
+- **软分位数**：$\beta\to\infty$ 时 $D$ 退化为 $d_i$ 的加权 $1-\varepsilon(1+N_0/W)$ 分位数（附录 A.3）。
+
+---
+
+## 4. 物理层：瞬时需求 $v_i$
+
+$$v_i=\omega_i\,(j_i+x_i+o_i)\,c_i$$
+
+应变必须在全谱上计算。不得把技法子集抽成独立谱面再算。
+
+### 4.1 同指项 $j_i$【A5】
+
+米视为长度 $\delta_h$ 的隐含按住。
+
+**按下事件**：取同列上一个物件，其结束时刻 $e'$ 为尾时刻（面条）或头时刻加 $\delta_h$（米）。
+
+$$\Delta^{\text{same}}_i=\max\big(\Delta_{\text{floor}},\;t_i-e'+\delta_h\big),\qquad j_i=1/\Delta^{\text{same}}_i$$
+
+同列无前驱时 $j_i=0$。米接米时 $\Delta^{\text{same}}$ 等于头到头间隔；面尾接头时等于空隙加 $\delta_h$。
+
+**松开事件**：$j_i=1/\ell_i$。
+
+### 4.2 同手异指项 $x_i$【A6】
+
+$$\psi(\Delta)=\frac{\Delta}{\Delta^2+\Delta_0^2}$$
+
+$$x_i=\sum_{g\in\text{hand}(f_i)\setminus\{f_i\}}\kappa_{f_i g}\;\psi(t_i-t_g)$$
+
+$t_g$ 为手指 $g$ 上时刻不晚于 $t_i$ 的最近事件（按下或松开）；不存在则该项为 0。同时事件 $\psi(0)=0$。
+
+### 4.3 异手项 $o_i$
+
+$$o_i=\kappa_\times\;\psi(t_i-t_{\bar h})$$
+
+$t_{\bar h}$ 为另一只手上时刻不晚于 $t_i$ 的最近事件。
+
+### 4.4 按住约束 $c_i$
+
+$$c_i=1+\sum_{g\in\mathcal H(t_i)\cap\text{hand}(f_i),\;g\ne f_i}\chi_{f_i g},\qquad\chi=\chi_0\,\kappa$$
+
+### 4.5 事件类型权重 $\omega_i$【A7】
+
+按下取 1，松开取 $\omega_{\text{rel}}$。
+
+---
+
+## 5. 认知层
+
+两个估计器都必须"先预测、后更新"：先用当前统计量计算本行的意外度，再把本行计入统计量。
+
+### 5.1 排列意外度 $U^{\text{pat}}$
+
+对每只手 $h$ 独立维护。行 $r$ 中手 $h$ 有事件时，其**符号** $\sigma$ 为该手各手指状态（无/按下/松开）的元组。字母表大小 $K=3^{n_h}-1$，$n_h$ 为该手的手指数（3 或 4）。
+
+维护带遗忘的计数：一阶 $n(\sigma',\sigma)$、零阶 $n(\sigma)$。每次使用前，所有计数乘以 $e^{-\Delta T/T_c}$，$\Delta T$ 为距该手上一次更新的时间。
+
+$$P_0(\sigma)=\frac{n(\sigma)+\alpha_0/K}{\sum_{\sigma''}n(\sigma'')+\alpha_0},\qquad
+P(\sigma\mid\sigma')=\frac{n(\sigma',\sigma)+\alpha\,P_0(\sigma)}{\sum_{\sigma''}n(\sigma',\sigma'')+\alpha}$$
+
+$$U^{\text{pat}}_{r,h}=\min\big(U_{\max},\,-\log_2 P(\sigma\mid\sigma')\big)$$
+
+$\sigma'$ 为该手上一个符号；不存在时用 $P_0$。行 $r$ 中属于手 $h$ 的每个事件取 $U^{\text{pat}}_i=U^{\text{pat}}_{r,h}$。
+
+### 5.2 节奏意外度 $U^{\text{rhy}}$
+
+对全局行序列，$\ell_r=\log_2(T_r-T_{r-1})$。历史行 $s<r$ 的权重 $\omega_s=e^{-(T_r-T_s)/T_c}$。
+
+$$\rho_r=\frac{\sum_{s<r}\omega_s\exp\!\big(-(\ell_r-\ell_s)^2/2b^2\big)+\alpha_r\,2^{-U_{\max}}}{\sum_{s<r}\omega_s+\alpha_r},\qquad U^{\text{rhy}}_r=\min\big(U_{\max},\,-\log_2\rho_r\big)$$
+
+首行取 0。行内每个事件取该行的值。实现可把 $\ell$ 轴离散成宽 $b/2$ 的桶并维护衰减计数，以避免遍历历史。
+
+### 5.3 执行调制 $M_i$【A9】
+
+$$M_i=1+\mu_p\,U^{\text{pat}}_i+\mu_r\,U^{\text{rhy}}_i+\nu\max(0,\,h_i-1)$$
+
+### 5.4 读谱需求 $R_i$【A10】
+
+$$I_i=\frac{1}{T_w}\sum_{(r,h):\;t_i\le T_r<t_i+T_w}U^{\text{pat}}_{r,h},\qquad R_i=\lambda_R\,I_i$$
+
+$I_i$ 的单位是 bit/s。每个（行，手）符号只计一次。
+
+---
+
+## 6. 负荷累积【A8】
+
+### 6.1 累加器
+
+按行的时间顺序更新。记衰减因子 $\phi(\Delta t,\tau)=e^{-\Delta t/\tau}$，$\Delta t$ 为该累加器距上次更新的时间。
+
+**单指**（7 个）。手指 $f$ 在本行有事件 $i$ 时：
+
+$$E^{f}\leftarrow E^{f}\,\phi(\Delta t,\tau_f)+\big(1-\phi(\Delta t,\tau_f)\big)\,v_i^{\gamma}$$
+
+**单手**（2 个）。手 $h$ 在本行有事件时，输入为该手本行所有事件的 $\sum v^\gamma$：
+
+$$E^{h}\leftarrow E^{h}\,\phi(\Delta t,\tau_h)+\big(1-\phi(\Delta t,\tau_h)\big)\sum_{k\in r\cap h}v_k^{\gamma}$$
+
+**全局**（1 个）。每行更新一次，输入为两手累加器衰减到当前时刻后的均值：
+
+$$E^{g}\leftarrow E^{g}\,\phi(\Delta t,\tau_g)+\big(1-\phi(\Delta t,\tau_g)\big)\cdot\tfrac12\big(E^{L}+E^{R}\big)$$
+
+全部初值为 0。事件 $i$ 记录本行更新**之后**的 $E^{f}_i,E^{h}_i,E^{g}_i$。累加器不依赖 $\theta$，只需计算一次。
+
+### 6.2 疲劳因子
+
+$$\Phi_i(\theta)=\sum_{m\in\{f,h,g\}}\eta_m\,\mathrm{sat}\!\left(\frac{E^{m}_i}{\theta^{\gamma}}\right),\qquad\mathrm{sat}(x)=\frac{x}{1+x}$$
+
+---
+
+## 7. 事件需求【A11】
+
+$$d_i(\theta)=\sqrt{\Big[v_i\,M_i\,\big(1+\Phi_i(\theta)\big)\Big]^2+R_i^{\,2}}$$
+
+---
+
+## 8. 技法隶属与归因
+
+本节所有依赖 $\theta$ 的量必须在 $\theta=D$（总难度，9.1 节）处取值，之后固定不变。
+
+### 8.1 特征
+
+$$\mathrm{ss}(z)=\tilde z^{2}(3-2\tilde z),\quad\tilde z=\min(1,\max(0,z))$$
+
+| 特征 | 定义 | 适用 |
+|---|---|---|
+| $\lambda_i$ LN 语境度 | $\max\big(\mathrm{isLN}_i,\;\min(1,h_i/2)\big)$ | 全部 |
+| $r_i$ 同指原始份额 | $j_i/(j_i+x_i+o_i)$，分母为 0 时取 0 | 全部 |
+| $q^J_i$ 同指份额 | $\mathrm{ss}\big((r_i-r_{lo})/(r_{hi}-r_{lo})\big)$ | 全部 |
+| $q^\Phi_i$ 持续份额 | $\min\!\Big(1,\;\dfrac{1}{\varphi_{\text{ref}}}\cdot\dfrac{\eta_h\,\mathrm{sat}(E^h_i/D^\gamma)+\eta_g\,\mathrm{sat}(E^g_i/D^\gamma)}{\eta_h+\eta_g}\Big)$ | 全部 |
+| $q^C_i$ 认知份额 | $1-\big(1-\min(1,(M_i-1)/m_0)\big)\big(1-R_i^2/d_i(D)^2\big)$，$d_i=0$ 时第二个括号取 1 | 全部 |
+| $q^{\text{inv}}_i$ 反键份额 | $\mathbb 1[\text{同列前驱是面条}]\cdot r_i\cdot\min(1,h_i/h_{\text{ref}})$ | 仅按下，松开取 0 |
+| $q^{\text{rel}}_i$ 释放协调份额 | $1-\dfrac{j_i}{(j_i+x_i+o_i)\,c_i}$，分母为 0 时取 0 | 仅松开，按下取 0 |
+
+### 8.2 隶属 $w_{ik}$（可重叠）与归因 $a_{ik}$（划分）
+
+| 技法 $k$ | 隶属 $w_{ik}$ | 归因 $a_{ik}$ |
+|---|---|---|
+| RC-Jack | $(1-\lambda)\,q^J$ | $(1-q^C)\,w$ |
+| RC-Speed | $(1-\lambda)(1-q^J)(1-q^\Phi)$ | $(1-q^C)\,w$ |
+| RC-Stamina | $(1-\lambda)(1-q^J)\,q^\Phi$ | $(1-q^C)\,w$ |
+| RC-Tech | $(1-\lambda)\,q^C$ | $w$ |
+| LN-General | $\lambda$ | $\lambda(1-q^C)(1-q^{\text{inv}}-q^{\text{rel}})$ |
+| LN-Tech | $\lambda\,q^C$ | $w$ |
+| LN-Inverse | $\lambda\,q^{\text{inv}}$ | $(1-q^C)\,w$ |
+| LN-Release | $\lambda\,q^{\text{rel}}$ | $(1-q^C)\,w$ |
+
+（表中省略下标 $i$。）
+
+**不变量**：对每个事件 $\sum_k a_{ik}=1$，实现必须断言。LN-General 的归因只取残差，原因是它的隶属是全部 LN 语境的超集，若直接用隶属做归因会永远占优。
+
+---
+
+## 9. 输出量
+
+### 9.1 总难度
+
+$D=D(w\equiv 1)$，$\varepsilon$ 取 3.3 节的总难度值。
+
+### 9.2 技法难度（强度）
+
+$D_k=D(w_{\cdot k})$，$\varepsilon$ 取该技法的合格线容差。求解时权重固定，$d_i(\theta)$ 仍随 $\theta$ 变化，使用完整的 $d_i$。
+
+### 9.3 覆盖
+
+$C_k=W_k/N$，$N$ 为事件总数。
+
+### 9.4 主导度
+
+$$s_i=\frac{p_i(D)\big(1-p_i(D)\big)}{\sum_j p_j(D)\big(1-p_j(D)\big)},\qquad\pi_k=\sum_i a_{ik}\,s_i$$
+
+**不变量**：$\sum_k\pi_k=1$。主导技法为 $\arg\max_k\pi_k$。推导见附录 A.5。
+
+### 9.5 三个量的语义
+
+| 量 | 回答的问题 | 与子集大小的关系 |
+|---|---|---|
+| $D_k$ | 这类排列有多难 | $W_k\gg N_0$ 时无关 |
+| $C_k$ | 这类排列占多少 | 就是大小 |
+| $\pi_k$ | 总难度由谁决定 | 大小线性进入，强度约以 $\beta$ 次方进入（附录 A.6） |
+
+展示时应并列给出 $D_k$ 与 $\pi_k$。
+
+### 9.6 输出结构
+
+```json
+{
+  "thumb_hand": "L | R",
+  "total":   { "D": 0.0, "stars": 0.0 },
+  "skills": {
+    "rc_jack":    { "D": 0.0, "stars": 0.0, "coverage": 0.0, "dominance": 0.0 },
+    "rc_tech":    { },
+    "rc_speed":   { },
+    "rc_stamina": { },
+    "ln_general": { },
+    "ln_tech":    { },
+    "ln_inverse": { },
+    "ln_release": { }
+  },
+  "dominant_skill": "rc_jack"
+}
+```
+
+---
+
+## 10. 星数标度【A12】
+
+$$\bigstar=a\,D^{\,b},\qquad\bigstar_k=a\,D_k^{\,b}$$
+
+- 全系统与星数有关的自由度只有 $a$、$b$。八个技法与总难度必须共用同一组 $(a,b)$。
+- $(a,b)$ 必须由**关于感知的共识陈述**确定，不得由任何谱面的 SR 数值回归得到。
+- 所需锚点：
+
+| 锚点 | 形式 | 确定 |
+|---|---|---|
+| 水平锚点 | "某段（或某张共识图）整体约 $x$ 星" | $a$ |
+| 倍速锚点 | "变速 $r$ 倍后感知星数约乘 $r^{b}$" | $b$ |
+| LN 锚点 | "某 LN 段整体约 $y$ 星" | RC 与 LN 之间的兑换（约束 $\omega_{\text{rel}}$、$\chi_0$、$\nu$） |
+
+锚点数值由项目方按社区共识填写，本规格不提供。
+
+---
+
+## 11. 计算流程
+
+```text
+function evaluate(chart):
+    best = None
+    for thumb_hand in [L, R]:
+        ev   = preprocess(chart)                    # §2：短面条折算、事件、行
+        phys = physical_layer(ev, thumb_hand)       # §4：j, x, o, c, v
+        cog  = cognitive_layer(ev, thumb_hand)      # §5：U_pat, U_rhy, M, R
+        E    = fatigue_accumulators(ev, phys.v)     # §6.1：E_f, E_h, E_g（与 θ 无关）
+
+        d(θ) = sqrt((v * M * (1 + Φ(E, θ)))^2 + R^2)   # §6.2, §7
+
+        λ    = ln_context(ev)                       # §8.1，与 θ 无关
+        D    = solve(w = 1, ε = 0.04 + 0.01 * mean(λ))   # §9.1
+        if best is None or D < best.D:
+            feat    = features(phys, cog, E, D)     # §8.1，在 θ = D 处取值
+            w, a    = membership(feat), attribution(feat)   # §8.2
+            assert all(|sum_k a[i][k] - 1| < 1e-9)
+            D_k     = { k: solve(w[:, k], ε_k) }    # §9.2
+            C_k     = { k: sum(w[:, k]) / N }       # §9.3
+            s       = p(D) * (1 - p(D)); s /= sum(s)
+            π_k     = { k: sum(a[:, k] * s) }       # §9.4
+            best    = (thumb_hand, D, D_k, C_k, π_k)
+    return to_stars(best)                           # §10
+
+function solve(w, ε):
+    W, W_plus = sum(w), sum(w[d > 0])
+    if W_plus <= ε * (W + N0): return 0
+    bisect over ln θ ∈ [ln θ_min, ln θ_max]:
+        g(θ) = sum(w * p(θ)) - ε * (W + N0)         # g 严格递减
+    return θ
+```
+
+复杂度：预处理与各层为 $O(N)$；每次求解为 $O(N\log(1/\text{tol}))$；共 2×9 次求解。
+
+---
+
+## 12. 参数
+
+"类别"一栏：**S** 为结构参数，校准时固定；**X** 为兑换率参数，参与校准；**G** 为标度参数，由锚点确定。
+
+| 参数 | 含义 | 初值 | 类别 | 依据 |
+|---|---|---|---|---|
+| $\varepsilon$ | 合格线容差 | 0.04 / 0.05 | S | 段位合格线 |
+| $\beta$ | 心理测量曲线陡度 | 6 | X | 可用玩家准度数据独立估计 |
+| $N_0$ | 伪计数 | 150 事件 | X | 约一个段落的量级 |
+| $\ell_{\min}$ | 短面条阈值 | 0.100 s | S | $2\delta_h$ |
+| $\delta_h$ | 米的隐含按住时长 | 0.050 s | S | 经验尺度 |
+| $\Delta_{\text{floor}}$ | 间隔下限 | 0.020 s | S | 数值保护 |
+| $\Delta_0$ | 动作合并时间尺度 | 0.040 s | S | 滚奏和弦的经验尺度 |
+| $\kappa$ | 同手耦合 | 无名–中 1.0，中–食 0.7，无名–食 0.5，拇–食 0.5，拇–其余 0.3 | X（整体缩放与各项） | 次序来自手指独立性研究，数值待校准 |
+| $\kappa_\times$ | 异手耦合 | 0.2 | X | 两手近似并行 |
+| $\chi_0$ | 按住耦合比例 | 0.5 | X | |
+| $\omega_{\text{rel}}$ | 松开权重 | 0.7 | X | 尾判更宽，依赖判定规则 |
+| $\tau_f,\tau_h,\tau_g$ | 疲劳时间常数 | 0.5 s，4 s，40 s | S | 小叠/长叠、爆发/长串、整曲耐力 |
+| $\eta_f,\eta_h,\eta_g$ | 疲劳增益 | 0.3，0.3，0.2 | X | |
+| $\gamma$ | 疲劳凸性 | 2 | S | |
+| $T_c$ | 认知统计量遗忘时间 | 4 s | S | |
+| $U_{\max}$ | 意外度上限 | 4 bit | S | |
+| $\alpha,\alpha_0,\alpha_r$ | 平滑伪计数 | 1，1，1 | S | |
+| $b$ | 节奏核带宽 | 0.15 倍频程 | S | |
+| $\mu_p,\mu_r$ | 意外度增益 | 0.1 / bit | X | |
+| $\nu$ | 多面条跟踪增益 | 0.1 | X | |
+| $T_w$ | 读谱前视窗 | 0.5 s | S | |
+| $\lambda_R$ | 读谱换算 | 0.1 Hz·s/bit | X | **无先验**，占位值 |
+| $r_{lo},r_{hi}$ | 同指份额锐化区间 | 0.25，0.55 | X | 串约 0.15，chordstream 约 0.26，多押叠约 0.55–0.7 的粗估 |
+| $\varphi_{\text{ref}}$ | 持续份额归一 | 0.5 | S | 极限持续时 $\mathrm{sat}=0.5$ |
+| $m_0$ | 认知份额归一 | 0.5 | S | |
+| $h_{\text{ref}}$ | 反键占用归一 | 3 列 | S | |
+| $\theta_{\min},\theta_{\max}$ | 二分区间 | 0.01，1000 Hz | S | |
+| $a,b$ | 星数标度 | 由锚点定 | G | 第 10 节 |
+
+---
+
+## 13. 校准规程
+
+### 13.1 数据
+
+- 段图池 $X_{k,n}$：技法 $k$ 在第 $n$ 段的槽位图。
+- 必须使用段位包内的版本（多为 JJ Edit 或 Cut），不得用原图。
+- 图池以现行版本为准；2019 年的列表中 LN 9 段及以上尚未完成。
+
+### 13.2 目标
+
+记 $\Omega$ 为 X 类参数，$\Omega^0$ 为初值，$m$ 为最小间隔：
+
+$$\max_{\Omega,\,m}\quad m\;-\;\rho_1\sum_j\left(\frac{\ln\Omega_j-\ln\Omega^0_j}{s_j}\right)^2\;-\;\rho_2\sum_{F\in\{\text{RC},\text{LN}\}}\sum_n\operatorname{Var}_{k\in F}\big[\ln D_k(X_{k,n})\big]$$
+
+$$\text{s.t.}\quad\ln D_k(X_{k,n+1})-\ln D_k(X_{k,n})\ge m\quad\forall k,n$$
+
+- 第一项是序数最大间隔，对应 G2。
+- 第二项把参数拉向先验，$s_j$ 为各参数的先验宽度（对数尺度）。
+- 第三项是可选的【A13】：同段四图等难。不采用时令 $\rho_2=0$，并由项目方直接指定技法间兑换率。
+- 目标非光滑，应使用无导数优化器（如 CMA-ES）。
+- $(a,b)$ 不参与本步骤，在 $\Omega$ 确定后由第 10 节的锚点解出。
+
+### 13.3 约束与自由度
+
+完整图池下序数约束约 8×14 个，X 类参数十余个。S 类参数不得为满足约束而调整；确需调整时应记录并重新跑全部验收测试。
+
+### 13.4 不可行时的处理
+
+若某对相邻段无法满足约束：
+
+1. 查看两张图的 $\pi_k$。槽位图的 $\pi_k$ 很低，说明该图在此技法上不纯，记录为图池问题。
+2. 否则视为模型缺少机制，记入第 16 节并修订规格。
+3. 不得通过增加针对单张图的特例来满足约束。
+
+---
+
+## 14. 验收测试
+
+| 编号 | 测试 | 通过条件 | 性质 |
+|---|---|---|---|
+| T1 | 段池单调 | 对每个 $k$，$D_k(X_{k,n})$ 随 $n$ 严格递增；报告最小间隔 | 硬性（G2） |
+| T2 | 留一段稳定 | 去掉任一段后校准，被去掉的段仍落在相邻段之间 | 硬性 |
+| T3 | 镜像不变 | 镜像谱面的 $D$、$D_k$、$\pi_k$ 相对变化不超过 $10^{-6}$ | 硬性 |
+| T4 | 尺寸无关 | 谱面与自身拼接（中间休息不少于 $5\tau_g$），$N\ge 20N_0$ 时 $\lvert\Delta\ln D\rvert\le 0.01$ | 硬性 |
+| T5 | 单点饱和 | 插入一个任意事件，$\lvert\Delta\ln D\rvert$ 为 $O(1/N)$ 量级 | 硬性 |
+| T6 | 归因守恒 | $\sum_k a_{ik}=1$、$\sum_k\pi_k=1$，误差不超过 $10^{-9}$ | 硬性 |
+| T7 | 变速缩放 | 倍率 $r\in[0.75,1.5]$ 时报告 $\ln D(r)/\ln r$ 的指数，应在 $[0.85,1.15]$ | 软性 |
+| T8 | 感知一致 | 玩家成对比较的一致率；**不得**用 SR 作参照 | 软性（G1） |
+| T9 | 槽位纯度 | 报告每张槽位图的 $\pi_k$ | 诊断，不阻塞 |
+| T10 | 主导度抗大小偏置 | 构造"大段简单串加短段难叠"的合成谱，主导技法应为 Jack | 硬性（G3） |
+
+---
+
+## 15. 假设清单
+
+| 编号 | 假设 | 用于 | 若不成立 |
+|---|---|---|---|
+| A1 | 表现只取决于 $\theta/d$（比率尺度）；计时误差与间隔近似成比例 | §3.1 | 需改用带绝对尺度的损失函数 |
+| A2 | 技法难度以段位合格线定义：刚好达到 96%/95% 的玩家水平 | §3.2–3.3 | 改 $\varepsilon$ 即可 |
+| A3 | 小子集的难度应向 0 收缩，用伪计数 $N_0$ 实现 | §3.2 | 调 $N_0$ |
+| A4 | 3+1+3 键位，中键用单个拇指，玩家选更易的那只手 | §2.5 | 需按键位重写指法映射与 $\kappa$ |
+| A5 | 米等价于长度 $\delta_h$ 的隐含按住；手指的可用间隔从上一物件结束算起 | §4.1 | 反键与米叠之间的兑换失真 |
+| A6 | 间隔小于 $\Delta_0$ 的事件合并为一个动作；同手耦合次序为无名–中最强、拇指食指最独立 | §4.2–4.3 | 改 $\psi$ 的形式或 $\kappa$ 的次序 |
+| A7 | 尾判比头判宽 | §4.5 | 按目标判定规则重定 $\omega_{\text{rel}}$ |
+| A8 | 疲劳由负荷相对能力的比值驱动（临界功率式），三个时间尺度线性叠加并饱和 | §6 | Stamina 与 Speed 的区分失效 |
+| A9 | 不可预测的排列与节奏等效抬高物理需求；同时跟踪多个面尾占用工作记忆 | §5.3 | Tech 两个技法失真 |
+| A10 | 决策时间与信息量成线性；玩家自调流速使前视时间窗近似恒定；无 SV | §5.4 | 读谱项需重建 |
+| A11 | 执行误差与读谱误差独立，按方差相加 | §7 | 改合成范数 |
+| A12 | 星数感知是内部速率单位的幂函数 | §10 | 改用其他单调标度，自由度仍不得超过锚点数 |
+| A13 | （可选）同一段的四张图对同一玩家大致等难 | §13.2 | 令 $\rho_2=0$，人工指定兑换率 |
+
+---
+
+## 16. 已知风险与未决问题
+
+1. **未验证**。本规格的 T1 尚未在任何图池上运行。
+2. **Speed 与 Stamina 的切分**。二者覆盖同一类排列，仅由 $q^\Phi$ 区分。高段 Speed 图若全是长串，其 Speed 子集会偏向每段串的开头。Speed 池不单调时先查这里。
+3. **短面条的松开项**。$j=1/\ell$ 在 $\ell$ 接近 $\ell_{\min}$ 时可能偏高（100 ms 面条对应 10 Hz，乘 $\omega_{\text{rel}}$ 后 7 Hz）。备选：$j=1/(\ell+\delta_h)$。
+4. **认知估计器冷启动**。谱面开头统计量为空，$U^{\text{pat}}$ 会贴近上限数秒。影响受 $U_{\max}$ 与 $\varepsilon$ 容差限制，但对极短谱面可能明显。
+5. **$\lambda_R$ 无先验**。读谱项的量级完全依赖校准。
+6. **判定规则依赖**。A5、A7 在 stable 与 lazer 下取值不同，需按目标规则确定。
+7. **和弦手型**。同手和弦的手型难度（如无名加食指、空出中指）未建模，仅通过手指复用间接体现。
+8. **A13 是推断**。四图等难是对段位设计意图的解读，未经作者确认。
+9. **图池纯度**。槽位图不保证只含对应技法；部分图经过剪辑，早期版本的槽位定义与现行不同。
+
+---
+
+## 附录 A. 推导
+
+### A.1 根的存在与唯一
+
+$\Phi_i(\theta)$ 关于 $\theta$ 不增，故 $d_i(\theta)$ 不增，$\theta/d_i(\theta)$ 严格递增，$p_i(\theta)$ 在 $d_i>0$ 时严格递减。令 $g(\theta)=\sum_i w_i p_i(\theta)$：
+
+- $\theta\to 0^+$：$\mathrm{sat}\to 1$，$d_i$ 有限为正，$p_i\to 1$，故 $g\to W_+$。
+- $\theta\to\infty$：$p_i\to 0$，故 $g\to 0$。
+
+$g$ 连续且严格递减，因此当且仅当 $W_+>\varepsilon(W+N_0)$ 时方程有唯一根。
+
+### A.2 尺寸无关
+
+把集合复制 $m$ 份（不计疲劳差异），方程变为 $m\sum w_ip_i=\varepsilon(mW+N_0)$，即加权平均损失等于 $\varepsilon\big(1+N_0/(mW)\big)$。$mW\gg N_0$ 时右边趋于 $\varepsilon$，与 $m$ 无关。
+
+### A.3 硬极限
+
+$\beta\to\infty$ 且忽略 $\Phi$ 对 $\theta$ 的依赖时，$p_i\to\mathbb 1[d_i>\theta]$，方程变为"需求超过 $\theta$ 的权重占比等于 $\varepsilon(1+N_0/W)$"，即 $D$ 是 $d_i$ 的加权 $1-\varepsilon(1+N_0/W)$ 分位数。
+
+### A.4 常规聚合的大小偏置
+
+非归一 $L^p$ 范数满足
+
+$$\|s\|_p=\Big(\sum_{i=1}^N s_i^p\Big)^{1/p}=N^{1/p}\cdot M_p(s)$$
+
+$M_p$ 为幂平均。子集大小翻倍使结果乘 $2^{1/p}$：$p=2$ 时为 +41%，$p=4$ 时为 +19%。按衰减权重求和的峰值聚合有同类效应，只是在若干个峰之后饱和。比较各技法的这类聚合值时，一部分差异来自大小而非强度。
+
+### A.5 主导度
+
+记 $F(\theta,\delta)=\sum_i p_i-\varepsilon(N+N_0)$，其中事件 $i$ 的需求被乘以 $(1+\delta_i)$。因 $p_i$ 只依赖 $\ln d_i-\ln\theta$：
+
+$$\frac{\partial p_i}{\partial\delta_i}\Big|_{\delta=0}=\beta\,p_i(1-p_i),\qquad\frac{\partial F}{\partial\ln\theta}=-\beta\sum_j p_j(1-p_j)\Big(1-\frac{\partial\ln d_j}{\partial\ln\theta}\Big)$$
+
+由隐函数定理：
+
+$$\frac{\partial\ln D}{\partial\delta_i}=\frac{p_i(1-p_i)}{\sum_j p_j(1-p_j)\big(1-\partial\ln d_j/\partial\ln\theta\big)}$$
+
+分母对所有 $i$ 相同，归一化后即 9.4 节的 $s_i$。$\Phi$ 对 $\theta$ 的依赖只影响公共分母，不影响份额。
+
+### A.6 主导度中大小与强度的兑换率
+
+在 $\theta=D$ 处平均损失约为 $\varepsilon$，多数事件 $p_i\ll 1$，故 $s_i\approx p_i/\sum_jp_j$，且 $p_i\approx(d_i/D)^\beta$：
+
+$$\pi_k\approx\frac{\sum_i a_{ik}\,d_i^{\beta}}{\sum_i d_i^{\beta}}$$
+
+大小线性进入，强度以 $\beta$ 次方进入。子集翻倍等价于强度乘 $2^{1/\beta}$；$\beta=6$ 时为 +12%。兑换率由 $\beta$ 决定，而 $\beta$ 有独立的经验含义。
+
+### A.7 疲劳的稳态与爆发
+
+- 恒定需求 $v$ 持续远超 $\tau$：$E\to v^\gamma$。刚好在极限（$\theta=v$）时 $\mathrm{sat}(1)=\tfrac12$，$\Phi=\tfrac12\sum_m\eta_m$；默认参数下 $\Phi=0.4$，需求为瞬时值的 1.4 倍。
+- 持续时间 $T\ll\tau$ 的爆发：$E\approx(T/\tau)\,v^\gamma$，疲劳可忽略。
+
+---
+
+## 参考
+
+- JinJin, *osu!mania 7K Dan (段) Courses - Updated!*，osu! 论坛：<https://osu.ppy.sh/community/forums/topics/981680>（槽位定义、合格线、图池列表）
+- 理论依据（按记忆列出，引用前请核对原文）：手指独立性（Häger-Ross & Schieber, 2000）；临界功率模型（Monod & Scherrer, 1965）；Hick–Hyman 定律（Hick, 1952；Hyman, 1953）；标量计时（Gibbon, 1977）。
