@@ -97,6 +97,9 @@ P0 = dict(
     mu_p=0.1, mu_r=0.1, nu=0.1, T_w=0.5, lambda_R=0.1,
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
+    delta_0_rel=None,                  # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    psi_n=2,                           # EXPERIMENT: psi = dt^(n-1) / (dt^n + Delta_0^n); 2 is the spec
+    qC_mode="spec", m_lo=0.0, m_hi=0.5,  # EXPERIMENT: "ss" = smoothstep((M-1 - m_lo) / (m_hi - m_lo))
     star_a=None, star_b=None,          # §10: anchors not supplied
 )
 
@@ -216,10 +219,12 @@ def preprocess(notes, P):
                 U_rhy=rhythm_surprise(T, P))
 
 
-def psi(dt, P):
+def psi(dt, P, d0=None):
     """§4.2; psi = 0 where there is no prior event (dt = inf) or the events coincide."""
-    with np.errstate(invalid="ignore"):
-        out = dt / (dt * dt + P["delta_0"] ** 2)
+    n = P["psi_n"]
+    d0 = P["delta_0"] if d0 is None else d0
+    with np.errstate(invalid="ignore", over="ignore"):
+        out = dt ** (n - 1) / (dt ** n + d0 ** n)
     return np.where(np.isfinite(dt), out, 0.0)
 
 
@@ -290,10 +295,16 @@ def layers(pre, thumb, P):
     tr = T[row]
 
     # §4.2 / §4.3
-    Psi = psi(T[:, None] - pre["last"], P)                     # [rows, 7]
+    d0 = None
+    if P["delta_0_rel"] is not None:
+        iv = np.diff(T, prepend=T[0] - 1.0)
+        lo_r = np.searchsorted(T, T - 2.0, side="left")
+        d0 = np.array([P["delta_0_rel"] * np.median(iv[max(lo_r[r], 1):r + 1]) if r >= 1 else P["delta_0"]
+                       for r in range(len(T))])
+    Psi = psi(T[:, None] - pre["last"], P, None if d0 is None else d0[:, None])   # [rows, 7]
     x = (K[col] * Psi[row]).sum(1)
     last_hand = np.stack([pre["last"][:, hand == hh].max(1) for hh in (0, 1)], 1)
-    o = P["k_cross"] * psi(tr - last_hand[row, 1 - hand[col]], P)
+    o = P["k_cross"] * psi(tr - last_hand[row, 1 - hand[col]], P, None if d0 is None else d0[row])
     # §4.4
     c = 1.0 + P["chi_0"] * (K[col] * pre["held"][row]).sum(1)
     # §4.5
@@ -421,7 +432,11 @@ def features(pre, L, D, P):
                           / (P["eta_h"] + P["eta_g"]) / P["phi_ref"])
         d = demand(L, D, P)
         read = np.where(d > 0, 1.0 - L["R"] ** 2 / np.where(d > 0, d, 1.0) ** 2, 1.0)
-        qC = 1.0 - (1.0 - np.minimum(1.0, (L["M"] - 1.0) / P["m_0"])) * read
+        if P["qC_mode"] == "ss":
+            cM = smoothstep((L["M"] - 1.0 - P["m_lo"]) / (P["m_hi"] - P["m_lo"]))
+        else:
+            cM = np.minimum(1.0, (L["M"] - 1.0) / P["m_0"])
+        qC = 1.0 - (1.0 - cM) * read
         qinv = np.where(~pre["rel"], pre["pred_ln"] * r * np.minimum(1.0, pre["h"] / P["h_ref"]), 0.0)
         den = jxo * L["c"]
         qrel = np.where(pre["rel"] & (den > 0), 1.0 - L["j"] / np.where(den > 0, den, 1.0), 0.0)
