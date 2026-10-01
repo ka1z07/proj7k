@@ -266,4 +266,4 @@ current_engine_version() != before                      # 版本也会动
 - `docs/adr/0011-...` — 降阶器的闭环应变剪枝
 - `docs/adr/0014-...` — 注入方法学版本与公式变更重评（第 8 节曾是它的覆盖缺口实证，#48 已修复）
 - `tests/test_engine_literal_registry.py` — 字面量登记守卫：星级路径上「哪些数不是标定、为什么」的单一清单
-- `AGENTS.md` — 两道验证闸门的命令
+- `CLAUDE.md` — 两道验证闸门的命令
