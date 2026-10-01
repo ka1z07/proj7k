@@ -10,19 +10,17 @@ only import from `proj7k` is the `.osu` parser and the corpus loader (the spec's
 The question: the spec says (§16.1) "T1 has not been run on any pool". With every parameter at
 its §12 prior and no §13 calibration, how far is the engine from its own acceptance tests?
 
-DEFAULT IS NOW SPEC v0.2 (demand_mode="Eh", v_cap=40, delta_0_rel=0.5; see the spec's 修订记录).
+DEFAULT IS NOW SPEC v0.2 (demand_mode="Eh", v_cap=40, delta_0_rel=0.5, strict_prior=True; see the spec's 修订记录).
 `--spec v0.1` restores v0.1 exactly (`.results.v01.json`); the numbers in the VERDICT block below and in
 the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the priors, uncalibrated, same
-120 charts (`.results.json`): T1 9 inversions / tau .969 / 8 of 8 ladders within the SR-count floor
-(v0.1: 22 / .905 / 3 of 8) / 2 strict (rc_speed, rc_stamina); T3, T4 (.0089), T6, T10 pass;
-T5 random max 6.8, 20 ms jack max 5.9; T7 .93 (66% in band); T9 unchanged (Tech 15/15 and 15/15).
-§10 stars: the owner's five consensus anchors (prototype_spec_v01_anchors.json), least squares: a=.217,
-b=1.067; residuals 0th -.13, 5th +.75, 8th -.30 (6.45, outside 6.5-7), 10th -.43; Zenith 10.06 (>= 10 holds);
-implied perceived rate exponent .99. Tier-level D is flat at 6th-8th (23.9, 24.2, 24.0). Post-hoc vs community
-SR: MAE .74, Spearman .958; per-pool bias -0.49 (Jack) to +1.57 (Speed).
-The `within the SR-count floor` fields
-in T1 are diagnostics only; the spec's T1 stays strict (v0.2 fails it).
-No held-out data: the three changes were picked on these charts.
+120 charts (`.results.json`): T1 10 inversions / tau .962 / 2 strict (rc_speed, rc_stamina) (v0.1: 22 / .905 / 0);
+T3, T4 (.0080), T6, T10 pass; T5 random max 10.0, 20 ms jack max 4.9; T7 .93 (66% in band);
+T9 unchanged (Tech 15/15 and 15/15). No held-out data: the four changes were picked on these charts.
+§10 stars (prototype_spec_v01_anchors.json, the owner's five consensus anchors; the Zenith inequality is active):
+a=.195, b=1.041; residuals 0th -.21, 5th +.63, 8th +.13 (in 6.5-7), 10th -.22, Zenith 10.0. RC tier-level D
+is monotone through 6th-8th (26.6, 28.8, 30.6; was 23.9, 24.2, 24.0). Post-hoc vs community SR: MAE .89,
+Spearman .971. The `within the SR-count floor` fields in T1 are diagnostics only; the spec's T1 stays strict
+(v0.2 fails it).
 
 VERDICT (v0.1) at the §12 priors, no calibration (frozen 120-chart corpus, `.results.json`):
 
@@ -71,8 +69,9 @@ numbers in the header of `.results.json` are under exactly these readings):
             time is snapped to its row time T_r, so "simultaneous" is exact everywhere after §2.4.
   R2  §2.6  h_i counts held columns across both hands (the spec says "columns", not "fingers of
             the hand"); "held" is strict on both ends: head < T_r < tail.
-  R3  §4.2  t_g includes events in the current row, so a chord partner gives psi(0) = 0 and also
-            masks that finger's earlier events. Same for t_hbar in §4.3.
+  R3  §4.2  v0.1 reading: t_g includes events in the current row, so a chord partner gives psi(0) = 0 and
+            also masks that finger's earlier events. Same for t_hbar in §4.3. v0.2 (strict_prior=True)
+            replaces it: only events strictly before the row count (spec v0.2 §4.2-4.3).
   R4  §5.1  A finger with both a press and a release in one row has symbol state "press".
   R5  §5.2  Row 0 has no interval, so it is neither scored (U = 0) nor in later rows' history.
             The sum is exact, truncated at 12 T_c (weight < 1e-5).
@@ -129,6 +128,8 @@ P0 = dict(
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    strict_prior=True,                 # EXPERIMENT (R3'): x, o ignore same-row partners and what they mask
+    row_in="sum",                      # EXPERIMENT: §6.1 hand input per row: "sum" (spec) or "max" of v^gamma
     v_cap=40.0,                        # EXPERIMENT: v_i <- min(v_i, v_cap) before it enters §6.1 and §7
     demand_mode="Eh",                  # EXPERIMENT: "Eh" d_i = sqrt(E^h_i); "EhM" d_i = sqrt(E^h_i) * M_i
     sym_mode="spec",                   # EXPERIMENT: "press_only" drops the release state from the §5.1 symbol
@@ -139,7 +140,7 @@ P0 = dict(
 )
 
 #: Restores the v0.1 spec exactly (the three v0.2 changes off). `--spec v0.1` applies it.
-V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None)
+V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None, strict_prior=False)
 
 FINGER = ["ring", "mid", "idx", "thumb", "idx", "mid", "ring"]  # §2.5
 SIDE = [0, 0, 0, None, 1, 1, 1]                                  # 0 = L, 1 = R; thumb by h_T
@@ -343,9 +344,12 @@ def layers(pre, thumb, P):
         lo_r = np.searchsorted(T, T - 2.0, side="left")
         d0 = np.array([P["delta_0_rel"] * np.median(iv[max(lo_r[r], 1):r + 1]) if r >= 1 else P["delta_0"]
                        for r in range(len(T))])
-    Psi = psi(T[:, None] - pre["last"], P, None if d0 is None else d0[:, None])   # [rows, 7]
+    last = pre["last"]
+    if P["strict_prior"]:  # EXPERIMENT (R3'): x and o look only at events strictly before the row
+        last = np.vstack([np.full((1, 7), -np.inf), last[:-1]])
+    Psi = psi(T[:, None] - last, P, None if d0 is None else d0[:, None])   # [rows, 7]
     x = (K[col] * Psi[row]).sum(1)
-    last_hand = np.stack([pre["last"][:, hand == hh].max(1) for hh in (0, 1)], 1)
+    last_hand = np.stack([last[:, hand == hh].max(1) for hh in (0, 1)], 1)
     o = P["k_cross"] * psi(tr - last_hand[row, 1 - hand[col]], P, None if d0 is None else d0[row])
     # §4.4
     c = 1.0 + P["chi_0"] * (K[col] * pre["held"][row]).sum(1)
@@ -396,7 +400,7 @@ def layers(pre, thumb, P):
             Ef[f] = step(Ef[f], tf[f], Tr, P["tau_f"], vg[i])
             tf[f] = Tr
             hh = hand[f]
-            hand_in[hh] += vg[i]
+            hand_in[hh] = max(hand_in[hh], vg[i]) if P["row_in"] == "max" else hand_in[hh] + vg[i]
             hand_hit[hh] = True
         cur = [0.0, 0.0]
         for hh in (0, 1):
@@ -419,10 +423,19 @@ def layers(pre, thumb, P):
 
 def demand(L, theta, P):
     """§7 d_i(theta) for scalar theta."""
+    mode = P["demand_mode"]
+    if mode in ("Ef", "EfEh_gm", "EfEh_max", "EfEh_mean"):
+        ef, eh = L["E_f"] ** (1.0 / P["gamma"]), L["E_h"] ** (1.0 / P["gamma"])
+        return {"Ef": ef, "EfEh_gm": np.sqrt(ef * eh), "EfEh_max": np.maximum(ef, eh), "EfEh_mean": 0.5 * (ef + eh)}[mode]
+    if mode == "EhPhi":  # EXPERIMENT: sustained-load factor back on top of the E^h demand (theta-dependent again)
+        tg = theta ** P["gamma"]
+        Phi = (P["eta_f"] * L["E_f"] / (L["E_f"] + tg) + P["eta_h"] * L["E_h"] / (L["E_h"] + tg)
+               + P["eta_g"] * L["E_g"] / (L["E_g"] + tg))
+        return L["E_h"] ** (1.0 / P["gamma"]) * (1.0 + Phi)
     if P["demand_mode"] == "Eh":
-        return np.sqrt(L["E_h"])
+        return L["E_h"] ** (1.0 / P["gamma"])
     if P["demand_mode"] == "EhM":
-        return np.sqrt(L["E_h"]) * L["M"]
+        return L["E_h"] ** (1.0 / P["gamma"]) * L["M"]
     tg = theta ** P["gamma"]
     Phi = (P["eta_f"] * L["E_f"] / (L["E_f"] + tg) + P["eta_h"] * L["E_h"] / (L["E_h"] + tg)
            + P["eta_g"] * L["E_g"] / (L["E_g"] + tg))
@@ -631,9 +644,23 @@ def star_scale(res, charts, rate_exponent):
     cfg = json.loads((Path(__file__).with_name("prototype_spec_v01_anchors.json")).read_text(encoding="utf-8"))
     tierD = lambda t: float(np.median([res[(p, t)]["total"]["D"] for p in cfg["pools"]]))  # noqa: E731
     eq = [x for x in cfg["anchors"] if "stars" in x]
+    ge = [x for x in cfg["anchors"] if "min_stars" in x]
     X = np.log([tierD(x["tier"]) for x in eq])
     Y = np.log([x["stars"] for x in eq])
     b, la = np.polyfit(X, Y, 1)
+    active = []
+    # active set: an inequality anchor the unconstrained fit violates becomes an equality at its bound
+    for x in ge:
+        if np.exp(la) * tierD(x["tier"]) ** b < x["min_stars"]:
+            active.append(x["tier"])
+    if active:
+        X2 = np.concatenate([X, np.log([tierD(x["tier"]) for x in ge if x["tier"] in active])])
+        Y2 = np.concatenate([Y, np.log([x["min_stars"] for x in ge if x["tier"] in active])])
+        # least squares over the equality anchors, the active bound held exactly: parametrise through the bound point
+        Xb, Yb = X2[len(X):], Y2[len(X):]
+        xb, yb = float(Xb[0]), float(Yb[0])
+        b = float(np.sum((X - xb) * (Y - yb)) / np.sum((X - xb) ** 2))
+        la = yb - b * xb
     a = float(np.exp(la))
     b = float(b)
     star = lambda D: a * D ** b  # noqa: E731
@@ -657,7 +684,7 @@ def star_scale(res, charts, rate_exponent):
     by_pool = {p: dict(mean_signed=round(float(np.mean([r[2] - r[3] for r in rows if r[0] == p])), 2),
                        mae=round(float(np.mean([abs(r[2] - r[3]) for r in rows if r[0] == p])), 2))
                for p in POOL_OF}
-    return dict(a=a, b=b, anchor_checks=checks, rc_tier_level=tiers,
+    return dict(a=a, b=b, active_inequality_anchors=active, anchor_checks=checks, rc_tier_level=tiers,
                 implied_perceived_rate_exponent=round(b * rate_exponent, 3),
                 diagnostic_vs_community_SR=dict(note="post-hoc; never in a fit",
                                                 mae_all=round(float(np.mean(abs(x - y))), 3),
