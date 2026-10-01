@@ -1,0 +1,8 @@
+{
+  "note": "PROPOSED anchors (§10), to be confirmed by the project owner. Level anchors: 'tier n, the four Regular maps taken together, is about x stars'. x = median of the four maps' community SR in docs/research/structured_index.json (0th: 3.33 3.40 3.84 3.93 -> 3.62; 10th: 6.25 6.59 7.05 7.57 -> 6.82). Two anchors fix exactly two free parameters (a, b): this is not a regression. The engine reads stars only from this file. No LN anchor yet: it constrains w_rel, chi_0, nu and needs the §13 calibration.",
+  "pools": ["Regular Jack", "Regular Tech", "Regular Speed", "Regular Stream"],
+  "anchors": [
+    {"tier": "0th", "stars": 3.62},
+    {"tier": "10th", "stars": 6.82}
+  ]
+}

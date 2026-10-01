@@ -1,5 +1,5 @@
 {
- "runtime_s_120_charts": 7.3,
+ "runtime_s_120_charts": 7.2,
  "T1": {
   "rc_jack": {
    "D": [
@@ -517,6 +517,63 @@
    "ln_release": 0.0
   }
  },
+ "stars": {
+  "a": 0.4239309374086222,
+  "b": 0.8351860290728093,
+  "anchors": [
+   {
+    "tier": "0th",
+    "stars": 3.62,
+    "engine_D": 13.038173685157306
+   },
+   {
+    "tier": "10th",
+    "stars": 6.82,
+    "engine_D": 27.83399117752705
+   }
+  ],
+  "implied_perceived_rate_exponent": 0.775,
+  "diagnostic_vs_community_SR": {
+   "note": "post-hoc; never in a fit",
+   "mae_all": 0.548,
+   "mae_non_anchor_charts": 0.548,
+   "spearman": 0.958,
+   "by_pool": {
+    "Regular Jack": {
+     "mean_signed": -0.76,
+     "mae": 0.76
+    },
+    "Regular Tech": {
+     "mean_signed": 0.08,
+     "mae": 0.38
+    },
+    "Regular Speed": {
+     "mean_signed": 0.79,
+     "mae": 0.79
+    },
+    "Regular Stream": {
+     "mean_signed": -0.37,
+     "mae": 0.43
+    },
+    "LN General": {
+     "mean_signed": -0.35,
+     "mae": 0.48
+    },
+    "LN Tech": {
+     "mean_signed": -0.4,
+     "mae": 0.53
+    },
+    "LN Inverse": {
+     "mean_signed": 0.29,
+     "mae": 0.62
+    },
+    "LN Release": {
+     "mean_signed": -0.24,
+     "mae": 0.41
+    }
+   }
+  }
+ },
  "diag_total_D_ladder": {
   "rc_jack": {
    "D": [
@@ -684,54 +741,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 12.048360288634624,
-    "stars": null
+    "stars": 3.388995798069159
    },
    "skills": {
     "rc_jack": {
      "D": 11.970284147808547,
-     "stars": null,
+     "stars": 3.370644064832596,
      "coverage": 0.5109689432461528,
      "dominance": 0.20527693630498456
     },
     "rc_tech": {
      "D": 11.790649048403258,
-     "stars": null,
+     "stars": 3.328345780879111,
      "coverage": 0.6945144472359683,
      "dominance": 0.6567044453058115
     },
     "rc_speed": {
      "D": 10.888298541981925,
-     "stars": null,
+     "stars": 3.1142224628587973,
      "coverage": 0.30054675140705844,
      "dominance": 0.07003098605008265
     },
     "rc_stamina": {
      "D": 11.413524952027537,
-     "stars": null,
+     "stars": 3.2391969071398674,
      "coverage": 0.18848430534678895,
      "dominance": 0.06798763233912153
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -742,54 +799,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 13.526187511403425,
-    "stars": null
+    "stars": 3.732819627618678
    },
    "skills": {
     "rc_jack": {
      "D": 13.304363547604968,
-     "stars": null,
+     "stars": 3.681622738056173,
      "coverage": 0.36618271782789147,
      "dominance": 0.07749448798598015
     },
     "rc_tech": {
      "D": 13.39611784447827,
-     "stars": null,
+     "stars": 3.702816525811863,
      "coverage": 0.740500843610513,
      "dominance": 0.7249098568305863
     },
     "rc_speed": {
      "D": 12.881072665571109,
-     "stars": null,
+     "stars": 3.5835340880252504,
      "coverage": 0.35508225063877613,
      "dominance": 0.10131902053087616
     },
     "rc_stamina": {
      "D": 13.147715067662805,
-     "stars": null,
+     "stars": 3.6453836129158113,
      "coverage": 0.27873503153333246,
      "dominance": 0.09627663465255737
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -800,54 +857,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 15.647495921652109,
-    "stars": null
+    "stars": 4.2157879695105605
    },
    "skills": {
     "rc_jack": {
      "D": 15.358619831479166,
-     "stars": null,
+     "stars": 4.150686060697482,
      "coverage": 0.5071868892270779,
      "dominance": 0.10316295488283023
     },
     "rc_tech": {
      "D": 15.570397671102667,
-     "stars": null,
+     "stars": 4.198432422802474,
      "coverage": 0.7949295428586417,
      "dominance": 0.7916159273471978
     },
     "rc_speed": {
      "D": 14.821095386741044,
-     "stars": null,
+     "stars": 4.029006626554013,
      "coverage": 0.28639310959388886,
      "dominance": 0.055878439736432764
     },
     "rc_stamina": {
      "D": 15.194129525164612,
-     "stars": null,
+     "stars": 4.113526039173687,
      "coverage": 0.20500357058413168,
      "dominance": 0.04931918042107302
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00141643059490085,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00141643059490085,
      "dominance": 2.3497612465635536e-05
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00011519891595645069,
      "dominance": 0.0
     }
@@ -858,54 +915,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 17.669933267947542,
-    "stars": null
+    "stars": 4.666253005999625
    },
    "skills": {
     "rc_jack": {
      "D": 17.421772646893785,
-     "stars": null,
+     "stars": 4.611456286795589,
      "coverage": 0.482573084275402,
      "dominance": 0.07087266068491016
     },
     "rc_tech": {
      "D": 17.662069694145746,
-     "stars": null,
+     "stars": 4.664518593116537,
      "coverage": 0.7912850144144637,
      "dominance": 0.8020487779723453
     },
     "rc_speed": {
      "D": 16.780923324843446,
-     "stars": null,
+     "stars": 4.4693482914334615,
      "coverage": 0.3062136275799555,
      "dominance": 0.067298865115497
     },
     "rc_stamina": {
      "D": 17.49289164290369,
-     "stars": null,
+     "stars": 4.627173252360448,
      "coverage": 0.21121328814464282,
      "dominance": 0.059779696227246916
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -916,54 +973,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 17.635557150251852,
-    "stars": null
+    "stars": 4.6586699704027295
    },
    "skills": {
     "rc_jack": {
      "D": 17.449017844645446,
-     "stars": null,
+     "stars": 4.617478595325596,
      "coverage": 0.5976011310236908,
      "dominance": 0.16666886099442732
     },
     "rc_tech": {
      "D": 17.476784215162915,
-     "stars": null,
+     "stars": 4.623614510126967,
      "coverage": 0.7055340768084476,
      "dominance": 0.6899042068558939
     },
     "rc_speed": {
      "D": 16.589476863767963,
-     "stars": null,
+     "stars": 4.426722855123045,
      "coverage": 0.24646757056560215,
      "dominance": 0.07328832886435574
     },
     "rc_stamina": {
      "D": 17.494631951739557,
-     "stars": null,
+     "stars": 4.627557720309121,
      "coverage": 0.15593129841070802,
      "dominance": 0.07013860328532341
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -974,54 +1031,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 19.30272298967895,
-    "stars": null
+    "stars": 5.023724175282083
    },
    "skills": {
     "rc_jack": {
      "D": 19.142986448552268,
-     "stars": null,
+     "stars": 4.9889792225658525,
      "coverage": 0.5168299788120596,
      "dominance": 0.12214086171964614
     },
     "rc_tech": {
      "D": 19.1721562747422,
-     "stars": null,
+     "stars": 4.995327626611832,
      "coverage": 0.7833852123234789,
      "dominance": 0.7686975371200488
     },
     "rc_speed": {
      "D": 18.379071234067723,
-     "stars": null,
+     "stars": 4.822147448576527,
      "coverage": 0.2819800064207386,
      "dominance": 0.057243219686603786
     },
     "rc_stamina": {
      "D": 18.8787151276502,
-     "stars": null,
+     "stars": 4.931391259921578,
      "coverage": 0.20119001476720166,
      "dominance": 0.05191838147370055
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1032,54 +1089,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 19.76209795979395,
-    "stars": null
+    "stars": 5.12338236321643
    },
    "skills": {
     "rc_jack": {
      "D": 19.5609886013393,
-     "stars": null,
+     "stars": 5.079800607481482,
      "coverage": 0.6594295279373275,
      "dominance": 0.20212983777770357
     },
     "rc_tech": {
      "D": 19.753531216913693,
-     "stars": null,
+     "stars": 5.1215273876608665,
      "coverage": 0.6368825832145929,
      "dominance": 0.666257772582747
     },
     "rc_speed": {
      "D": 18.22376401707894,
-     "stars": null,
+     "stars": 4.788091334011525,
      "coverage": 0.21308225017952848,
      "dominance": 0.06909586568822894
     },
     "rc_stamina": {
      "D": 19.074444343614985,
-     "stars": null,
+     "stars": 4.974055713125214,
      "coverage": 0.12748822188314402,
      "dominance": 0.06251652395132042
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1090,54 +1147,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 21.34619685785851,
-    "stars": null
+    "stars": 5.46418040755336
    },
    "skills": {
     "rc_jack": {
      "D": 21.326009593616973,
-     "stars": null,
+     "stars": 5.459864232352623,
      "coverage": 0.5751537222663742,
      "dominance": 0.18428464090185853
     },
     "rc_tech": {
      "D": 21.287065171317064,
-     "stars": null,
+     "stars": 5.451535745063656,
      "coverage": 0.646643473101771,
      "dominance": 0.655038296751204
     },
     "rc_speed": {
      "D": 20.076540114883333,
-     "stars": null,
+     "stars": 5.191378051541205,
      "coverage": 0.25275351315896544,
      "dominance": 0.08221362697038809
     },
     "rc_stamina": {
      "D": 21.020417746621714,
-     "stars": null,
+     "stars": 5.394443916667768,
      "coverage": 0.17209276457466124,
      "dominance": 0.07846343537654958
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1148,54 +1205,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 20.157348075732443,
-    "stars": null
+    "stars": 5.208823707555485
    },
    "skills": {
     "rc_jack": {
      "D": 20.03036096239221,
-     "stars": null,
+     "stars": 5.181403225035811,
      "coverage": 0.5985490230341654,
      "dominance": 0.12063030943217215
     },
     "rc_tech": {
      "D": 20.306566932392414,
-     "stars": null,
+     "stars": 5.241008368338616,
      "coverage": 0.7374435707368707,
      "dominance": 0.7738120942227091
     },
     "rc_speed": {
      "D": 19.377923180630344,
-     "stars": null,
+     "stars": 5.040064855582749,
      "coverage": 0.20211109686618606,
      "dominance": 0.04507215429351457
     },
     "rc_stamina": {
      "D": 20.00874664068036,
-     "stars": null,
+     "stars": 5.1767331691140654,
      "coverage": 0.14950879901856584,
      "dominance": 0.040990681809686576
     },
     "ln_general": {
      "D": 14.153759670468412,
-     "stars": null,
+     "stars": 3.8769229890386816,
      "coverage": 0.04983108108108108,
      "dominance": 0.00529611353521019
     },
     "ln_tech": {
      "D": 13.648875293371848,
-     "stars": null,
+     "stars": 3.761076398825069,
      "coverage": 0.034588099155693525,
      "dominance": 0.014198152510400103
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0005224129157953509,
      "dominance": 4.94196307824053e-07
     }
@@ -1206,54 +1263,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 22.18885501062006,
-    "stars": null
+    "stars": 5.643755186584903
    },
    "skills": {
     "rc_jack": {
      "D": 22.014031677856437,
-     "stars": null,
+     "stars": 5.606593224046775,
      "coverage": 0.5637840313475961,
      "dominance": 0.17051173165298597
     },
     "rc_tech": {
      "D": 21.99352093367196,
-     "stars": null,
+     "stars": 5.602230101055922,
      "coverage": 0.6714850074032831,
      "dominance": 0.6569998395441798
     },
     "rc_speed": {
      "D": 21.11536780126758,
-     "stars": null,
+     "stars": 5.414787262052419,
      "coverage": 0.2602296387395666,
      "dominance": 0.09165683811602356
     },
     "rc_stamina": {
      "D": 21.856708833195093,
-     "stars": null,
+     "stars": 5.573109722081562,
      "coverage": 0.17598632991283758,
      "dominance": 0.08083159068681259
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1264,54 +1321,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 24.797960522563727,
-    "stars": null
+    "stars": 6.192868289976609
    },
    "skills": {
     "rc_jack": {
      "D": 24.684178937086063,
-     "stars": null,
+     "stars": 6.169127478729546,
      "coverage": 0.6517673059807746,
      "dominance": 0.19887229423355968
     },
     "rc_tech": {
      "D": 24.610980167336724,
-     "stars": null,
+     "stars": 6.153844841659703,
      "coverage": 0.6715419059246664,
      "dominance": 0.6579498436970441
     },
     "rc_speed": {
      "D": 23.649536366996475,
-     "stars": null,
+     "stars": 5.952406460311481,
      "coverage": 0.2042127131293179,
      "dominance": 0.07571102604405208
     },
     "rc_stamina": {
      "D": 24.328490925564832,
-     "stars": null,
+     "stars": 6.094795480540039,
      "coverage": 0.14337105162319552,
      "dominance": 0.06746683602476107
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0006489292667099286,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0005840363400389357,
      "dominance": 5.823273758752835e-13
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1322,54 +1379,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 25.75033621110665,
-    "stars": null
+    "stars": 6.390889120308702
    },
    "skills": {
     "rc_jack": {
      "D": 25.664850142118283,
-     "stars": null,
+     "stars": 6.373164542637196,
      "coverage": 0.7237820367484781,
      "dominance": 0.25065510986236356
     },
     "rc_tech": {
      "D": 25.496036825431567,
-     "stars": null,
+     "stars": 6.338134370894337,
      "coverage": 0.6558389736670384,
      "dominance": 0.6354839499759826
     },
     "rc_speed": {
      "D": 24.253963134168398,
-     "stars": null,
+     "stars": 6.07919797349691,
      "coverage": 0.16410871009753683,
      "dominance": 0.05974954314838751
     },
     "rc_stamina": {
      "D": 25.05225816070856,
-     "stars": null,
+     "stars": 6.2458633903056615,
      "coverage": 0.11210925315398775,
      "dominance": 0.05411139701326768
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1380,54 +1437,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 26.69137644224042,
-    "stars": null
+    "stars": 6.585370565841422
    },
    "skills": {
     "rc_jack": {
      "D": 26.710147098329,
-     "stars": null,
+     "stars": 6.589238212217037,
      "coverage": 0.6958591713321609,
      "dominance": 0.14152538205437934
     },
     "rc_tech": {
      "D": 26.62883899788897,
-     "stars": null,
+     "stars": 6.572481646106297,
      "coverage": 0.8054625931686585,
      "dominance": 0.8022870326168667
     },
     "rc_speed": {
      "D": 25.21835423097503,
-     "stars": null,
+     "stars": 6.2804295749314925,
      "coverage": 0.17897172066417782,
      "dominance": 0.02885234652980851
     },
     "rc_stamina": {
      "D": 25.90059559920624,
-     "stars": null,
+     "stars": 6.422020244257616,
      "coverage": 0.12407201529932765,
      "dominance": 0.02579413560862788
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0010970927043335162,
      "dominance": 0.00012794992774263516
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0010107830683390934,
      "dominance": 0.0014131532625761079
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0002593286761858772,
      "dominance": 0.0
     }
@@ -1438,54 +1495,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 29.427554279949938,
-    "stars": null
+    "stars": 7.144602544175455
    },
    "skills": {
     "rc_jack": {
      "D": 29.54225711248008,
-     "stars": null,
+     "stars": 7.167853561421079,
      "coverage": 0.6978588922379326,
      "dominance": 0.15693543824433087
     },
     "rc_tech": {
      "D": 29.425889967975298,
-     "stars": null,
+     "stars": 7.144265067402683,
      "coverage": 0.7767849079347655,
      "dominance": 0.785308297983297
     },
     "rc_speed": {
      "D": 27.100278016453814,
-     "stars": null,
+     "stars": 6.669522842759373,
      "coverage": 0.19256337691488418,
      "dominance": 0.030178134981411916
     },
     "rc_stamina": {
      "D": 28.9100846947094,
-     "stars": null,
+     "stars": 7.039521310881155,
      "coverage": 0.1095777308471839,
      "dominance": 0.02757812879096055
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1496,54 +1553,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 31.83794043381431,
-    "stars": null
+    "stars": 7.630161835117958
    },
    "skills": {
     "rc_jack": {
      "D": 31.98040243134657,
-     "stars": null,
+     "stars": 7.658666185057866,
      "coverage": 0.6592326282381429,
      "dominance": 0.21448430686741535
     },
     "rc_tech": {
      "D": 31.814274394723125,
-     "stars": null,
+     "stars": 7.625424608163611,
      "coverage": 0.6585047115381513,
      "dominance": 0.6666760036219957
     },
     "rc_speed": {
      "D": 29.70078234561964,
-     "stars": null,
+     "stars": 7.199963197516508,
      "coverage": 0.2096874579626039,
      "dominance": 0.06241039568117662
     },
     "rc_stamina": {
      "D": 31.363221254496224,
-     "stars": null,
+     "stars": 7.535025767634938,
      "coverage": 0.1310799137992537,
      "dominance": 0.056429293829413085
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1554,54 +1611,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 12.451357650038076,
-    "stars": null
+    "stars": 3.483411687666469
    },
    "skills": {
     "rc_jack": {
      "D": 11.932205529210037,
-     "stars": null,
+     "stars": 3.3616865648936685,
      "coverage": 0.3627898352251194,
      "dominance": 0.05697479713540847
     },
     "rc_tech": {
      "D": 12.395021504059315,
-     "stars": null,
+     "stars": 3.470243662968776,
      "coverage": 0.7928129155400041,
      "dominance": 0.7955183685909831
     },
     "rc_speed": {
      "D": 11.826732533411402,
-     "stars": null,
+     "stars": 3.336850755312064,
      "coverage": 0.3468779157441026,
      "dominance": 0.07268549013610183
     },
     "rc_stamina": {
      "D": 11.999792721837977,
-     "stars": null,
+     "stars": 3.3775823433396046,
      "coverage": 0.2588269981556322,
      "dominance": 0.06284083645374045
     },
     "ln_general": {
      "D": 5.755439252459414,
-     "stars": null,
+     "stars": 1.8285297650870134,
      "coverage": 0.03150525087514586,
      "dominance": 0.003248090734276016
     },
     "ln_tech": {
      "D": 4.523963442940789,
-     "stars": null,
+     "stars": 1.49546238759975,
      "coverage": 0.049725070858252514,
      "dominance": 0.008704380203036762
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 2.98726216041335e-05,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0023792051589635282,
      "dominance": 2.8036746453424287e-05
     }
@@ -1612,54 +1669,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 15.73455857735789,
-    "stars": null
+    "stars": 4.2353696652636765
    },
    "skills": {
     "rc_jack": {
      "D": 15.184085498509152,
-     "stars": null,
+     "stars": 4.111254850741601,
      "coverage": 0.3421495822810979,
      "dominance": 0.055192433910131705
     },
     "rc_tech": {
      "D": 15.655579269964957,
-     "stars": null,
+     "stars": 4.217606790436231,
      "coverage": 0.7608895451910854,
      "dominance": 0.7580703688864034
     },
     "rc_speed": {
      "D": 15.145757768575509,
-     "stars": null,
+     "stars": 4.102585781041942,
      "coverage": 0.37059651584737413,
      "dominance": 0.08982400485501127
     },
     "rc_stamina": {
      "D": 15.676085276245592,
-     "stars": null,
+     "stars": 4.222220119117436,
      "coverage": 0.28285346182752286,
      "dominance": 0.08797335093870903
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0044004400440044,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0042904290429042905,
      "dominance": 0.008939841409744098
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0008127676603377773,
      "dominance": 0.0
     }
@@ -1670,54 +1727,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 17.863035214585775,
-    "stars": null
+    "stars": 4.708804382148044
    },
    "skills": {
     "rc_jack": {
      "D": 16.685234270997856,
-     "stars": null,
+     "stars": 4.448053258762239,
      "coverage": 0.250580707759497,
      "dominance": 0.03998755084976262
     },
     "rc_tech": {
      "D": 17.682367054099608,
-     "stars": null,
+     "stars": 4.668995178747999,
      "coverage": 0.7164682570295621,
      "dominance": 0.7024912952753167
     },
     "rc_speed": {
      "D": 17.313507916055162,
-     "stars": null,
+     "stars": 4.587509962421449,
      "coverage": 0.4316269039668618,
      "dominance": 0.135501622334463
     },
     "rc_stamina": {
      "D": 17.78301625673708,
-     "stars": null,
+     "stars": 4.691180885692029,
      "coverage": 0.31779238827364076,
      "dominance": 0.12201953154045732
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1728,54 +1785,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 18.448133158612407,
-    "stars": null
+    "stars": 4.8372762497597535
    },
    "skills": {
     "rc_jack": {
      "D": 17.72698984779394,
-     "stars": null,
+     "stars": 4.678833766521663,
      "coverage": 0.3312077636088155,
      "dominance": 0.07469375607497045
     },
     "rc_tech": {
      "D": 18.248392005867046,
-     "stars": null,
+     "stars": 4.793494995911117,
      "coverage": 0.6548962923765164,
      "dominance": 0.6342988091280268
     },
     "rc_speed": {
      "D": 17.621613324725853,
-     "stars": null,
+     "stars": 4.655593404473349,
      "coverage": 0.3682263373053839,
      "dominance": 0.11448252332154635
     },
     "rc_stamina": {
      "D": 18.528671822777426,
-     "stars": null,
+     "stars": 4.854907377886247,
      "coverage": 0.2577460557437644,
      "dominance": 0.11302124482594411
     },
     "ln_general": {
      "D": 15.920945554400452,
-     "stars": null,
+     "stars": 4.2772310250277785,
      "coverage": 0.042819843342036555,
      "dominance": 0.014321785855236791
     },
     "ln_tech": {
      "D": 15.367151096343463,
-     "stars": null,
+     "stars": 4.1526115648804565,
      "coverage": 0.03202295293281357,
      "dominance": 0.0489151668011204
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 1.5244689660293048e-05,
      "dominance": 2.268122740119409e-06
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0026978381867681245,
      "dominance": 0.0002644458704144034
     }
@@ -1786,54 +1843,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 19.323399375954637,
-    "stars": null
+    "stars": 5.028218109850818
    },
    "skills": {
     "rc_jack": {
      "D": 18.48860345342557,
-     "stars": null,
+     "stars": 4.846137389851809,
      "coverage": 0.3751920180127361,
      "dominance": 0.0836794208666829
     },
     "rc_tech": {
      "D": 18.795655141231983,
-     "stars": null,
+     "stars": 4.913264098395104,
      "coverage": 0.7235868660739111,
      "dominance": 0.6453999107009167
     },
     "rc_speed": {
      "D": 18.287545952550573,
-     "stars": null,
+     "stars": 4.802083345431934,
      "coverage": 0.3833341551704027,
      "dominance": 0.12860437158523685
     },
     "rc_stamina": {
      "D": 19.85786635431618,
-     "stars": null,
+     "stars": 5.1441102966189165,
      "coverage": 0.24147382681686103,
      "dominance": 0.14231629684716238
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1844,54 +1901,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 21.467484193093586,
-    "stars": null
+    "stars": 5.490098333523423
    },
    "skills": {
     "rc_jack": {
      "D": 20.950820375672194,
-     "stars": null,
+     "stars": 5.37952284465985,
      "coverage": 0.3862567676062042,
      "dominance": 0.03379626935986663
     },
     "rc_tech": {
      "D": 21.519357678353362,
-     "stars": null,
+     "stars": 5.5011758196180915,
      "coverage": 0.8557063449684519,
      "dominance": 0.8759432957931418
     },
     "rc_speed": {
      "D": 20.783892856463183,
-     "stars": null,
+     "stars": 5.343701669790927,
      "coverage": 0.35453220183050693,
      "dominance": 0.04794229163598369
     },
     "rc_stamina": {
      "D": 21.33753756814812,
-     "stars": null,
+     "stars": 5.462329074604752,
      "coverage": 0.2592110305632885,
      "dominance": 0.04231814321100752
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1902,54 +1959,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 23.67969881954265,
-    "stars": null
+    "stars": 5.9587462404370095
    },
    "skills": {
     "rc_jack": {
      "D": 22.08822029746744,
-     "stars": null,
+     "stars": 5.622369318658467,
      "coverage": 0.3509654322654546,
      "dominance": 0.04610721697817706
     },
     "rc_tech": {
      "D": 23.58256231859012,
-     "stars": null,
+     "stars": 5.938324563014277,
      "coverage": 0.7545510995951209,
      "dominance": 0.7499188569934101
     },
     "rc_speed": {
      "D": 23.122417292945105,
-     "stars": null,
+     "stars": 5.8413955064060294,
      "coverage": 0.3709978417835731,
      "dominance": 0.09612652203109948
     },
     "rc_stamina": {
      "D": 24.56267329812421,
-     "stars": null,
+     "stars": 6.143755100174059,
      "coverage": 0.2780367259509731,
      "dominance": 0.10784740399731228
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -1960,54 +2017,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 24.419937393987492,
-    "stars": null
+    "stars": 6.1139230494820564
    },
    "skills": {
     "rc_jack": {
      "D": 23.211719207500067,
-     "stars": null,
+     "stars": 5.860231534591342,
      "coverage": 0.3112675320075071,
      "dominance": 0.026374339652213374
     },
     "rc_tech": {
      "D": 24.363517036509297,
-     "stars": null,
+     "stars": 6.102123179273101,
      "coverage": 0.8036289615366481,
      "dominance": 0.8027556095644438
     },
     "rc_speed": {
      "D": 23.727458618372715,
-     "stars": null,
+     "stars": 5.968782047277011,
      "coverage": 0.39420937429035824,
      "dominance": 0.08497211533343238
     },
     "rc_stamina": {
      "D": 25.029195396960525,
-     "stars": null,
+     "stars": 6.24106082663791,
      "coverage": 0.2945230937021344,
      "dominance": 0.08589793544991034
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2018,54 +2075,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 22.76030279767464,
-    "stars": null
+    "stars": 5.7648929300882
    },
    "skills": {
     "rc_jack": {
      "D": 22.203408469425312,
-     "stars": null,
+     "stars": 5.646846615380864,
      "coverage": 0.45912290879538453,
      "dominance": 0.05380051897116861
     },
     "rc_tech": {
      "D": 22.807107946536192,
-     "stars": null,
+     "stars": 5.774792504323245,
      "coverage": 0.8277419981856322,
      "dominance": 0.8464857618695791
     },
     "rc_speed": {
      "D": 21.88511055806292,
-     "stars": null,
+     "stars": 5.579157478326167,
      "coverage": 0.31549279173503064,
      "dominance": 0.05026522274319181
     },
     "rc_stamina": {
      "D": 23.03838775465959,
-     "stars": null,
+     "stars": 5.823660604077401,
      "coverage": 0.22538429946958408,
      "dominance": 0.0494484964160596
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2076,54 +2133,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 25.56939005475069,
-    "stars": null
+    "stars": 6.353360459745922
    },
    "skills": {
     "rc_jack": {
      "D": 24.757802690034016,
-     "stars": null,
+     "stars": 6.1844913123883565,
      "coverage": 0.4289176364699916,
      "dominance": 0.07113627289707741
     },
     "rc_tech": {
      "D": 25.41641767862031,
-     "stars": null,
+     "stars": 6.3215994779351705,
      "coverage": 0.7478848862182493,
      "dominance": 0.7365047678284562
     },
     "rc_speed": {
      "D": 24.98353298251407,
-     "stars": null,
+     "stars": 6.231549984956817,
      "coverage": 0.3217442929670841,
      "dominance": 0.09753071214034145
     },
     "rc_stamina": {
      "D": 25.78095609156784,
-     "stars": null,
+     "stars": 6.397235448853766,
      "coverage": 0.2485898475924799,
      "dominance": 0.09406533764042546
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007482229704451926,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007482229704451926,
      "dominance": 0.0007629094936995881
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00020700817998962838,
      "dominance": 0.0
     }
@@ -2134,54 +2191,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 27.16247351153227,
-    "stars": null
+    "stars": 6.682304321366934
    },
    "skills": {
     "rc_jack": {
      "D": 25.631172138179625,
-     "stars": null,
+     "stars": 6.366179115818865,
      "coverage": 0.4456296839857126,
      "dominance": 0.023211848008653207
     },
     "rc_tech": {
      "D": 27.042401653414515,
-     "stars": null,
+     "stars": 6.6576246237153,
      "coverage": 0.871005255239113,
      "dominance": 0.857225676331467
     },
     "rc_speed": {
      "D": 26.696655463114237,
-     "stars": null,
+     "stars": 6.586458340081839,
      "coverage": 0.315141722440165,
      "dominance": 0.058764350103290314
     },
     "rc_stamina": {
      "D": 27.90533722965025,
-     "stars": null,
+     "stars": 6.8345972283507574,
      "coverage": 0.23922859357412304,
      "dominance": 0.06079812555658921
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2192,54 +2249,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 28.3115188591805,
-    "stars": null
+    "stars": 6.917584374315399
    },
    "skills": {
     "rc_jack": {
      "D": 27.459223147223646,
-     "stars": null,
+     "stars": 6.743221647243742,
      "coverage": 0.5615343104298849,
      "dominance": 0.04763598024520325
     },
     "rc_tech": {
      "D": 28.2577995081552,
-     "stars": null,
+     "stars": 6.906620268301784,
      "coverage": 0.8849326523476418,
      "dominance": 0.8827217268221745
     },
     "rc_speed": {
      "D": 27.575699163794095,
-     "stars": null,
+     "stars": 6.767102362668381,
      "coverage": 0.25938820305663374,
      "dominance": 0.03571647229920554
     },
     "rc_stamina": {
      "D": 28.74302185719983,
-     "stars": null,
+     "stars": 7.00553030098884,
      "coverage": 0.1790774865134808,
      "dominance": 0.03392582063341738
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2250,54 +2307,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 33.25275240044869,
-    "stars": null
+    "stars": 7.912327601179538
    },
    "skills": {
     "rc_jack": {
      "D": 31.659697441420423,
-     "stars": null,
+     "stars": 7.594468656797849,
      "coverage": 0.4437822481067782,
      "dominance": 0.07302702750497833
     },
     "rc_tech": {
      "D": 33.07118618333953,
-     "stars": null,
+     "stars": 7.8762289717337675,
      "coverage": 0.7427412618142492,
      "dominance": 0.7307842726470475
     },
     "rc_speed": {
      "D": 32.96023843254714,
-     "stars": null,
+     "stars": 7.854154491356492,
      "coverage": 0.3152991680100323,
      "dominance": 0.10284886315424974
     },
     "rc_stamina": {
      "D": 34.064155241018774,
-     "stars": null,
+     "stars": 8.073255159599611,
      "coverage": 0.24091858388318957,
      "dominance": 0.09333983669372298
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2308,54 +2365,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 36.88161520114414,
-    "stars": null
+    "stars": 8.627259813162413
    },
    "skills": {
     "rc_jack": {
      "D": 35.68749407281868,
-     "stars": null,
+     "stars": 8.393340255022995,
      "coverage": 0.35522265750216947,
      "dominance": 0.02172896274647168
     },
     "rc_tech": {
      "D": 36.88553245321604,
-     "stars": null,
+     "stars": 8.628025099365146,
      "coverage": 0.8768523900490461,
      "dominance": 0.8828684789340613
     },
     "rc_speed": {
      "D": 35.832554013818445,
-     "stars": null,
+     "stars": 8.421824468093593,
      "coverage": 0.39734366458420345,
      "dominance": 0.052226561938427785
     },
     "rc_stamina": {
      "D": 37.44891342444182,
-     "stars": null,
+     "stars": 8.737950227748188,
      "coverage": 0.2466991938886553,
      "dominance": 0.04311820823304682
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007344840249724568,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007344840249724568,
      "dominance": 5.778814799265372e-05
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 7.802583424434898e-05,
      "dominance": 0.0
     }
@@ -2366,54 +2423,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 36.413598774967355,
-    "stars": null
+    "stars": 8.53572982097657
    },
    "skills": {
     "rc_jack": {
      "D": 35.98766928962244,
-     "stars": null,
+     "stars": 8.452262146028682,
      "coverage": 0.5182342104666672,
      "dominance": 0.13580696437266382
     },
     "rc_tech": {
      "D": 35.958814966906054,
-     "stars": null,
+     "stars": 8.446601812191405,
      "coverage": 0.722584200801627,
      "dominance": 0.6825172424695501
     },
     "rc_speed": {
      "D": 35.15246272683421,
-     "stars": null,
+     "stars": 8.288114854161913,
      "coverage": 0.29191683813797525,
      "dominance": 0.09276449920001187
     },
     "rc_stamina": {
      "D": 37.14725761546922,
-     "stars": null,
+     "stars": 8.679126254874054,
      "coverage": 0.18940480304980903,
      "dominance": 0.08849510211998317
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00044414834554741284,
      "dominance": 0.00013227782492974518
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0003481100161965245,
      "dominance": 0.0002839140128611424
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0001251126544728968,
      "dominance": 0.0
     }
@@ -2424,54 +2481,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 15.282962432623766,
-    "stars": null
+    "stars": 4.13360247923032
    },
    "skills": {
     "rc_jack": {
      "D": 12.541341107684232,
-     "stars": null,
+     "stars": 3.504424104225069,
      "coverage": 0.14953481533688676,
      "dominance": 0.037144097785437
     },
     "rc_tech": {
      "D": 14.600195913441329,
-     "stars": null,
+     "stars": 3.9787918223879033,
      "coverage": 0.6021373367478294,
      "dominance": 0.5131421521045652
     },
     "rc_speed": {
      "D": 14.285541412731032,
-     "stars": null,
+     "stars": 3.9070476157564316,
      "coverage": 0.5367837193432675,
      "dominance": 0.19597259069875128
     },
     "rc_stamina": {
      "D": 15.743611503492756,
-     "stars": null,
+     "stars": 4.237404777515251,
      "coverage": 0.29659162156984575,
      "dominance": 0.2165354586368997
     },
     "ln_general": {
      "D": 10.620872004938857,
-     "stars": null,
+     "stars": 3.050210089098357,
      "coverage": 0.01708984375,
      "dominance": 0.020019178285390585
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.007371894156011628,
      "dominance": 0.016727214003505297
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00087996740646398,
      "dominance": 0.0004593084854509944
     }
@@ -2482,54 +2539,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 17.659308129406494,
-    "stars": null
+    "stars": 4.663909464111073
    },
    "skills": {
     "rc_jack": {
      "D": 15.907051940842218,
-     "stars": null,
+     "stars": 4.274113402519867,
      "coverage": 0.1660228579398321,
      "dominance": 0.02021820745710108
     },
     "rc_tech": {
      "D": 17.699386981195335,
-     "stars": null,
+     "stars": 4.672748273282073,
      "coverage": 0.6112472221528853,
      "dominance": 0.637270099913417
     },
     "rc_speed": {
      "D": 17.181997129162283,
-     "stars": null,
+     "stars": 4.558388772658641,
      "coverage": 0.4220525769944929,
      "dominance": 0.14544450643890866
     },
     "rc_stamina": {
      "D": 18.197754768117253,
-     "stars": null,
+     "stars": 4.782383300955229,
      "coverage": 0.2909568231301915,
      "dominance": 0.14703312940192842
     },
     "ln_general": {
      "D": 12.87769826498494,
-     "stars": null,
+     "stars": 3.5827500290243424,
      "coverage": 0.12096774193548387,
      "dominance": 0.003852026344647851
     },
     "ln_tech": {
      "D": 12.800066626895974,
-     "stars": null,
+     "stars": 3.564702554554288,
      "coverage": 0.10799134264156833,
      "dominance": 0.046148345242476144
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00040471224975649223,
      "dominance": 1.5028369122871174e-05
     },
     "ln_release": {
      "D": 8.10362877852417,
-     "stars": null,
+     "stars": 2.4333891458795516,
      "coverage": 0.014425826662085792,
      "dominance": 1.8656832397802554e-05
     }
@@ -2540,54 +2597,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 19.075435030286364,
-    "stars": null
+    "stars": 4.97427147585702
    },
    "skills": {
     "rc_jack": {
      "D": 18.098284497578494,
-     "stars": null,
+     "stars": 4.760540964632306,
      "coverage": 0.22733417799587075,
      "dominance": 0.04021892350919397
     },
     "rc_tech": {
      "D": 18.701020920426394,
-     "stars": null,
+     "stars": 4.892594854895904,
      "coverage": 0.6920873098159055,
      "dominance": 0.6426541681462437
     },
     "rc_speed": {
      "D": 18.40699504842607,
-     "stars": null,
+     "stars": 4.8282656045063135,
      "coverage": 0.4439957622847602,
      "dominance": 0.16079605355943394
     },
     "rc_stamina": {
      "D": 19.126570356161814,
-     "stars": null,
+     "stars": 4.98540578900531,
      "coverage": 0.32726949949527956,
      "dominance": 0.15544521929723693
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0014005602240896359,
      "dominance": 0.000299087668932342
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0010459119473660743,
      "dominance": 0.0005861822401345715
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 9.925001819186037e-05,
      "dominance": 3.655788251541178e-07
     }
@@ -2598,54 +2655,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 20.773290114465027,
-    "stars": null
+    "stars": 5.341424816831776
    },
    "skills": {
     "rc_jack": {
      "D": 19.51309939215738,
-     "stars": null,
+     "stars": 5.0694118299835385,
      "coverage": 0.24616261724255195,
      "dominance": 0.05273394701275394
     },
     "rc_tech": {
      "D": 20.335975022707427,
-     "stars": null,
+     "stars": 5.247346723736761,
      "coverage": 0.6590808436273484,
      "dominance": 0.6083083028992489
     },
     "rc_speed": {
      "D": 19.958290195892637,
-     "stars": null,
+     "stars": 5.1658281585383925,
      "coverage": 0.4523402737512335,
      "dominance": 0.16558572046236245
     },
     "rc_stamina": {
      "D": 21.503465213270353,
-     "stars": null,
+     "stars": 5.497782481422044,
      "coverage": 0.26659494084122287,
      "dominance": 0.16265302427043798
     },
     "ln_general": {
      "D": 11.599545403515155,
-     "stars": null,
+     "stars": 3.283230228716728,
      "coverage": 0.034902168164992066,
      "dominance": 0.0007017689108674147
     },
     "ln_tech": {
      "D": 11.537014152908473,
-     "stars": null,
+     "stars": 3.2684413925431475,
      "coverage": 0.032767571900413926,
      "dominance": 0.010017171526989837
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00018772519250375526,
      "dominance": 4.8537517254340816e-08
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.003172835647793358,
      "dominance": 1.6379822241586616e-08
     }
@@ -2656,54 +2713,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 23.79900127488509,
-    "stars": null
+    "stars": 5.983809140542538
    },
    "skills": {
     "rc_jack": {
      "D": 21.15317499739109,
-     "stars": null,
+     "stars": 5.422883372021609,
      "coverage": 0.13777126026975337,
      "dominance": 0.014266319847631565
     },
     "rc_tech": {
      "D": 23.494085409509992,
-     "stars": null,
+     "stars": 5.919711384153235,
      "coverage": 0.6243004950961499,
      "dominance": 0.603919752269361
     },
     "rc_speed": {
      "D": 23.315068031828613,
-     "stars": null,
+     "stars": 5.882015509392888,
      "coverage": 0.4912097031951011,
      "dominance": 0.197896311943506
     },
     "rc_stamina": {
      "D": 23.981570054207225,
-     "stars": null,
+     "stars": 6.022122912913736,
      "coverage": 0.3710190365351458,
      "dominance": 0.18391761593950065
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2714,54 +2771,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 24.180856666741885,
-    "stars": null
+    "stars": 6.063890250965876
    },
    "skills": {
     "rc_jack": {
      "D": 19.075127967010136,
-     "stars": null,
+     "stars": 4.974204600408341,
      "coverage": 0.15580231488752558,
      "dominance": 0.017208618046466333
     },
     "rc_tech": {
      "D": 23.750954413754748,
-     "stars": null,
+     "stars": 5.97371801647667,
      "coverage": 0.5855668941527254,
      "dominance": 0.5560749757766434
     },
     "rc_speed": {
      "D": 23.665868062060294,
-     "stars": null,
+     "stars": 5.955839349008199,
      "coverage": 0.5023810444058787,
      "dominance": 0.22112455687775331
     },
     "rc_stamina": {
      "D": 24.960498192139443,
-     "stars": null,
+     "stars": 6.226751073653722,
      "coverage": 0.3418166407065952,
      "dominance": 0.20559184929913688
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2772,54 +2829,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 25.295831223194963,
-    "stars": null
+    "stars": 6.296540435804323
    },
    "skills": {
     "rc_jack": {
      "D": 21.59448379897131,
-     "stars": null,
+     "stars": 5.517211065141467,
      "coverage": 0.11738100636681058,
      "dominance": 0.017706191996651313
     },
     "rc_tech": {
      "D": 24.623612928868653,
-     "stars": null,
+     "stars": 6.156482878058319,
      "coverage": 0.5357183690470332,
      "dominance": 0.48556543761876786
     },
     "rc_speed": {
      "D": 24.75198080728975,
-     "stars": null,
+     "stars": 6.183276674069165,
      "coverage": 0.512863714562375,
      "dominance": 0.25775193963509935
     },
     "rc_stamina": {
      "D": 25.737670479893577,
-     "stars": null,
+     "stars": 6.388263635718848,
      "coverage": 0.36975527907081535,
      "dominance": 0.2389764307494816
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2830,54 +2887,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 26.45582234756789,
-    "stars": null
+    "stars": 6.536797005311055
    },
    "skills": {
     "rc_jack": {
      "D": 24.26867147458849,
-     "stars": null,
+     "stars": 6.082276825182033,
      "coverage": 0.23442148240389657,
      "dominance": 0.04811465086174581
     },
     "rc_tech": {
      "D": 25.72879026409239,
-     "stars": null,
+     "stars": 6.386422725176913,
      "coverage": 0.6219860871609754,
      "dominance": 0.5562349816578105
     },
     "rc_speed": {
      "D": 25.75804308024756,
-     "stars": null,
+     "stars": 6.3924865761970775,
      "coverage": 0.4615274893643977,
      "dominance": 0.20913436575785588
     },
     "rc_stamina": {
      "D": 26.915095724945115,
-     "stars": null,
+     "stars": 6.631438292751544,
      "coverage": 0.3040510282317061,
      "dominance": 0.18651600172258725
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2888,54 +2945,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 28.35533662643683,
-    "stars": null
+    "stars": 6.926525030621998
    },
    "skills": {
     "rc_jack": {
      "D": 26.940733412870923,
-     "stars": null,
+     "stars": 6.636713503353233,
      "coverage": 0.282392197209781,
      "dominance": 0.056352858596300695
     },
     "rc_tech": {
      "D": 27.964391856784573,
-     "stars": null,
+     "stars": 6.846675008526826,
      "coverage": 0.6437843157281004,
      "dominance": 0.6124927852284561
     },
     "rc_speed": {
      "D": 27.59465786684964,
-     "stars": null,
+     "stars": 6.7709878317651775,
      "coverage": 0.4280373864358091,
      "dominance": 0.17156741192181568
     },
     "rc_stamina": {
      "D": 28.97585921640106,
-     "stars": null,
+     "stars": 7.052895064650943,
      "coverage": 0.28957041635440783,
      "dominance": 0.1595869442534276
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -2946,54 +3003,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 28.886154513553038,
-    "stars": null
+    "stars": 7.034654408853508
    },
    "skills": {
     "rc_jack": {
      "D": 26.67947876748728,
-     "stars": null,
+     "stars": 6.582918847836348,
      "coverage": 0.35080145777762944,
      "dominance": 0.05932488532297915
     },
     "rc_tech": {
      "D": 28.65856885697258,
-     "stars": null,
+     "stars": 6.988334905974651,
      "coverage": 0.685670260995133,
      "dominance": 0.6747417435576417
     },
     "rc_speed": {
      "D": 28.685598681343752,
-     "stars": null,
+     "stars": 6.9938393303788695,
      "coverage": 0.3744813364920273,
      "dominance": 0.14380808379551996
     },
     "rc_stamina": {
      "D": 29.353228534892406,
-     "stars": null,
+     "stars": 7.1295282540798155,
      "coverage": 0.27471720573034275,
      "dominance": 0.12212528732386017
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3004,54 +3061,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 31.386690226824125,
-    "stars": null
+    "stars": 7.539734614856693
    },
    "skills": {
     "rc_jack": {
      "D": 28.969322453230482,
-     "stars": null,
+     "stars": 7.051566186547923,
      "coverage": 0.21265180412549406,
      "dominance": 0.03492296424729548
     },
     "rc_tech": {
      "D": 31.227137718427095,
-     "stars": null,
+     "stars": 7.507710314633873,
      "coverage": 0.6771695290624545,
      "dominance": 0.6739785997125193
     },
     "rc_speed": {
      "D": 30.688737294593068,
-     "stars": null,
+     "stars": 7.399446152317691,
      "coverage": 0.46258745952944824,
      "dominance": 0.15542588311865063
     },
     "rc_stamina": {
      "D": 31.949074141096247,
-     "stars": null,
+     "stars": 7.6523996972104,
      "coverage": 0.3247607363450564,
      "dominance": 0.1356725529215348
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3062,54 +3119,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 32.340509153004206,
-    "stars": null
+    "stars": 7.730624707848693
    },
    "skills": {
     "rc_jack": {
      "D": 30.682877742273813,
-     "stars": null,
+     "stars": 7.398266172210961,
      "coverage": 0.22392761606046696,
      "dominance": 0.06450705735957821
     },
     "rc_tech": {
      "D": 31.9884196869172,
-     "stars": null,
+     "stars": 7.660269685905247,
      "coverage": 0.571891769601334,
      "dominance": 0.5570925264947242
     },
     "rc_speed": {
      "D": 31.35058886554045,
-     "stars": null,
+     "stars": 7.53249094715623,
      "coverage": 0.46578517027778604,
      "dominance": 0.20027347768914378
     },
     "rc_stamina": {
      "D": 33.005470169188335,
-     "stars": null,
+     "stars": 7.863155402784309,
      "coverage": 0.30954866122452335,
      "dominance": 0.17809487266276702
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007385524372230429,
      "dominance": 4.039420774956563e-06
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0006877691536237715,
      "dominance": 2.8026373010535063e-05
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00018786175662288226,
      "dominance": 0.0
     }
@@ -3120,54 +3177,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 35.60845732725823,
-    "stars": null
+    "stars": 8.377812439305497
    },
    "skills": {
     "rc_jack": {
      "D": 33.132609010065174,
-     "stars": null,
+     "stars": 7.888444581576798,
      "coverage": 0.22564469596161785,
      "dominance": 0.04985834006612193
     },
     "rc_tech": {
      "D": 35.09604975887655,
-     "stars": null,
+     "stars": 8.277004711370715,
      "coverage": 0.653238395004494,
      "dominance": 0.616843119136874
     },
     "rc_speed": {
      "D": 34.73872511873483,
-     "stars": null,
+     "stars": 8.206563498625494,
      "coverage": 0.4541645706645639,
      "dominance": 0.16882232569762282
     },
     "rc_stamina": {
      "D": 36.6066469964365,
-     "stars": null,
+     "stars": 8.57350762375254,
      "coverage": 0.3201907333738181,
      "dominance": 0.16447621509938185
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3178,54 +3235,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 39.57429625747323,
-    "stars": null
+    "stars": 9.150236081293604
    },
    "skills": {
     "rc_jack": {
      "D": 36.555242182777874,
-     "stars": null,
+     "stars": 8.563451377996936,
      "coverage": 0.17851554091816663,
      "dominance": 0.021557437704248658
     },
     "rc_tech": {
      "D": 39.476126585042806,
-     "stars": null,
+     "stars": 9.131274763489202,
      "coverage": 0.6743981597620432,
      "dominance": 0.6779469131024023
     },
     "rc_speed": {
      "D": 38.81419506311662,
-     "stars": null,
+     "stars": 9.003219689976484,
      "coverage": 0.48400268487983,
      "dominance": 0.16340791035272692
     },
     "rc_stamina": {
      "D": 40.3318236033768,
-     "stars": null,
+     "stars": 9.296292306903934,
      "coverage": 0.3374817742020045,
      "dominance": 0.13708773884062225
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3236,54 +3293,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 43.730435120094064,
-    "stars": null
+    "stars": 9.946145697688285
    },
    "skills": {
     "rc_jack": {
      "D": 39.927967839814464,
-     "stars": null,
+     "stars": 9.21848309153448,
      "coverage": 0.16963766101379288,
      "dominance": 0.010042106917507999
     },
     "rc_tech": {
      "D": 43.591034551222414,
-     "stars": null,
+     "stars": 9.919658683958927,
      "coverage": 0.7278507151501399,
      "dominance": 0.7259038284704367
     },
     "rc_speed": {
      "D": 42.838898265147485,
-     "stars": null,
+     "stars": 9.77650564835431,
      "coverage": 0.4968523242358097,
      "dominance": 0.14055695342784358
     },
     "rc_stamina": {
      "D": 44.77778920675882,
-     "stars": null,
+     "stars": 10.144708391352113,
      "coverage": 0.333510014750398,
      "dominance": 0.12349711118421168
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3294,54 +3351,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 13.624989720276535,
-    "stars": null
+    "stars": 3.7555784987127563
    },
    "skills": {
     "rc_jack": {
      "D": 13.130173467406596,
-     "stars": null,
+     "stars": 3.641321114958793,
      "coverage": 0.4148007303414962,
      "dominance": 0.07743431819650845
     },
     "rc_tech": {
      "D": 13.54036383276503,
-     "stars": null,
+     "stars": 3.7360867911773816,
      "coverage": 0.7688424984175407,
      "dominance": 0.7663745586010865
     },
     "rc_speed": {
      "D": 12.978524165217607,
-     "stars": null,
+     "stars": 3.606162871420021,
      "coverage": 0.34105316667820895,
      "dominance": 0.08064297419638466
     },
     "rc_stamina": {
      "D": 13.374148400170649,
-     "stars": null,
+     "stars": 3.6977441169377667,
      "coverage": 0.24414610298029463,
      "dominance": 0.07554814900602046
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3352,54 +3409,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 14.055735963074072,
-    "stars": null
+    "stars": 3.8544852981424946
    },
    "skills": {
     "rc_jack": {
      "D": 13.223587325192797,
-     "stars": null,
+     "stars": 3.6629447674254356,
      "coverage": 0.2831618470913537,
      "dominance": 0.07021839344363345
     },
     "rc_tech": {
      "D": 13.901127398562615,
-     "stars": null,
+     "stars": 3.819042765351892,
      "coverage": 0.6681670648100801,
      "dominance": 0.6559912254462252
     },
     "rc_speed": {
      "D": 13.39529310914394,
-     "stars": null,
+     "stars": 3.7026261318111025,
      "coverage": 0.4228131747326297,
      "dominance": 0.13147440707941987
     },
     "rc_stamina": {
      "D": 14.338747501433307,
-     "stars": null,
+     "stars": 3.919197256373653,
      "coverage": 0.29402497817601714,
      "dominance": 0.14231597403072133
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3410,54 +3467,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 15.903014279627651,
-    "stars": null
+    "stars": 4.273207297526597
    },
    "skills": {
     "rc_jack": {
      "D": 15.565879218786902,
-     "stars": null,
+     "stars": 4.197414837621634,
      "coverage": 0.41443394714900234,
      "dominance": 0.06303387637427295
     },
     "rc_tech": {
      "D": 15.906849211031348,
-     "stars": null,
+     "stars": 4.274067908152115,
      "coverage": 0.7662784525825584,
      "dominance": 0.7717323206753663
     },
     "rc_speed": {
      "D": 15.40210992073303,
-     "stars": null,
+     "stars": 4.160499923312977,
      "coverage": 0.29456839754865505,
      "dominance": 0.06766228727897884
     },
     "rc_stamina": {
      "D": 16.305566517848305,
-     "stars": null,
+     "stars": 4.363360656412587,
      "coverage": 0.2245703662538699,
      "dominance": 0.0790296632724308
     },
     "ln_general": {
      "D": 10.80853166525925,
-     "stars": null,
+     "stars": 3.095156520430151,
      "coverage": 0.06642728904847396,
      "dominance": 0.0026902788114264503
     },
     "ln_tech": {
      "D": 10.604191340850143,
-     "stars": null,
+     "stars": 3.046208593210921,
      "coverage": 0.055725054508539214,
      "dominance": 0.015438604636569883
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 5.934600374454037e-05,
      "dominance": 3.7612409062019297e-06
     },
     "ln_release": {
      "D": 7.988258581967698,
-     "stars": null,
+     "stars": 2.4044209839352435,
      "coverage": 0.009423944517005418,
      "dominance": 0.0004092077100483675
     }
@@ -3468,54 +3525,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 17.458882708598367,
-    "stars": null
+    "stars": 4.619658753461012
    },
    "skills": {
     "rc_jack": {
      "D": 16.36999514940617,
-     "stars": null,
+     "stars": 4.377755472707643,
      "coverage": 0.54212877894249,
      "dominance": 0.10420027084358219
     },
     "rc_tech": {
      "D": 17.22780824926195,
-     "stars": null,
+     "stars": 4.568537147929184,
      "coverage": 0.6886996487929288,
      "dominance": 0.6586515379702926
     },
     "rc_speed": {
      "D": 17.398915607122387,
-     "stars": null,
+     "stars": 4.60640274415084,
      "coverage": 0.24463559655668934,
      "dominance": 0.11318811079617652
     },
     "rc_stamina": {
      "D": 17.940822976803233,
-     "stars": null,
+     "stars": 4.725924008406238,
      "coverage": 0.2036686557193499,
      "dominance": 0.11631066280332981
     },
     "ln_general": {
      "D": 9.871549457638723,
-     "stars": null,
+     "stars": 2.8694049488820808,
      "coverage": 0.009566968781470292,
      "dominance": 0.0011695437728034392
     },
     "ln_tech": {
      "D": 9.104997986970861,
-     "stars": null,
+     "stars": 2.6820831860242884,
      "coverage": 0.008060000088023869,
      "dominance": 0.006322108004010584
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.001246017616087568,
      "dominance": 0.00015776580980460204
     }
@@ -3526,54 +3583,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 20.601198253806583,
-    "stars": null
+    "stars": 5.304442618261371
    },
    "skills": {
     "rc_jack": {
      "D": 20.100805435899513,
-     "stars": null,
+     "stars": 5.1966179130668415,
      "coverage": 0.4172075305156545,
      "dominance": 0.11780546929843491
     },
     "rc_tech": {
      "D": 20.38403325003473,
-     "stars": null,
+     "stars": 5.257701511995517,
      "coverage": 0.6648258091835261,
      "dominance": 0.6461847570145873
     },
     "rc_speed": {
      "D": 19.74334356217208,
-     "stars": null,
+     "stars": 5.119321259914966,
      "coverage": 0.3459546311315191,
      "dominance": 0.12090092231313831
     },
     "rc_stamina": {
      "D": 20.788223701757946,
-     "stars": null,
+     "stars": 5.344631628665957,
      "coverage": 0.23683783835282526,
      "dominance": 0.11510885137384005
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3584,54 +3641,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 21.56891284489456,
-    "stars": null
+    "stars": 5.511754123349451
    },
    "skills": {
     "rc_jack": {
      "D": 21.053725170782897,
-     "stars": null,
+     "stars": 5.401581857289833,
      "coverage": 0.43225453204374825,
      "dominance": 0.14803339596096804
     },
     "rc_tech": {
      "D": 21.26705566763903,
-     "stars": null,
+     "stars": 5.447255621927702,
      "coverage": 0.6179085194666283,
      "dominance": 0.5920737400232501
     },
     "rc_speed": {
      "D": 20.87080159711068,
-     "stars": null,
+     "stars": 5.362357412815418,
      "coverage": 0.3371539100325816,
      "dominance": 0.13704821008941495
     },
     "rc_stamina": {
      "D": 21.619727857745687,
-     "stars": null,
+     "stars": 5.52259720163102,
      "coverage": 0.23059155792366923,
      "dominance": 0.12284465392636676
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3642,54 +3699,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 24.041132581126096,
-    "stars": null
+    "stars": 6.034612253993988
    },
    "skills": {
     "rc_jack": {
      "D": 23.413123849408265,
-     "stars": null,
+     "stars": 5.902669109627789,
      "coverage": 0.3751041192715058,
      "dominance": 0.10276756615701288
     },
     "rc_tech": {
      "D": 23.820397723852594,
-     "stars": null,
+     "stars": 5.988301885420782,
      "coverage": 0.6434640455823541,
      "dominance": 0.6279378411647145
     },
     "rc_speed": {
      "D": 23.418334179465138,
-     "stars": null,
+     "stars": 5.90376616757593,
      "coverage": 0.3556636170210857,
      "dominance": 0.1380588639708294
     },
     "rc_stamina": {
      "D": 24.22695840380514,
-     "stars": null,
+     "stars": 6.073544354949054,
      "coverage": 0.269232263707406,
      "dominance": 0.13123572870744404
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3700,54 +3757,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 24.04485795973028,
-    "stars": null
+    "stars": 6.035393238716156
    },
    "skills": {
     "rc_jack": {
      "D": 23.688021729803296,
-     "stars": null,
+     "stars": 5.960495380438889,
      "coverage": 0.4558856767809387,
      "dominance": 0.13247917746817817
     },
     "rc_tech": {
      "D": 23.807517779282467,
-     "stars": null,
+     "stars": 5.985597483426419,
      "coverage": 0.6731758583331003,
      "dominance": 0.6538632786133668
     },
     "rc_speed": {
      "D": 22.87686916908104,
-     "stars": null,
+     "stars": 5.7895412170475025,
      "coverage": 0.33614919149191813,
      "dominance": 0.10872655753233151
     },
     "rc_stamina": {
      "D": 24.492172840113618,
-     "stars": null,
+     "stars": 6.129023963871229,
      "coverage": 0.20796513172714384,
      "dominance": 0.10493098638612423
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3758,54 +3815,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 25.146999485431813,
-    "stars": null
+    "stars": 6.265584579942082
    },
    "skills": {
     "rc_jack": {
      "D": 24.88456289087126,
-     "stars": null,
+     "stars": 6.210926056514964,
      "coverage": 0.5502001664441359,
      "dominance": 0.1559826103063405
     },
     "rc_tech": {
      "D": 24.985145787085838,
-     "stars": null,
+     "stars": 6.23188595835062,
      "coverage": 0.6757404476137643,
      "dominance": 0.6678009816138312
     },
     "rc_speed": {
      "D": 24.007492274672718,
-     "stars": null,
+     "stars": 6.027559029383345,
      "coverage": 0.2716655802364195,
      "dominance": 0.09183342167940725
     },
     "rc_stamina": {
      "D": 25.24566173904666,
-     "stars": null,
+     "stars": 6.286108931836045,
      "coverage": 0.17813425331944405,
      "dominance": 0.0843829864004211
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3816,54 +3873,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 26.978960783852415,
-    "stars": null
+    "stars": 6.644577630933505
    },
    "skills": {
     "rc_jack": {
      "D": 26.728088936404976,
-     "stars": null,
+     "stars": 6.592934664017623,
      "coverage": 0.5450240039589457,
      "dominance": 0.1691493900252637
     },
     "rc_tech": {
      "D": 26.70470395228536,
-     "stars": null,
+     "stars": 6.588116711824019,
      "coverage": 0.6475810263721953,
      "dominance": 0.626877397570337
     },
     "rc_speed": {
      "D": 26.01665784129728,
-     "stars": null,
+     "stars": 6.446045939979967,
      "coverage": 0.2648146201592509,
      "dominance": 0.10594526876772425
     },
     "rc_stamina": {
      "D": 26.974527898814838,
-     "stars": null,
+     "stars": 6.643665792836941,
      "coverage": 0.19016137588180343,
      "dominance": 0.09802794363667608
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3874,54 +3931,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 28.50550884352183,
-    "stars": null
+    "stars": 6.957149193109967
    },
    "skills": {
     "rc_jack": {
      "D": 28.217055517203175,
-     "stars": null,
+     "stars": 6.898302139217894,
      "coverage": 0.5783184349365645,
      "dominance": 0.14159613388686387
     },
     "rc_tech": {
      "D": 28.306878727140358,
-     "stars": null,
+     "stars": 6.916637459913704,
      "coverage": 0.7230982305459352,
      "dominance": 0.707693351248103
     },
     "rc_speed": {
      "D": 27.483701746481955,
-     "stars": null,
+     "stars": 6.748241801681117,
      "coverage": 0.24850022026259846,
      "dominance": 0.07805095824141325
     },
     "rc_stamina": {
      "D": 28.534347190951934,
-     "stars": null,
+     "stars": 6.963027062280587,
      "coverage": 0.17318134480083988,
      "dominance": 0.07265955662362102
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -3932,54 +3989,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 30.716855136101564,
-    "stars": null
+    "stars": 7.40510792741273
    },
    "skills": {
     "rc_jack": {
      "D": 30.321365625921835,
-     "stars": null,
+     "stars": 7.325393726006766,
      "coverage": 0.5438261071847521,
      "dominance": 0.16827093366805784
     },
     "rc_tech": {
      "D": 30.56236952808334,
-     "stars": null,
+     "stars": 7.3739903198014405,
      "coverage": 0.6344890829532127,
      "dominance": 0.6298069065320232
     },
     "rc_speed": {
      "D": 29.832850891423693,
-     "stars": null,
+     "stars": 7.226692406648993,
      "coverage": 0.27148326671622613,
      "dominance": 0.10825840072500817
     },
     "rc_stamina": {
      "D": 30.90469070684752,
-     "stars": null,
+     "stars": 7.442908407384319,
      "coverage": 0.1830751172137243,
      "dominance": 0.0922231083796003
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0016155088852988692,
      "dominance": 0.00016185728010196265
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0014091355682745435,
      "dominance": 0.0012787934152093247
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0003274447009685681,
      "dominance": 0.0
     }
@@ -3990,54 +4047,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 31.64603740219103,
-    "stars": null
+    "stars": 7.591731868241014
    },
    "skills": {
     "rc_jack": {
      "D": 31.070175943065657,
-     "stars": null,
+     "stars": 7.476179683967603,
      "coverage": 0.5333360167353586,
      "dominance": 0.16671411378893394
     },
     "rc_tech": {
      "D": 30.967960320521943,
-     "stars": null,
+     "stars": 7.45563240150521,
      "coverage": 0.660071038647365,
      "dominance": 0.5979763458484422
     },
     "rc_speed": {
      "D": 30.71447850868444,
-     "stars": null,
+     "stars": 7.404629405603592,
      "coverage": 0.27516605654507675,
      "dominance": 0.11745998009371338
     },
     "rc_stamina": {
      "D": 32.52144683970213,
-     "stars": null,
+     "stars": 7.766730771958988,
      "coverage": 0.1854723783946657,
      "dominance": 0.11642841647772212
     },
     "ln_general": {
      "D": 15.25078341834568,
-     "stars": null,
+     "stars": 4.126332175893703,
      "coverage": 0.006025548324897566,
      "dominance": 5.789432557914019e-07
     },
     "ln_tech": {
      "D": 15.248373611605658,
-     "stars": null,
+     "stars": 4.125787619171078,
      "coverage": 0.006020009975471716,
      "dominance": 0.0014205648479312608
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0011528609479713365,
      "dominance": 0.0
     }
@@ -4048,54 +4105,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 35.83205964079069,
-    "stars": null
+    "stars": 8.421727424492461
    },
    "skills": {
     "rc_jack": {
      "D": 34.76214355023265,
-     "stars": null,
+     "stars": 8.211183736777759,
      "coverage": 0.5069945310082047,
      "dominance": 0.1454712441464586
     },
     "rc_tech": {
      "D": 35.193914594843996,
-     "stars": null,
+     "stars": 8.296276639095323,
      "coverage": 0.6712283112582514,
      "dominance": 0.6166571857200306
     },
     "rc_speed": {
      "D": 35.45854079008214,
-     "stars": null,
+     "stars": 8.3483437286815,
      "coverage": 0.29457158760515023,
      "dominance": 0.1255928105640152
     },
     "rc_stamina": {
      "D": 36.971523369828354,
-     "stars": null,
+     "stars": 8.644821173198203,
      "coverage": 0.1968268102737493,
      "dominance": 0.11168578523105499
     },
     "ln_general": {
      "D": 6.389396348917312,
-     "stars": null,
+     "stars": 1.9952802685428697,
      "coverage": 0.0016070711128967456,
      "dominance": 2.2267198293329028e-05
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0015653438439080787,
      "dominance": 0.000570707140148456
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00016683218025748307,
      "dominance": 0.0
     }
@@ -4106,54 +4163,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 39.41068252224963,
-    "stars": null
+    "stars": 9.118630028924152
    },
    "skills": {
     "rc_jack": {
      "D": 38.09299355939521,
-     "stars": null,
+     "stars": 8.863287887901642,
      "coverage": 0.5808747640938979,
      "dominance": 0.20329456026571238
     },
     "rc_tech": {
      "D": 38.513714534146175,
-     "stars": null,
+     "stars": 8.944971205924885,
      "coverage": 0.6004032928636123,
      "dominance": 0.5412331643783963
     },
     "rc_speed": {
      "D": 39.1103665014614,
-     "stars": null,
+     "stars": 9.060560165772799,
      "coverage": 0.2518104533061121,
      "dominance": 0.13227701826795385
     },
     "rc_stamina": {
      "D": 41.067804736788375,
-     "stars": null,
+     "stars": 9.437761810778285,
      "coverage": 0.16731478259999197,
      "dominance": 0.12319525708793705
     },
     "ln_general": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_release": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     }
@@ -4164,54 +4221,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 9.70025525353007,
-    "stars": null
+    "stars": 2.8277604921509765
    },
    "skills": {
     "rc_jack": {
      "D": 9.109744508305782,
-     "stars": null,
+     "stars": 2.6832508890187463,
      "coverage": 0.1775162118080626,
      "dominance": 0.0360132225900122
     },
     "rc_tech": {
      "D": 9.373762265702132,
-     "stars": null,
+     "stars": 2.748046336268614,
      "coverage": 0.26931045378585117,
      "dominance": 0.25340802510666155
     },
     "rc_speed": {
      "D": 8.340029401173407,
-     "stars": null,
+     "stars": 2.49253580762455,
      "coverage": 0.1026538488245935,
      "dominance": 0.021179968817279973
     },
     "rc_stamina": {
      "D": 8.57423749104595,
-     "stars": null,
+     "stars": 2.5508619903523853,
      "coverage": 0.07054295184506224,
      "dominance": 0.020069364105263242
     },
     "ln_general": {
      "D": 9.516016295664558,
-     "stars": null,
+     "stars": 2.7828333885686938,
      "coverage": 0.6492869875222816,
      "dominance": 0.09726203342409898
     },
     "ln_tech": {
      "D": 9.457911613576302,
-     "stars": null,
+     "stars": 2.768634793629241,
      "coverage": 0.538660585659889,
      "dominance": 0.555657186934686
     },
     "ln_inverse": {
      "D": 6.5357503229875045,
-     "stars": null,
+     "stars": 2.033379699373279,
      "coverage": 0.01841076931072898,
      "dominance": 0.002649303722747948
     },
     "ln_release": {
      "D": 8.386539460236794,
-     "stars": null,
+     "stars": 2.5041397279075728,
      "coverage": 0.09348620195291397,
      "dominance": 0.01376089529925003
     }
@@ -4222,54 +4279,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 10.18023923500026,
-    "stars": null
+    "stars": 2.944153847149322
    },
    "skills": {
     "rc_jack": {
      "D": 7.889801831894928,
-     "stars": null,
+     "stars": 2.3796450453548985,
      "coverage": 0.12560461282171562,
      "dominance": 0.008464971367235112
     },
     "rc_tech": {
      "D": 7.836924122239642,
-     "stars": null,
+     "stars": 2.366317739609992,
      "coverage": 0.19029613720541694,
      "dominance": 0.05603660834745757
     },
     "rc_speed": {
      "D": 6.689621226457074,
-     "stars": null,
+     "stars": 2.073284668586459,
      "coverage": 0.1117719065323715,
      "dominance": 0.005149495726373394
     },
     "rc_stamina": {
      "D": 6.561564302852301,
-     "stars": null,
+     "stars": 2.0400850278494174,
      "coverage": 0.03447399300275443,
      "dominance": 0.0026359786989937164
     },
     "ln_general": {
      "D": 10.502645765488666,
-     "stars": null,
+     "stars": 3.0218265460123,
      "coverage": 0.7281494876431586,
      "dominance": 0.10786191788571409
     },
     "ln_tech": {
      "D": 10.580378840781442,
-     "stars": null,
+     "stars": 3.0404944551681066,
      "coverage": 0.593234668038456,
      "dominance": 0.7988623643556787
     },
     "ln_inverse": {
      "D": 7.893299521053003,
-     "stars": null,
+     "stars": 2.3805260833833928,
      "coverage": 0.01883495556591463,
      "dominance": 0.0032627259979246225
     },
     "ln_release": {
      "D": 9.263816910565936,
-     "stars": null,
+     "stars": 2.7211004971225514,
      "coverage": 0.09987221466918852,
      "dominance": 0.017725937620622453
     }
@@ -4280,54 +4337,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 13.272525828299464,
-    "stars": null
+    "stars": 3.674263106627408
    },
    "skills": {
     "rc_jack": {
      "D": 12.844338209762656,
-     "stars": null,
+     "stars": 3.5749968280689863,
      "coverage": 0.2306862659898341,
      "dominance": 0.03091174406149843
     },
     "rc_tech": {
      "D": 13.176726754059459,
-     "stars": null,
+     "stars": 3.652100533866768,
      "coverage": 0.32624280066871686,
      "dominance": 0.322279857512109
     },
     "rc_speed": {
      "D": 12.012702097224178,
-     "stars": null,
+     "stars": 3.380616808562345,
      "coverage": 0.09010382344548912,
      "dominance": 0.0179486900011141
     },
     "rc_stamina": {
      "D": 12.212199521152488,
-     "stars": null,
+     "stars": 3.4274425642783513,
      "coverage": 0.07245749898911419,
      "dominance": 0.017069874842794448
     },
     "ln_general": {
      "D": 12.97112932238786,
-     "stars": null,
+     "stars": 3.6044467319021503,
      "coverage": 0.6067524115755627,
      "dominance": 0.058276895633980544
     },
     "ln_tech": {
      "D": 12.92170717636553,
-     "stars": null,
+     "stars": 3.5929730663834367,
      "coverage": 0.5437538281556387,
      "dominance": 0.5451558837607065
     },
     "ln_inverse": {
      "D": 8.353118941197346,
-     "stars": null,
+     "stars": 2.4958026282670516,
      "coverage": 0.012407347572555707,
      "dominance": 0.0011509694876449025
     },
     "ln_release": {
      "D": 11.478549936347092,
-     "stars": null,
+     "stars": 3.254602468901478,
      "coverage": 0.08433584813026455,
      "dominance": 0.007206084700152162
     }
@@ -4338,54 +4395,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 17.58362812752102,
-    "stars": null
+    "stars": 4.647210313332727
    },
    "skills": {
     "rc_jack": {
      "D": 16.64873812726902,
-     "stars": null,
+     "stars": 4.439925960265463,
      "coverage": 0.1415115699050295,
      "dominance": 0.01664710099077118
     },
     "rc_tech": {
      "D": 17.35341269812736,
-     "stars": null,
+     "stars": 4.596339087985015,
      "coverage": 0.24274728201871248,
      "dominance": 0.23167216842548444
     },
     "rc_speed": {
      "D": 16.073067430277103,
-     "stars": null,
+     "stars": 4.311336799500734,
      "coverage": 0.07648383427224424,
      "dominance": 0.010849706903322662
     },
     "rc_stamina": {
      "D": 16.538948779293015,
-     "stars": null,
+     "stars": 4.415459317398403,
      "coverage": 0.06298110434414492,
      "dominance": 0.01250642671311112
     },
     "ln_general": {
      "D": 17.367163991116687,
-     "stars": null,
+     "stars": 4.599380852361375,
      "coverage": 0.7190234914785812,
      "dominance": 0.07048024002301359
     },
     "ln_tech": {
      "D": 17.311951756660907,
-     "stars": null,
+     "stars": 4.587165586746721,
      "coverage": 0.6379535701780669,
      "dominance": 0.6427352231230437
     },
     "ln_inverse": {
      "D": 13.329708463755804,
-     "stars": null,
+     "stars": 3.6874794130796706,
      "coverage": 0.02045241642245083,
      "dominance": 0.001773585802613545
     },
     "ln_release": {
      "D": 16.4495929997422,
-     "stars": null,
+     "stars": 4.395526551033019,
      "coverage": 0.12881754173433912,
      "dominance": 0.013335548018640463
     }
@@ -4396,54 +4453,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 16.64743490760544,
-    "stars": null
+    "stars": 4.4396356930061875
    },
    "skills": {
     "rc_jack": {
      "D": 16.137492274615823,
-     "stars": null,
+     "stars": 4.325764812717945,
      "coverage": 0.17966318024913236,
      "dominance": 0.024010101505771354
     },
     "rc_tech": {
      "D": 16.22822122841393,
-     "stars": null,
+     "stars": 4.3460675763080365,
      "coverage": 0.24226512081432022,
      "dominance": 0.21934554853857618
     },
     "rc_speed": {
      "D": 14.09125261898582,
-     "stars": null,
+     "stars": 3.8626180540555954,
      "coverage": 0.06327920656029733,
      "dominance": 0.008012860558833207
     },
     "rc_stamina": {
      "D": 14.31534333399967,
-     "stars": null,
+     "stars": 3.913853818411941,
      "coverage": 0.04094039707335429,
      "dominance": 0.007074556127971731
     },
     "ln_general": {
      "D": 16.49347227567409,
-     "stars": null,
+     "stars": 4.405317009863906,
      "coverage": 0.7161172161172161,
      "dominance": 0.0809138128332283
     },
     "ln_tech": {
      "D": 16.402782785421493,
-     "stars": null,
+     "stars": 4.3850773870323305,
      "coverage": 0.6343164896520885,
      "dominance": 0.6460329691178184
     },
     "ln_inverse": {
      "D": 13.159604036471968,
-     "stars": null,
+     "stars": 3.6481364975361874,
      "coverage": 0.027379889724254446,
      "dominance": 0.002233313033431941
     },
     "ln_release": {
      "D": 15.147413380356191,
-     "stars": null,
+     "stars": 4.102960326453172,
      "coverage": 0.10046798904748477,
      "dominance": 0.012376838284369394
     }
@@ -4454,54 +4511,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 20.183160153701298,
-    "stars": null
+    "stars": 5.214393854399982
    },
    "skills": {
     "rc_jack": {
      "D": 19.54155221797361,
-     "stars": null,
+     "stars": 5.075584709274344,
      "coverage": 0.0843993699055203,
      "dominance": 0.018083079313041317
     },
     "rc_tech": {
      "D": 19.355962815984107,
-     "stars": null,
+     "stars": 5.03529404430206,
      "coverage": 0.09921012212482151,
      "dominance": 0.09653305510102299
     },
     "rc_speed": {
      "D": 15.212501728544037,
-     "stars": null,
+     "stars": 4.117679782296393,
      "coverage": 0.018846778668455466,
      "dominance": 0.0032432431743998433
     },
     "rc_stamina": {
      "D": 15.667226010748276,
-     "stars": null,
+     "stars": 4.220227132322155,
      "coverage": 0.012446864026253363,
      "dominance": 0.004100734054922332
     },
     "ln_general": {
      "D": 20.039505264838642,
-     "stars": null,
+     "stars": 5.183378720706667,
      "coverage": 0.8843069873997709,
      "dominance": 0.11658250401503584
     },
     "ln_tech": {
      "D": 19.877207952358752,
-     "stars": null,
+     "stars": 5.148294554242605,
      "coverage": 0.7631708949131367,
      "dominance": 0.7337624530035183
     },
     "ln_inverse": {
      "D": 17.25226948573447,
-     "stars": null,
+     "stars": 4.573954137104543,
      "coverage": 0.041909524435401364,
      "dominance": 0.004472819966466153
     },
     "ln_release": {
      "D": 19.36750803090975,
-     "stars": null,
+     "stars": 5.037802312422224,
      "coverage": 0.14286046083562973,
      "dominance": 0.023222111371592045
     }
@@ -4512,54 +4569,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 21.715033938837546,
-    "stars": null
+    "stars": 5.542922618024556
    },
    "skills": {
     "rc_jack": {
      "D": 22.218625400419672,
-     "stars": null,
+     "stars": 5.650078621042486,
      "coverage": 0.20307925296832344,
      "dominance": 0.03205272630688843
     },
     "rc_tech": {
      "D": 22.98073114153378,
-     "stars": null,
+     "stars": 5.811485688288426,
      "coverage": 0.3095876096404795,
      "dominance": 0.41364386024733213
     },
     "rc_speed": {
      "D": 21.067570011361592,
-     "stars": null,
+     "stars": 5.404548325258823,
      "coverage": 0.0892304139054195,
      "dominance": 0.019027759680244588
     },
     "rc_stamina": {
      "D": 22.005952202333038,
-     "stars": null,
+     "stars": 5.604874607503618,
      "coverage": 0.08018916979447474,
      "dominance": 0.02085752540390243
     },
     "ln_general": {
      "D": 20.45662499386434,
-     "stars": null,
+     "stars": 5.273334750859245,
      "coverage": 0.6275011633317822,
      "dominance": 0.04104621609712181
     },
     "ln_tech": {
      "D": 20.341711949026145,
-     "stars": null,
+     "stars": 5.248583033103062,
      "coverage": 0.5822165433328295,
      "dominance": 0.466825576050237
     },
     "ln_inverse": {
      "D": 16.297436515103215,
-     "stars": null,
+     "stars": 4.3615435641481355,
      "coverage": 0.05383643967665983,
      "dominance": 0.0007299543023926886
     },
     "ln_release": {
      "D": 18.63581545594711,
-     "stars": null,
+     "stars": 4.878343174002729,
      "coverage": 0.12837212172746573,
      "dominance": 0.0058163819118808024
     }
@@ -4570,54 +4627,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 23.401804011949913,
-    "stars": null
+    "stars": 5.900285529292325
    },
    "skills": {
     "rc_jack": {
      "D": 19.338186619313753,
-     "stars": null,
+     "stars": 5.031431575330194,
      "coverage": 0.03081638559716324,
      "dominance": 0.0033182742833592757
     },
     "rc_tech": {
      "D": 19.92795065375393,
-     "stars": null,
+     "stars": 5.15926877087523,
      "coverage": 0.03910696901170367,
      "dominance": 0.027952314408845394
     },
     "rc_speed": {
      "D": 14.801521864559522,
-     "stars": null,
+     "stars": 4.024562185312208,
      "coverage": 0.007594898337617749,
      "dominance": 0.0003388865652127592
     },
     "rc_stamina": {
      "D": 15.098848577088537,
-     "stars": null,
+     "stars": 4.091970810423186,
      "coverage": 0.0048623267545600465,
      "dominance": 0.00036197884130079617
     },
     "ln_general": {
      "D": 23.407967934630538,
-     "stars": null,
+     "stars": 5.901583469446502,
      "coverage": 0.956726389310659,
      "dominance": 0.09817394040965108
     },
     "ln_tech": {
      "D": 23.40531467646497,
-     "stars": null,
+     "stars": 5.90102477850837,
      "coverage": 0.8364230282811735,
      "dominance": 0.8502055570549396
     },
     "ln_inverse": {
      "D": 21.60170639201377,
-     "stars": null,
+     "stars": 5.518752201863462,
      "coverage": 0.07887310271572388,
      "dominance": 0.0064650064889200266
     },
     "ln_release": {
      "D": 22.762994796688705,
-     "stars": null,
+     "stars": 5.765462395163918,
      "coverage": 0.14887348439637452,
      "dominance": 0.013184041947770328
     }
@@ -4628,54 +4685,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 23.068933627637545,
-    "stars": null
+    "stars": 5.830108712125339
    },
    "skills": {
     "rc_jack": {
      "D": 22.97501838002338,
-     "stars": null,
+     "stars": 5.810279093227641,
      "coverage": 0.21274214445050305,
      "dominance": 0.01563075518347619
     },
     "rc_tech": {
      "D": 23.242816956924035,
-     "stars": null,
+     "stars": 5.866788029403019,
      "coverage": 0.3059081634071467,
      "dominance": 0.3043392361891246
     },
     "rc_speed": {
      "D": 21.114622477654553,
-     "stars": null,
+     "stars": 5.41462763293492,
      "coverage": 0.07329628916674646,
      "dominance": 0.008928495288238802
     },
     "rc_stamina": {
      "D": 21.78279619451242,
-     "stars": null,
+     "stars": 5.557364966479852,
      "coverage": 0.05534920877142839,
      "dominance": 0.009020169305860432
     },
     "ln_general": {
      "D": 22.69460765445868,
-     "stars": null,
+     "stars": 5.750992344401831,
      "coverage": 0.6586123576113221,
      "dominance": 0.03999474928695146
     },
     "ln_tech": {
      "D": 22.7103430470391,
-     "stars": null,
+     "stars": 5.754322435432534,
      "coverage": 0.6072894515319399,
      "dominance": 0.616415084483376
     },
     "ln_inverse": {
      "D": 18.398358129185578,
-     "stars": null,
+     "stars": 4.826373404095309,
      "coverage": 0.027155180618132862,
      "dominance": 0.0009075087542884535
     },
     "ln_release": {
      "D": 21.39584164937494,
-     "stars": null,
+     "stars": 5.474791943865929,
      "coverage": 0.08435602606275343,
      "dominance": 0.004764001508684458
     }
@@ -4686,54 +4743,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 25.8030663189013,
-    "stars": null
+    "stars": 6.401817279794297
    },
    "skills": {
     "rc_jack": {
      "D": 25.484001453250826,
-     "stars": null,
+     "stars": 6.335635473598566,
      "coverage": 0.1592792403958757,
      "dominance": 0.030381076917603562
     },
     "rc_tech": {
      "D": 25.82627298214916,
-     "stars": null,
+     "stars": 6.40662562566234,
      "coverage": 0.1884074278891546,
      "dominance": 0.19721318692451145
     },
     "rc_speed": {
      "D": 23.052250949730208,
-     "stars": null,
+     "stars": 5.826587242010204,
      "coverage": 0.044365421838952215,
      "dominance": 0.012196814106040043
     },
     "rc_stamina": {
      "D": 23.562997975589226,
-     "stars": null,
+     "stars": 5.934209740302029,
      "coverage": 0.03215975416895746,
      "dominance": 0.011929751178474694
     },
     "ln_general": {
      "D": 25.3979176589261,
-     "stars": null,
+     "stars": 6.317756268023722,
      "coverage": 0.7641955835962145,
      "dominance": 0.08185848135491583
     },
     "ln_tech": {
      "D": 25.305643567041223,
-     "stars": null,
+     "stars": 6.298580271279024,
      "coverage": 0.6724315581646141,
      "dominance": 0.6519861117300152
     },
     "ln_inverse": {
      "D": 21.28821555810185,
-     "stars": null,
+     "stars": 5.451781797826051,
      "coverage": 0.046766922272137634,
      "dominance": 0.0023837938584277377
     },
     "ln_release": {
      "D": 23.824220118397648,
-     "stars": null,
+     "stars": 5.989104427233286,
      "coverage": 0.11750869443153686,
      "dominance": 0.012050783930011105
     }
@@ -4744,54 +4801,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 27.791152444815182,
-    "stars": null
+    "stars": 6.81123233724619
    },
    "skills": {
     "rc_jack": {
      "D": 26.51822701143191,
-     "stars": null,
+     "stars": 6.549672373327363,
      "coverage": 0.1597269594198657,
      "dominance": 0.014671905885898099
     },
     "rc_tech": {
      "D": 27.386847943345252,
-     "stars": null,
+     "stars": 6.728374376569114,
      "coverage": 0.24042726547544963,
      "dominance": 0.21965417079055222
     },
     "rc_speed": {
      "D": 25.103621465299764,
-     "stars": null,
+     "stars": 6.256556609199612,
      "coverage": 0.07241700610411618,
      "dominance": 0.009244675450387652
     },
     "rc_stamina": {
      "D": 25.906070847697745,
-     "stars": null,
+     "stars": 6.423154057197777,
      "coverage": 0.054161657104510666,
      "dominance": 0.00811422273329494
     },
     "ln_general": {
      "D": 27.655172186579637,
-     "stars": null,
+     "stars": 6.783386926308574,
      "coverage": 0.7136943773715074,
      "dominance": 0.04533603298978051
     },
     "ln_tech": {
      "D": 27.73792501824459,
-     "stars": null,
+     "stars": 6.800335350581491,
      "coverage": 0.6475148163582507,
      "dominance": 0.6932792768526902
     },
     "ln_inverse": {
      "D": 23.94325970007574,
-     "stars": null,
+     "stars": 6.014087122626629,
      "coverage": 0.04127397098544469,
      "dominance": 0.003948474974477505
     },
     "ln_release": {
      "D": 26.298146400021214,
-     "stars": null,
+     "stars": 6.504242871314663,
      "coverage": 0.12113030041562635,
      "dominance": 0.0057512403229194806
     }
@@ -4802,54 +4859,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 30.768565545855942,
-    "stars": null
+    "stars": 7.415518044861135
    },
    "skills": {
     "rc_jack": {
      "D": 30.41039679624233,
-     "stars": null,
+     "stars": 7.343353569163055,
      "coverage": 0.1694922843317492,
      "dominance": 0.027537205799796717
     },
     "rc_tech": {
      "D": 30.83148610445947,
-     "stars": null,
+     "stars": 7.428181053462831,
      "coverage": 0.19724924467757157,
      "dominance": 0.19778600884686082
     },
     "rc_speed": {
      "D": 27.52467598602762,
-     "stars": null,
+     "stars": 6.7566432895241295,
      "coverage": 0.036484396303252245,
      "dominance": 0.005763223392767654
     },
     "rc_stamina": {
      "D": 28.133437003494578,
-     "stars": null,
+     "stars": 6.88122471564493,
      "coverage": 0.03213298310325959,
      "dominance": 0.005838782273637451
     },
     "ln_general": {
      "D": 30.43936099938859,
-     "stars": null,
+     "stars": 7.349194513699743,
      "coverage": 0.7618903362617389,
      "dominance": 0.07103336951731548
     },
     "ln_tech": {
      "D": 30.383092405588304,
-     "stars": null,
+     "stars": 7.337846504122453,
      "coverage": 0.6665576600251477,
      "dominance": 0.6657884432290517
     },
     "ln_inverse": {
      "D": 27.142547932343714,
-     "stars": null,
+     "stars": 6.678210042971741,
      "coverage": 0.04685382426294953,
      "dominance": 0.00423844459495688
     },
     "ln_release": {
      "D": 29.380672208304404,
-     "stars": null,
+     "stars": 7.135094942737326,
      "coverage": 0.12591395615043555,
      "dominance": 0.022014522345614067
     }
@@ -4860,54 +4917,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 38.52337581384548,
-    "stars": null
+    "stars": 8.946845218233774
    },
    "skills": {
     "rc_jack": {
      "D": 35.87727914712168,
-     "stars": null,
+     "stars": 8.430602934154628,
      "coverage": 0.12549219805756326,
      "dominance": 0.0084524221571946
     },
     "rc_tech": {
      "D": 37.0069494366364,
-     "stars": null,
+     "stars": 8.651738854418443,
      "coverage": 0.18884506716325247,
      "dominance": 0.14514714804405138
     },
     "rc_speed": {
      "D": 33.54794079652424,
-     "stars": null,
+     "stars": 7.970947145250303,
      "coverage": 0.05136068582430709,
      "dominance": 0.003441244016241292
     },
     "rc_stamina": {
      "D": 36.537916004063,
-     "stars": null,
+     "stars": 8.560061358881812,
      "coverage": 0.030298080930842453,
      "dominance": 0.0041838251629367565
     },
     "ln_general": {
      "D": 38.559026690001275,
-     "stars": null,
+     "stars": 8.953759799820565,
      "coverage": 0.7928490351872872,
      "dominance": 0.041197009185368276
     },
     "ln_tech": {
      "D": 38.48444560113305,
-     "stars": null,
+     "stars": 8.939293395906715,
      "coverage": 0.7397414475172143,
      "dominance": 0.7778815481226518
     },
     "ln_inverse": {
      "D": 34.87322404509302,
-     "stars": null,
+     "stars": 8.233091902298037,
      "coverage": 0.06880012979065736,
      "dominance": 0.0019968062881615643
     },
     "ln_release": {
      "D": 38.34058178436538,
-     "stars": null,
+     "stars": 8.911375240718172,
      "coverage": 0.21852353370946465,
      "dominance": 0.0176999970233937
     }
@@ -4918,54 +4975,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 39.338341414952815,
-    "stars": null
+    "stars": 9.10464865833812
    },
    "skills": {
     "rc_jack": {
      "D": 38.64611849543709,
-     "stars": null,
+     "stars": 8.970647057080237,
      "coverage": 0.10874925527890482,
      "dominance": 0.00775884531790064
     },
     "rc_tech": {
      "D": 39.48691574834181,
-     "stars": null,
+     "stars": 9.133359053201485,
      "coverage": 0.1580869747741554,
      "dominance": 0.15613501282677733
     },
     "rc_speed": {
      "D": 36.02341306745233,
-     "stars": null,
+     "stars": 8.459272942770038,
      "coverage": 0.031562339580897804,
      "dominance": 0.002631297063495093
     },
     "rc_stamina": {
      "D": 36.99578491232946,
-     "stars": null,
+     "stars": 8.649558865138125,
      "coverage": 0.02779838565546039,
      "dominance": 0.0028300449654633394
     },
     "ln_general": {
      "D": 39.0420181370414,
-     "stars": null,
+     "stars": 9.04733390467183,
      "coverage": 0.831890019484737,
      "dominance": 0.02846407314630319
     },
     "ln_tech": {
      "D": 39.048057066584214,
-     "stars": null,
+     "stars": 9.0485026664704,
      "coverage": 0.7930867671597436,
      "dominance": 0.7937296435511281
     },
     "ln_inverse": {
      "D": 35.703311096172335,
-     "stars": null,
+     "stars": 8.3964470378289,
      "coverage": 0.07951786795580032,
      "dominance": 0.002182224809267105
     },
     "ln_release": {
      "D": 38.086800415282596,
-     "stars": null,
+     "stars": 8.862084377139197,
      "coverage": 0.20360421390226077,
      "dominance": 0.006268858319665114
     }
@@ -4976,54 +5033,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 42.85675476491568,
-    "stars": null
+    "stars": 9.77990902488822
    },
    "skills": {
     "rc_jack": {
      "D": 42.37855793755426,
-     "stars": null,
+     "stars": 9.688685608423475,
      "coverage": 0.15122279535357988,
      "dominance": 0.04785651215150295
     },
     "rc_tech": {
      "D": 41.25940829149228,
-     "stars": null,
+     "stars": 9.474522834916677,
      "coverage": 0.13865596266026975,
      "dominance": 0.1091441256052234
     },
     "rc_speed": {
      "D": 34.69156855278623,
-     "stars": null,
+     "stars": 8.197258389831598,
      "coverage": 0.026404216674673697,
      "dominance": 0.0036951563503137925
     },
     "rc_stamina": {
      "D": 37.162120392437565,
-     "stars": null,
+     "stars": 8.682026389194446,
      "coverage": 0.013631729230487617,
      "dominance": 0.003854015675304511
     },
     "ln_general": {
      "D": 42.76131832500803,
-     "stars": null,
+     "stars": 9.761716509828963,
      "coverage": 0.8087412587412588,
      "dominance": 0.11150839057103538
     },
     "ln_tech": {
      "D": 42.61721548382636,
-     "stars": null,
+     "stars": 9.734234302149293,
      "coverage": 0.673778151280641,
      "dominance": 0.6874644350002616
     },
     "ln_inverse": {
      "D": 39.57415204014254,
-     "stars": null,
+     "stars": 9.15020823163326,
      "coverage": 0.05200150279049968,
      "dominance": 0.007739785168611403
     },
     "ln_release": {
      "D": 42.40517031244556,
-     "stars": null,
+     "stars": 9.693766770796739,
      "coverage": 0.16753744984125168,
      "dominance": 0.02873757947774802
     }
@@ -5034,54 +5091,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 8.301405558827215,
-    "stars": null
+    "stars": 2.4828913339615912
    },
    "skills": {
     "rc_jack": {
      "D": 7.464287253341069,
-     "stars": null,
+     "stars": 2.2719709818071103,
      "coverage": 0.10827357930741237,
      "dominance": 0.007821418215320156
     },
     "rc_tech": {
      "D": 7.608233451732849,
-     "stars": null,
+     "stars": 2.308506246113744,
      "coverage": 0.14036631706006875,
      "dominance": 0.14265916009409524
     },
     "rc_speed": {
      "D": 5.350228890722772,
-     "stars": null,
+     "stars": 1.720368699193318,
      "coverage": 0.02572712976444309,
      "dominance": 0.0015567611355657793
     },
     "rc_stamina": {
      "D": 5.097874077245043,
-     "stars": null,
+     "stars": 1.652329314948154,
      "coverage": 0.015389534830583548,
      "dominance": 0.0013040871158094165
     },
     "ln_general": {
      "D": 8.210883178457651,
-     "stars": null,
+     "stars": 2.46025860034842,
      "coverage": 0.850609756097561,
      "dominance": 0.04864871853662386
     },
     "ln_tech": {
      "D": 8.141451687399496,
-     "stars": null,
+     "stars": 2.442871221279559,
      "coverage": 0.8297873421716613,
      "dominance": 0.7922796248315845
     },
     "ln_inverse": {
      "D": 5.5550114724089665,
-     "stars": null,
+     "stars": 1.7751930390525323,
      "coverage": 0.026913756370052153,
      "dominance": 0.0010303230810221986
     },
     "ln_release": {
      "D": 6.566077473528328,
-     "stars": null,
+     "stars": 2.041256902736278,
      "coverage": 0.08017726027323901,
      "dominance": 0.0046999069899784345
     }
@@ -5092,54 +5149,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 9.393857279673053,
-    "stars": null
+    "stars": 2.7529656552505295
    },
    "skills": {
     "rc_jack": {
      "D": 7.495509612509429,
-     "stars": null,
+     "stars": 2.2799053780916085,
      "coverage": 0.19798799267361086,
      "dominance": 0.01498997482229206
     },
     "rc_tech": {
      "D": 7.861989168953743,
-     "stars": null,
+     "stars": 2.3726369791621362,
      "coverage": 0.3724089769497473,
      "dominance": 0.17211342897812332
     },
     "rc_speed": {
      "D": 6.954317984517805,
-     "stars": null,
+     "stars": 2.1415801865134263,
      "coverage": 0.21610110393661391,
      "dominance": 0.017366030003601422
     },
     "rc_stamina": {
      "D": 7.259580061125557,
-     "stars": null,
+     "stars": 2.2198128842550147,
      "coverage": 0.08591090338977563,
      "dominance": 0.014916705840255918
     },
     "ln_general": {
      "D": 9.78924104400799,
-     "stars": null,
+     "stars": 2.849409404027203,
      "coverage": 0.5,
      "dominance": 0.08912649807591155
     },
     "ln_tech": {
      "D": 9.794186152182972,
-     "stars": null,
+     "stars": 2.850611521119381,
      "coverage": 0.4115981852739747,
      "dominance": 0.6733091829372165
     },
     "ln_inverse": {
      "D": 6.666675298548228,
-     "stars": null,
+     "stars": 2.06734353717282,
      "coverage": 0.018959718571121567,
      "dominance": 0.002440254769020736
     },
     "ln_release": {
      "D": 8.438386990039596,
-     "stars": null,
+     "stars": 2.517062815033456,
      "coverage": 0.08380486377820909,
      "dominance": 0.015737924573578164
     }
@@ -5150,54 +5207,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 13.008305437660345,
-    "stars": null
+    "stars": 3.6130726549193897
    },
    "skills": {
     "rc_jack": {
      "D": 12.190291716690119,
-     "stars": null,
+     "stars": 3.422306592670588,
      "coverage": 0.1429815480278023,
      "dominance": 0.01187060481213251
     },
     "rc_tech": {
      "D": 13.160058299830949,
-     "stars": null,
+     "stars": 3.648241673851257,
      "coverage": 0.3695377018764016,
      "dominance": 0.3940756485111703
     },
     "rc_speed": {
      "D": 12.353322122660629,
-     "stars": null,
+     "stars": 3.460490486987265,
      "coverage": 0.17020798928019304,
      "dominance": 0.03245820366684617
     },
     "rc_stamina": {
      "D": 12.932336899767202,
-     "stars": null,
+     "stars": 3.595441433878767,
      "coverage": 0.13253204634462298,
      "dominance": 0.0327302403184776
     },
     "ln_general": {
      "D": 12.506745081452896,
-     "stars": null,
+     "stars": 3.4963483900843295,
      "coverage": 0.5542784163473818,
      "dominance": 0.05153566151266066
     },
     "ln_tech": {
      "D": 12.42276152109441,
-     "stars": null,
+     "stars": 3.476728851354861,
      "coverage": 0.5049022232669159,
      "dominance": 0.47133052855879354
     },
     "ln_inverse": {
      "D": 6.447929485356535,
-     "stars": null,
+     "stars": 2.010534919377687,
      "coverage": 0.010869190985144241,
      "dominance": 0.0008766418127471919
     },
     "ln_release": {
      "D": 11.302370385027771,
-     "stars": null,
+     "stars": 3.2128288691781366,
      "coverage": 0.09514359122194069,
      "dominance": 0.005122470807171518
     }
@@ -5208,54 +5265,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 15.456675312548146,
-    "stars": null
+    "stars": 4.172806553896145
    },
    "skills": {
     "rc_jack": {
      "D": 15.21708829913833,
-     "stars": null,
+     "stars": 4.118716623967664,
      "coverage": 0.19502554741756753,
      "dominance": 0.02961039772374867
     },
     "rc_tech": {
      "D": 15.527373017193398,
-     "stars": null,
+     "stars": 4.1887410107924845,
      "coverage": 0.31780324234005825,
      "dominance": 0.3252124899170383
     },
     "rc_speed": {
      "D": 14.315592349214485,
-     "stars": null,
+     "stars": 3.9139106789956895,
      "coverage": 0.09961402085118043,
      "dominance": 0.01678331197014899
     },
     "rc_stamina": {
      "D": 14.665549307551583,
-     "stars": null,
+     "stars": 3.993660897372862,
      "coverage": 0.07964465869637456,
      "dominance": 0.017123281757183365
     },
     "ln_general": {
      "D": 15.051979616124143,
-     "stars": null,
+     "stars": 4.0813595137283825,
      "coverage": 0.6257157730348777,
      "dominance": 0.07717558717066919
     },
     "ln_tech": {
      "D": 14.98125174150822,
-     "stars": null,
+     "stars": 4.065336156953644,
      "coverage": 0.5343428928027454,
      "dominance": 0.5188354759168823
     },
     "ln_inverse": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.003469478374605017,
      "dominance": 0.0006732955367024651
     },
     "ln_release": {
      "D": 13.912419173390873,
-     "stars": null,
+     "stars": 3.8216334876635374,
      "coverage": 0.09507333147494265,
      "dominance": 0.014586160007627084
     }
@@ -5266,54 +5323,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 17.270382219621787,
-    "stars": null
+    "stars": 4.577964422119601
    },
    "skills": {
     "rc_jack": {
      "D": 16.322605382306417,
-     "stars": null,
+     "stars": 4.367168435138293,
      "coverage": 0.17016573203128596,
      "dominance": 0.024685373936405984
     },
     "rc_tech": {
      "D": 17.8083159390648,
-     "stars": null,
+     "stars": 4.696754336228569,
      "coverage": 0.34951378395712895,
      "dominance": 0.40459587759550686
     },
     "rc_speed": {
      "D": 17.303991936966938,
-     "stars": null,
+     "stars": 4.585404011117656,
      "coverage": 0.13954248361489613,
      "dominance": 0.047461615513819305
     },
     "rc_stamina": {
      "D": 18.25039337691209,
-     "stars": null,
+     "stars": 4.793934066740554,
      "coverage": 0.12958811735679118,
      "dominance": 0.06372948469883655
     },
     "ln_general": {
      "D": 16.169318334929674,
-     "stars": null,
+     "stars": 4.332888788340084,
      "coverage": 0.5607036669970268,
      "dominance": 0.037432063076556964
     },
     "ln_tech": {
      "D": 16.10015917779605,
-     "stars": null,
+     "stars": 4.317405184645627,
      "coverage": 0.5147927406318538,
      "dominance": 0.4171005758360706
     },
     "ln_inverse": {
      "D": 10.802763548616532,
-     "stars": null,
+     "stars": 3.0937769233248384,
      "coverage": 0.012821254059081418,
      "dominance": 0.0009689932380791746
     },
     "ln_release": {
      "D": 14.824270569490448,
-     "stars": null,
+     "stars": 4.029727504866404,
      "coverage": 0.09004551113385559,
      "dominance": 0.004026016104724586
     }
@@ -5324,54 +5381,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 19.83688199276762,
-    "stars": null
+    "stars": 5.139569892567483
    },
    "skills": {
     "rc_jack": {
      "D": 19.55357405992119,
-     "stars": null,
+     "stars": 5.07819241899131,
      "coverage": 0.08798281174489406,
      "dominance": 0.006334498046377517
     },
     "rc_tech": {
      "D": 19.995093577557284,
-     "stars": null,
+     "stars": 5.173782818426107,
      "coverage": 0.14241762603898378,
      "dominance": 0.14694461869441722
     },
     "rc_speed": {
      "D": 17.988124612261405,
-     "stars": null,
+     "stars": 4.736328227238051,
      "coverage": 0.03647772635080694,
      "dominance": 0.0020484471278918066
     },
     "rc_stamina": {
      "D": 18.456985023148885,
-     "stars": null,
+     "stars": 4.839214675980505,
      "coverage": 0.029491037966427873,
      "dominance": 0.002098097033497348
     },
     "ln_general": {
      "D": 19.68759733647586,
-     "stars": null,
+     "stars": 5.107246138069162,
      "coverage": 0.8460484239378712,
      "dominance": 0.04831802355056361
     },
     "ln_tech": {
      "D": 19.718224277873894,
-     "stars": null,
+     "stars": 5.113880898928942,
      "coverage": 0.7809844702603644,
      "dominance": 0.7863317598941575
     },
     "ln_inverse": {
      "D": 17.50660007933096,
-     "stars": null,
+     "stars": 4.630201540945125,
      "coverage": 0.035762563065326686,
      "dominance": 0.0014833325994205854
     },
     "ln_release": {
      "D": 19.091620426785198,
-     "stars": null,
+     "stars": 4.977796249550421,
      "coverage": 0.11751968279168024,
      "dominance": 0.006441223053673803
     }
@@ -5382,54 +5439,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 22.360258306051858,
-    "stars": null
+    "stars": 5.680143333612965
    },
    "skills": {
     "rc_jack": {
      "D": 21.97777895447465,
-     "stars": null,
+     "stars": 5.598880952904545,
      "coverage": 0.171839379029314,
      "dominance": 0.030704308888408062
     },
     "rc_tech": {
      "D": 22.217382094058834,
-     "stars": null,
+     "stars": 5.6498145622194205,
      "coverage": 0.3042133448632415,
      "dominance": 0.2895362334168755
     },
     "rc_speed": {
      "D": 20.619131522910394,
-     "stars": null,
+     "stars": 5.3082988117400625,
      "coverage": 0.13870045046107826,
      "dominance": 0.03216904879900938
     },
     "rc_stamina": {
      "D": 21.590401444378106,
-     "stars": null,
+     "stars": 5.516339946147106,
      "coverage": 0.09795299347611487,
      "dominance": 0.03352563983487607
     },
     "ln_general": {
      "D": 22.017705915884406,
-     "stars": null,
+     "stars": 5.60737475106454,
      "coverage": 0.5915071770334929,
      "dominance": 0.07926637427763053
     },
     "ln_tech": {
      "D": 21.916018725812293,
-     "stars": null,
+     "stars": 5.585737477469293,
      "coverage": 0.5050838026467126,
      "dominance": 0.5187817765639104
     },
     "ln_inverse": {
      "D": 16.55752350730397,
-     "stars": null,
+     "stars": 4.419600586870865,
      "coverage": 0.015768007166154823,
      "dominance": 0.0015106588848408848
     },
     "ln_release": {
      "D": 20.901527586215273,
-     "stars": null,
+     "stars": 5.368949957152949,
      "coverage": 0.09175825366864,
      "dominance": 0.014505959334449245
     }
@@ -5440,54 +5497,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 21.93797816013141,
-    "stars": null
+    "stars": 5.590411463172539
    },
    "skills": {
     "rc_jack": {
      "D": 22.07836771688636,
-     "stars": null,
+     "stars": 5.6202746862077815,
      "coverage": 0.23597304216488096,
      "dominance": 0.02991590093383051
     },
     "rc_tech": {
      "D": 22.479846802768474,
-     "stars": null,
+     "stars": 5.705504198022964,
      "coverage": 0.3738440632708673,
      "dominance": 0.40825223945088474
     },
     "rc_speed": {
      "D": 21.2064345769193,
-     "stars": null,
+     "stars": 5.434284442373172,
      "coverage": 0.10048781965797964,
      "dominance": 0.014796791805708944
     },
     "rc_stamina": {
      "D": 21.554926365328477,
-     "stars": null,
+     "stars": 5.5087689027562625,
      "coverage": 0.08783891107645829,
      "dominance": 0.014436577490412869
     },
     "ln_general": {
      "D": 21.13455209739331,
-     "stars": null,
+     "stars": 5.418895724603335,
      "coverage": 0.5757002271006812,
      "dominance": 0.044186438519691035
     },
     "ln_tech": {
      "D": 21.047540982242356,
-     "stars": null,
+     "stars": 5.400256696831402,
      "coverage": 0.5301946460617408,
      "dominance": 0.48343276294888327
     },
     "ln_inverse": {
      "D": 14.92190804644969,
-     "stars": null,
+     "stars": 4.051882259034603,
      "coverage": 0.016156805426935116,
      "dominance": 0.0008215677565591355
     },
     "ln_release": {
      "D": 19.597109625355742,
-     "stars": null,
+     "stars": 5.087633697103069,
      "coverage": 0.09127905273140463,
      "dominance": 0.004157721094029517
     }
@@ -5498,54 +5555,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 24.87329138141067,
-    "stars": null
+    "stars": 6.2085763811897
    },
    "skills": {
     "rc_jack": {
      "D": 24.414515654322415,
-     "stars": null,
+     "stars": 6.112789330939493,
      "coverage": 0.16672429377501857,
      "dominance": 0.013224849103900437
     },
     "rc_tech": {
      "D": 25.07258037130764,
-     "stars": null,
+     "stars": 6.250094660392019,
      "coverage": 0.30446895676389624,
      "dominance": 0.30480047485929795
     },
     "rc_speed": {
      "D": 23.41311769889709,
-     "stars": null,
+     "stars": 5.902667814586788,
      "coverage": 0.10029592466683049,
      "dominance": 0.011312633910839403
     },
     "rc_stamina": {
      "D": 24.05232548736227,
-     "stars": null,
+     "stars": 6.03695866384722,
      "coverage": 0.0768727769822974,
      "dominance": 0.010334078198639008
     },
     "ln_general": {
      "D": 24.47035926258036,
-     "stars": null,
+     "stars": 6.124464581588927,
      "coverage": 0.6561070045758536,
      "dominance": 0.03889717911331132
     },
     "ln_tech": {
      "D": 24.467114215606156,
-     "stars": null,
+     "stars": 6.123786258286089,
      "coverage": 0.6063684212046693,
      "dominance": 0.6133533578233241
     },
     "ln_inverse": {
      "D": 19.963750305467407,
-     "stars": null,
+     "stars": 5.167008455832175,
      "coverage": 0.02940159947189484,
      "dominance": 0.0014515522063335397
     },
     "ln_release": {
      "D": 23.44940585873217,
-     "stars": null,
+     "stars": 5.910307611635449,
      "coverage": 0.11924448949909952,
      "dominance": 0.006625874784354172
     }
@@ -5556,54 +5613,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 25.27441220388264,
-    "stars": null
+    "stars": 6.292087297762861
    },
    "skills": {
     "rc_jack": {
      "D": 24.663222824229706,
-     "stars": null,
+     "stars": 6.164752968859628,
      "coverage": 0.1219098915996732,
      "dominance": 0.0054005554147586714
     },
     "rc_tech": {
      "D": 25.497438798366776,
-     "stars": null,
+     "stars": 6.338425449071885,
      "coverage": 0.18768172155468177,
      "dominance": 0.19498260391680888
     },
     "rc_speed": {
      "D": 23.206575577435498,
-     "stars": null,
+     "stars": 5.859146937725497,
      "coverage": 0.04433657027837068,
      "dominance": 0.00578332842569782
     },
     "rc_stamina": {
      "D": 23.96202913413368,
-     "stars": null,
+     "stars": 6.018024370798457,
      "coverage": 0.03815218469224218,
      "dominance": 0.006255907998687717
     },
     "ln_general": {
      "D": 24.98347784960036,
-     "stars": null,
+     "stars": 6.231538499812021,
      "coverage": 0.7956013534297139,
      "dominance": 0.030513429049706796
     },
     "ln_tech": {
      "D": 24.97737698001916,
-     "stars": null,
+     "stars": 6.2302675567632395,
      "coverage": 0.7584818751102712,
      "dominance": 0.7516456043350989
     },
     "ln_inverse": {
      "D": 21.783652590223312,
-     "stars": null,
+     "stars": 5.55754744493191,
      "coverage": 0.03293245647972887,
      "dominance": 0.0010808014492638602
     },
     "ln_release": {
      "D": 24.200870864533908,
-     "stars": null,
+     "stars": 6.068081770017697,
      "coverage": 0.12754384062797192,
      "dominance": 0.004337769409977148
     }
@@ -5614,54 +5671,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 28.967061701718617,
-    "stars": null
+    "stars": 7.0511065801214885
    },
    "skills": {
     "rc_jack": {
      "D": 28.215191377599826,
-     "stars": null,
+     "stars": 6.897921516647428,
      "coverage": 0.15690649313492397,
      "dominance": 0.010956865686210269
     },
     "rc_tech": {
      "D": 29.328767664796338,
-     "stars": null,
+     "stars": 7.124565875731996,
      "coverage": 0.32934914590673814,
      "dominance": 0.3335689663686618
     },
     "rc_speed": {
      "D": 27.81513834623063,
-     "stars": null,
+     "stars": 6.816141727138422,
      "coverage": 0.11973812000623758,
      "dominance": 0.011973408746362603
     },
     "rc_stamina": {
      "D": 28.69946395306899,
-     "stars": null,
+     "stars": 6.996662558966626,
      "coverage": 0.09326134297169116,
      "dominance": 0.010321663335776407
     },
     "ln_general": {
      "D": 28.46641831873981,
-     "stars": null,
+     "stars": 6.949180146951704,
      "coverage": 0.6300940438871473,
      "dominance": 0.02585175296852631
     },
     "ln_tech": {
      "D": 28.510736374083226,
-     "stars": null,
+     "stars": 6.9582147478305485,
      "coverage": 0.5915468133110982,
      "dominance": 0.6019659645583955
     },
     "ln_inverse": {
      "D": 21.909948787942447,
-     "stars": null,
+     "stars": 5.584445377138848,
      "coverage": 0.018594925554535176,
      "dominance": 0.0008826529883939791
     },
     "ln_release": {
      "D": 27.525859652736337,
-     "stars": null,
+     "stars": 6.756885961647916,
      "coverage": 0.11917437525106558,
      "dominance": 0.0044787253476724995
     }
@@ -5672,54 +5729,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 28.88125144894809,
-    "stars": null
+    "stars": 7.033657145297584
    },
    "skills": {
     "rc_jack": {
      "D": 29.163935079826576,
-     "stars": null,
+     "stars": 7.09110845831482,
      "coverage": 0.18377347495564855,
      "dominance": 0.015206143457904619
     },
     "rc_tech": {
      "D": 29.85605678248873,
-     "stars": null,
+     "stars": 7.231387005101476,
      "coverage": 0.2761548745775403,
      "dominance": 0.3170078909528319
     },
     "rc_speed": {
      "D": 27.735138139202228,
-     "stars": null,
+     "stars": 6.799764711783058,
      "coverage": 0.06766985525514338,
      "dominance": 0.007517307072880286
     },
     "rc_stamina": {
      "D": 28.139891039529786,
-     "stars": null,
+     "stars": 6.882543122175101,
      "coverage": 0.055185636173122984,
      "dominance": 0.007044768694319263
     },
     "ln_general": {
      "D": 28.142583630116704,
-     "stars": null,
+     "stars": 6.883093139854446,
      "coverage": 0.6933710336160854,
      "dominance": 0.02902221183804335
     },
     "ln_tech": {
      "D": 28.212282982660636,
-     "stars": null,
+     "stars": 6.897327668318452,
      "coverage": 0.6423396988351476,
      "dominance": 0.6162302873283234
     },
     "ln_inverse": {
      "D": 23.38738178504346,
-     "stars": null,
+     "stars": 5.897248413872409,
      "coverage": 0.03770976102326989,
      "dominance": 0.0014092417218438714
     },
     "ln_release": {
      "D": 26.906523414801228,
-     "stars": null,
+     "stars": 6.629674269521247,
      "coverage": 0.1462709783887924,
      "dominance": 0.006562148933853563
     }
@@ -5730,54 +5787,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 35.9810858625934,
-    "stars": null
+    "stars": 8.450970745285867
    },
    "skills": {
     "rc_jack": {
      "D": 34.13127218420349,
-     "stars": null,
+     "stars": 8.08653815364074,
      "coverage": 0.10139820823278546,
      "dominance": 0.0027163022008354788
     },
     "rc_tech": {
      "D": 36.58122880213742,
-     "stars": null,
+     "stars": 8.568535392035876,
      "coverage": 0.2505533738884592,
      "dominance": 0.2627471077650965
     },
     "rc_speed": {
      "D": 35.099929667207604,
-     "stars": null,
+     "stars": 8.277768926611532,
      "coverage": 0.09517395077144122,
      "dominance": 0.010822414804947413
     },
     "rc_stamina": {
      "D": 35.87205896594578,
-     "stars": null,
+     "stars": 8.4295784313767,
      "coverage": 0.07635158289142006,
      "dominance": 0.010123766221170657
     },
     "ln_general": {
      "D": 35.38938580963228,
-     "stars": null,
+     "stars": 8.334743193659325,
      "coverage": 0.7270762581043532,
      "dominance": 0.02671240821212476
     },
     "ln_tech": {
      "D": 35.34536842114676,
-     "stars": null,
+     "stars": 8.326084124173306,
      "coverage": 0.7015520406269616,
      "dominance": 0.6852391964298781
     },
     "ln_inverse": {
      "D": 27.664209520639083,
-     "stars": null,
+     "stars": 6.785238248837394,
      "coverage": 0.01956550772874113,
      "dominance": 0.0005410699049319116
     },
     "ln_release": {
      "D": 33.79115688040835,
-     "stars": null,
+     "stars": 8.019181976288245,
      "coverage": 0.13241307493496313,
      "dominance": 0.001097734461015003
     }
@@ -5788,54 +5845,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 38.16587846292227,
-    "stars": null
+    "stars": 8.87744915537704
    },
    "skills": {
     "rc_jack": {
      "D": 37.750215851516955,
-     "stars": null,
+     "stars": 8.796627383008182,
      "coverage": 0.12980362560747777,
      "dominance": 0.006878721744133395
     },
     "rc_tech": {
      "D": 39.31642341406964,
-     "stars": null,
+     "stars": 9.100411728704788,
      "coverage": 0.20020953787834883,
      "dominance": 0.22228251984567
     },
     "rc_speed": {
      "D": 36.39517653495559,
-     "stars": null,
+     "stars": 8.532123031251217,
      "coverage": 0.04635728355893537,
      "dominance": 0.0035537394462838664
     },
     "rc_stamina": {
      "D": 38.11997399757748,
-     "stars": null,
+     "stars": 8.86853060749133,
      "coverage": 0.038918839504442325,
      "dominance": 0.0037642925527585427
     },
     "ln_general": {
      "D": 37.585274385051434,
-     "stars": null,
+     "stars": 8.764515450765682,
      "coverage": 0.7849202513291446,
      "dominance": 0.020701608397444754
     },
     "ln_tech": {
      "D": 37.61101679878555,
-     "stars": null,
+     "stars": 8.769528686960678,
      "coverage": 0.7549985412687793,
      "dominance": 0.7377546698693049
     },
     "ln_inverse": {
      "D": 33.155296230106046,
-     "stars": null,
+     "stars": 7.892955611907621,
      "coverage": 0.05855901913798612,
      "dominance": 0.001973779042002394
     },
     "ln_release": {
      "D": 36.4316198598305,
-     "stars": null,
+     "stars": 8.539257779748107,
      "coverage": 0.17654756719964732,
      "dominance": 0.0030906691024024354
     }
@@ -5846,54 +5903,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 43.60636010955019,
-    "stars": null
+    "stars": 9.922571321870608
    },
    "skills": {
     "rc_jack": {
      "D": 42.4497255628934,
-     "stars": null,
+     "stars": 9.702272631672155,
      "coverage": 0.17461118849085475,
      "dominance": 0.014589884716790565
     },
     "rc_tech": {
      "D": 44.77248628150868,
-     "stars": null,
+     "stars": 10.143704977978523,
      "coverage": 0.26610060872342545,
      "dominance": 0.28580138301134195
     },
     "rc_speed": {
      "D": 43.390000826057445,
-     "stars": null,
+     "stars": 9.881436366914182,
      "coverage": 0.07609835553519936,
      "dominance": 0.016539469306515273
     },
     "rc_stamina": {
      "D": 44.98016184365323,
-     "stars": null,
+     "stars": 10.182986497048423,
      "coverage": 0.06479362913804373,
      "dominance": 0.016366888638418613
     },
     "ln_general": {
      "D": 42.763441851285,
-     "stars": null,
+     "stars": 9.762121378515005,
      "coverage": 0.6844968268359021,
      "dominance": 0.05101329431274092
     },
     "ln_tech": {
      "D": 42.77679461095471,
-     "stars": null,
+     "stars": 9.764667121936771,
      "coverage": 0.6191625036665405,
      "dominance": 0.6064316271597976
     },
     "ln_inverse": {
      "D": 37.82236546886783,
-     "stars": null,
+     "stars": 8.810666689463583,
      "coverage": 0.0407744477587756,
      "dominance": 0.0023570831800235476
     },
     "ln_release": {
      "D": 41.89913569302603,
-     "stars": null,
+     "stars": 9.597057955020047,
      "coverage": 0.13169624555372764,
      "dominance": 0.006900369674371934
     }
@@ -5904,54 +5961,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 7.1667500256240615,
-    "stars": null
+    "stars": 2.1960807775610154
    },
    "skills": {
     "rc_jack": {
      "D": 4.999547217627926,
-     "stars": null,
+     "stars": 1.6256694557456333,
      "coverage": 0.060166716967392356,
      "dominance": 0.01333941825941316
     },
     "rc_tech": {
      "D": 4.953054810119126,
-     "stars": null,
+     "stars": 1.6130337146074674,
      "coverage": 0.06243754018523718,
      "dominance": 0.05364056114329582
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.011117459564187698,
      "dominance": 0.0008690273453740597
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.00738249013508662,
      "dominance": 0.0009116823209191303
     },
     "ln_general": {
      "D": 7.142240298082685,
-     "stars": null,
+     "stars": 2.189806405053288,
      "coverage": 0.9213333333333333,
      "dominance": 0.09897025976199257
     },
     "ln_tech": {
      "D": 6.9197413749349765,
-     "stars": null,
+     "stars": 2.132683594570993,
      "coverage": 0.7904755150234524,
      "dominance": 0.7520282303512054
     },
     "ln_inverse": {
      "D": 5.618084263070685,
-     "stars": null,
+     "stars": 1.7920113017142099,
      "coverage": 0.15720087679898917,
      "dominance": 0.04378453749068913
     },
     "ln_release": {
      "D": 5.910943254879215,
-     "stars": null,
+     "stars": 1.8697006619790362,
      "coverage": 0.20072654704789342,
      "dominance": 0.036456283327111344
     }
@@ -5962,54 +6019,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 8.73158918374507,
-    "stars": null
+    "stars": 2.589900519940958
    },
    "skills": {
     "rc_jack": {
      "D": 6.475238125944391,
-     "stars": null,
+     "stars": 2.0176441612594602,
      "coverage": 0.06977643104146003,
      "dominance": 0.006944303802343696
     },
     "rc_tech": {
      "D": 7.4870863638128275,
-     "stars": null,
+     "stars": 2.277765353636964,
      "coverage": 0.10520163482903887,
      "dominance": 0.09519778600917575
     },
     "rc_speed": {
      "D": 5.822356795311566,
-     "stars": null,
+     "stars": 1.8462688953911979,
      "coverage": 0.027026691350857744,
      "dominance": 0.0015305982767866828
     },
     "rc_stamina": {
      "D": 6.061733261836668,
-     "stars": null,
+     "stars": 1.909453310212087,
      "coverage": 0.023412188612466925,
      "dominance": 0.0015991694487165224
     },
     "ln_general": {
      "D": 8.683379251619264,
-     "stars": null,
+     "stars": 2.5779521816175315,
      "coverage": 0.8797846889952153,
      "dominance": 0.06247824213971644
     },
     "ln_tech": {
      "D": 8.581936407101383,
-     "stars": null,
+     "stars": 2.552774801675462,
      "coverage": 0.8084801633280387,
      "dominance": 0.7912500938104463
     },
     "ln_inverse": {
      "D": 7.79912664881537,
-     "stars": null,
+     "stars": 2.356782177301894,
      "coverage": 0.14403715099056286,
      "dominance": 0.032941670078599085
     },
     "ln_release": {
      "D": 7.729254676691095,
-     "stars": null,
+     "stars": 2.3391347530229023,
      "coverage": 0.17732478452146946,
      "dominance": 0.008058136434215307
     }
@@ -6020,54 +6077,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 11.211781167061348,
-    "stars": null
+    "stars": 3.1913077208246783
    },
    "skills": {
     "rc_jack": {
      "D": 10.409730249734308,
-     "stars": null,
+     "stars": 2.9994825999994217,
      "coverage": 0.0915930780254174,
      "dominance": 0.026198385283053814
     },
     "rc_tech": {
      "D": 10.449983187758885,
-     "stars": null,
+     "stars": 3.009166481614267,
      "coverage": 0.13275121779350407,
      "dominance": 0.13497523353521815
     },
     "rc_speed": {
      "D": 8.001639365396343,
-     "stars": null,
+     "stars": 2.407784265631108,
      "coverage": 0.034663372864151804,
      "dominance": 0.002596037600567413
     },
     "rc_stamina": {
      "D": 8.34119214887116,
-     "stars": null,
+     "stars": 2.4928260344451423,
      "coverage": 0.024537199904081618,
      "dominance": 0.003190126132057633
     },
     "ln_general": {
      "D": 11.0638114512352,
-     "stars": null,
+     "stars": 3.1560929683082333,
      "coverage": 0.8492063492063492,
      "dominance": 0.05391161080699701
     },
     "ln_tech": {
      "D": 11.055372606987758,
-     "stars": null,
+     "stars": 3.1540823088605294,
      "coverage": 0.7400989813131971,
      "dominance": 0.7397862415323038
     },
     "ln_inverse": {
      "D": 9.918029266725183,
-     "stars": null,
+     "stars": 2.8806843447131127,
      "coverage": 0.12082792930401236,
      "dominance": 0.019326144003307823
     },
     "ln_release": {
      "D": 10.368372393639556,
-     "stars": null,
+     "stars": 2.9895264714441923,
      "coverage": 0.1972749509661908,
      "dominance": 0.02001622110649457
     }
@@ -6078,54 +6135,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 10.694901838248208,
-    "stars": null
+    "stars": 3.0679565074490327
    },
    "skills": {
     "rc_jack": {
      "D": 5.809331320475729,
-     "stars": null,
+     "stars": 1.8428186256464516,
      "coverage": 0.01437699680511182,
      "dominance": 0.00357687797320109
     },
     "rc_tech": {
      "D": 5.002148272590142,
-     "stars": null,
+     "stars": 1.6263757988432896,
      "coverage": 0.0123915543290073,
      "dominance": 0.02124443276061142
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_general": {
      "D": 10.658303749746523,
-     "stars": null,
+     "stars": 3.059185759401406,
      "coverage": 0.9856230031948882,
      "dominance": 0.005445610792468554
     },
     "ln_tech": {
      "D": 10.647675237031706,
-     "stars": null,
+     "stars": 3.05663770219287,
      "coverage": 0.9721121443525248,
      "dominance": 0.9591217439495088
     },
     "ln_inverse": {
      "D": 10.115234516959699,
-     "stars": null,
+     "stars": 2.9284444452687084,
      "coverage": 0.3173933473337202,
      "dominance": 0.009800439565437611
     },
     "ln_release": {
      "D": 9.935608530497209,
-     "stars": null,
+     "stars": 2.88494808551203,
      "coverage": 0.3510966693180975,
      "dominance": 0.0008108949587725357
     }
@@ -6136,54 +6193,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 13.785373845598471,
-    "stars": null
+    "stars": 3.7924648492942303
    },
    "skills": {
     "rc_jack": {
      "D": 10.701378451239657,
-     "stars": null,
+     "stars": 3.069508115037158,
      "coverage": 0.0606677936463237,
      "dominance": 0.002799720437451497
     },
     "rc_tech": {
      "D": 10.767347014137783,
-     "stars": null,
+     "stars": 3.085303461525937,
      "coverage": 0.06747508607276757,
      "dominance": 0.04380778909365639
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.005469882963845081,
      "dominance": 5.464532448499636e-07
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0037003800699931546,
      "dominance": 2.657157640873111e-07
     },
     "ln_general": {
      "D": 13.795156927045904,
-     "stars": null,
+     "stars": 3.794712539814475,
      "coverage": 0.930161943319838,
      "dominance": 0.008681228195899216
     },
     "ln_tech": {
      "D": 13.771510414754996,
-     "stars": null,
+     "stars": 3.789279236688207,
      "coverage": 0.9199892814024836,
      "dominance": 0.936316615239088
     },
     "ln_inverse": {
      "D": 13.201866599009664,
-     "stars": null,
+     "stars": 3.6579190569746025,
      "coverage": 0.2910771122274626,
      "dominance": 0.007810105949758906
     },
     "ln_release": {
      "D": 12.971240856060176,
-     "stars": null,
+     "stars": 3.604472616995614,
      "coverage": 0.3113777607615671,
      "dominance": 0.000583728915136743
     }
@@ -6194,54 +6251,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 18.98896519538981,
-    "stars": null
+    "stars": 4.955432149407675
    },
    "skills": {
     "rc_jack": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.000851063829787234,
      "dominance": 0.00020749802042874932
     },
     "rc_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0007816038687842957,
      "dominance": 0.0023348883758419104
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_general": {
      "D": 18.98113387016248,
-     "stars": null,
+     "stars": 4.9537252281831385,
      "coverage": 0.9991489361702127,
      "dominance": 0.02703922823717614
     },
     "ln_tech": {
      "D": 18.984537850739528,
-     "stars": null,
+     "stars": 4.954467176472478,
      "coverage": 0.9479507713035408,
      "dominance": 0.951721018113926
     },
     "ln_inverse": {
      "D": 17.926331810335174,
-     "stars": null,
+     "stars": 4.722735703445692,
      "coverage": 0.28867900358795645,
      "dominance": 0.015001103669551888
     },
     "ln_release": {
      "D": 18.111798362554072,
-     "stars": null,
+     "stars": 4.7635095871378645,
      "coverage": 0.3206613024285746,
      "dominance": 0.0036962635830748904
     }
@@ -6252,54 +6309,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 18.32858305504339,
-    "stars": null
+    "stars": 4.811081509867057
    },
    "skills": {
     "rc_jack": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0013245033112582781,
      "dominance": 0.0005658326254705941
     },
     "rc_tech": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0010757376775625198,
      "dominance": 0.002445240254348631
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_general": {
      "D": 18.32095719244154,
-     "stars": null,
+     "stars": 4.8094096459965865,
      "coverage": 0.9986754966887417,
      "dominance": 0.02641378179471958
     },
     "ln_tech": {
      "D": 18.279379167056206,
-     "stars": null,
+     "stars": 4.800292225703113,
      "coverage": 0.9397579790124321,
      "dominance": 0.931633457998948
     },
     "ln_inverse": {
      "D": 17.705606064389876,
-     "stars": null,
+     "stars": 4.674119506023642,
      "coverage": 0.3305953773848338,
      "dominance": 0.02976785588736848
     },
     "ln_release": {
      "D": 17.738001151990936,
-     "stars": null,
+     "stars": 4.681260948702623,
      "coverage": 0.37829409538747305,
      "dominance": 0.009173831439144263
     }
@@ -6310,54 +6367,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 21.782592092760883,
-    "stars": null
+    "stars": 5.557321476863275
    },
    "skills": {
     "rc_jack": {
      "D": 8.212473979354103,
-     "stars": null,
+     "stars": 2.4606566919357973,
      "coverage": 0.002830411576549918,
      "dominance": 0.00033840192510044655
     },
     "rc_tech": {
      "D": 7.286593079222695,
-     "stars": null,
+     "stars": 2.226709375665278,
      "coverage": 0.0026763199086367252,
      "dominance": 0.002371277374998464
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 6.527008622993497e-05,
      "dominance": 0.0
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 5.6347857515349596e-05,
      "dominance": 0.0
     },
     "ln_general": {
      "D": 21.78075466461025,
-     "stars": null,
+     "stars": 5.5569299581117315,
      "coverage": 0.9970479704797048,
      "dominance": 0.03648319758994802
     },
     "ln_tech": {
      "D": 21.7959448311604,
-     "stars": null,
+     "stars": 5.560166511702942,
      "coverage": 0.9233853476317517,
      "dominance": 0.9296791002732251
     },
     "ln_inverse": {
      "D": 21.32317506418043,
-     "stars": null,
+     "stars": 5.459258136666888,
      "coverage": 0.29501161458713915,
      "dominance": 0.026354314509566924
     },
     "ln_release": {
      "D": 21.489103390297824,
-     "stars": null,
+     "stars": 5.494715608360383,
      "coverage": 0.32789916770336847,
      "dominance": 0.004773708327162601
     }
@@ -6368,54 +6425,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 28.35086528162514,
-    "stars": null
+    "stars": 6.925612793738977
    },
    "skills": {
     "rc_jack": {
      "D": 16.409505291027116,
-     "stars": null,
+     "stars": 4.386578313640077,
      "coverage": 0.004801097393689987,
      "dominance": 0.0005961962226225078
     },
     "rc_tech": {
      "D": 14.97458439893825,
-     "stars": null,
+     "stars": 4.063825032332659,
      "coverage": 0.0035012187692078484,
      "dominance": 0.002953493058664299
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0,
      "dominance": 0.0
     },
     "ln_general": {
      "D": 28.351732963062634,
-     "stars": null,
+     "stars": 6.925789818623858,
      "coverage": 0.99519890260631,
      "dominance": 0.06241480497311552
     },
     "ln_tech": {
      "D": 28.4297532280392,
-     "stars": null,
+     "stars": 6.941703913659635,
      "coverage": 0.8689495298787216,
      "dominance": 0.8887463774247205
     },
     "ln_inverse": {
      "D": 27.74933686726046,
-     "stars": null,
+     "stars": 6.802671931770683,
      "coverage": 0.24182656764679544,
      "dominance": 0.0333271161967175
     },
     "ln_release": {
      "D": 28.15424728029601,
-     "stars": null,
+     "stars": 6.885475583063225,
      "coverage": 0.267583840370105,
      "dominance": 0.01196201212416077
     }
@@ -6426,54 +6483,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 28.859860483347465,
-    "stars": null
+    "stars": 7.029305982712888
    },
    "skills": {
     "rc_jack": {
      "D": 14.289483541019548,
-     "stars": null,
+     "stars": 3.907948058492097,
      "coverage": 0.003427733985509783,
      "dominance": 0.0003050716802011953
     },
     "rc_tech": {
      "D": 19.498805588940048,
-     "stars": null,
+     "stars": 5.066310210187315,
      "coverage": 0.008236065897078081,
      "dominance": 0.0067975351573287875
     },
     "rc_speed": {
      "D": 14.434691938244121,
-     "stars": null,
+     "stars": 3.9410874702649275,
      "coverage": 0.003497336908028487,
      "dominance": 0.0003580708228342359
     },
     "rc_stamina": {
      "D": 13.729617767510197,
-     "stars": null,
+     "stars": 3.779649707694006,
      "coverage": 0.002888313919846545,
      "dominance": 0.00034287992796770467
     },
     "ln_general": {
      "D": 28.85883709757429,
-     "stars": null,
+     "stars": 7.0290978012354515,
      "coverage": 0.9901866151866152,
      "dominance": 0.03518693538040589
     },
     "ln_tech": {
      "D": 28.98098667409849,
-     "stars": null,
+     "stars": 7.05393740625764,
      "coverage": 0.908285325299458,
      "dominance": 0.933694849194582
     },
     "ln_inverse": {
      "D": 28.195716892140936,
-     "stars": null,
+     "stars": 6.893944941728398,
      "coverage": 0.23377986418736849,
      "dominance": 0.01618759663100495
     },
     "ln_release": {
      "D": 28.55170415259419,
-     "stars": null,
+     "stars": 6.966564308583005,
      "coverage": 0.2560815830468694,
      "dominance": 0.0071270612056761554
     }
@@ -6484,54 +6541,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 31.014712723620388,
-    "stars": null
+    "stars": 7.465031907788978
    },
    "skills": {
     "rc_jack": {
      "D": 25.353925417203403,
-     "stars": null,
+     "stars": 6.30861542821135,
      "coverage": 0.03145595586552157,
      "dominance": 0.0053848743775163094
     },
     "rc_tech": {
      "D": 24.816253925468803,
-     "stars": null,
+     "stars": 6.19668357690958,
      "coverage": 0.03158398079020591,
      "dominance": 0.019424848778279213
     },
     "rc_speed": {
      "D": 14.694737414501338,
-     "stars": null,
+     "stars": 4.000298187804753,
      "coverage": 0.0035586241223571893,
      "dominance": 0.0005231710319606436
     },
     "rc_stamina": {
      "D": 11.968929090567482,
-     "stars": null,
+     "stars": 3.3703253859042412,
      "coverage": 0.0024254200121212326,
      "dominance": 0.0005127438381941682
     },
     "ln_general": {
      "D": 31.03207666187657,
-     "stars": null,
+     "stars": 7.468522308804717,
      "coverage": 0.96256,
      "dominance": 0.05140725830872843
     },
     "ln_tech": {
      "D": 30.97621548561832,
-     "stars": null,
+     "stars": 7.457292261010849,
      "coverage": 0.8859329035142376,
      "dominance": 0.8911863836471061
     },
     "ln_inverse": {
      "D": 29.81285807600935,
-     "stars": null,
+     "stars": 7.222647337224679,
      "coverage": 0.19505604208893612,
      "dominance": 0.016992951789868344
     },
     "ln_release": {
      "D": 30.168088406597086,
-     "stars": null,
+     "stars": 7.294453442908566,
      "coverage": 0.24535046620315018,
      "dominance": 0.01456776822834691
     }
@@ -6542,54 +6599,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 38.41893801660507,
-    "stars": null
+    "stars": 8.926583156849217
    },
    "skills": {
     "rc_jack": {
      "D": 29.397046075498267,
-     "stars": null,
+     "stars": 7.1384158180649955,
      "coverage": 0.037159932843899846,
      "dominance": 0.0027453267502408783
     },
     "rc_tech": {
      "D": 29.268794327913888,
-     "stars": null,
+     "stars": 7.112396192866091,
      "coverage": 0.04376480753802087,
      "dominance": 0.017394775303614978
     },
     "rc_speed": {
      "D": 20.195213354722707,
-     "stars": null,
+     "stars": 5.21699448648992,
      "coverage": 0.012994795531316094,
      "dominance": 0.00035074273844113796
     },
     "rc_stamina": {
      "D": 19.216822869109684,
-     "stars": null,
+     "stars": 5.0050456013613,
      "coverage": 0.004215719075356372,
      "dominance": 0.0002811559083226101
     },
     "ln_general": {
      "D": 38.584671145491455,
-     "stars": null,
+     "stars": 8.958732958115352,
      "coverage": 0.9456295525494277,
      "dominance": 0.03198028412057864
     },
     "ln_tech": {
      "D": 38.85367037219091,
-     "stars": null,
+     "stars": 9.010866488326403,
      "coverage": 0.857149141080405,
      "dominance": 0.9213957737515797
     },
     "ln_inverse": {
      "D": 36.33552594629462,
-     "stars": null,
+     "stars": 8.520442302900175,
      "coverage": 0.18116161098214945,
      "dominance": 0.012289260806364057
     },
     "ln_release": {
      "D": 38.26689839689602,
-     "stars": null,
+     "stars": 8.897069588504397,
      "coverage": 0.28028675008360904,
      "dominance": 0.013562680620857848
     }
@@ -6600,54 +6657,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 38.42568220325223,
-    "stars": null
+    "stars": 8.927891875883663
    },
    "skills": {
     "rc_jack": {
      "D": 36.07609931596207,
-     "stars": null,
+     "stars": 8.469604751559194,
      "coverage": 0.06199195381804214,
      "dominance": 0.009152544683229825
     },
     "rc_tech": {
      "D": 35.99653832014724,
-     "stars": null,
+     "stars": 8.454001827702498,
      "coverage": 0.05418380290769131,
      "dominance": 0.05212490371361553
     },
     "rc_speed": {
      "D": 21.48795289015999,
-     "stars": null,
+     "stars": 5.494469911992671,
      "coverage": 0.0030728110289451075,
      "dominance": 0.0011391718968577803
     },
     "rc_stamina": {
      "D": 21.74976879385547,
-     "stars": null,
+     "stars": 5.550326675804269,
      "coverage": 0.002718740307651949,
      "dominance": 0.0012107203088576406
     },
     "ln_general": {
      "D": 38.351747525271,
-     "stars": null,
+     "stars": 8.913542677195341,
      "coverage": 0.9322164948453608,
      "dominance": 0.050206496878649906
     },
     "ln_tech": {
      "D": 38.4624033106482,
-     "stars": null,
+     "stars": 8.935016995111134,
      "coverage": 0.8466542404554233,
      "dominance": 0.8632299646612787
     },
     "ln_inverse": {
      "D": 36.6489302843243,
-     "stars": null,
+     "stars": 8.581777694710492,
      "coverage": 0.11828601940736354,
      "dominance": 0.0061287900751332705
     },
     "ln_release": {
      "D": 38.55392107701359,
-     "stars": null,
+     "stars": 8.952769617362534,
      "coverage": 0.22198020271726837,
      "dominance": 0.01680740778237735
     }
@@ -6658,54 +6715,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 42.47505939029491,
-    "stars": null
+    "stars": 9.707108352952286
    },
    "skills": {
     "rc_jack": {
      "D": 40.179615741835285,
-     "stars": null,
+     "stars": 9.266982196271625,
      "coverage": 0.055514933664677996,
      "dominance": 0.00802482770497733
     },
     "rc_tech": {
      "D": 40.69593351404889,
-     "stars": null,
+     "stars": 9.366333823861074,
      "coverage": 0.06301990834236701,
      "dominance": 0.05799705334309625
     },
     "rc_speed": {
      "D": 33.2130794307643,
-     "stars": null,
+     "stars": 7.904442680848244,
      "coverage": 0.010931414061123622,
      "dominance": 0.0012712153148722424
     },
     "rc_stamina": {
      "D": 33.95212228740345,
-     "stars": null,
+     "stars": 8.051073302549838,
      "coverage": 0.0086190577883864,
      "dominance": 0.0013531237486319773
     },
     "ln_general": {
      "D": 42.39474711766913,
-     "stars": null,
+     "stars": 9.69177670870652,
      "coverage": 0.9249345944858121,
      "dominance": 0.04450570454450937
     },
     "ln_tech": {
      "D": 42.50023816173604,
-     "stars": null,
+     "stars": 9.711914006167131,
      "coverage": 0.8460179557044534,
      "dominance": 0.8655050467298111
     },
     "ln_inverse": {
      "D": 40.34065066641541,
-     "stars": null,
+     "stars": 9.297991542231783,
      "coverage": 0.11005839114917418,
      "dominance": 0.005162463764088793
     },
     "ln_release": {
      "D": 41.87752535242479,
-     "stars": null,
+     "stars": 9.592923708704411,
      "coverage": 0.23351068020440427,
      "dominance": 0.016180564850013623
     }
@@ -6716,54 +6773,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 45.35740093340667,
-    "stars": null
+    "stars": 10.254264377893247
    },
    "skills": {
     "rc_jack": {
      "D": 44.44921798645905,
-     "stars": null,
+     "stars": 10.082499430685088,
      "coverage": 0.05278376818964625,
      "dominance": 0.013273769208908567
     },
     "rc_tech": {
      "D": 44.574481148589854,
-     "stars": null,
+     "stars": 10.106224632442066,
      "coverage": 0.051324641341029605,
      "dominance": 0.05789601275491538
     },
     "rc_speed": {
      "D": 34.66710533459962,
-     "stars": null,
+     "stars": 8.192430395614963,
      "coverage": 0.0073737441917348856,
      "dominance": 0.002126093794806854
     },
     "rc_stamina": {
      "D": 36.033048927957466,
-     "stars": null,
+     "stars": 8.461162727488464,
      "coverage": 0.005746516774318418,
      "dominance": 0.002378814276145732
     },
     "ln_general": {
      "D": 45.137523864995615,
-     "stars": null,
+     "stars": 10.21273137872664,
      "coverage": 0.9340959708443005,
      "dominance": 0.07395385761394166
     },
     "ln_tech": {
      "D": 44.97465718973729,
-     "stars": null,
+     "stars": 10.18194568628546,
      "coverage": 0.8307764759669977,
      "dominance": 0.8092977203462839
     },
     "ln_inverse": {
      "D": 42.3114150920534,
-     "stars": null,
+     "stars": 9.675863531255033,
      "coverage": 0.13333694314101371,
      "dominance": 0.012500167689776508
     },
     "ln_release": {
      "D": 44.191880126717535,
-     "stars": null,
+     "stars": 10.033724281801044,
      "coverage": 0.22582454489706752,
      "dominance": 0.028573564315221147
     }
@@ -6774,54 +6831,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 5.019815510621582,
-    "stars": null
+    "stars": 1.6311719181103688
    },
    "skills": {
     "rc_jack": {
      "D": 3.7570260543078144,
-     "stars": null,
+     "stars": 1.2805512425249463,
      "coverage": 0.06712317850777877,
      "dominance": 0.008856127505002372
     },
     "rc_tech": {
      "D": 3.9663366074262782,
-     "stars": null,
+     "stars": 1.3398670862295765,
      "coverage": 0.0949659838701239,
      "dominance": 0.0848088523606613
     },
     "rc_speed": {
      "D": 2.351492646538358,
-     "stars": null,
+     "stars": 0.8658369568070867,
      "coverage": 0.02119001468619352,
      "dominance": 0.002384481373381415
     },
     "rc_stamina": {
      "D": 2.312927903886004,
-     "stars": null,
+     "stars": 0.8539613321140658,
      "coverage": 0.017818882277725812,
      "dominance": 0.0023165027763859293
     },
     "ln_general": {
      "D": 4.981713473808212,
-     "stars": null,
+     "stars": 1.6208248868539559,
      "coverage": 0.8938679245283019,
      "dominance": 0.05893768197314572
     },
     "ln_tech": {
      "D": 4.949866814606493,
-     "stars": null,
+     "stars": 1.6121665645171914,
      "coverage": 0.8248727955016756,
      "dominance": 0.8248101524410474
     },
     "ln_inverse": {
      "D": 2.8803371087931797,
-     "stars": null,
+     "stars": 1.0256891304440958,
      "coverage": 0.03128237996152203,
      "dominance": 0.0022350023872840085
     },
     "ln_release": {
      "D": 4.309355362805689,
-     "stars": null,
+     "stars": 1.4359767505897683,
      "coverage": 0.17402636698292623,
      "dominance": 0.01565119918309173
     }
@@ -6832,54 +6889,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 7.007284108220996,
-    "stars": null
+    "stars": 2.155194299346375
    },
    "skills": {
     "rc_jack": {
      "D": 5.934463539730188,
-     "stars": null,
+     "stars": 1.8759121961398861,
      "coverage": 0.11317603058666979,
      "dominance": 0.015868676202028788
     },
     "rc_tech": {
      "D": 6.034954902053812,
-     "stars": null,
+     "stars": 1.9024057668123413,
      "coverage": 0.1184454258858551,
      "dominance": 0.10566568210102438
     },
     "rc_speed": {
      "D": 3.894930402335105,
-     "stars": null,
+     "stars": 1.3196908711871074,
      "coverage": 0.015437544577532094,
      "dominance": 0.0031534090872067304
     },
     "rc_stamina": {
      "D": 3.969379834413661,
-     "stars": null,
+     "stars": 1.3407256296529535,
      "coverage": 0.014950781271441683,
      "dominance": 0.003534505302697088
     },
     "ln_general": {
      "D": 6.957764613276787,
-     "stars": null,
+     "stars": 2.1424666070096414,
      "coverage": 0.8564356435643564,
      "dominance": 0.086826490844288
     },
     "ln_tech": {
      "D": 6.921882306531405,
-     "stars": null,
+     "stars": 2.1332346705818805,
      "coverage": 0.7527897796040696,
      "dominance": 0.7641000341620572
     },
     "ln_inverse": {
      "D": 4.412782261593092,
-     "stars": null,
+     "stars": 1.4647043897394452,
      "coverage": 0.026242360210050945,
      "dominance": 0.0014600508811292501
     },
     "ln_release": {
      "D": 6.3187263835363225,
-     "stars": null,
+     "stars": 1.976831832722325,
      "coverage": 0.16843509853048616,
      "dominance": 0.019391151419569132
     }
@@ -6890,54 +6947,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 15.553712319793279,
-    "stars": null
+    "stars": 4.194674529850874
    },
    "skills": {
     "rc_jack": {
      "D": 10.920061410016729,
-     "stars": null,
+     "stars": 3.12180803333524,
      "coverage": 0.024980084247277934,
      "dominance": 0.001928312828872212
     },
     "rc_tech": {
      "D": 12.150743486848333,
-     "stars": null,
+     "stars": 3.4130312209287488,
      "coverage": 0.050358334692658366,
      "dominance": 0.024645653911683857
     },
     "rc_speed": {
      "D": 10.928713035312926,
-     "stars": null,
+     "stars": 3.123873573713434,
      "coverage": 0.02100568632983993,
      "dominance": 0.0028133636657701436
     },
     "rc_stamina": {
      "D": 10.225185208136901,
-     "stars": null,
+     "stars": 2.955006071361914,
      "coverage": 0.00887384065398365,
      "dominance": 0.0018454639037291888
     },
     "ln_general": {
      "D": 15.584813692345552,
-     "stars": null,
+     "stars": 4.201678680348336,
      "coverage": 0.9451403887688985,
      "dominance": 0.21964617562750727
     },
     "ln_tech": {
      "D": 15.57890003512458,
-     "stars": null,
+     "stars": 4.200347079165056,
      "coverage": 0.6540238487126359,
      "dominance": 0.6865030273326675
     },
     "ln_inverse": {
      "D": 7.849350899917343,
-     "stars": null,
+     "stars": 2.36945111515027,
      "coverage": 0.005655250113651633,
      "dominance": 0.0008290869464526707
     },
     "ln_release": {
      "D": 15.147930831046265,
-     "stars": null,
+     "stars": 4.103077386800578,
      "coverage": 0.16952045006343633,
      "dominance": 0.061788915783317466
     }
@@ -6948,54 +7005,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 9.82982885218569,
-    "stars": null
+    "stars": 2.859273027315264
    },
    "skills": {
     "rc_jack": {
      "D": 8.029343955976135,
-     "stars": null,
+     "stars": 2.414744915523703,
      "coverage": 0.042443252051922474,
      "dominance": 0.003349557925158591
     },
     "rc_tech": {
      "D": 8.399463044600877,
-     "stars": null,
+     "stars": 2.507362182791589,
      "coverage": 0.06537161406851207,
      "dominance": 0.05360700247833969
     },
     "rc_speed": {
      "D": 6.160311643211031,
-     "stars": null,
+     "stars": 1.9353532270230236,
      "coverage": 0.01814194337527143,
      "dominance": 0.0012612772533533592
     },
     "rc_stamina": {
      "D": 6.3516250140910495,
-     "stars": null,
+     "stars": 1.9854242471791859,
      "coverage": 0.010977304572806107,
      "dominance": 0.00136190482123169
     },
     "ln_general": {
      "D": 9.818024607134792,
-     "stars": null,
+     "stars": 2.856405060618288,
      "coverage": 0.9284375,
      "dominance": 0.05529756168790147
     },
     "ln_tech": {
      "D": 9.795917114604157,
-     "stars": null,
+     "stars": 2.8510322808977033,
      "coverage": 0.8554344695416384,
      "dominance": 0.8616910900587982
     },
     "ln_inverse": {
      "D": 8.385917191171336,
-     "stars": null,
+     "stars": 2.5039845464411044,
      "coverage": 0.07906652690146933,
      "dominance": 0.005280334772870182
     },
     "ln_release": {
      "D": 9.2720184727336,
-     "stars": null,
+     "stars": 2.7231123802352055,
      "coverage": 0.17292917601204394,
      "dominance": 0.018151271002346335
     }
@@ -7006,54 +7063,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 10.152495335355438,
-    "stars": null
+    "stars": 2.9374511303690745
    },
    "skills": {
     "rc_jack": {
      "D": 7.110283173717337,
-     "stars": null,
+     "stars": 2.181620201108627,
      "coverage": 0.028162742810833724,
      "dominance": 0.0018840802984530654
     },
     "rc_tech": {
      "D": 7.087203062171235,
-     "stars": null,
+     "stars": 2.175704180530597,
      "coverage": 0.025937377295245704,
      "dominance": 0.016825017922147828
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.001295408475153501,
      "dominance": 8.520035622663991e-05
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0009545931021373185,
      "dominance": 5.319721911821238e-05
     },
     "ln_general": {
      "D": 10.1606442728242,
-     "stars": null,
+     "stars": 2.9394201649320637,
      "coverage": 0.9695872556118754,
      "dominance": 0.03213831556729449
     },
     "ln_tech": {
      "D": 10.178484562000996,
-     "stars": null,
+     "stars": 2.943730020657407,
      "coverage": 0.9098675429156247,
      "dominance": 0.9328331471550919
     },
     "ln_inverse": {
      "D": 8.925665797227179,
-     "stars": null,
+     "stars": 2.6378911888544914,
      "coverage": 0.09732900249089066,
      "dominance": 0.004584334003296046
     },
     "ln_release": {
      "D": 9.730166312000115,
-     "stars": null,
+     "stars": 2.835041042746503,
      "coverage": 0.2066417801608081,
      "dominance": 0.011596707478371441
     }
@@ -7064,54 +7121,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 12.821437760219336,
-    "stars": null
+    "stars": 3.569672620173341
    },
    "skills": {
     "rc_jack": {
      "D": 9.840923833018566,
-     "stars": null,
+     "stars": 2.861968153285393,
      "coverage": 0.02990651056975079,
      "dominance": 0.0013235396084875033
     },
     "rc_tech": {
      "D": 10.27145207471465,
-     "stars": null,
+     "stars": 2.9661690172492157,
      "coverage": 0.038694379260489506,
      "dominance": 0.0465084440312336
     },
     "rc_speed": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.006424946117127375,
      "dominance": 0.00041430515566152345
     },
     "rc_stamina": {
      "D": 0.0,
-     "stars": null,
+     "stars": 0.0,
      "coverage": 0.0038291858834029603,
      "dominance": 0.0004890613836897298
     },
     "ln_general": {
      "D": 12.766826118231752,
-     "stars": null,
+     "stars": 3.556969430572705,
      "coverage": 0.9598393574297188,
      "dominance": 0.014634565326864031
     },
     "ln_tech": {
      "D": 12.752667103462136,
-     "stars": null,
+     "stars": 3.5536744477727726,
      "coverage": 0.9429708049457372,
      "dominance": 0.9311823219474851
     },
     "ln_inverse": {
      "D": 10.617754082896072,
-     "stars": null,
+     "stars": 3.0494622148853123,
      "coverage": 0.10181552459172166,
      "dominance": 0.001624138253700815
     },
     "ln_release": {
      "D": 11.68290824325925,
-     "stars": null,
+     "stars": 3.30292538918606,
      "coverage": 0.23888019603686583,
      "dominance": 0.003823624292877851
     }
@@ -7122,54 +7179,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 15.349947211570035,
-    "stars": null
+    "stars": 4.148728472026011
    },
    "skills": {
     "rc_jack": {
      "D": 14.644940497248376,
-     "stars": null,
+     "stars": 3.9889732027585376,
      "coverage": 0.13133871693407573,
      "dominance": 0.0077968658439791895
     },
     "rc_tech": {
      "D": 14.82887478959477,
-     "stars": null,
+     "stars": 4.030772779785822,
      "coverage": 0.15785344039527446,
      "dominance": 0.15331840679591027
     },
     "rc_speed": {
      "D": 11.175376455311115,
-     "stars": null,
+     "stars": 3.1826510435750013,
      "coverage": 0.022326664801692705,
      "dominance": 0.0008478386331429032
     },
     "rc_stamina": {
      "D": 11.437770172103795,
-     "stars": null,
+     "stars": 3.2449427128853907,
      "coverage": 0.015077540121536259,
      "dominance": 0.0007841473902368709
     },
     "ln_general": {
      "D": 15.231705244206138,
-     "stars": null,
+     "stars": 4.12202059188643,
      "coverage": 0.8312570781426953,
      "dominance": 0.05010342582587085
     },
     "ln_tech": {
      "D": 15.222178000773354,
-     "stars": null,
+     "stars": 4.119867143319652,
      "coverage": 0.7676472851157408,
      "dominance": 0.7759856637187676
     },
     "ln_inverse": {
      "D": 12.613439664326151,
-     "stars": null,
+     "stars": 3.5212422120904505,
      "coverage": 0.03479456081123271,
      "dominance": 0.0019861538309511057
     },
     "ln_release": {
      "D": 14.279097294323128,
-     "stars": null,
+     "stars": 3.905575591796862,
      "coverage": 0.1371208777544198,
      "dominance": 0.009177497961141423
     }
@@ -7180,54 +7237,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 23.729859177613864,
-    "stars": null
+    "stars": 5.969286390888764
    },
    "skills": {
     "rc_jack": {
      "D": 16.930464211537178,
-     "stars": null,
+     "stars": 4.50258772186279,
      "coverage": 0.01204962869357678,
      "dominance": 0.001352546823762177
     },
     "rc_tech": {
      "D": 18.903956481744842,
-     "stars": null,
+     "stars": 4.936897372282003,
      "coverage": 0.018202701819078303,
      "dominance": 0.017918782489423545
     },
     "rc_speed": {
      "D": 14.129635588751539,
-     "stars": null,
+     "stars": 3.871403353467434,
      "coverage": 0.005029780163138938,
      "dominance": 0.001031779758050302
     },
     "rc_stamina": {
      "D": 14.942277096796095,
-     "stars": null,
+     "stars": 4.056501149144057,
      "coverage": 0.005105527757751095,
      "dominance": 0.0011979924932759719
     },
     "ln_general": {
      "D": 23.709892305035304,
-     "stars": null,
+     "stars": 5.9650912104546805,
      "coverage": 0.9778150633855331,
      "dominance": 0.07071147281667967
     },
     "ln_tech": {
      "D": 23.763404948767384,
-     "stars": null,
+     "stars": 5.976333284052539,
      "coverage": 0.8721320703748452,
      "dominance": 0.887267241357093
     },
     "ln_inverse": {
      "D": 22.057135952491272,
-     "stars": null,
+     "stars": 5.6157603456913785,
      "coverage": 0.07595169551602995,
      "dominance": 0.0035333959526628344
     },
     "ln_release": {
      "D": 23.218338120186154,
-     "stars": null,
+     "stars": 5.861627154433805,
      "coverage": 0.2060698493576109,
      "dominance": 0.016986788309052904
     }
@@ -7238,54 +7295,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 25.925521529386476,
-    "stars": null
+    "stars": 6.427181579679352
    },
    "skills": {
     "rc_jack": {
      "D": 21.86404718978981,
-     "stars": null,
+     "stars": 5.574672448105771,
      "coverage": 0.041169847492367774,
      "dominance": 0.0021977514187802877
     },
     "rc_tech": {
      "D": 23.8426602725145,
-     "stars": null,
+     "stars": 5.992975784629766,
      "coverage": 0.052923190521966985,
      "dominance": 0.05917558688835101
     },
     "rc_speed": {
      "D": 17.22293200961808,
-     "stars": null,
+     "stars": 4.567457143531179,
      "coverage": 0.010866449885609182,
      "dominance": 0.0007437524912383433
     },
     "rc_stamina": {
      "D": 18.212969061437718,
-     "stars": null,
+     "stars": 4.785722418181126,
      "coverage": 0.007367472898217693,
      "dominance": 0.0005921114003336908
     },
     "ln_general": {
      "D": 25.815675776264303,
-     "stars": null,
+     "stars": 6.404430007121926,
      "coverage": 0.9405962297238053,
      "dominance": 0.026359004242345486
     },
     "ln_tech": {
      "D": 25.926016928969457,
-     "stars": null,
+     "stars": 6.427284152250455,
      "coverage": 0.8830588235109571,
      "dominance": 0.8989624975124653
     },
     "ln_inverse": {
      "D": 23.17538515766267,
-     "stars": null,
+     "stars": 5.852569209971351,
      "coverage": 0.08939915588128018,
      "dominance": 0.0022775730155063416
     },
     "ln_release": {
      "D": 25.78699483729888,
-     "stars": null,
+     "stars": 6.398486902874654,
      "coverage": 0.19569035466614576,
      "dominance": 0.009691723030980726
     }
@@ -7296,54 +7353,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 26.66833588185154,
-    "stars": null
+    "stars": 6.580622503534636
    },
    "skills": {
     "rc_jack": {
      "D": 24.76197768791781,
-     "stars": null,
+     "stars": 6.185362326782363,
      "coverage": 0.05646766405397789,
      "dominance": 0.0028635167215147247
     },
     "rc_tech": {
      "D": 25.933081390130813,
-     "stars": null,
+     "stars": 6.42874681503676,
      "coverage": 0.0880102147898696,
      "dominance": 0.09608474004001591
     },
     "rc_speed": {
      "D": 21.47877923171405,
-     "stars": null,
+     "stars": 5.492510743332791,
      "coverage": 0.02257197014920071,
      "dominance": 0.0017549415756173328
     },
     "rc_stamina": {
      "D": 21.762333341118747,
-     "stars": null,
+     "stars": 5.553004445948617,
      "coverage": 0.015457973452323819,
      "dominance": 0.001785653075035198
     },
     "ln_general": {
      "D": 26.488916892686444,
-     "stars": null,
+     "stars": 6.54362571452688,
      "coverage": 0.9055023923444976,
      "dominance": 0.029667330371524126
     },
     "ln_tech": {
      "D": 26.522502492575214,
-     "stars": null,
+     "stars": 6.550554310277827,
      "coverage": 0.8560257957954205,
      "dominance": 0.8568613147093859
     },
     "ln_inverse": {
      "D": 23.669493240330826,
-     "stars": null,
+     "stars": 5.956601301059949,
      "coverage": 0.0726652558506819,
      "dominance": 0.002409221937071164
     },
     "ln_release": {
      "D": 26.03174653811152,
-     "stars": null,
+     "stars": 6.449168106712483,
      "coverage": 0.19811532513841848,
      "dominance": 0.008573281569836137
     }
@@ -7354,54 +7411,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 33.49204925738084,
-    "stars": null
+    "stars": 7.9598545539687295
    },
    "skills": {
     "rc_jack": {
      "D": 31.74557402685305,
-     "stars": null,
+     "stars": 7.6116695752538535,
      "coverage": 0.056494193836964204,
      "dominance": 0.0038785049907287114
     },
     "rc_tech": {
      "D": 34.501849741224596,
-     "stars": null,
+     "stars": 8.15980126856234,
      "coverage": 0.11154662308750019,
      "dominance": 0.15170260013663775
     },
     "rc_speed": {
      "D": 30.78516861120031,
-     "stars": null,
+     "stars": 7.418859890886484,
      "coverage": 0.036511311259529,
      "dominance": 0.0034493053023763025
     },
     "rc_stamina": {
      "D": 31.566127704607226,
-     "stars": null,
+     "stars": 7.575718057850617,
      "coverage": 0.02961770018096116,
      "dominance": 0.0032249990590783807
     },
     "ln_general": {
      "D": 32.988746159679515,
-     "stars": null,
+     "stars": 7.8598276374034795,
      "coverage": 0.8773767947225456,
      "dominance": 0.016733789289248558
     },
     "ln_tech": {
      "D": 33.10454328768304,
-     "stars": null,
+     "stars": 7.882863408200149,
      "coverage": 0.8314631900289529,
      "dominance": 0.811645493448265
     },
     "ln_inverse": {
      "D": 29.16842992488021,
-     "stars": null,
+     "stars": 7.092021226377094,
      "coverage": 0.07080898328519551,
      "dominance": 0.0009531624786250288
     },
     "ln_release": {
      "D": 32.373158051894535,
-     "stars": null,
+     "stars": 7.737142242964831,
      "coverage": 0.22711843486918376,
      "dominance": 0.008412145295040552
     }
@@ -7412,54 +7469,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 35.900242140972644,
-    "stars": null
+    "stars": 8.435109315751593
    },
    "skills": {
     "rc_jack": {
      "D": 34.07994389005566,
-     "stars": null,
+     "stars": 8.076380250555095,
      "coverage": 0.06854545604327857,
      "dominance": 0.00391372868870642
     },
     "rc_tech": {
      "D": 36.152630353788396,
-     "stars": null,
+     "stars": 8.484608111471067,
      "coverage": 0.1296307985929917,
      "dominance": 0.14057653744858883
     },
     "rc_speed": {
      "D": 32.43934231152048,
-     "stars": null,
+     "stars": 7.750350950793146,
      "coverage": 0.04044840780351117,
      "dominance": 0.004705085977725204
     },
     "rc_stamina": {
      "D": 34.38055730940577,
-     "stars": null,
+     "stars": 8.135836121554783,
      "coverage": 0.031233199669626337,
      "dominance": 0.00569722028727703
     },
     "ln_general": {
      "D": 35.52085718504873,
-     "stars": null,
+     "stars": 8.36059559208676,
      "coverage": 0.8597729364835839,
      "dominance": 0.030892969383565103
     },
     "ln_tech": {
      "D": 35.402536111256325,
-     "stars": null,
+     "stars": 8.337329767230049,
      "coverage": 0.8244677728560558,
      "dominance": 0.7989833048332439
     },
     "ln_inverse": {
      "D": 31.253965880422953,
-     "stars": null,
+     "stars": 7.5130969643017265,
      "coverage": 0.0635884511598413,
      "dominance": 0.0012103331839610416
     },
     "ln_release": {
      "D": 34.784401877342845,
-     "stars": null,
+     "stars": 8.215574621671347,
      "coverage": 0.24646352078483327,
      "dominance": 0.014020820196933619
     }
@@ -7470,54 +7527,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 40.03688669721441,
-    "stars": null
+    "stars": 9.239480757295675
    },
    "skills": {
     "rc_jack": {
      "D": 38.95505544987647,
-     "stars": null,
+     "stars": 9.030500021443016,
      "coverage": 0.05564544132407752,
      "dominance": 0.0013499209681874565
     },
     "rc_tech": {
      "D": 40.71397021437521,
-     "stars": null,
+     "stars": 9.369800737858208,
      "coverage": 0.14507870800191938,
      "dominance": 0.1585820520719891
     },
     "rc_speed": {
      "D": 37.78789448211513,
-     "stars": null,
+     "stars": 8.803959668717969,
      "coverage": 0.05372450303880124,
      "dominance": 0.003315846917357925
     },
     "rc_stamina": {
      "D": 38.6176635803515,
-     "stars": null,
+     "stars": 8.965130288560706,
      "coverage": 0.043058866357389265,
      "dominance": 0.0031785065335702906
     },
     "ln_general": {
      "D": 39.65339748353055,
-     "stars": null,
+     "stars": 9.165508718982835,
      "coverage": 0.847571189279732,
      "dominance": 0.012831290123457146
     },
     "ln_tech": {
      "D": 39.63054408488883,
-     "stars": null,
+     "stars": 9.161096766585683,
      "coverage": 0.8296917589981294,
      "dominance": 0.8141540738243187
     },
     "ln_inverse": {
      "D": 36.23948001445311,
-     "stars": null,
+     "stars": 8.501628024231447,
      "coverage": 0.0683623792976439,
      "dominance": 0.0007234992514241741
     },
     "ln_release": {
      "D": 38.71803350101518,
-     "stars": null,
+     "stars": 8.984586777808278,
      "coverage": 0.23066479195248712,
      "dominance": 0.005864810309694592
     }
@@ -7528,54 +7585,54 @@
    "thumb_hand": "R",
    "total": {
     "D": 43.042927121466704,
-    "stars": null
+    "stars": 9.815378822839183
    },
    "skills": {
     "rc_jack": {
      "D": 41.69356063154006,
-     "stars": null,
+     "stars": 9.557715396612469,
      "coverage": 0.07007193626750406,
      "dominance": 0.002907455412862284
     },
     "rc_tech": {
      "D": 43.03236441096592,
-     "stars": null,
+     "stars": 9.813367079142681,
      "coverage": 0.10922488312553948,
      "dominance": 0.1140664460376381
     },
     "rc_speed": {
      "D": 38.07944736918303,
-     "stars": null,
+     "stars": 8.860655421291291,
      "coverage": 0.024501415394593475,
      "dominance": 0.0018946500150294914
     },
     "rc_stamina": {
      "D": 38.87538570719775,
-     "stars": null,
+     "stars": 9.015072439818102,
      "coverage": 0.021508728986912275,
      "dominance": 0.0019806803448498026
     },
     "ln_general": {
      "D": 42.779740793258526,
-     "stars": null,
+     "stars": 9.765228802734551,
      "coverage": 0.8839179193509902,
      "dominance": 0.016951047189169448
     },
     "ln_tech": {
      "D": 42.7949630571142,
-     "stars": null,
+     "stars": 9.76813078001389,
      "coverage": 0.8564350903682826,
      "dominance": 0.8544395654980874
     },
     "ln_inverse": {
      "D": 39.66830732187922,
-     "stars": null,
+     "stars": 9.168386905088084,
      "coverage": 0.07493898021434367,
      "dominance": 0.0013706617281328667
     },
     "ln_release": {
      "D": 42.127629815948836,
-     "stars": null,
+     "stars": 9.640749409658985,
      "coverage": 0.22684057702797406,
      "dominance": 0.006389493774230222
     }
@@ -7586,54 +7643,54 @@
    "thumb_hand": "L",
    "total": {
     "D": 47.18219503844802,
-    "stars": null
+    "stars": 10.597690475357341
    },
    "skills": {
     "rc_jack": {
      "D": 46.216584771724946,
-     "stars": null,
+     "stars": 10.416240930313947,
      "coverage": 0.0742122893716699,
      "dominance": 0.004463738049819402
     },
     "rc_tech": {
      "D": 47.46152072257103,
-     "stars": null,
+     "stars": 10.650064474867273,
      "coverage": 0.10623000295432512,
      "dominance": 0.11125767447063378
     },
     "rc_speed": {
      "D": 42.73361087772284,
-     "stars": null,
+     "stars": 9.756433541142313,
      "coverage": 0.021457379281560093,
      "dominance": 0.00297177852022007
     },
     "rc_stamina": {
      "D": 43.77120298739908,
-     "stars": null,
+     "stars": 9.953889225780197,
      "coverage": 0.019519490014189504,
      "dominance": 0.003337442803645562
     },
     "ln_general": {
      "D": 46.89129530117645,
-     "stars": null,
+     "stars": 10.543091968247817,
      "coverage": 0.8848108413325805,
      "dominance": 0.03291669401927064
     },
     "ln_tech": {
      "D": 46.798584713559585,
-     "stars": null,
+     "stars": 10.525679548488446,
      "coverage": 0.8455127608293221,
      "dominance": 0.8313337537410388
     },
     "ln_inverse": {
      "D": 43.45659112891689,
-     "stars": null,
+     "stars": 9.894100332893258,
      "coverage": 0.08108612174761111,
      "dominance": 0.003086127125046834
     },
     "ln_release": {
      "D": 46.07005242125914,
-     "stars": null,
+     "stars": 10.388651451286314,
      "coverage": 0.22146252923657705,
      "dominance": 0.010632791270327091
     }

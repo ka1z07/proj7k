@@ -16,6 +16,9 @@ the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the pri
 120 charts (`.results.json`): T1 9 inversions / tau .969 / 8 of 8 ladders within the SR-count floor
 (v0.1: 22 / .905 / 3 of 8) / 2 strict (rc_speed, rc_stamina); T3, T4 (.0089), T6, T10 pass;
 T5 random max 6.8, 20 ms jack max 5.9; T7 .93 (66% in band); T9 unchanged (Tech 15/15 and 15/15).
+§10 stars: two level anchors (prototype_spec_v01_anchors.json) give a=.424, b=.835; vs community SR (post-hoc)
+MAE .55, Spearman .958; per-pool bias -0.76 (Jack) to +0.79 (Speed). The `within the SR-count floor` fields
+in T1 are diagnostics only; the spec's T1 stays strict (v0.2 fails it).
 No held-out data: the three changes were picked on these charts.
 
 VERDICT (v0.1) at the §12 priors, no calibration (frozen 120-chart corpus, `.results.json`):
@@ -618,6 +621,34 @@ def t10_chart():
     return notes
 
 
+def star_scale(res, charts, rate_exponent):
+    """§10: (a, b) from the anchors file (two level anchors, solved exactly). Then, as a diagnostic that
+    never feeds back, how the community SR of every benchmark chart compares."""
+    cfg = json.loads((Path(__file__).with_name("prototype_spec_v01_anchors.json")).read_text(encoding="utf-8"))
+    pts = [(float(np.median([res[(p, a["tier"])]["total"]["D"] for p in cfg["pools"]])), a["stars"], a["tier"])
+           for a in cfg["anchors"]]
+    (D1, s1, _), (D2, s2, _) = pts
+    b = float(np.log(s2 / s1) / np.log(D2 / D1))
+    a = float(s1 / D1 ** b)
+    man = json.loads((REPO / "docs/research/structured_index.json").read_text(encoding="utf-8"))
+    rows = [(c["pool"], c["tier"], a * res[(c["pool"], c["tier"])]["total"]["D"] ** b, man[c["pool"]][c["tier"]]["sr"])
+            for c in charts]
+    anchored = {(p, a_["tier"]) for p in cfg["pools"] for a_ in cfg["anchors"]}
+    x = np.array([r[2] for r in rows])
+    y = np.array([r[3] for r in rows])
+    free = np.array([(r[0], r[1]) not in anchored for r in rows])
+    by_pool = {p: dict(mean_signed=round(float(np.mean([r[2] - r[3] for r in rows if r[0] == p])), 2),
+                       mae=round(float(np.mean([abs(r[2] - r[3]) for r in rows if r[0] == p])), 2))
+               for p in POOL_OF}
+    return dict(a=a, b=b, anchors=[dict(tier=t, stars=s_, engine_D=d) for d, s_, t in pts],
+                implied_perceived_rate_exponent=round(b * rate_exponent, 3),
+                diagnostic_vs_community_SR=dict(note="post-hoc; never in a fit",
+                                                mae_all=round(float(np.mean(abs(x - y))), 3),
+                                                mae_non_anchor_charts=round(float(np.mean(abs(x - y)[free])), 3),
+                                                spearman=round(float(stats.spearmanr(x, y)[0]), 3),
+                                                by_pool=by_pool))
+
+
 def valid_insert(notes, rnd, span):
     """A random rice that does not sit inside, or within 5 ms of, an object on its own column."""
     while True:
@@ -726,6 +757,9 @@ def run_all(seed=0):
                          D={k: round(r10["skills"][k]["D"], 3) for k in SKILLS},
                          coverage={k: round(r10["skills"][k]["coverage"], 3) for k in SKILLS})
 
+    # §10 stars from the level anchors, then SR as a post-hoc diagnostic on every chart
+    report["stars"] = star_scale(res, charts, report["T7"]["exponent_median"])
+
     # diagnostics: the total D ladder per pool, and the per-chart outputs
     report["diag_total_D_ladder"] = {
         k: dict(D=[round(res[(pool, t)]["total"]["D"], 3) for t in TIERS],
@@ -733,6 +767,11 @@ def run_all(seed=0):
         for pool, k in POOL_OF.items()}
     report["charts"] = {f"{p} {t}": {kk: vv for kk, vv in r.items() if not kk.startswith("_")}
                         for (p, t), r in res.items()}
+    A, B = report["stars"]["a"], report["stars"]["b"]
+    for r in report["charts"].values():
+        r["total"]["stars"] = A * r["total"]["D"] ** B
+        for sk in r["skills"].values():
+            sk["stars"] = A * sk["D"] ** B if sk["D"] > 0 else 0.0
     return report
 
 
@@ -757,6 +796,7 @@ def main():
     brief["T1"] = {k: dict(tau=v["kendall_tau"], min_gap=v["min_ln_gap"], inv=len(v["inversions"]),
                            sr_floor=v["sr_floor_inversions"])
                    for k, v in report["T1"].items()}
+    brief["stars"] = {k: v for k, v in report["stars"].items() if k != "anchors"}
     brief["T9_dominant_is_own"] = {k: v["dominant_is_own"] for k, v in report["T9"].items()}
     print(json.dumps(brief, indent=1, ensure_ascii=False, default=float))
 
