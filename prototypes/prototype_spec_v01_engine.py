@@ -16,8 +16,11 @@ the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the pri
 120 charts (`.results.json`): T1 9 inversions / tau .969 / 8 of 8 ladders within the SR-count floor
 (v0.1: 22 / .905 / 3 of 8) / 2 strict (rc_speed, rc_stamina); T3, T4 (.0089), T6, T10 pass;
 T5 random max 6.8, 20 ms jack max 5.9; T7 .93 (66% in band); T9 unchanged (Tech 15/15 and 15/15).
-§10 stars: two level anchors (prototype_spec_v01_anchors.json) give a=.424, b=.835; vs community SR (post-hoc)
-MAE .55, Spearman .958; per-pool bias -0.76 (Jack) to +0.79 (Speed). The `within the SR-count floor` fields
+§10 stars: the owner's five consensus anchors (prototype_spec_v01_anchors.json), least squares: a=.217,
+b=1.067; residuals 0th -.13, 5th +.75, 8th -.30 (6.45, outside 6.5-7), 10th -.43; Zenith 10.06 (>= 10 holds);
+implied perceived rate exponent .99. Tier-level D is flat at 6th-8th (23.9, 24.2, 24.0). Post-hoc vs community
+SR: MAE .74, Spearman .958; per-pool bias -0.49 (Jack) to +1.57 (Speed).
+The `within the SR-count floor` fields
 in T1 are diagnostics only; the spec's T1 stays strict (v0.2 fails it).
 No held-out data: the three changes were picked on these charts.
 
@@ -622,29 +625,42 @@ def t10_chart():
 
 
 def star_scale(res, charts, rate_exponent):
-    """§10: (a, b) from the anchors file (two level anchors, solved exactly). Then, as a diagnostic that
-    never feeds back, how the community SR of every benchmark chart compares."""
+    """§10: (a, b) = least-squares line in ln-ln through the anchors' (tier-level D, stars), where the
+    tier-level D is the median total D of the anchor pools. Inequality anchors are only checked. Then,
+    as a post-hoc diagnostic that never feeds back, how the community SR of every chart compares."""
     cfg = json.loads((Path(__file__).with_name("prototype_spec_v01_anchors.json")).read_text(encoding="utf-8"))
-    pts = [(float(np.median([res[(p, a["tier"])]["total"]["D"] for p in cfg["pools"]])), a["stars"], a["tier"])
-           for a in cfg["anchors"]]
-    (D1, s1, _), (D2, s2, _) = pts
-    b = float(np.log(s2 / s1) / np.log(D2 / D1))
-    a = float(s1 / D1 ** b)
+    tierD = lambda t: float(np.median([res[(p, t)]["total"]["D"] for p in cfg["pools"]]))  # noqa: E731
+    eq = [x for x in cfg["anchors"] if "stars" in x]
+    X = np.log([tierD(x["tier"]) for x in eq])
+    Y = np.log([x["stars"] for x in eq])
+    b, la = np.polyfit(X, Y, 1)
+    a = float(np.exp(la))
+    b = float(b)
+    star = lambda D: a * D ** b  # noqa: E731
+    checks = []
+    for x in cfg["anchors"]:
+        got = star(tierD(x["tier"]))
+        row = dict(tier=x["tier"], engine_D=round(tierD(x["tier"]), 2), stars=round(got, 2))
+        if "stars" in x:
+            row.update(target=x["stars"], residual=round(got - x["stars"], 2))
+            if "range" in x:
+                row["in_range"] = bool(x["range"][0] <= got <= x["range"][1])
+        else:
+            row.update(min_stars=x["min_stars"], satisfied=bool(got >= x["min_stars"]))
+        checks.append(row)
+    tiers = {t: dict(engine_D=round(tierD(t), 2), stars=round(star(tierD(t)), 2)) for t in TIERS}
     man = json.loads((REPO / "docs/research/structured_index.json").read_text(encoding="utf-8"))
-    rows = [(c["pool"], c["tier"], a * res[(c["pool"], c["tier"])]["total"]["D"] ** b, man[c["pool"]][c["tier"]]["sr"])
+    rows = [(c["pool"], c["tier"], star(res[(c["pool"], c["tier"])]["total"]["D"]), man[c["pool"]][c["tier"]]["sr"])
             for c in charts]
-    anchored = {(p, a_["tier"]) for p in cfg["pools"] for a_ in cfg["anchors"]}
     x = np.array([r[2] for r in rows])
     y = np.array([r[3] for r in rows])
-    free = np.array([(r[0], r[1]) not in anchored for r in rows])
     by_pool = {p: dict(mean_signed=round(float(np.mean([r[2] - r[3] for r in rows if r[0] == p])), 2),
                        mae=round(float(np.mean([abs(r[2] - r[3]) for r in rows if r[0] == p])), 2))
                for p in POOL_OF}
-    return dict(a=a, b=b, anchors=[dict(tier=t, stars=s_, engine_D=d) for d, s_, t in pts],
+    return dict(a=a, b=b, anchor_checks=checks, rc_tier_level=tiers,
                 implied_perceived_rate_exponent=round(b * rate_exponent, 3),
                 diagnostic_vs_community_SR=dict(note="post-hoc; never in a fit",
                                                 mae_all=round(float(np.mean(abs(x - y))), 3),
-                                                mae_non_anchor_charts=round(float(np.mean(abs(x - y)[free])), 3),
                                                 spearman=round(float(stats.spearmanr(x, y)[0]), 3),
                                                 by_pool=by_pool))
 
@@ -796,7 +812,7 @@ def main():
     brief["T1"] = {k: dict(tau=v["kendall_tau"], min_gap=v["min_ln_gap"], inv=len(v["inversions"]),
                            sr_floor=v["sr_floor_inversions"])
                    for k, v in report["T1"].items()}
-    brief["stars"] = {k: v for k, v in report["stars"].items() if k != "anchors"}
+    brief["stars"] = {k: v for k, v in report["stars"].items() if k != "rc_tier_level"}
     brief["T9_dominant_is_own"] = {k: v["dominant_is_own"] for k, v in report["T9"].items()}
     print(json.dumps(brief, indent=1, ensure_ascii=False, default=float))
 
