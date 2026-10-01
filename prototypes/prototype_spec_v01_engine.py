@@ -17,8 +17,10 @@ VERDICT at the §12 priors, no calibration (frozen 120-chart corpus, `.results.j
              stamina .981/1, ln_general .886/4, ln_tech .981/1, ln_inverse .848/3, ln_release .905/2.
   T3  PASS   mirror: max relative change 3.8e-15.
   T4  FAIL*  39 charts with N >= 20 N0; max |d ln D| = 0.0105 (LN Tech 9th), the only one > 0.01.
-  T5  O(1/N) N * |d ln D| median 4.5 / max 13.3 (random insert); 5.4 / 8.8 (20 ms jack insert).
-             The spec gives no constant; 1/(beta eps) = 4.2 is the hard-limit scale.
+  T5  O(1/N) N * |d ln D|: random insertion median 3.7 / p95 8.4 / max 12.3; 20 ms jack insertion median
+             5.4 / max 8.7. (Corrected: an earlier run let the random rice land inside a hold on its own
+             column, an invalid chart, and read 4.5 / 9.7 / 13.3.) The spec gives no constant;
+             1/(beta eps) = 4.2 is the hard-limit scale.
   T6  PASS   sum_k a = 1 to 2e-16, sum_k pi = 1 to 2e-15.
   T7  FAIL   rate exponent median 0.69 (p5–p95 0.31–0.89); 12% of (chart, rate) in [0.85, 1.15].
              Cause: Delta_0. The psi time scale is fixed in seconds, so below 40 ms intra-hand
@@ -33,14 +35,19 @@ VERDICT at the §12 priors, no calibration (frozen 120-chart corpus, `.results.j
              rc_speed.)
   T2, T8 not run (need §13 calibration / player judgements). Stars are null (§10 anchors absent).
 
+EXPERIMENT v_cap=40 (Hz, on top of "Eh"): T1 unchanged (8), T5 jack-insertion max 4.9, random max 11.7;
+v_cap 30 gives 10 inversions, v_cap 22 gives 14. EXPERIMENT delta_0_rel=0.5 on top: T7 .93 (66% in
+band), T1 9 inversions, T5 random max 6.8; under the spec's d_i the same switch costs +5 inversions.
+
 EXPERIMENT demand_mode="Eh" (default stays "spec"): d_i = sqrt(E^h_i), the §6.1 hand accumulator
 (RMS of v over ~4 s) used directly as the §7 demand. Chosen from 9 variants (3 accumulators x 3
 quantiles) by own-pool inversions on the same 120 charts, so selection is NOT held out. At the §12
 priors, no calibration:
   T1 22 -> 8 inversions, tau .905 -> .974, 2/8 strict ladders (rc_speed, rc_stamina)
   T3 pass | T4 pass (max .0081, was .0105) | T6 pass | T10 pass (jack pi .40)
-  T5 WORSE in the tail: N*|dlnD| median 0.9 but p95 62, max 200 (spec mode: 13). One inserted event
-     with a very short gap enters ~60 downstream events through E^h.
+  T5 (valid insertions): random max 11.7 (spec 12.3); 20 ms jack insertion max 26.8 (spec 8.7). An inserted
+     event with a very short gap enters ~60 downstream events through E^h. (An earlier read of
+     p95 62 / max 200 used invalid insertions inside a hold.)
   T7 .745 (was .69) and T9 (Tech slots 15/15, 15/15) unchanged: those are Delta_0 and q_C, not demand.
 
 Reading of the spec where it leaves a choice open (each is a decision for the spec owner; the
@@ -108,6 +115,7 @@ P0 = dict(
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=None,                  # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    v_cap=None,                        # EXPERIMENT: v_i <- min(v_i, v_cap) before it enters §6.1 and §7
     demand_mode="spec",                # EXPERIMENT: "Eh" d_i = sqrt(E^h_i); "EhM" d_i = sqrt(E^h_i) * M_i
     sym_mode="spec",                   # EXPERIMENT: "press_only" drops the release state from the §5.1 symbol
     U_base="none",                     # EXPERIMENT: "median" subtracts the chart's own median U_pat (clip at 0)
@@ -328,6 +336,8 @@ def layers(pre, thumb, P):
     omega = np.where(rel, P["w_rel"], 1.0)
     j = pre["j"]
     v = omega * (j + x + o) * c
+    if P["v_cap"] is not None:
+        v = np.minimum(v, P["v_cap"])
 
     # §5.1, §5.3, §5.4
     Upat_rh = pattern_surprise(pre, hand, P)
@@ -582,6 +592,34 @@ def t10_chart():
     return notes
 
 
+def valid_insert(notes, rnd, span):
+    """A random rice that does not sit inside, or within 5 ms of, an object on its own column."""
+    while True:
+        c, t = rnd.randrange(7), rnd.uniform(*span)
+        if all(not (cc == c and t0 - 0.005 <= t <= (e if e is not None else t0) + 0.005) for cc, t0, e in notes):
+            return (c, t, None)
+
+
+def t5_report(charts, res, rnd):
+    t5 = {"random": [], "adversarial": []}
+    for ch in charts:
+        a = res[(ch["pool"], ch["tier"])]
+        N = a["_n_events"]
+        notes = ch["notes"]
+        span = (min(t for _, t, _ in notes), max(t for _, t, _ in notes))
+        for kind in t5:
+            if kind == "random":
+                ins = valid_insert(notes, rnd, span)
+            else:
+                c, t, e = rnd.choice([n for n in notes if n[2] is None] or notes)
+                ins = (c, (e if e is not None else t) + 0.020, None)
+            b = evaluate(notes + [ins])
+            t5[kind].append(N * abs(np.log(b["total"]["D"] / a["total"]["D"])))
+    return {k: dict(N_times_abs_dlnD_median=round(float(np.median(v)), 3),
+                    N_times_abs_dlnD_p95=round(float(np.percentile(v, 95)), 3),
+                    N_times_abs_dlnD_max=round(float(np.max(v)), 3)) for k, v in t5.items()}
+
+
 def run_all(seed=0):
     rnd = random.Random(seed)
     charts = load_corpus()
@@ -623,24 +661,8 @@ def run_all(seed=0):
                         worst=[(n, round(v, 5)) for n, v in t4[:5]],
                         n_fail=sum(v > 0.01 for _, v in t4), pass_=all(v <= 0.01 for _, v in t4))
 
-    # T5 single-point insertion: random rice, and a 20 ms same-column jack after an existing note
-    t5 = {"random": [], "adversarial": []}
-    for ch in charts:
-        a = res[(ch["pool"], ch["tier"])]
-        N = a["_n_events"]
-        notes = ch["notes"]
-        span = (min(t for _, t, _ in notes), max(t for _, t, _ in notes))
-        for kind in t5:
-            if kind == "random":
-                ins = (rnd.randrange(7), rnd.uniform(*span), None)
-            else:
-                c, t, e = rnd.choice([n for n in notes if n[2] is None] or notes)
-                ins = (c, (e if e is not None else t) + 0.020, None)
-            b = evaluate(notes + [ins])
-            t5[kind].append(N * abs(np.log(b["total"]["D"] / a["total"]["D"])))
-    report["T5"] = {k: dict(N_times_abs_dlnD_median=round(float(np.median(v)), 3),
-                            N_times_abs_dlnD_p95=round(float(np.percentile(v, 95)), 3),
-                            N_times_abs_dlnD_max=round(float(np.max(v)), 3)) for k, v in t5.items()}
+    # T5 single-point insertion
+    report["T5"] = t5_report(charts, res, rnd)
 
     # T6 conservation (asserted in evaluate; report the worst errors)
     report["T6"] = dict(max_attr_err=max(r["_attr_max_err"] for r in res.values()),

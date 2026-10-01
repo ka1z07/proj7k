@@ -1,5 +1,5 @@
 {
- "runtime_s_120_charts": 6.2,
+ "runtime_s_120_charts": 6.4,
  "T1": {
   "rc_jack": {
    "D": [
@@ -256,14 +256,14 @@
  },
  "T5": {
   "random": {
-   "N_times_abs_dlnD_median": 4.492,
-   "N_times_abs_dlnD_p95": 9.672,
-   "N_times_abs_dlnD_max": 13.325
+   "N_times_abs_dlnD_median": 3.671,
+   "N_times_abs_dlnD_p95": 8.39,
+   "N_times_abs_dlnD_max": 12.262
   },
   "adversarial": {
-   "N_times_abs_dlnD_median": 5.424,
-   "N_times_abs_dlnD_p95": 7.755,
-   "N_times_abs_dlnD_max": 8.793
+   "N_times_abs_dlnD_median": 5.409,
+   "N_times_abs_dlnD_p95": 7.411,
+   "N_times_abs_dlnD_max": 8.678
   }
  },
  "T6": {
