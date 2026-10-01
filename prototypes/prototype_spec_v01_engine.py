@@ -33,6 +33,16 @@ VERDICT at the §12 priors, no calibration (frozen 120-chart corpus, `.results.j
              rc_speed.)
   T2, T8 not run (need §13 calibration / player judgements). Stars are null (§10 anchors absent).
 
+EXPERIMENT demand_mode="Eh" (default stays "spec"): d_i = sqrt(E^h_i), the §6.1 hand accumulator
+(RMS of v over ~4 s) used directly as the §7 demand. Chosen from 9 variants (3 accumulators x 3
+quantiles) by own-pool inversions on the same 120 charts, so selection is NOT held out. At the §12
+priors, no calibration:
+  T1 22 -> 8 inversions, tau .905 -> .974, 2/8 strict ladders (rc_speed, rc_stamina)
+  T3 pass | T4 pass (max .0081, was .0105) | T6 pass | T10 pass (jack pi .40)
+  T5 WORSE in the tail: N*|dlnD| median 0.9 but p95 62, max 200 (spec mode: 13). One inserted event
+     with a very short gap enters ~60 downstream events through E^h.
+  T7 .745 (was .69) and T9 (Tech slots 15/15, 15/15) unchanged: those are Delta_0 and q_C, not demand.
+
 Reading of the spec where it leaves a choice open (each is a decision for the spec owner; the
 numbers in the header of `.results.json` are under exactly these readings):
 
@@ -98,6 +108,7 @@ P0 = dict(
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=None,                  # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    demand_mode="spec",                # EXPERIMENT: "Eh" d_i = sqrt(E^h_i); "EhM" d_i = sqrt(E^h_i) * M_i
     sym_mode="spec",                   # EXPERIMENT: "press_only" drops the release state from the §5.1 symbol
     U_base="none",                     # EXPERIMENT: "median" subtracts the chart's own median U_pat (clip at 0)
     psi_n=2,                           # EXPERIMENT: psi = dt^(n-1) / (dt^n + Delta_0^n); 2 is the spec
@@ -381,6 +392,10 @@ def layers(pre, thumb, P):
 
 def demand(L, theta, P):
     """§7 d_i(theta) for scalar theta."""
+    if P["demand_mode"] == "Eh":
+        return np.sqrt(L["E_h"])
+    if P["demand_mode"] == "EhM":
+        return np.sqrt(L["E_h"]) * L["M"]
     tg = theta ** P["gamma"]
     Phi = (P["eta_f"] * L["E_f"] / (L["E_f"] + tg) + P["eta_h"] * L["E_h"] / (L["E_h"] + tg)
            + P["eta_g"] * L["E_g"] / (L["E_g"] + tg))
