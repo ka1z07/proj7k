@@ -10,7 +10,15 @@ only import from `proj7k` is the `.osu` parser and the corpus loader (the spec's
 The question: the spec says (§16.1) "T1 has not been run on any pool". With every parameter at
 its §12 prior and no §13 calibration, how far is the engine from its own acceptance tests?
 
-VERDICT at the §12 priors, no calibration (frozen 120-chart corpus, `.results.json`):
+DEFAULT IS NOW SPEC v0.2 (demand_mode="Eh", v_cap=40, delta_0_rel=0.5; see the spec's 修订记录).
+`--spec v0.1` restores v0.1 exactly (`.results.v01.json`); the numbers in the VERDICT block below and in
+the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the priors, uncalibrated, same
+120 charts (`.results.json`): T1 9 inversions / tau .969 / 8 of 8 ladders within the SR-count floor
+(v0.1: 22 / .905 / 3 of 8) / 2 strict (rc_speed, rc_stamina); T3, T4 (.0089), T6, T10 pass;
+T5 random max 6.8, 20 ms jack max 5.9; T7 .93 (66% in band); T9 unchanged (Tech 15/15 and 15/15).
+No held-out data: the three changes were picked on these charts.
+
+VERDICT (v0.1) at the §12 priors, no calibration (frozen 120-chart corpus, `.results.json`):
 
   T1  FAIL   0/8 ladders strict, 22 adjacent inversions of 112, mean Kendall tau 0.905.
              Per ladder (tau / inversions): jack .867/3, tech .848/5, speed .924/3,
@@ -114,15 +122,18 @@ P0 = dict(
     mu_p=0.1, mu_r=0.1, nu=0.1, T_w=0.5, lambda_R=0.1,
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
-    delta_0_rel=None,                  # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
-    v_cap=None,                        # EXPERIMENT: v_i <- min(v_i, v_cap) before it enters §6.1 and §7
-    demand_mode="spec",                # EXPERIMENT: "Eh" d_i = sqrt(E^h_i); "EhM" d_i = sqrt(E^h_i) * M_i
+    delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    v_cap=40.0,                        # EXPERIMENT: v_i <- min(v_i, v_cap) before it enters §6.1 and §7
+    demand_mode="Eh",                  # EXPERIMENT: "Eh" d_i = sqrt(E^h_i); "EhM" d_i = sqrt(E^h_i) * M_i
     sym_mode="spec",                   # EXPERIMENT: "press_only" drops the release state from the §5.1 symbol
     U_base="none",                     # EXPERIMENT: "median" subtracts the chart's own median U_pat (clip at 0)
     psi_n=2,                           # EXPERIMENT: psi = dt^(n-1) / (dt^n + Delta_0^n); 2 is the spec
     qC_mode="spec", m_lo=0.0, m_hi=0.5,  # EXPERIMENT: "ss" = smoothstep((M-1 - m_lo) / (m_hi - m_lo))
     star_a=None, star_b=None,          # §10: anchors not supplied
 )
+
+#: Restores the v0.1 spec exactly (the three v0.2 changes off). `--spec v0.1` applies it.
+V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None)
 
 FINGER = ["ring", "mid", "idx", "thumb", "idx", "mid", "ring"]  # §2.5
 SIDE = [0, 0, 0, None, 1, 1, 1]                                  # 0 = L, 1 = R; thumb by h_T
@@ -563,15 +574,30 @@ def concat_self(notes, rest):
     return notes + [(c, t + shift, None if e is None else e + shift) for c, t, e in notes]
 
 
-def t1_ladders(results):
+def sr_floor():
+    """Per skill: (inversions of the community SR on that slot's pool, set of exempt adjacent pairs).
+    Read ONLY as the pool's noise floor for the T1 tolerance rule (spec v0.2 §14); it is never in
+    an objective or a fit."""
+    man = json.loads((REPO / "docs/research/structured_index.json").read_text(encoding="utf-8"))
     out = {}
+    for pool, k in POOL_OF.items():
+        sr = [man[pool][t]["sr"] for t in TIERS]
+        out[k] = {i for i in range(14) if sr[i + 1] <= sr[i]}
+    return out
+
+
+def t1_ladders(results):
+    out, floor = {}, sr_floor()
     for pool, k in POOL_OF.items():
         v = [results[(pool, t)]["skills"][k]["D"] for t in TIERS]
         lv = np.log(np.maximum(v, 1e-12))
         gaps = np.diff(lv)
-        inv = [f"{TIERS[i]}>{TIERS[i + 1]}" for i in range(len(TIERS) - 1) if gaps[i] <= 0]
+        bad = [i for i in range(14) if gaps[i] <= 0]
+        inv = [f"{TIERS[i]}>{TIERS[i + 1]}" for i in bad]
         out[k] = dict(D=[round(x, 3) for x in v], kendall_tau=round(stats.kendalltau(range(15), v)[0], 3),
-                      min_ln_gap=round(float(gaps.min()), 4), inversions=inv, strict=not inv)
+                      min_ln_gap=round(float(gaps.min()), 4), inversions=inv, strict=not inv,
+                      sr_floor_inversions=len(floor[k]), within_count_floor=len(bad) <= len(floor[k]),
+                      inversions_on_pairs_sr_does_not_invert=[f"{TIERS[i]}>{TIERS[i + 1]}" for i in bad if i not in floor[k]])
     return out
 
 
@@ -632,6 +658,9 @@ def run_all(seed=0):
 
     report["T1"] = t1_ladders(res)
     report["T1_summary"] = dict(
+        ladders_within_sr_count_floor=sum(v["within_count_floor"] for v in report["T1"].values()),
+        inversions_on_pairs_sr_does_not_invert=sum(len(v["inversions_on_pairs_sr_does_not_invert"]) for v in report["T1"].values()),
+        sr_floor_inversions=sum(v["sr_floor_inversions"] for v in report["T1"].values()),
         ladders_strict=sum(v["strict"] for v in report["T1"].values()),
         adjacent_inversions=sum(len(v["inversions"]) for v in report["T1"].values()),
         mean_kendall_tau=round(float(np.mean([v["kendall_tau"] for v in report["T1"].values()])), 3))
@@ -711,8 +740,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--chart", help="evaluate one .osu file and print the §9.6 JSON")
     ap.add_argument("--rate", type=float, default=1.0)
-    ap.add_argument("--out", default=str(Path(__file__).with_suffix(".results.json")))
+    ap.add_argument("--spec", choices=("v0.2", "v0.1"), default="v0.2")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    if args.spec == "v0.1":
+        P0.update(V01)
+    if args.out is None:
+        args.out = str(Path(__file__).with_suffix(".results.json" if args.spec == "v0.2" else ".results.v01.json"))
     if args.chart:
         notes = rate(notes_of(Path(args.chart).read_text(encoding="utf-8")), args.rate)
         print(json.dumps(evaluate(notes), indent=2, ensure_ascii=False))
@@ -720,7 +754,8 @@ def main():
     report = run_all()
     Path(args.out).write_text(json.dumps(report, indent=1, ensure_ascii=False, default=float), encoding="utf-8")
     brief = {k: v for k, v in report.items() if k not in ("charts", "T1", "T9", "diag_total_D_ladder")}
-    brief["T1"] = {k: dict(tau=v["kendall_tau"], min_gap=v["min_ln_gap"], inv=len(v["inversions"]))
+    brief["T1"] = {k: dict(tau=v["kendall_tau"], min_gap=v["min_ln_gap"], inv=len(v["inversions"]),
+                           sr_floor=v["sr_floor_inversions"])
                    for k, v in report["T1"].items()}
     brief["T9_dominant_is_own"] = {k: v["dominant_is_own"] for k, v in report["T9"].items()}
     print(json.dumps(brief, indent=1, ensure_ascii=False, default=float))

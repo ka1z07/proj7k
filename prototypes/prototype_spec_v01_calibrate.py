@@ -24,7 +24,8 @@ import time
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import prototype_spec_v01_engine as E  # noqa: E402
+import prototype_spec_v01_engine as E
+E.P0.update(E.V01)  # these scripts reproduce the v0.1 runs
 
 # name -> prior (the §12 value); every one is an X-class parameter
 X = ["beta", "N0", "k_ring_mid", "k_mid_idx", "k_ring_idx", "k_thumb_idx", "k_thumb_other", "k_cross", "chi_0",

@@ -10,6 +10,7 @@ Result (D_k own-pool adjacent inversions of 112 / total-D inversions of 112):
 """
 from multiprocessing import Pool
 import numpy as np, prototype_spec_v01_engine as E
+E.P0.update(E.V01)  # these scripts reproduce the v0.1 runs
 from scipy import stats
 G={}
 def init():
