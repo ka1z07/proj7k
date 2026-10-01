@@ -98,6 +98,8 @@ P0 = dict(
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=None,                  # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    sym_mode="spec",                   # EXPERIMENT: "press_only" drops the release state from the §5.1 symbol
+    U_base="none",                     # EXPERIMENT: "median" subtracts the chart's own median U_pat (clip at 0)
     psi_n=2,                           # EXPERIMENT: psi = dt^(n-1) / (dt^n + Delta_0^n); 2 is the spec
     qC_mode="spec", m_lo=0.0, m_hi=0.5,  # EXPERIMENT: "ss" = smoothstep((M-1 - m_lo) / (m_hi - m_lo))
     star_a=None, star_b=None,          # §10: anchors not supplied
@@ -260,9 +262,13 @@ def pattern_surprise(pre, hand, P):
     for hh in (0, 1):
         cols = np.where(hand == hh)[0]
         nh = len(cols)
-        Ksym = 3 ** nh - 1
-        pw = 3 ** np.arange(nh)
-        sym = state[:, cols] @ pw
+        base = 2 if P["sym_mode"] == "press_only" else 3
+        Ksym = base ** nh - 1
+        pw = base ** np.arange(nh)
+        st = state[:, cols]
+        if P["sym_mode"] == "press_only":
+            st = np.where(st == 2, 0, st)
+        sym = st @ pw
         n0 = np.zeros(3 ** nh)
         n1 = np.zeros((3 ** nh, 3 ** nh))
         prev, t_prev = None, None
@@ -314,7 +320,9 @@ def layers(pre, thumb, P):
 
     # §5.1, §5.3, §5.4
     Upat_rh = pattern_surprise(pre, hand, P)
-    U_pat = Upat_rh[row, hand[col]]
+    U_pat = np.nan_to_num(Upat_rh[row, hand[col]])
+    if P["U_base"] == "median":
+        U_pat = np.maximum(0.0, U_pat - np.median(U_pat))
     U_rhy = pre["U_rhy"][row]
     M = 1.0 + P["mu_p"] * U_pat + P["mu_r"] * U_rhy + P["nu"] * np.maximum(0, pre["h"] - 1)
     S = np.nansum(Upat_rh, 1)
