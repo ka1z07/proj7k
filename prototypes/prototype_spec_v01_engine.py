@@ -468,9 +468,9 @@ def stars(D, P):
     return P["star_a"] * D ** P["star_b"]
 
 
-def evaluate(notes, P=P0, detail=False):
-    """§11."""
-    pre = preprocess(notes, P)
+def evaluate(notes, P=P0, detail=False, pre=None):
+    """§11. `pre` lets a caller reuse `preprocess(notes, P)` when no S-class parameter changed."""
+    pre = preprocess(notes, P) if pre is None else pre
     if pre["n"] == 0:
         raise ValueError("empty chart")
     lam_mean = np.maximum(pre["is_ln"].astype(float), np.minimum(1.0, pre["h"] / 2.0)).mean()
