@@ -24,9 +24,9 @@ the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the pri
 T3, T4 (.0080), T6, T10 pass; T5 random max 10.0, 20 ms jack max 4.9; T7 .93 (66% in band);
 T9 unchanged (Tech 15/15 and 15/15). No held-out data: the four changes were picked on these charts.
 §10 stars (prototype_spec_v01_anchors.json, the owner's five consensus anchors; the Zenith inequality is active):
-a=.195, b=1.041; residuals 0th -.21, 5th +.63, 8th +.13 (in 6.5-7), 10th -.22, Zenith 10.0. RC tier-level D
-is monotone through 6th-8th (26.6, 28.8, 30.6; was 23.9, 24.2, 24.0). Post-hoc vs community SR: MAE .89,
-Spearman .971. The `within the SR-count floor` fields in T1 are diagnostics only; the spec's T1 stays strict
+a=.220, b=1.009; residuals 0th -.09, 5th +.23 (anchor now 5.5), 8th +.21 (in 6.5-7), 10th -.15, Zenith 10.0. RC tier-level D
+is monotone through 6th-8th (26.6, 28.8, 30.6; was 23.9, 24.2, 24.0). Post-hoc vs community SR: MAE .91,
+Spearman .971. LN anchors (not fitted) read 2.01 / 5.43 / 7.80 / 8.95 / 12.00 against 3 / 5 / 6.5 / 7.75 / 10: accepted for now, to be revisited after the §13 calibration. The `within the SR-count floor` fields in T1 are diagnostics only; the spec's T1 stays strict
 (v0.2 fails it).
 
 VERDICT (v0.1) at the §12 priors, no calibration (frozen 120-chart corpus, `.results.json`):
