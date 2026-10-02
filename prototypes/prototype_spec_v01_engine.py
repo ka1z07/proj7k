@@ -128,13 +128,16 @@ P0 = dict(
     beta=6.0, N0=150.0,                # §3.1, §3.2
     l_min=0.100, delta_h=0.050, delta_floor=0.020, delta_0=0.040,
     k_ring_mid=1.0, k_mid_idx=0.7, k_ring_idx=0.5, k_thumb_idx=0.5, k_thumb_other=0.3, k_scale=1.0,
-    k_cross=0.2, chi_0=0.5, w_rel=0.7,
+    k_cross=0.2, chi_0=0.15, w_rel=0.7,
     tau_f=0.5, tau_h=4.0, tau_g=40.0, eta_f=0.3, eta_h=0.3, eta_g=0.2, gamma=2.0,
     T_c=4.0, U_max=4.0, alpha=1.0, alpha_0=1.0, alpha_r=1.0, b=0.15,
     mu_p=0.1, mu_r=0.1, nu=0.1, T_w=0.5, lambda_R=0.1,
-    r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
+    r_lo=0.26, r_hi=0.42, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    rel_mode="spec",                   # v2: q_rel = release in a row with no press ("isolated"), or the spec's formula ("spec")
+    member_mode="v2",                  # EXPERIMENT: "v2" = chord-ness for Speed/Stamina, rhythm-surprise q_C, h-based q_inv, family-normalised attribution
+    k_hi=2.5, u_lo=0.5, u_hi=2.5,      # v2: chord size at which q_K saturates; U_rhy range for q_C (bits)
     nu_add=0.0,                        # EXPERIMENT: v_i += nu_add * h_i (spec: 0)
     rel_count_w=1.0,                   # EXPERIMENT: weight of a release event in the §3.2 solve (spec: 1)
     strict_prior=True,                 # EXPERIMENT (R3'): x, o ignore same-row partners and what they mask
@@ -149,7 +152,7 @@ P0 = dict(
 )
 
 #: Restores the v0.1 spec exactly (the three v0.2 changes off). `--spec v0.1` applies it.
-V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None, strict_prior=False)
+V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None, strict_prior=False, member_mode="spec", r_lo=0.25, r_hi=0.55, chi_0=0.5)
 
 FINGER = ["ring", "mid", "idx", "thumb", "idx", "mid", "ring"]  # §2.5
 SIDE = [0, 0, 0, None, 1, 1, 1]                                  # 0 = L, 1 = R; thumb by h_T
@@ -512,11 +515,33 @@ def features(pre, L, D, P):
         qinv = np.where(~pre["rel"], pre["pred_ln"] * r * np.minimum(1.0, pre["h"] / P["h_ref"]), 0.0)
         den = jxo * L["c"]
         qrel = np.where(pre["rel"] & (den > 0), 1.0 - L["j"] / np.where(den > 0, den, 1.0), 0.0)
-    return dict(lam=lam, r=r, qJ=qJ, qPhi=qPhi, qC=qC, qinv=qinv, qrel=qrel, d=d)
+    out = dict(lam=lam, r=r, qJ=qJ, qPhi=qPhi, qC=qC, qinv=qinv, qrel=qrel, d=d)
+    if P["member_mode"] == "v2":
+        hand = hand_of(L["thumb"])
+        key = pre["row"] * 2 + hand[pre["col"]]
+        size = np.bincount(key, minlength=2 * pre["n_rows"])[key].astype(float)       # events of this hand in this row
+        qK = smoothstep((size - 1.0) / (P["k_hi"] - 1.0))
+        qC2 = smoothstep((L["U_rhy"] - P["u_lo"]) / (P["u_hi"] - P["u_lo"]))
+        qinv2 = np.where(~pre["rel"], np.minimum(1.0, pre["h"] / P["h_ref"]), 0.0)
+        press_row = np.bincount(pre["row"][~pre["rel"]], minlength=pre["n_rows"]) > 0
+        qrel2 = (pre["rel"] & ~press_row[pre["row"]]).astype(float)   # a release in a row with no press: read and timed alone
+        out.update(qK=qK, qC=qC2, qinv=qinv2, qrel=qrel2 if P["rel_mode"] == "isolated" else qrel)
+    return out
 
 
-def membership(F):
+def membership(F, P=None):
     """§8.2: (w [n, 8], a [n, 8]) in SKILLS order."""
+    if P is not None and P["member_mode"] == "v2":
+        lam, qJ, qK, qC, qinv, qrel = F["lam"], F["qJ"], F["qK"], F["qC"], F["qinv"], F["qrel"]
+        rc, ln = 1 - lam, lam
+        wt = np.stack([qJ, qC, (1 - qJ) * (1 - qK), (1 - qJ) * qK,                      # RC, unit mass
+                       1 - np.maximum(np.maximum(qC, qinv), qrel), qC, qinv, qrel], 1)  # LN, unit mass
+        w = wt * np.concatenate([np.repeat(rc[:, None], 4, 1), np.repeat(ln[:, None], 4, 1)], 1)
+        a = np.zeros_like(w)
+        a[:, :4] = w[:, :4] / wt[:, :4].sum(1, keepdims=True)
+        a[:, 4:] = w[:, 4:] / wt[:, 4:].sum(1, keepdims=True)
+        return w, a
+
     lam, qJ, qPhi, qC, qinv, qrel = F["lam"], F["qJ"], F["qPhi"], F["qC"], F["qinv"], F["qrel"]
     rc = 1 - lam
     w = np.stack([rc * qJ, rc * qC, rc * (1 - qJ) * (1 - qPhi), rc * (1 - qJ) * qPhi,
@@ -548,7 +573,7 @@ def evaluate(notes, P=P0, detail=False, pre=None):
             best = dict(D=D, L=L, thumb=thumb)
     L, D = best["L"], best["D"]
     F = features(pre, L, D, P)
-    w, a = membership(F)
+    w, a = membership(F, P)
     assert np.all(np.abs(a.sum(1) - 1.0) < 1e-9), "attribution must sum to 1 (§8.2)"
     cw = np.where(pre["rel"], P["rel_count_w"], 1.0)
     Dk = {k: solve(L, w[:, n] * cw, P["eps_rc"] if k.startswith("rc") else P["eps_ln"], P)
