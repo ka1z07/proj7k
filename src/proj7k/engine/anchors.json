@@ -1,0 +1,67 @@
+{
+  "note": "Anchors (§10), the project owner's consensus statements of 2026-10-01: 0th about 3.5; 5th about 5.5 (revised from 5 on 2026-10-02; the engine's tier 5 reads about 5.6 and the community SR's four-map geometric mean is 5.24); 8th about 6.5-7; 10th about 8; Zenith above 10. 'The four Regular maps of tier n taken together' is the unit. More statements than the two parameters (a, b): a and b are the least-squares line in ln-ln over the equality anchors; the residuals are a test of A12 and of the ladder's shape. The inequality is only checked. The engine reads stars only from this file. No LN anchor yet. LN anchors (2026-10-02, 'LN overall'): 0th about 3, 5th about 5, 8th about 6.5, 10th 7.5-8, Zenith about 10; the unit is the four LN maps of the tier. They are NOT fitted into (a, b) (the spec shares one (a, b) across all skills); they are read against the RC-derived scale and reported.",
+  "pools": [
+    "Regular Jack",
+    "Regular Tech",
+    "Regular Speed",
+    "Regular Stream"
+  ],
+  "anchors": [
+    {
+      "tier": "0th",
+      "stars": 3.5
+    },
+    {
+      "tier": "5th",
+      "stars": 5.5
+    },
+    {
+      "tier": "8th",
+      "stars": 6.75,
+      "range": [
+        6.5,
+        7.0
+      ]
+    },
+    {
+      "tier": "10th",
+      "stars": 8.0
+    },
+    {
+      "tier": "Zenith",
+      "min_stars": 10.0
+    }
+  ],
+  "ln_pools": [
+    "LN General",
+    "LN Tech",
+    "LN Inverse",
+    "LN Release"
+  ],
+  "ln_anchors": [
+    {
+      "tier": "0th",
+      "stars": 3.0
+    },
+    {
+      "tier": "5th",
+      "stars": 5.0
+    },
+    {
+      "tier": "8th",
+      "stars": 6.5
+    },
+    {
+      "tier": "10th",
+      "stars": 7.75,
+      "range": [
+        7.5,
+        8.0
+      ]
+    },
+    {
+      "tier": "Zenith",
+      "stars": 10.0
+    }
+  ]
+}
