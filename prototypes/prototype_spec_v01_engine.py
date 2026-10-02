@@ -136,6 +136,7 @@ P0 = dict(
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
     rel_mode="spec",                   # v2: q_rel = release in a row with no press ("isolated"), or the spec's formula ("spec")
+    rel_hold_gate=False,               # v2 note mode: scale q_rel by (1 - min(1, h/h_ref))
     member_mode="v2",                  # EXPERIMENT: "v2" = chord-ness for Speed/Stamina, rhythm-surprise q_C, h-based q_inv, family-normalised attribution
     k_hi=2.5, u_lo=0.5, u_hi=2.5,      # v2: chord size at which q_K saturates; U_rhy range for q_C (bits)
     nu_add=0.0,                        # EXPERIMENT: v_i += nu_add * h_i (spec: 0)
@@ -265,7 +266,7 @@ def preprocess(notes, P):
         if state[ev_row[i], ev_col[i]] != 1:
             state[ev_row[i], ev_col[i]] = s
 
-    return dict(n=n, n_rows=n_rows, T=T, row=ev_row, col=ev_col, rel=ev_rel, t=ev_t, is_ln=is_ln,
+    return dict(obj=ev_obj, tail_row=tail_row, n=n, n_rows=n_rows, T=T, row=ev_row, col=ev_col, rel=ev_rel, t=ev_t, is_ln=is_ln,
                 ell=ell, held=held, h=h, j=j, pred_ln=pred_ln, last=last, has=has, state=state,
                 U_rhy=rhythm_surprise(T, P))
 
@@ -525,7 +526,14 @@ def features(pre, L, D, P):
         qinv2 = np.where(~pre["rel"], np.minimum(1.0, pre["h"] / P["h_ref"]), 0.0)
         press_row = np.bincount(pre["row"][~pre["rel"]], minlength=pre["n_rows"]) > 0
         qrel2 = (pre["rel"] & ~press_row[pre["row"]]).astype(float)   # a release in a row with no press: read and timed alone
-        out.update(qK=qK, qC=qC2, qinv=qinv2, qrel=qrel2 if P["rel_mode"] == "isolated" else qrel)
+        if P["rel_mode"] == "note":   # the tail's property belongs to the whole LN: both its press and its release carry it
+            tr = pre["tail_row"][pre["obj"]]
+            has_tail = pre["is_ln"] & (tr >= 0)
+            iso_tail = has_tail & ~press_row[np.where(has_tail, tr, 0)]
+            qrel2 = iso_tail.astype(float)
+            if P["rel_hold_gate"]:  # tail timing is the point only where the hand is not already occupied by many holds
+                qrel2 = qrel2 * (1.0 - np.minimum(1.0, pre["h"] / P["h_ref"]))
+        out.update(qK=qK, qC=qC2, qinv=qinv2, qrel=qrel2 if P["rel_mode"] in ("isolated", "note") else qrel)
     return out
 
 
@@ -590,6 +598,8 @@ def evaluate(notes, P=P0, detail=False, pre=None):
         "skills": {k: {"D": Dk[k], "stars": stars(Dk[k], P), "coverage": float(Ck[n]), "dominance": float(pi[n])}
                    for n, k in enumerate(SKILLS)},
         "dominant_skill": SKILLS[int(np.argmax(pi))],
+        "dominance_rank": [SKILLS[k] for k in np.argsort(-pi, kind="stable")],
+        "dominance_margin": float(np.sort(pi)[-1] - np.sort(pi)[-2]),
     }
     if detail:
         out["_n_events"] = pre["n"]
@@ -835,7 +845,14 @@ def run_all(seed=0):
         t9[k] = dict(own_pi=[round(x, 3) for x in own], dominant_is_own=sum(d == k for d in dom),
                      dominant=dict(zip(*np.unique(dom, return_counts=True))) if dom else {})
         t9[k]["dominant"] = {str(a): int(b) for a, b in t9[k]["dominant"].items()}
+    for pool, k in POOL_OF.items():
+        ranks = [res[(pool, t)]["dominance_rank"].index(k) for t in TIERS]
+        t9[k]["own_in_top2"] = int(sum(r_ < 2 for r_ in ranks))
+        t9[k]["own_in_top3"] = int(sum(r_ < 3 for r_ in ranks))
+        t9[k]["mean_own_rank"] = round(float(np.mean(ranks)) + 1, 2)
     report["T9"] = t9
+    report["T9_summary"] = dict(own_top1=sum(v["dominant_is_own"] for v in t9.values()), own_top2=sum(v["own_in_top2"] for v in t9.values()),
+                                own_top3=sum(v["own_in_top3"] for v in t9.values()))
 
     # T10
     r10 = evaluate(t10_chart(), detail=True)

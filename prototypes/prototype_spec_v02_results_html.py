@@ -49,6 +49,17 @@ def diff(p, k, i, t):
     return f'<td style="background:{col}" title="{tip(p, t)}">{d:+.2f}</td>'
 
 
+ABBR = {"rc_jack": "Jack", "rc_tech": "Tech", "rc_speed": "Spd", "rc_stamina": "Stm", "ln_general": "LNg", "ln_tech": "LNt", "ln_inverse": "LNi", "ln_release": "LNr"}
+
+
+def dom(p, k, i, t):
+    c = ch[f"{p} {t}"]
+    d = c["dominant_skill"]
+    rank = c["dominance_rank"].index(k) + 1
+    bad = "" if d == k else " inv"
+    return f'<td class="{bad.strip()}" title="{tip(p, t)}\nrank of own slot skill: {rank}">{ABBR[d]}</td>'
+
+
 def sr(p, k, i, t):
     return f'<td style="background:{hue(man[p][t]["sr"])}">{man[p][t]["sr"]:.2f}</td>'
 
@@ -61,10 +72,11 @@ body = f"""<h1>Difficulty engine, spec v0.2 — 120 benchmark charts</h1>
 <div class=g><div><b>T1</b> {t1['adjacent_inversions']} inversions of 112, τ {t1['mean_kendall_tau']}, strict ladders {t1['ladders_strict']}/8 (fails)</div>
 <div><b>T3</b> mirror pass · <b>T4</b> {r['T4']['max_abs_dlnD']:.4f} pass · <b>T6</b> pass · <b>T10</b> {r['T10']['dominant']} pass</div>
 <div><b>T5</b> max {r['T5']['random']['N_times_abs_dlnD_max']:.1f} / {r['T5']['adversarial']['N_times_abs_dlnD_max']:.1f} · <b>T7</b> exponent {r['T7']['exponent_median']}, {r['T7']['share_in_0_85_1_15']:.0%} in band</div>
-<div><b>T9</b> all RC charts: rc_tech dominant; all LN charts: ln_tech dominant (unresolved)</div></div>
+<div><b>T9</b> own slot's technique is the top-1 / top-2 / top-3 contributor on {r['T9_summary']['own_top1']} / {r['T9_summary']['own_top2']} / {r['T9_summary']['own_top3']} of 120 charts (LN Release: 0 / 5 / 12 of 15)</div></div>
 <div class=g><div><b>RC anchors</b><ul>{anch}</ul></div><div><b>LN anchors (not fitted)</b><ul>{lnanch}</ul>log rms {s['ln_rms_log_error']}</div></div>"""
 body += table("Total stars", "The engine's total difficulty, one cell per chart.", total)
 body += table("Technique stars on its own pool", "D_k of the slot's skill. Red outline = adjacent inversion (T1).", own)
+body += table("Dominant technique (argmax π)", "Red outline = not the slot's own technique. Hover for the slot technique's rank among the eight.", dom)
 body += table("Community SR (reference only)", "Never in the engine or any fit; shown for comparison.", sr)
 body += table("Engine stars minus SR", "Red = engine harder than SR, blue = easier.", diff)
 css = """:root{--bg:#fff;--fg:#1d1d1f;--mut:#6b6b70;--bd:#d8d8dc}@media(prefers-color-scheme:dark){:root{--bg:#161618;--fg:#ececee;--mut:#9a9aa0;--bd:#38383c}}

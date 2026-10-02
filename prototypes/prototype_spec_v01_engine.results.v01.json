@@ -1,5 +1,5 @@
 {
- "runtime_s_120_charts": 7.1,
+ "runtime_s_120_charts": 6.7,
  "T1": {
   "rc_jack": {
    "D": [
@@ -353,7 +353,10 @@
    "dominant_is_own": 0,
    "dominant": {
     "rc_tech": 15
-   }
+   },
+   "own_in_top2": 10,
+   "own_in_top3": 14,
+   "mean_own_rank": 2.4
   },
   "rc_tech": {
    "own_pi": [
@@ -376,7 +379,10 @@
    "dominant_is_own": 15,
    "dominant": {
     "rc_tech": 15
-   }
+   },
+   "own_in_top2": 15,
+   "own_in_top3": 15,
+   "mean_own_rank": 1.0
   },
   "rc_speed": {
    "own_pi": [
@@ -399,7 +405,10 @@
    "dominant_is_own": 0,
    "dominant": {
     "rc_tech": 15
-   }
+   },
+   "own_in_top2": 15,
+   "own_in_top3": 15,
+   "mean_own_rank": 2.0
   },
   "rc_stamina": {
    "own_pi": [
@@ -422,7 +431,10 @@
    "dominant_is_own": 0,
    "dominant": {
     "rc_tech": 15
-   }
+   },
+   "own_in_top2": 0,
+   "own_in_top3": 14,
+   "mean_own_rank": 3.07
   },
   "ln_general": {
    "own_pi": [
@@ -445,7 +457,10 @@
    "dominant_is_own": 0,
    "dominant": {
     "ln_tech": 15
-   }
+   },
+   "own_in_top2": 2,
+   "own_in_top3": 15,
+   "mean_own_rank": 2.87
   },
   "ln_tech": {
    "own_pi": [
@@ -469,7 +484,10 @@
    "dominant": {
     "ln_tech": 14,
     "rc_tech": 1
-   }
+   },
+   "own_in_top2": 15,
+   "own_in_top3": 15,
+   "mean_own_rank": 1.07
   },
   "ln_inverse": {
    "own_pi": [
@@ -492,7 +510,10 @@
    "dominant_is_own": 0,
    "dominant": {
     "ln_tech": 15
-   }
+   },
+   "own_in_top2": 4,
+   "own_in_top3": 10,
+   "mean_own_rank": 3.07
   },
   "ln_release": {
    "own_pi": [
@@ -515,8 +536,16 @@
    "dominant_is_own": 0,
    "dominant": {
     "ln_tech": 15
-   }
+   },
+   "own_in_top2": 0,
+   "own_in_top3": 3,
+   "mean_own_rank": 4.13
   }
+ },
+ "T9_summary": {
+  "own_top1": 29,
+  "own_top2": 61,
+  "own_top3": 101
  },
  "T10": {
   "dominant": "rc_jack",
@@ -952,7 +981,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.4845093679669386
   },
   "Regular Jack 1st": {
    "thumb_hand": "R",
@@ -1010,7 +1050,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.49121206848773896
   },
   "Regular Jack 2nd": {
    "thumb_hand": "R",
@@ -1068,7 +1119,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6334581737860677
   },
   "Regular Jack 3rd": {
    "thumb_hand": "R",
@@ -1126,7 +1188,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6685800607323149
   },
   "Regular Jack 4th": {
    "thumb_hand": "R",
@@ -1184,7 +1257,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5894196988223246
   },
   "Regular Jack 5th": {
    "thumb_hand": "L",
@@ -1242,7 +1326,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6860552511736772
   },
   "Regular Jack 6th": {
    "thumb_hand": "L",
@@ -1300,7 +1395,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.45712236822975044
   },
   "Regular Jack 7th": {
    "thumb_hand": "R",
@@ -1358,7 +1464,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5724061447371698
   },
   "Regular Jack 8th": {
    "thumb_hand": "L",
@@ -1416,7 +1533,18 @@
      "dominance": 8.79876536027423e-12
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "ln_tech",
+    "ln_general",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.6176035793277056
   },
   "Regular Jack 9th": {
    "thumb_hand": "L",
@@ -1474,7 +1602,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.538537504508555
   },
   "Regular Jack 10th": {
    "thumb_hand": "L",
@@ -1532,7 +1671,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6212300032251159
   },
   "Regular Jack Gamma": {
    "thumb_hand": "R",
@@ -1590,7 +1740,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5698346514045829
   },
   "Regular Jack Azimuth": {
    "thumb_hand": "L",
@@ -1648,7 +1809,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.7849082796082367
   },
   "Regular Jack Zenith": {
    "thumb_hand": "L",
@@ -1706,7 +1878,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.7771755330051475
   },
   "Regular Jack Stellium": {
    "thumb_hand": "R",
@@ -1764,7 +1947,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6098825471007487
   },
   "Regular Tech 0th": {
    "thumb_hand": "L",
@@ -1822,7 +2016,18 @@
      "dominance": 2.381761472960736e-07
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "ln_tech",
+    "rc_stamina",
+    "ln_general",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.7895156745428382
   },
   "Regular Tech 1st": {
    "thumb_hand": "R",
@@ -1880,7 +2085,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.559252404902125
   },
   "Regular Tech 2nd": {
    "thumb_hand": "L",
@@ -1938,7 +2154,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5203179746644556
   },
   "Regular Tech 3rd": {
    "thumb_hand": "L",
@@ -1996,7 +2223,18 @@
      "dominance": 1.658095021522341e-05
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "ln_tech",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.3452049555445681
   },
   "Regular Tech 4th": {
    "thumb_hand": "R",
@@ -2054,7 +2292,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5328229140874962
   },
   "Regular Tech 5th": {
    "thumb_hand": "L",
@@ -2112,7 +2361,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.8090038411582816
   },
   "Regular Tech 6th": {
    "thumb_hand": "R",
@@ -2170,7 +2430,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6546766854677261
   },
   "Regular Tech 7th": {
    "thumb_hand": "L",
@@ -2228,7 +2499,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6537232974675523
   },
   "Regular Tech 8th": {
    "thumb_hand": "R",
@@ -2286,7 +2568,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.7956362229100051
   },
   "Regular Tech 9th": {
    "thumb_hand": "R",
@@ -2344,7 +2637,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6248249253944416
   },
   "Regular Tech 10th": {
    "thumb_hand": "L",
@@ -2402,7 +2706,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.8219837179676279
   },
   "Regular Tech Gamma": {
    "thumb_hand": "L",
@@ -2460,7 +2775,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.8592209573615629
   },
   "Regular Tech Azimuth": {
    "thumb_hand": "R",
@@ -2518,7 +2844,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6038687045123754
   },
   "Regular Tech Zenith": {
    "thumb_hand": "R",
@@ -2576,7 +2913,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.8018928797773333
   },
   "Regular Tech Stellium": {
    "thumb_hand": "L",
@@ -2634,7 +2982,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6486826049696153
   },
   "Regular Speed 0th": {
    "thumb_hand": "R",
@@ -2692,7 +3051,18 @@
      "dominance": 6.415192297581048e-08
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "ln_general",
+    "rc_jack",
+    "ln_tech",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.3245268347079655
   },
   "Regular Speed 1st": {
    "thumb_hand": "R",
@@ -2750,7 +3120,18 @@
      "dominance": 1.9047080953739913e-06
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "ln_tech",
+    "rc_jack",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.439259096797124
   },
   "Regular Speed 2nd": {
    "thumb_hand": "R",
@@ -2808,7 +3189,18 @@
      "dominance": 6.597004951820668e-12
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.28674761608564037
   },
   "Regular Speed 3rd": {
    "thumb_hand": "L",
@@ -2866,7 +3258,18 @@
      "dominance": 5.226944540212188e-10
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.3206297584750901
   },
   "Regular Speed 4th": {
    "thumb_hand": "R",
@@ -2924,7 +3327,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.22806664214623684
   },
   "Regular Speed 5th": {
    "thumb_hand": "R",
@@ -2982,7 +3396,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.41739126135406823
   },
   "Regular Speed 6th": {
    "thumb_hand": "R",
@@ -3040,7 +3465,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.20763386042702603
   },
   "Regular Speed 7th": {
    "thumb_hand": "R",
@@ -3098,7 +3534,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.13202748020084754
   },
   "Regular Speed 8th": {
    "thumb_hand": "R",
@@ -3156,7 +3603,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.236601639571982
   },
   "Regular Speed 9th": {
    "thumb_hand": "R",
@@ -3214,7 +3672,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.44832326984987503
   },
   "Regular Speed 10th": {
    "thumb_hand": "R",
@@ -3272,7 +3741,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5849202298213527
   },
   "Regular Speed Gamma": {
    "thumb_hand": "R",
@@ -3330,7 +3810,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.2746023938615154
   },
   "Regular Speed Azimuth": {
    "thumb_hand": "R",
@@ -3388,7 +3879,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.3906690279167808
   },
   "Regular Speed Zenith": {
    "thumb_hand": "R",
@@ -3446,7 +3948,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.47216811590806906
   },
   "Regular Speed Stellium": {
    "thumb_hand": "R",
@@ -3504,7 +4017,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.589916648782216
   },
   "Regular Stream 0th": {
    "thumb_hand": "L",
@@ -3562,7 +4086,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6416335820476728
   },
   "Regular Stream 1st": {
    "thumb_hand": "L",
@@ -3620,7 +4155,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.3443160847866745
   },
   "Regular Stream 2nd": {
    "thumb_hand": "L",
@@ -3678,7 +4224,18 @@
      "dominance": 0.0006145066669930302
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "ln_tech",
+    "rc_jack",
+    "ln_general",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.6528030413573145
   },
   "Regular Stream 3rd": {
    "thumb_hand": "L",
@@ -3736,7 +4293,18 @@
      "dominance": 9.035095259542614e-07
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.5032615655178965
   },
   "Regular Stream 4th": {
    "thumb_hand": "L",
@@ -3794,7 +4362,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.37631189667355325
   },
   "Regular Stream 5th": {
    "thumb_hand": "R",
@@ -3852,7 +4431,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.35861976653795147
   },
   "Regular Stream 6th": {
    "thumb_hand": "L",
@@ -3910,7 +4500,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.39094983125232513
   },
   "Regular Stream 7th": {
    "thumb_hand": "R",
@@ -3968,7 +4569,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.4470910449109443
   },
   "Regular Stream 8th": {
    "thumb_hand": "R",
@@ -4026,7 +4638,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.48769689894063795
   },
   "Regular Stream 9th": {
    "thumb_hand": "R",
@@ -4084,7 +4707,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.4038368707894651
   },
   "Regular Stream 10th": {
    "thumb_hand": "R",
@@ -4142,7 +4776,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5480221652069377
   },
   "Regular Stream Gamma": {
    "thumb_hand": "R",
@@ -4200,7 +4845,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.4294958555801741
   },
   "Regular Stream Azimuth": {
    "thumb_hand": "R",
@@ -4258,7 +4914,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.44683079702034145
   },
   "Regular Stream Zenith": {
    "thumb_hand": "L",
@@ -4316,7 +4983,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.4834065906173924
   },
   "Regular Stream Stellium": {
    "thumb_hand": "R",
@@ -4374,7 +5052,18 @@
      "dominance": 0.0
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_general",
+    "ln_tech",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.409370676974661
   },
   "LN General 0th": {
    "thumb_hand": "R",
@@ -4432,7 +5121,18 @@
      "dominance": 0.00769065508803754
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.3530081074810789
   },
   "LN General 1st": {
    "thumb_hand": "R",
@@ -4490,7 +5190,18 @@
      "dominance": 0.014105552824064558
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_jack",
+    "ln_release",
+    "rc_speed",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.6250536493264323
   },
   "LN General 2nd": {
    "thumb_hand": "L",
@@ -4548,7 +5259,18 @@
      "dominance": 0.0017556691587048271
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.24687240325379978
   },
   "LN General 3rd": {
    "thumb_hand": "L",
@@ -4606,7 +5328,18 @@
      "dominance": 0.00468320604749997
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.46548551946560307
   },
   "LN General 4th": {
    "thumb_hand": "L",
@@ -4664,7 +5397,18 @@
      "dominance": 0.005896850092848384
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.42089114040192216
   },
   "LN General 5th": {
    "thumb_hand": "R",
@@ -4722,7 +5466,18 @@
      "dominance": 0.02035849169880339
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_release",
+    "rc_speed",
+    "ln_inverse",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7653931279369175
   },
   "LN General 6th": {
    "thumb_hand": "L",
@@ -4780,7 +5535,18 @@
      "dominance": 0.0013437202847611906
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.422814941484196
   },
   "LN General 7th": {
    "thumb_hand": "R",
@@ -4838,7 +5604,18 @@
      "dominance": 0.008278686248003878
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_release",
+    "ln_inverse",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.8703156489034173
   },
   "LN General 8th": {
    "thumb_hand": "L",
@@ -4896,7 +5673,18 @@
      "dominance": 0.0023252977466917636
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.49419345058195896
   },
   "LN General 9th": {
    "thumb_hand": "R",
@@ -4954,7 +5742,18 @@
      "dominance": 0.002025399748142586
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6433741993431841
   },
   "LN General 10th": {
    "thumb_hand": "R",
@@ -5012,7 +5811,18 @@
      "dominance": 0.0009950493843934
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_inverse",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5635436147934135
   },
   "LN General Gamma": {
    "thumb_hand": "R",
@@ -5070,7 +5880,18 @@
      "dominance": 0.00944791154372778
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_release",
+    "rc_jack",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.5282798021767612
   },
   "LN General Azimuth": {
    "thumb_hand": "L",
@@ -5128,7 +5949,18 @@
      "dominance": 0.0024958487610650193
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.890314390087745
   },
   "LN General Zenith": {
    "thumb_hand": "L",
@@ -5186,7 +6018,18 @@
      "dominance": 0.0005755183391108044
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_inverse",
+    "ln_release",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.8388358556435185
   },
   "LN General Stellium": {
    "thumb_hand": "L",
@@ -5244,7 +6087,18 @@
      "dominance": 0.002382288226199433
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_inverse",
+    "rc_speed",
+    "ln_release",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7925598200032714
   },
   "LN Tech 0th": {
    "thumb_hand": "R",
@@ -5302,7 +6156,18 @@
      "dominance": 0.00041447753274297333
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.6515206476451316
   },
   "LN Tech 1st": {
    "thumb_hand": "L",
@@ -5360,7 +6225,18 @@
      "dominance": 0.01609047849855568
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_release",
+    "rc_stamina",
+    "ln_inverse",
+    "rc_jack"
+   ],
+   "dominance_margin": 0.5184028903325842
   },
   "LN Tech 2nd": {
    "thumb_hand": "L",
@@ -5418,7 +6294,18 @@
      "dominance": 0.0008997051450750618
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "rc_speed",
+    "ln_general",
+    "rc_stamina",
+    "rc_jack",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.01793999402394203
   },
   "LN Tech 3rd": {
    "thumb_hand": "L",
@@ -5476,7 +6363,18 @@
      "dominance": 0.009403520487423298
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.011364368360696986
   },
   "LN Tech 4th": {
    "thumb_hand": "R",
@@ -5534,7 +6432,18 @@
      "dominance": 0.0030774263460539167
     }
    },
-   "dominant_skill": "rc_tech"
+   "dominant_skill": "rc_tech",
+   "dominance_rank": [
+    "rc_tech",
+    "ln_tech",
+    "rc_speed",
+    "ln_general",
+    "rc_stamina",
+    "rc_jack",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.014930227313073752
   },
   "LN Tech 5th": {
    "thumb_hand": "L",
@@ -5592,7 +6501,18 @@
      "dominance": 0.003758832601619974
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "ln_release",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.5027990059708274
   },
   "LN Tech 6th": {
    "thumb_hand": "R",
@@ -5650,7 +6570,18 @@
      "dominance": 0.002524298321007248
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.28214463380241395
   },
   "LN Tech 7th": {
    "thumb_hand": "L",
@@ -5708,7 +6639,18 @@
      "dominance": 0.0020001786853175735
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.15278420387687253
   },
   "LN Tech 8th": {
    "thumb_hand": "R",
@@ -5766,7 +6708,18 @@
      "dominance": 0.0022755458875451397
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.30347922048304343
   },
   "LN Tech 9th": {
    "thumb_hand": "R",
@@ -5824,7 +6777,18 @@
      "dominance": 0.0027062112949199383
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_release",
+    "rc_jack",
+    "rc_stamina",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.6819651368546464
   },
   "LN Tech 10th": {
    "thumb_hand": "R",
@@ -5882,7 +6846,18 @@
      "dominance": 0.004337373187911499
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "ln_release",
+    "rc_stamina",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.3543729157519413
   },
   "LN Tech Gamma": {
    "thumb_hand": "L",
@@ -5940,7 +6915,18 @@
      "dominance": 0.002923888804173472
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina",
+    "ln_release",
+    "ln_inverse"
+   ],
+   "dominance_margin": 0.41379157205061873
   },
   "LN Tech Azimuth": {
    "thumb_hand": "L",
@@ -5998,7 +6984,18 @@
      "dominance": 0.0002876115223685562
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_stamina",
+    "rc_jack",
+    "ln_inverse",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5606010539252984
   },
   "LN Tech Zenith": {
    "thumb_hand": "L",
@@ -6056,7 +7053,18 @@
      "dominance": 0.0008051362049855155
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_inverse",
+    "rc_jack",
+    "ln_release",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7327972092989544
   },
   "LN Tech Stellium": {
    "thumb_hand": "L",
@@ -6114,7 +7122,18 @@
      "dominance": 0.0009188437998860337
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "rc_jack",
+    "ln_inverse",
+    "rc_stamina",
+    "ln_release"
+   ],
+   "dominance_margin": 0.5879583336390262
   },
   "LN Inverse 0th": {
    "thumb_hand": "R",
@@ -6172,7 +7191,18 @@
      "dominance": 0.014166352266107565
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_inverse",
+    "rc_jack",
+    "ln_release",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.6361966574074833
   },
   "LN Inverse 1st": {
    "thumb_hand": "R",
@@ -6230,7 +7260,18 @@
      "dominance": 0.0027877715922817034
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "rc_tech",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.8041539881944555
   },
   "LN Inverse 2nd": {
    "thumb_hand": "R",
@@ -6288,7 +7329,18 @@
      "dominance": 0.0037184389115151053
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "rc_jack",
+    "rc_speed",
+    "ln_release",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7620776722909876
   },
   "LN Inverse 3rd": {
    "thumb_hand": "R",
@@ -6346,7 +7398,18 @@
      "dominance": 1.716405844503417e-06
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_inverse",
+    "ln_general",
+    "rc_tech",
+    "rc_jack",
+    "ln_release",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9855709485516391
   },
   "LN Inverse 4th": {
    "thumb_hand": "R",
@@ -6404,7 +7467,18 @@
      "dominance": 2.3904577684986493e-05
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_inverse",
+    "ln_general",
+    "rc_jack",
+    "rc_speed",
+    "ln_release",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9706795478805068
   },
   "LN Inverse 5th": {
    "thumb_hand": "R",
@@ -6462,7 +7536,18 @@
      "dominance": 1.426964007061202e-05
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_inverse",
+    "ln_general",
+    "rc_tech",
+    "ln_release",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9824855532541296
   },
   "LN Inverse 6th": {
    "thumb_hand": "R",
@@ -6520,7 +7605,18 @@
      "dominance": 0.0014289509474330196
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_inverse",
+    "ln_general",
+    "ln_release",
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9069628916410396
   },
   "LN Inverse 7th": {
    "thumb_hand": "R",
@@ -6578,7 +7674,18 @@
      "dominance": 0.0014914272887532939
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_inverse",
+    "ln_general",
+    "ln_release",
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.944954245727519
   },
   "LN Inverse 8th": {
    "thumb_hand": "R",
@@ -6636,7 +7743,18 @@
      "dominance": 0.002062836230717803
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9482511901552281
   },
   "LN Inverse 9th": {
    "thumb_hand": "R",
@@ -6694,7 +7812,18 @@
      "dominance": 0.0009026126122063434
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "rc_tech",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9764568025945382
   },
   "LN Inverse 10th": {
    "thumb_hand": "R",
@@ -6752,7 +7881,18 @@
      "dominance": 0.003141609818939013
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "rc_tech",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.927463607823735
   },
   "LN Inverse Gamma": {
    "thumb_hand": "R",
@@ -6810,7 +7950,18 @@
      "dominance": 0.002399238125195526
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_inverse",
+    "rc_tech",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9486068030824942
   },
   "LN Inverse Azimuth": {
    "thumb_hand": "L",
@@ -6868,7 +8019,18 @@
      "dominance": 0.0030852782909673035
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9469821803297032
   },
   "LN Inverse Zenith": {
    "thumb_hand": "R",
@@ -6926,7 +8088,18 @@
      "dominance": 0.0019452749272819351
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9304020208911944
   },
   "LN Inverse Stellium": {
    "thumb_hand": "R",
@@ -6984,7 +8157,18 @@
      "dominance": 0.005369991004108637
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_inverse",
+    "ln_release",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.8944753470513908
   },
   "LN Release 0th": {
    "thumb_hand": "L",
@@ -7042,7 +8226,18 @@
      "dominance": 0.014614452294722562
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_release",
+    "rc_jack",
+    "rc_speed",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.6837581335906248
   },
   "LN Release 1st": {
    "thumb_hand": "L",
@@ -7100,7 +8295,18 @@
      "dominance": 0.017633060114909855
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_release",
+    "rc_jack",
+    "rc_speed",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7225740385749118
   },
   "LN Release 2nd": {
    "thumb_hand": "L",
@@ -7158,7 +8364,18 @@
      "dominance": 0.07843819388048397
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_release",
+    "rc_tech",
+    "rc_speed",
+    "rc_stamina",
+    "ln_inverse",
+    "rc_jack"
+   ],
+   "dominance_margin": 0.4792148459158724
   },
   "LN Release 3rd": {
    "thumb_hand": "R",
@@ -7216,7 +8433,18 @@
      "dominance": 0.006316939949944318
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_release",
+    "ln_inverse",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.7954885486356909
   },
   "LN Release 4th": {
    "thumb_hand": "R",
@@ -7274,7 +8502,18 @@
      "dominance": 0.006209913238322803
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_release",
+    "ln_inverse",
+    "rc_tech",
+    "rc_jack",
+    "rc_speed",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9632369076997005
   },
   "LN Release 5th": {
    "thumb_hand": "L",
@@ -7332,7 +8571,18 @@
      "dominance": 0.001973023797834375
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_release",
+    "ln_inverse",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9499570045635664
   },
   "LN Release 6th": {
    "thumb_hand": "R",
@@ -7390,7 +8640,18 @@
      "dominance": 0.008085585417308378
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "ln_inverse",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.6558014259867014
   },
   "LN Release 7th": {
    "thumb_hand": "R",
@@ -7448,7 +8709,18 @@
      "dominance": 0.015105277354549248
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "ln_release",
+    "rc_tech",
+    "ln_inverse",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9322551462978679
   },
   "LN Release 8th": {
    "thumb_hand": "R",
@@ -7506,7 +8778,18 @@
      "dominance": 0.006016555150611544
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "ln_general",
+    "rc_tech",
+    "ln_release",
+    "ln_inverse",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9402132477858015
   },
   "LN Release 9th": {
    "thumb_hand": "R",
@@ -7564,7 +8847,18 @@
      "dominance": 0.0021003772861336862
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.8723400648011017
   },
   "LN Release 10th": {
    "thumb_hand": "R",
@@ -7622,7 +8916,18 @@
      "dominance": 0.0023617642849689873
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_release",
+    "ln_inverse",
+    "rc_stamina",
+    "rc_jack"
+   ],
+   "dominance_margin": 0.8377114311799597
   },
   "LN Release Gamma": {
    "thumb_hand": "R",
@@ -7680,7 +8985,18 @@
      "dominance": 0.007961507966852823
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_release",
+    "rc_speed",
+    "ln_inverse",
+    "rc_stamina",
+    "rc_jack"
+   ],
+   "dominance_margin": 0.844408319398951
   },
   "LN Release Azimuth": {
    "thumb_hand": "R",
@@ -7738,7 +9054,18 @@
      "dominance": 0.0027666465995780146
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "rc_speed",
+    "ln_release",
+    "ln_inverse",
+    "rc_stamina",
+    "rc_jack"
+   ],
+   "dominance_margin": 0.838067929968597
   },
   "LN Release Zenith": {
    "thumb_hand": "R",
@@ -7796,7 +9123,18 @@
      "dominance": 0.001751382901430799
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9176939524607393
   },
   "LN Release Stellium": {
    "thumb_hand": "L",
@@ -7854,7 +9192,18 @@
      "dominance": 0.0033267402286399424
     }
    },
-   "dominant_skill": "ln_tech"
+   "dominant_skill": "ln_tech",
+   "dominance_rank": [
+    "ln_tech",
+    "rc_tech",
+    "ln_general",
+    "ln_inverse",
+    "ln_release",
+    "rc_speed",
+    "rc_jack",
+    "rc_stamina"
+   ],
+   "dominance_margin": 0.9133451437689276
   }
  }
 }
