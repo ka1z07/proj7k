@@ -10,6 +10,13 @@ only import from `proj7k` is the `.osu` parser and the corpus loader (the spec's
 The question: the spec says (§16.1) "T1 has not been run on any pool". With every parameter at
 its §12 prior and no §13 calibration, how far is the engine from its own acceptance tests?
 
+LN anchors (owner, 2026-10-02: 0th ~3, 5th ~5, 8th ~6.5, 10th 7.5-8, Zenith ~10): against the RC-derived (a, b) the
+four-LN-map tier stars read 1.91 / 5.32 / 7.73 / 8.92 / 12.07 (v0.2 before the LN work: rms log error .24), i.e. the
+LN ladder is far steeper than the consensus. Tried, all off by default: rel_count_w (release events' weight in the
+quantile: no effect), nu_add (additive hold-tracking cost v += nu_add * h: with w_rel and chi_0 at their bounds
+rms .11, but the three trade along a ridge and two sit on a boundary, so not adopted), w_rel and chi_0 alone (best
+rms .20 at chi_0 -> 0). RC tier 5 (+0.63 stars): beta, N0, kappa, k_cross, a 3-parameter scale c + a D^b: no fix.
+
 DEFAULT IS NOW SPEC v0.2 (demand_mode="Eh", v_cap=40, delta_0_rel=0.5, strict_prior=True; see the spec's 修订记录).
 `--spec v0.1` restores v0.1 exactly (`.results.v01.json`); the numbers in the VERDICT block below and in
 the EXPERIMENT paragraphs are v0.1 unless a line says otherwise. v0.2 at the priors, uncalibrated, same
@@ -128,6 +135,8 @@ P0 = dict(
     r_lo=0.25, r_hi=0.55, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
+    nu_add=0.0,                        # EXPERIMENT: v_i += nu_add * h_i (spec: 0)
+    rel_count_w=1.0,                   # EXPERIMENT: weight of a release event in the §3.2 solve (spec: 1)
     strict_prior=True,                 # EXPERIMENT (R3'): x, o ignore same-row partners and what they mask
     row_in="sum",                      # EXPERIMENT: §6.1 hand input per row: "sum" (spec) or "max" of v^gamma
     v_cap=40.0,                        # EXPERIMENT: v_i <- min(v_i, v_cap) before it enters §6.1 and §7
@@ -356,7 +365,7 @@ def layers(pre, thumb, P):
     # §4.5
     omega = np.where(rel, P["w_rel"], 1.0)
     j = pre["j"]
-    v = omega * (j + x + o) * c
+    v = omega * (j + x + o) * c + P["nu_add"] * pre["h"]   # EXPERIMENT: additive hold-tracking cost (Hz per held column)
     if P["v_cap"] is not None:
         v = np.minimum(v, P["v_cap"])
 
@@ -530,7 +539,7 @@ def evaluate(notes, P=P0, detail=False, pre=None):
         raise ValueError("empty chart")
     lam_mean = np.maximum(pre["is_ln"].astype(float), np.minimum(1.0, pre["h"] / 2.0)).mean()
     eps_total = P["eps_rc"] + 0.01 * lam_mean
-    ones = np.ones(pre["n"])
+    ones = np.where(pre["rel"], P["rel_count_w"], 1.0)   # EXPERIMENT: count weight of release events (spec: 1)
     best = None
     for thumb in (0, 1):
         L = layers(pre, thumb, P)
@@ -541,7 +550,8 @@ def evaluate(notes, P=P0, detail=False, pre=None):
     F = features(pre, L, D, P)
     w, a = membership(F)
     assert np.all(np.abs(a.sum(1) - 1.0) < 1e-9), "attribution must sum to 1 (§8.2)"
-    Dk = {k: solve(L, w[:, n], P["eps_rc"] if k.startswith("rc") else P["eps_ln"], P)
+    cw = np.where(pre["rel"], P["rel_count_w"], 1.0)
+    Dk = {k: solve(L, w[:, n] * cw, P["eps_rc"] if k.startswith("rc") else P["eps_ln"], P)
           for n, k in enumerate(SKILLS)}
     Ck = w.sum(0) / pre["n"]
     p = loss(F["d"], D, P)
@@ -684,7 +694,16 @@ def star_scale(res, charts, rate_exponent):
     by_pool = {p: dict(mean_signed=round(float(np.mean([r[2] - r[3] for r in rows if r[0] == p])), 2),
                        mae=round(float(np.mean([abs(r[2] - r[3]) for r in rows if r[0] == p])), 2))
                for p in POOL_OF}
-    return dict(a=a, b=b, active_inequality_anchors=active, anchor_checks=checks, rc_tier_level=tiers,
+    ln_checks = []
+    for an in cfg.get("ln_anchors", []):
+        got = star(float(np.exp(np.mean([np.log(res[(p, an["tier"])]["total"]["D"]) for p in cfg["ln_pools"]]))))
+        row = dict(tier=an["tier"], stars=round(got, 2), target=an["stars"], residual=round(got - an["stars"], 2))
+        if "range" in an:
+            row["in_range"] = bool(an["range"][0] <= got <= an["range"][1])
+        ln_checks.append(row)
+    ln_rms = float(np.sqrt(np.mean([np.log(r["stars"] / r["target"]) ** 2 for r in ln_checks]))) if ln_checks else None
+    return dict(a=a, b=b, active_inequality_anchors=active, anchor_checks=checks,
+                ln_anchor_checks=ln_checks, ln_rms_log_error=None if ln_rms is None else round(ln_rms, 3), rc_tier_level=tiers,
                 implied_perceived_rate_exponent=round(b * rate_exponent, 3),
                 diagnostic_vs_community_SR=dict(note="post-hoc; never in a fit",
                                                 mae_all=round(float(np.mean(abs(x - y))), 3),

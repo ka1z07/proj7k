@@ -1,5 +1,5 @@
 {
- "runtime_s_120_charts": 7.3,
+ "runtime_s_120_charts": 7.4,
  "T1": {
   "rc_jack": {
    "D": [
@@ -568,6 +568,40 @@
     "satisfied": true
    }
   ],
+  "ln_anchor_checks": [
+   {
+    "tier": "0th",
+    "stars": 1.91,
+    "target": 3.0,
+    "residual": -1.09
+   },
+   {
+    "tier": "5th",
+    "stars": 5.32,
+    "target": 5.0,
+    "residual": 0.32
+   },
+   {
+    "tier": "8th",
+    "stars": 7.73,
+    "target": 6.5,
+    "residual": 1.23
+   },
+   {
+    "tier": "10th",
+    "stars": 8.92,
+    "target": 7.75,
+    "residual": 1.17,
+    "in_range": false
+   },
+   {
+    "tier": "Zenith",
+    "stars": 12.07,
+    "target": 10.0,
+    "residual": 2.07
+   }
+  ],
+  "ln_rms_log_error": 0.242,
   "rc_tier_level": {
    "0th": {
     "engine_D": 15.09,
