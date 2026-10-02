@@ -72,7 +72,7 @@ body = f"""<h1>Difficulty engine, spec v0.2 — 120 benchmark charts</h1>
 <div class=g><div><b>T1</b> {t1['adjacent_inversions']} inversions of 112, τ {t1['mean_kendall_tau']}, strict ladders {t1['ladders_strict']}/8 (fails)</div>
 <div><b>T3</b> mirror pass · <b>T4</b> {r['T4']['max_abs_dlnD']:.4f} pass · <b>T6</b> pass · <b>T10</b> {r['T10']['dominant']} pass</div>
 <div><b>T5</b> max {r['T5']['random']['N_times_abs_dlnD_max']:.1f} / {r['T5']['adversarial']['N_times_abs_dlnD_max']:.1f} · <b>T7</b> exponent {r['T7']['exponent_median']}, {r['T7']['share_in_0_85_1_15']:.0%} in band</div>
-<div><b>T9</b> own slot's technique is the top-1 / top-2 / top-3 contributor on {r['T9_summary']['own_top1']} / {r['T9_summary']['own_top2']} / {r['T9_summary']['own_top3']} of 120 charts (LN Release: 0 / 5 / 12 of 15)</div></div>
+<div><b>T9</b> own slot's technique is the top-1 / top-2 / top-3 contributor on {r['T9_summary']['own_top1']} / {r['T9_summary']['own_top2']} / {r['T9_summary']['own_top3']} of 120 charts (LN Release: 4 / 10 / 11 of 15; labels are slot membership, see spec §16)</div></div>
 <div class=g><div><b>RC anchors</b><ul>{anch}</ul></div><div><b>LN anchors (not fitted)</b><ul>{lnanch}</ul>log rms {s['ln_rms_log_error']}</div></div>"""
 body += table("Total stars", "The engine's total difficulty, one cell per chart.", total)
 body += table("Technique stars on its own pool", "D_k of the slot's skill. Red outline = adjacent inversion (T1).", own)

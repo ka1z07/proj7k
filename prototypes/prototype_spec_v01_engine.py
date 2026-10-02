@@ -135,7 +135,7 @@ P0 = dict(
     r_lo=0.26, r_hi=0.42, phi_ref=0.5, m_0=0.5, h_ref=3.0,
     theta_min=0.01, theta_max=1000.0,
     delta_0_rel=0.5,                   # EXPERIMENT: Delta_0 = c * median row interval over the past 2 s
-    rel_mode="spec",                   # v2: q_rel = release in a row with no press ("isolated"), or the spec's formula ("spec")
+    rel_mode="note",                   # v2: q_rel = release in a row with no press ("isolated"), or the spec's formula ("spec")
     rel_hold_gate=False,               # v2 note mode: scale q_rel by (1 - min(1, h/h_ref))
     member_mode="v2",                  # EXPERIMENT: "v2" = chord-ness for Speed/Stamina, rhythm-surprise q_C, h-based q_inv, family-normalised attribution
     k_hi=2.5, u_lo=0.5, u_hi=2.5,      # v2: chord size at which q_K saturates; U_rhy range for q_C (bits)
@@ -153,7 +153,7 @@ P0 = dict(
 )
 
 #: Restores the v0.1 spec exactly (the three v0.2 changes off). `--spec v0.1` applies it.
-V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None, strict_prior=False, member_mode="spec", r_lo=0.25, r_hi=0.55, chi_0=0.5)
+V01 = dict(demand_mode="spec", v_cap=None, delta_0_rel=None, strict_prior=False, member_mode="spec", r_lo=0.25, r_hi=0.55, chi_0=0.5, rel_mode="spec")
 
 FINGER = ["ring", "mid", "idx", "thumb", "idx", "mid", "ring"]  # §2.5
 SIDE = [0, 0, 0, None, 1, 1, 1]                                  # 0 = L, 1 = R; thumb by h_T
