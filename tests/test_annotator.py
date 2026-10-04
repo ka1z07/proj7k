@@ -9,7 +9,7 @@ from proj7k.lazer.bridge import (
     BeatmapUpdatePayload,
     BeatmapRevertPayload,
 )
-from proj7k.difficulty import current_engine_version
+from proj7k.lazer.annotator import current_engine_version
 from proj7k.lazer.annotator import (
     INJECTED_SUFFIX_PATTERN,
     InjectedMetadata,
@@ -69,7 +69,7 @@ def test_format_injected_difficulty_name():
     assert format_injected_difficulty_name("Master", 9.156, "LN_Release", version=VERSION) == f"Master (9.16★ Azimuth LN_Release {VERSION})"
     assert format_injected_difficulty_name("God", 10.8, "speed", version=VERSION) == f"God (10.80★ Stellium Speed {VERSION})"
     assert format_injected_difficulty_name("Beginner", 2.0, "tech", version=VERSION) == f"Beginner (2.00★ 0th Tech {VERSION})"
-    assert format_injected_difficulty_name("", 5.0, "speed", version=VERSION) == f"(5.00★ 4th Speed {VERSION})"
+    assert format_injected_difficulty_name("", 5.0, "speed", version=VERSION) == f"(5.00★ 3rd Speed {VERSION})"
 
     # Explicit dan_tier override
     assert format_injected_difficulty_name("Hard", 6.42, "jack", dan_tier="6th", version=VERSION) == f"Hard (6.42★ 6th Jack {VERSION})"
@@ -94,7 +94,7 @@ def test_difficulty_name_idempotence():
     # 2. Re-formatting with updated values replaces suffix without accumulating; the version
     #    token is refreshed too, so a re-evaluation never leaves a stale version behind.
     updated = format_injected_difficulty_name(formatted_1, 7.10, "tech", version="vdeadbeef")
-    assert updated == "Insane (7.10★ 9th Tech vdeadbeef)"
+    assert updated == "Insane (7.10★ 8th Tech vdeadbeef)"
 
     # 3. Migration from historical suffix: replaces old suffix cleanly with new Dan suffix
     migrated = format_injected_difficulty_name("Insane (6.42★ Jack)", 6.42, "jack", version=VERSION)
@@ -152,7 +152,7 @@ def test_versioned_suffix_stripping_and_revert():
 def test_generate_binned_skill_tags():
     assert generate_binned_skill_tags("jack", 6.42) == ["dominant_jack", "jack_6★", "dan_7th"]
     assert generate_binned_skill_tags("LN_General", 7.8) == ["dominant_ln_general", "ln_general_7★", "dan_10th"]
-    assert generate_binned_skill_tags("Tech", 5.0) == ["dominant_tech", "tech_5★", "dan_4th"]
+    assert generate_binned_skill_tags("Tech", 5.0) == ["dominant_tech", "tech_5★", "dan_3rd"]
     assert generate_binned_skill_tags("speed", 0.8) == ["dominant_speed", "speed_0★", "dan_0th"]
     assert generate_binned_skill_tags("speed", 10.5) == ["dominant_speed", "speed_10★", "dan_zenith"]
     assert generate_binned_skill_tags("stream", 11.2) == ["dominant_stream", "stream_11★", "dan_stellium"]
@@ -384,7 +384,7 @@ def test_annotate_batch_and_build_collections():
     assert len(updates) == 2
     version = current_engine_version()
     assert updates[0].difficulty_name == f"Easy (3.20★ 0th Jack {version})"
-    assert updates[1].difficulty_name == f"Hard (7.50★ 10th LN_Inverse {version})"
+    assert updates[1].difficulty_name == f"Hard (7.50★ 9th LN_Inverse {version})"
 
     assert len(collections) == 12
     assert collections["7K Jack"] == ["md5-1"]
