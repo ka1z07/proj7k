@@ -142,6 +142,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     is_daemon = args.daemon or (pos_action == "daemon")
     is_once = args.once or (pos_action == "once") or (not is_setup and not is_revert and not is_daemon)
 
+    if args.dry_run and (is_setup or is_revert or is_daemon):
+        parser.error("--dry-run applies only to --once (a daemon or revert run would write the library)")
+
     # 1. Action: setup
     if is_setup:
         logging.info("Setting up Node.js Realm companion bridge environment...")

@@ -355,3 +355,40 @@ def test_cli_no_package_flag(tmp_path):
     assert len(practice_files) == 1
     osz_files = list(tmp_path.glob("*.osz"))
     assert len(osz_files) == 0
+
+
+def test_lazer_practice_sync_stamps_the_difficulty_engines_stars_not_the_legacy_loops(tmp_path):
+    """
+    The library carries one scale (the difficulty engine's, as the daemon stamps it). The closed loop's own
+    "legacy SR" must not leak into the injected star rating, tags or tier.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from proj7k.downscaler.cli import sync_practice_beatmaps_to_lazer
+    from proj7k.lazer.bridge import BatchUpdateResult, LazerBeatmapRecord, RealmBridgeClient
+
+    realm = tmp_path / "client.realm"
+    realm.touch()
+    record = LazerBeatmapRecord(
+        id="rec-1", hash="h", md5_hash="abc", file_hash="h", star_rating=1.0, difficulty_name="Practice",
+        tags="", title="T", artist="A", ruleset_id=3, circle_size=7.0,
+    )
+    bridge = MagicMock(spec=RealmBridgeClient)
+    bridge.dump_7k_beatmaps.return_value = [record]
+    bridge.dump_collections.return_value = {}
+    bridge.apply_batch_update.return_value = BatchUpdateResult(success=True, updated_count=1)
+    result = SimpleNamespace(
+        downscaled_beatmap=SimpleNamespace(md5="abc"),
+        downscaled_profile=SimpleNamespace(dominant_skill="rc_stamina", total_stars=6.55),
+        downscaled_rating=SimpleNamespace(star_rating=9.99),  # the legacy loop's number
+    )
+
+    outcome = sync_practice_beatmaps_to_lazer(
+        [result], realm_path=realm, lock_path=tmp_path / "client.realm.lock", bridge_client=bridge
+    )
+
+    assert outcome.success is True
+    (update,) = bridge.apply_batch_update.call_args.kwargs["updates"]
+    assert update.star_rating == 6.55
+    assert "dominant_stream" in update.tags and "dan_7th" in update.tags

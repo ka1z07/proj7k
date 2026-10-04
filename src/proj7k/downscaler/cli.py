@@ -414,7 +414,8 @@ def sync_practice_beatmaps_to_lazer(
         practice_hashes.append(bm_md5)
 
         dom_tech = SKILL_TECH_KEY[res.downscaled_profile.dominant_skill]
-        sr = res.downscaled_rating.star_rating
+        # The library carries the difficulty engine's scale (the daemon stamps it); the closed loop's legacy SR stays in the report.
+        sr = res.downscaled_profile.total_stars
 
         # If beatmap already exists in Realm, create mutation payload
         if bm_md5 in rec_by_md5:

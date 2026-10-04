@@ -103,17 +103,18 @@ class DualGateValidator:
         self.min_cosine_similarity = min_cosine_similarity
         # The closed loop validates many candidates against one original; the original is solved once.
         # The beatmap is held with its profile so that its id cannot be reused while the entry lives.
-        self._profiles: Dict[int, Tuple[Beatmap7K, DifficultyProfile]] = {}
+        self._profiles: Dict[int, Tuple[Beatmap7K, int, DifficultyProfile]] = {}
 
     def profile_of(self, beatmap: Beatmap7K) -> DifficultyProfile:
         """The difficulty engine's profile of a parsed chart, memoised per beatmap object."""
+        n_objects = len(beatmap.hit_objects)
         hit = self._profiles.pop(id(beatmap), None)
-        if hit is None:
+        if hit is None or hit[1] != n_objects:  # an in-place edit that changed the note count is not served stale
             if len(self._profiles) >= 8:
                 self._profiles.pop(next(iter(self._profiles)))  # least recently used
-            hit = (beatmap, evaluate_notes(notes_from_beatmap(beatmap)))
+            hit = (beatmap, n_objects, evaluate_notes(notes_from_beatmap(beatmap)))
         self._profiles[id(beatmap)] = hit
-        return hit[1]
+        return hit[2]
 
     def validate(
         self,

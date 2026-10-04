@@ -283,3 +283,13 @@ def test_cli_dry_run_prints_the_report_and_passes_the_flag(capsys):
     assert "Would update: 4" in out
     assert "stream->speed: 2" in out
     assert "+0.25★" in out
+
+
+def test_cli_rejects_dry_run_with_the_daemon_instead_of_writing(capsys):
+    with patch("proj7k.sync.LazerSyncManager"), patch("proj7k.sync.run_daemon") as run_daemon_mock:
+        with pytest.raises(SystemExit) as exit_info:
+            main(["--daemon", "--dry-run"])
+
+    assert exit_info.value.code == 2
+    run_daemon_mock.assert_not_called()
+    assert "--dry-run" in capsys.readouterr().err

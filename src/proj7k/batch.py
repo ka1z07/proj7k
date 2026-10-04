@@ -529,7 +529,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)
             return 1
         else:
-            print("CI Monotonicity Guard: PASSED (all techniques and tiers strictly monotonic).", file=sys.stderr)
+            print("CI Monotonicity Guard: PASSED (every ladder within its gate; see the own-skill ratchet for recorded inversions).", file=sys.stderr)
 
     return 0
 
