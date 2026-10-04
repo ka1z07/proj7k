@@ -18,6 +18,8 @@ import pytest
 from proj7k.batch import BenchmarkBatchReport, run_benchmark_pipeline
 from proj7k.dan import CANONICAL_DAN_SR_BANDS, CANONICAL_DAN_TIERS
 from proj7k.guard import (
+    CALIBRATED_METRIC_GATES,
+    OWN_SKILL_RATCHET,
     LADDER_MAX_TOTAL_INVERSIONS,
     LADDER_MIN_MEAN_KENDALL_TAU,
     LADDER_MIN_MEAN_SPEARMAN_RHO,
@@ -190,7 +192,7 @@ def test_guard_blocks_a_rating_regression_on_the_real_ladder(benchmark_report: B
     assert "star_rating" in result.error_message
 
 
-def test_only_ln_release_is_below_the_plain_own_skill_bar_and_the_ratchet_holds_each_pool(
+def test_only_ln_release_is_below_the_plain_own_skill_bar(
     benchmark_report: BenchmarkBatchReport,
 ):
     """
@@ -199,8 +201,6 @@ def test_only_ln_release_is_below_the_plain_own_skill_bar_and_the_ratchet_holds_
     clear is LN Release, whose tail-isolation skill T1 records inversions on — a known defect, not an
     acceptance. If it ever clears the plain bar, delete its ratchet entry.
     """
-    from proj7k.guard import CALIBRATED_METRIC_GATES, OWN_SKILL_RATCHET
-
     plain = CALIBRATED_METRIC_GATES["own_skill"]
     own = {technique: reports["own_skill"] for technique, reports in benchmark_report.monotonicity.items()}
     below_plain = {
@@ -214,7 +214,12 @@ def test_only_ln_release_is_below_the_plain_own_skill_bar_and_the_ratchet_holds_
     assert below_plain == {"LN Release"}
     assert set(OWN_SKILL_RATCHET) == set(EXPECTED_TECHNIQUES)
     assert evaluate_monotonicity_guard(benchmark_report).passed
+
+
+def test_each_pools_own_skill_ladder_holds_its_ratchet_on_all_three_measures(benchmark_report: BenchmarkBatchReport):
     config = MonotonicityGuardConfig()
-    for technique in EXPECTED_TECHNIQUES:
-        gate = config.gate_for("own_skill", technique)
-        assert own[technique]["kendall_tau"] >= gate.min_kendall_tau, technique
+    for technique, reports in benchmark_report.monotonicity.items():
+        rep, gate = reports["own_skill"], config.gate_for("own_skill", technique)
+        assert rep["kendall_tau"] >= gate.min_kendall_tau, technique
+        assert rep["spearman_rho"] >= gate.min_spearman_rho, technique
+        assert len(rep["violations"]) <= gate.max_violations, technique

@@ -8,7 +8,6 @@ difficulty" (project ruling, 2026-10-02), so this is its score; the slot labels 
 
 import random
 
-import numpy as np
 import pytest
 
 from engine_support import EDITS, SKILLS_LN, T11_TIERS, lnify

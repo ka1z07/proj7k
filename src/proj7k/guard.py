@@ -37,9 +37,12 @@ class MetricGate:
 #: ladder rather than about any one technique and is asserted end-to-end alongside these
 #: (`tests/test_120_benchmark_guard.py`). Splitting them this way keeps the library gate
 #: meaningful for partial manifests, where a cross-technique mean would say nothing.
+#: The per-technique bar the star rating and every ladder metric below are held to.
+PLAIN_LADDER_GATE = MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4)
+
 CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # Measured worst over the benchmark corpus: tau 0.905 / rho 0.964 / 3 inversions.
-    "star_rating": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "star_rating": PLAIN_LADDER_GATE,
     # --- The raw technique drivers (issue #52) -------------------------------------------------
     #
     # One gate per technique, on the technique's *own* ladder (`monotonicity.DRIVER_METRIC_
@@ -68,15 +71,15 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # cannot outlive the defect.
     # The new engine's own-skill ladder (ADR-0018 decision 3): each pool's own skill climbs the 15 tiers. The
     # default is the per-technique star bar; `OWN_SKILL_RATCHET` overrides it per pool.
-    "own_skill": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_jack": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_speed": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_stream": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_general": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_inverse": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_release": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    OWN_SKILL_METRIC: PLAIN_LADDER_GATE,
+    "driver_jack": PLAIN_LADDER_GATE,
+    "driver_tech": PLAIN_LADDER_GATE,
+    "driver_speed": PLAIN_LADDER_GATE,
+    "driver_stream": PLAIN_LADDER_GATE,
+    "driver_ln_general": PLAIN_LADDER_GATE,
+    "driver_ln_tech": PLAIN_LADDER_GATE,
+    "driver_ln_inverse": PLAIN_LADDER_GATE,
+    "driver_ln_release": PLAIN_LADDER_GATE,
 }
 #: Per-pool ratchet for the `own_skill` ladder, keyed by the pool's manifest name: the thresholds are the
 #: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an

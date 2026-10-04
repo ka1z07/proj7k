@@ -727,9 +727,10 @@ def test_sync_manager_preheats_when_locked(tmp_path: Path):
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
-
-
-
+def _jack_chart_content() -> str:
+    """A fast two-column jack: the engine's dominant skill is jack, unambiguously."""
+    rows = [f"{x},192,{1000 + 120 * i},1,0,0:0:0:0:" for i in range(120) for x in (64, 320)]
+    return _make_osu_content().split("[HitObjects]")[0] + "[HitObjects]\n" + "\n".join(rows) + "\n"
 
 
 def test_dry_run_reports_what_would_change_and_writes_nothing(tmp_path: Path):
@@ -739,7 +740,7 @@ def test_dry_run_reports_what_would_change_and_writes_nothing(tmp_path: Path):
     snapshotting, locking or touching the database.
     """
     from proj7k.engine import evaluate_osu
-    from proj7k.engine.skills import SKILL_TECH_KEY
+    from proj7k.lazer.annotator import inject_binned_skill_tags
 
     realm_file = tmp_path / "client.realm"
     realm_file.touch()
@@ -747,13 +748,17 @@ def test_dry_run_reports_what_would_change_and_writes_nothing(tmp_path: Path):
     files_dir.mkdir(parents=True)
 
     hash_hex = "dryrunabcdef123456"
-    osu_file = files_dir / hash_hex
-    osu_file.write_text(_make_osu_content())
+    content = _jack_chart_content()
+    (files_dir / hash_hex).write_text(content)
 
-    # Injected by an older engine: stale, and its tag says jack.
-    record = _annotated_record(5.00, "Hard (5.00★ 5th Jack vdeadbeef)", hash_hex)
-    profile = evaluate_osu(osu_file.read_text())
-    new_dominant = SKILL_TECH_KEY[profile.dominant_skill]
+    # Injected by an older engine: stale, and its tag says stream.
+    record = LazerBeatmapRecord(
+        id="rec-1", hash=hash_hex, md5_hash="md5-rec-1", file_hash=hash_hex, star_rating=5.00,
+        difficulty_name="Hard (5.00★ 5th Stream vdeadbeef)", tags=inject_binned_skill_tags("", "stream", 5.0),
+        title="Test Song", artist="Artist", ruleset_id=3, circle_size=7.0,
+    )
+    new_stars = evaluate_osu(content).total_stars
+    assert new_stars > 0.0
 
     mock_bridge = MagicMock(spec=RealmBridgeClient)
     mock_bridge.dump_7k_beatmaps.return_value = [record]
@@ -777,8 +782,8 @@ def test_dry_run_reports_what_would_change_and_writes_nothing(tmp_path: Path):
     assert summary.total_7k == 1
     assert summary.would_update == 1
     assert summary.updated_count == 0
-    assert summary.dominant_changes == ({} if new_dominant == "jack" else {f"jack->{new_dominant}": 1})
-    assert summary.star_change_mean == pytest.approx(profile.total_stars - 5.00)
+    assert summary.dominant_changes == {"stream->jack": 1}
+    assert summary.star_change_mean == pytest.approx(new_stars - 5.00)
 
     mock_bridge.apply_batch_update.assert_not_called()
     mock_backup.create_realm_snapshot.assert_not_called()

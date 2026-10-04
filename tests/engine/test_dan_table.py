@@ -4,8 +4,6 @@ tier-level stars. `src/proj7k/dan_table.json` stores them to two decimals; this 
 from the engine it describes.
 """
 
-import json
-
 import numpy as np
 import pytest
 
