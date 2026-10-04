@@ -611,7 +611,7 @@
     <!-- Column 3: Dual-Hand Strain Profile & Playhead Cursor -->
     <div class="card col-strain" id="cardStrain">
       <div class="strain-header">
-        <div class="card-title" style="margin-bottom: 0;">Dual-Hand Strain Timeseries</div>
+        <div class="card-title" style="margin-bottom: 0;">Dual-Hand Strain Timeseries <span style="opacity:.6;font-weight:400">(legacy engine)</span></div>
         <div class="playhead-time" id="playheadTime">00:00.00</div>
       </div>
       <div class="strain-legend" style="margin-bottom: 10px;">
@@ -643,7 +643,7 @@
   <div id="techDrawer" class="no-overlay">
     <div class="drawer-header" id="drawerToggle">
       <div class="drawer-title">
-        <span>4D Tech 细分指标 (Unorthodox Permutation)</span>
+        <span>4D Tech 细分指标 (Unorthodox Permutation, legacy engine)</span>
       </div>
       <div class="drawer-icon" id="drawerArrow">▼</div>
     </div>
@@ -879,7 +879,8 @@
       statNps.textContent = (meta.avg_nps || 0).toFixed(2);
 
       // 4D Tech breakdown
-      const tech = data.tech_breakdown || meta.tech_breakdown || {};
+      const legacy = data.legacy || {};
+      const tech = legacy.tech_breakdown || {};
       const tort = tech.tortuosity || 0;
       const shear = tech.bracket_shear || 0;
       const entropy = tech.spatial_entropy || 0;
@@ -902,7 +903,7 @@
       barSpeedBurst.style.width = `${Math.min(100, (speedBurst / 12.5) * 100)}%`;
 
       // Strain profile
-      currentStrainProfile = data.strain_profile || null;
+      currentStrainProfile = legacy.strain_profile || null;
       if (currentStrainProfile && currentStrainProfile.sample_times_ms && currentStrainProfile.sample_times_ms.length > 0) {
         const times = currentStrainProfile.sample_times_ms;
         currentDurationMs = times[times.length - 1];

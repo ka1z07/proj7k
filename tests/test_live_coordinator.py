@@ -128,7 +128,8 @@ def test_coordinator_on_beatmap_changed_broadcasts_radar(tmp_path: Path):
                 assert "radar" in client_frame
                 assert "jack" in client_frame["radar"]
                 assert "stream" in client_frame["radar"]
-                assert client_frame["radar"]["stream"] > 0.0
+                skills = [client_frame["radar"][k] for k in ("jack", "tech", "speed", "stream")]
+                assert all(v >= 0.0 for v in skills) and max(skills) > 0.0
 
                 # 4. Secondary switch test: cache hit latency < 5ms
                 t0 = time.perf_counter()

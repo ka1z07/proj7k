@@ -88,3 +88,21 @@ def test_dan_mapper_boundary_sr():
     target_high = mapper.resolve(target_sr=11.5)
     assert target_high.target_dan == "Stellium"
     assert target_high.target_sr == 11.5
+
+
+def test_resolve_from_beatmap_reads_the_dominant_skill_from_the_difficulty_engine():
+    from proj7k.downscaler.mapper import TwoTierDanMapper
+    from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
+
+    # A two-column fast jack: the engine's dominant skill is jack, which the mapper speaks as "jack".
+    hit_objects = [
+        HitObject(column=c, time=i * 120.0, note_type=NoteType.RICE) for i in range(80) for c in (0, 2)
+    ]
+    beatmap = Beatmap7K(
+        title="t", artist="a", creator="c", version="v", hit_objects=hit_objects,
+        timing_points=[TimingPoint(time=0.0, beat_length=500.0, meter=4, uninherited=True)],
+    )
+
+    target = TwoTierDanMapper().resolve_from_beatmap(beatmap, target_dan="7th")
+
+    assert target.dominant_skill == "jack"

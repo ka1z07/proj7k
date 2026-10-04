@@ -1,14 +1,17 @@
 """
 LiveEngine: Analysis orchestrator and caching seam for real-time live radar.
 
-SPEC-P2.4-01 / ADR-0010.
+SPEC-P2.4-01 / ADR-0010. Stars, dan tier and the radar come from the spec v0.2 difficulty engine
+(ADR-0017/0018); the dual-hand strain canvas, the 4D tech breakdown and the legacy synthesis are
+the driver/strain engine's and ride in the frame under `legacy`, labelled, until they are redesigned.
 """
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from proj7k.cache import TwoLayerCache
-from proj7k.difficulty import DifficultyOptions, evaluate_intrinsic_difficulty
+from proj7k.engine import evaluate_osu
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import extract_beatmap_features
 from proj7k.parser import parse_osu_7k
 from proj7k.radar import compute_tech_4d_components, compute_technique_radar
@@ -16,21 +19,22 @@ from proj7k.rating import synthesize_star_rating
 from proj7k.strain import compute_dual_hand_strain
 
 
-from proj7k.dan import legacy_estimate_canonical_dan
+from proj7k.dan import estimate_canonical_dan
 
 
 def estimate_dan_tier(star_rating: float) -> str:
     """
-    Estimates canonical Jinjin 7K Dan benchmark tier from intrinsic star rating.
-    Delegates directly to canonical proj7k.dan.legacy_estimate_canonical_dan.
+    Estimates canonical Jinjin 7K Dan benchmark tier from the difficulty engine's star rating.
+    Delegates directly to canonical proj7k.dan.estimate_canonical_dan.
     """
-    return legacy_estimate_canonical_dan(star_rating)
+    return estimate_canonical_dan(star_rating)
 
 
 class LiveEngine:
     """
     Evaluates 7K charts for real-time visualization with TwoLayerCache integration.
-    Produces canonical JSON state frames conforming to TechniqueRadar and StarRatingSynthesis.
+    Produces canonical JSON state frames: the engine's profile, the radar the canvas draws, and the
+    labelled `legacy` readings.
     """
 
     def __init__(
@@ -67,12 +71,18 @@ class LiveEngine:
             features = extract_beatmap_features(beatmap)
             self.cache.put_features(content_hash, None, features)
 
+        profile = evaluate_osu(content_str)
+        dan_tier = estimate_dan_tier(profile.total_stars)
+        dominant_key = SKILL_TECH_KEY[profile.dominant_skill]
+        radar: Dict[str, Any] = {SKILL_TECH_KEY[name]: reading.stars for name, reading in profile.skills.items()}
+        radar["dominant_technique"] = dominant_key
+        radar["dominant_score"] = radar[dominant_key]
+
         strain_profile = compute_dual_hand_strain(beatmap)
-        radar = compute_technique_radar(beatmap, features=features)
-        synthesis = synthesize_star_rating(radar, p90_strain=strain_profile.p90_strain)
-        dan_tier = estimate_dan_tier(synthesis.star_rating)
-        tech_breakdown = radar.tech_4d.to_dict() if radar.tech_4d else {}
-        tech_breakdown["speed_burst"] = round(radar.speed, 4)
+        legacy_radar = compute_technique_radar(beatmap, features=features)
+        synthesis = synthesize_star_rating(legacy_radar, p90_strain=strain_profile.p90_strain)
+        tech_breakdown = legacy_radar.tech_4d.to_dict() if legacy_radar.tech_4d else {}
+        tech_breakdown["speed_burst"] = round(legacy_radar.speed, 4)
 
         metadata: Dict[str, Any] = {
             "title": beatmap.title,
@@ -83,23 +93,25 @@ class LiveEngine:
             "hold_pct": features.hold_pct,
             "duration_seconds": features.duration_seconds,
             "avg_nps": features.avg_nps,
-            "dominant_technique": synthesis.dominant_technique,
-            "dominant_score": synthesis.dominant_score,
-            "synergy_bonus": synthesis.synergy_bonus,
+            "dominant_technique": dominant_key,
+            "dominant_score": radar["dominant_score"],
             "dan_tier": dan_tier,
-            "tech_breakdown": tech_breakdown,
         }
 
         frame = {
             "type": "beatmap_update",
             "cached": False,
-            "star_rating": synthesis.star_rating,
-            "raw_star_rating": synthesis.uncompressed_rating,
+            "star_rating": profile.total_stars,
             "dan_tier": dan_tier,
-            "radar": radar.to_dict(),
-            "synthesis": synthesis.to_dict(),
-            "strain_profile": strain_profile.to_dict(),
-            "tech_breakdown": tech_breakdown,
+            "radar": radar,
+            "profile": profile.to_dict(),
+            "legacy": {
+                "engine": "legacy driver/strain engine (to be redesigned, ADR-0018)",
+                "star_rating": synthesis.star_rating,
+                "synthesis": synthesis.to_dict(),
+                "strain_profile": strain_profile.to_dict(),
+                "tech_breakdown": tech_breakdown,
+            },
             "metadata": metadata,
         }
 

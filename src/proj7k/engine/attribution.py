@@ -65,5 +65,7 @@ def dominance(a: np.ndarray, d: np.ndarray, D: float, p: Params) -> np.ndarray:
     """§9.4: pi_k = sum_i a_ik s_i, with s_i the event's normalised share of p_i (1 - p_i) at theta = D."""
     pl = loss(d, D, p)
     s = pl * (1 - pl)
-    s = s / s.sum()
+    total = s.sum()
+    # D = 0 (nothing to solve) leaves no event with a share; they then count equally, so pi still sums to 1.
+    s = s / total if total > 0.0 else np.full_like(s, 1.0 / len(s))
     return a.T @ s

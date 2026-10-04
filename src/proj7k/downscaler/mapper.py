@@ -18,7 +18,10 @@ import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from proj7k.parser import Beatmap7K
-from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar, compute_technique_radar
+from proj7k.engine import evaluate_notes
+from proj7k.engine.events import notes_from_beatmap
+from proj7k.engine.skills import SKILL_TECH_KEY
+from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar
 from proj7k.rating import RatingOptions
 from proj7k.strain import compute_raw_strain_star_rating
 
@@ -219,9 +222,8 @@ class TwoTierDanMapper:
         target_dan: Optional[str] = None,
         target_sr: Optional[float] = None,
     ) -> DanTarget:
-        """Resolves target, auto-detecting dominant technique from the beatmap."""
-        radar = compute_technique_radar(beatmap)
-        dominant = radar.dominant_technique
+        """Resolves target, auto-detecting the dominant skill from the beatmap with the difficulty engine."""
+        dominant = SKILL_TECH_KEY[evaluate_notes(notes_from_beatmap(beatmap)).dominant_skill]
         return self.resolve(target_dan=target_dan, target_sr=target_sr, dominant_skill=dominant)
 
     def _get_tier_profile(self, tech_name: str, dan_tier: str) -> Optional[Dict[str, Any]]:

@@ -12,15 +12,20 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from proj7k.engine.params import Params
-from proj7k.parser import NoteType, parse_osu_7k
+from proj7k.parser import Beatmap7K, NoteType, parse_osu_7k
 
 #: A chart as `(column, head_s, tail_s | None)`; a rice has no tail (§2.1).
 Notes = List[Tuple[int, float, Optional[float]]]
 
 
 def notes_from_osu(content: str) -> Notes:
+    return notes_from_beatmap(parse_osu_7k(content))
+
+
+def notes_from_beatmap(beatmap: Beatmap7K) -> Notes:
+    """A parsed chart as `(column, head_s, tail_s | None)` notes (§2.1)."""
     out: Notes = []
-    for ho in parse_osu_7k(content).hit_objects:
+    for ho in beatmap.hit_objects:
         tail = ho.end_time if ho.note_type == NoteType.LN and ho.end_time is not None else None
         out.append((int(ho.column), ho.time / 1000.0, None if tail is None else tail / 1000.0))
     return out

@@ -14,6 +14,8 @@ from proj7k.engine.params import Params
 
 def loss(d: np.ndarray, theta: float, p: Params) -> np.ndarray:
     """§3.1 p_i(theta), the chance an event of difficulty reading d is lost at level theta; d = 0 gives 0."""
+    if theta <= 0.0:  # the limit: every event with any difficulty is lost, and log(0) - log(0) is not a number
+        return (d > 0).astype(float)
     with np.errstate(divide="ignore"):
         return special.expit(p.beta * (np.log(d) - np.log(theta)))
 

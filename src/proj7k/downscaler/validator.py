@@ -3,9 +3,10 @@ DualGateValidator - Dual-gate technique preservation verification engine
 (ADR-0011, SPEC-P5.1-03).
 
 Enforces strict preservation of macro-contour and microscopic technique signatures
-between original and downscaled beatmaps:
+between original and downscaled beatmaps. The technique signature is the difficulty engine's
+(spec v0.2) eight skills' stars and its dominant skill:
 - Gate 1: Macro Contour & Dominant Invariant:
-  cos(R_downscaled, R_orig) >= 0.80 and 1st-rank dominant technique conserved.
+  cos(R_downscaled, R_orig) >= 0.80 and 1st-rank dominant skill conserved.
 - Gate 2: Microscopic Centroid Confidence Band:
   Protects core physiological metrics (e.g. hold_pct, density ratios)
   against degeneration into an unrelated chart category or drift outside target bounds.
@@ -15,9 +16,11 @@ from dataclasses import dataclass, field
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from proj7k.engine import DifficultyProfile, evaluate_notes
+from proj7k.engine.events import notes_from_beatmap
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K
-from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar, compute_technique_radar
+from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar
 from proj7k.downscaler.mapper import DanTarget
 
 
@@ -26,12 +29,18 @@ def compute_radar_cosine_similarity(
     radar2: TechniqueRadar,
 ) -> float:
     """
-    Computes cosine similarity between two 8D technique radar score vectors:
+    Computes cosine similarity between two 8D legacy technique radar score vectors:
     cos(R1, R2) = (R1 . R2) / (||R1|| * ||R2||).
     """
-    v1 = radar1.to_vector()
-    v2 = radar2.to_vector()
+    return _cosine(radar1.to_vector(), radar2.to_vector())
 
+
+def compute_skill_cosine_similarity(profile1: DifficultyProfile, profile2: DifficultyProfile) -> float:
+    """Cosine similarity between two charts' eight skill-stars vectors (in the engine's skill order)."""
+    return _cosine([r.stars for r in profile1.skills.values()], [r.stars for r in profile2.skills.values()])
+
+
+def _cosine(v1: Any, v2: Any) -> float:
     dot = sum(a * b for a, b in zip(v1, v2))
     norm1 = math.sqrt(sum(a * a for a in v1))
     norm2 = math.sqrt(sum(b * b for b in v2))
@@ -51,6 +60,7 @@ class ValidationResult:
     passed: bool
     cosine_similarity: float
     dominant_conserved: bool
+    #: Engine skill names (`rc_jack`, ..., `ln_release`).
     dominant_technique_orig: str
     dominant_technique_downscaled: str
     gate1_passed: bool
@@ -91,30 +101,62 @@ class DualGateValidator:
         min_cosine_similarity: float = 0.80,
     ):
         self.min_cosine_similarity = min_cosine_similarity
+        # The closed loop validates many candidates against one original; the original is solved once.
+        # The beatmap is held with its profile so that its id cannot be reused while the entry lives.
+        self._profiles: Dict[int, Tuple[Beatmap7K, DifficultyProfile]] = {}
+
+    def profile_of(self, beatmap: Beatmap7K) -> DifficultyProfile:
+        """The difficulty engine's profile of a parsed chart, memoised per beatmap object."""
+        hit = self._profiles.pop(id(beatmap), None)
+        if hit is None:
+            if len(self._profiles) >= 8:
+                self._profiles.pop(next(iter(self._profiles)))  # least recently used
+            hit = (beatmap, evaluate_notes(notes_from_beatmap(beatmap)))
+        self._profiles[id(beatmap)] = hit
+        return hit[1]
 
     def validate(
         self,
-        orig_beatmap_or_radar: Union[Beatmap7K, TechniqueRadar],
+        orig_beatmap_or_profile: Union[Beatmap7K, DifficultyProfile],
         downscaled_beatmap: Beatmap7K,
         target: Optional[DanTarget] = None,
     ) -> ValidationResult:
         """
         Validates technique preservation between original and downscaled beatmap.
         """
-        if isinstance(orig_beatmap_or_radar, TechniqueRadar):
-            radar_orig = orig_beatmap_or_radar
+        if isinstance(orig_beatmap_or_profile, DifficultyProfile):
+            profile_orig = orig_beatmap_or_profile
             feat_orig = None
         else:
-            radar_orig = compute_technique_radar(orig_beatmap_or_radar)
-            feat_orig = extract_beatmap_features(orig_beatmap_or_radar)
+            profile_orig = self.profile_of(orig_beatmap_or_profile)
+            feat_orig = extract_beatmap_features(orig_beatmap_or_profile)
 
-        radar_downscaled = compute_technique_radar(downscaled_beatmap)
+        if not downscaled_beatmap.hit_objects:
+            # Nothing to solve: the engine has no profile of an empty chart.
+            return ValidationResult(
+                passed=False,
+                cosine_similarity=0.0,
+                dominant_conserved=False,
+                dominant_technique_orig=profile_orig.dominant_skill,
+                dominant_technique_downscaled="",
+                gate1_passed=False,
+                gate2_passed=False,
+                details={
+                    "min_cosine_similarity": self.min_cosine_similarity,
+                    "gate1_violations": ["Downscaled chart is empty."],
+                    "gate2_violations": ["Total notes wiped out (< 5 notes remaining)."],
+                    "profile_orig": profile_orig.to_dict(),
+                    "profile_downscaled": None,
+                },
+            )
+
+        profile_downscaled = self.profile_of(downscaled_beatmap)
         feat_downscaled = extract_beatmap_features(downscaled_beatmap)
 
         # Gate 1: Macro contour and dominant conservation
-        cosine_sim = compute_radar_cosine_similarity(radar_orig, radar_downscaled)
-        dominant_orig = radar_orig.dominant_technique
-        dominant_downscaled = radar_downscaled.dominant_technique
+        cosine_sim = compute_skill_cosine_similarity(profile_orig, profile_downscaled)
+        dominant_orig = profile_orig.dominant_skill
+        dominant_downscaled = profile_downscaled.dominant_skill
 
         dominant_conserved = (dominant_orig == dominant_downscaled)
         gate1_passed = (cosine_sim >= self.min_cosine_similarity) and dominant_conserved
@@ -170,10 +212,10 @@ class DualGateValidator:
             "min_cosine_similarity": self.min_cosine_similarity,
             "gate1_violations": [] if gate1_passed else (
                 [f"Cosine similarity {cosine_sim:.4f} < {self.min_cosine_similarity}"] if cosine_sim < self.min_cosine_similarity else []
-            ) + ([f"Dominant technique shifted from '{dominant_orig}' to '{dominant_downscaled}'"] if not dominant_conserved else []),
+            ) + ([f"Dominant skill shifted from '{dominant_orig}' to '{dominant_downscaled}'"] if not dominant_conserved else []),
             "gate2_violations": gate2_violations,
-            "radar_orig": radar_orig.to_dict(),
-            "radar_downscaled": radar_downscaled.to_dict(),
+            "profile_orig": profile_orig.to_dict(),
+            "profile_downscaled": profile_downscaled.to_dict(),
         }
 
         return ValidationResult(

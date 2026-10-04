@@ -13,6 +13,19 @@ SKILLS: Tuple[str, ...] = (
 )
 RC_COUNT = 4
 
+#: The engine's skill names against the short technique keys the consumers of the legacy radar speak
+#: (`radar.TECHNIQUE_NAMES`: the live radar canvas, the downscaler's pruner and mapper).
+SKILL_TECH_KEY = {
+    "rc_jack": "jack",
+    "rc_tech": "tech",
+    "rc_speed": "speed",
+    "rc_stamina": "stream",
+    "ln_general": "ln_general",
+    "ln_tech": "ln_tech",
+    "ln_inverse": "ln_inverse",
+    "ln_release": "ln_release",
+}
+
 #: The benchmark manifest's technique pools (`docs/research/structured_index.json`) against the skill each
 #: pool is the ladder of. A pool's own skill is the one its charts are meant to be hard at, so it is the
 #: skill whose D_k must climb the 15 tiers (ADR-0018 decision 3).
