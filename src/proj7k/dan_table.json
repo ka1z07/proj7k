@@ -1,0 +1,20 @@
+{
+  "note": "Star rating of each dan tier on the spec v0.2 engine: the four Regular pools' tier-level stars (ADR-0018 decision 2). Generated from the engine's tier medians; tests/engine/test_dan_table.py keeps it equal to them.",
+  "stars": {
+    "0th": 3.4,
+    "1st": 3.94,
+    "2nd": 4.42,
+    "3rd": 5.1,
+    "4th": 5.45,
+    "5th": 5.74,
+    "6th": 6.04,
+    "7th": 6.55,
+    "8th": 6.96,
+    "9th": 7.4,
+    "10th": 7.85,
+    "Gamma": 8.44,
+    "Azimuth": 9.3,
+    "Zenith": 10.0,
+    "Stellium": 11.05
+  }
+}

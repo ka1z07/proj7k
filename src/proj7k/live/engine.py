@@ -16,15 +16,15 @@ from proj7k.rating import synthesize_star_rating
 from proj7k.strain import compute_dual_hand_strain
 
 
-from proj7k.dan import estimate_canonical_dan
+from proj7k.dan import legacy_estimate_canonical_dan
 
 
 def estimate_dan_tier(star_rating: float) -> str:
     """
     Estimates canonical Jinjin 7K Dan benchmark tier from intrinsic star rating.
-    Delegates directly to canonical proj7k.dan.estimate_canonical_dan.
+    Delegates directly to canonical proj7k.dan.legacy_estimate_canonical_dan.
     """
-    return estimate_canonical_dan(star_rating)
+    return legacy_estimate_canonical_dan(star_rating)
 
 
 class LiveEngine:

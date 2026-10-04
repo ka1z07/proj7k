@@ -11,7 +11,7 @@ from proj7k.downscaler.balancer import BimanualFluxBalancer
 from proj7k.downscaler.mapper import (
     TwoTierDanMapper,
     DanTarget,
-    CANONICAL_DAN_SR,
+    LEGACY_DAN_SR,
     CANONICAL_DAN_TIERS,
     parse_dan_tier,
     star_rating_to_strain,
@@ -48,7 +48,7 @@ __all__ = [
     "BimanualFluxBalancer",
     "TwoTierDanMapper",
     "DanTarget",
-    "CANONICAL_DAN_SR",
+    "LEGACY_DAN_SR",
     "CANONICAL_DAN_TIERS",
     "parse_dan_tier",
     "star_rating_to_strain",

@@ -4,7 +4,7 @@ from pathlib import Path
 from proj7k.downscaler.mapper import (
     TwoTierDanMapper,
     DanTarget,
-    CANONICAL_DAN_SR,
+    LEGACY_DAN_SR,
     CANONICAL_DAN_TIERS,
     parse_dan_tier,
     star_rating_to_strain,
@@ -44,7 +44,7 @@ def test_star_rating_to_strain_roundtrip():
 def test_canonical_dan_tiers_order_and_sr():
     assert len(CANONICAL_DAN_TIERS) == 15
     # Strict monotonicity of star ratings across canonical dan tiers
-    srs = [CANONICAL_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
+    srs = [LEGACY_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
     for i in range(len(srs) - 1):
         assert srs[i] < srs[i + 1]
 

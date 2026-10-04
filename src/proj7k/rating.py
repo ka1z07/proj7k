@@ -23,7 +23,7 @@ from proj7k.calibration import (
     TechniqueStarAnchor,
     compute_methodology_fingerprint,
 )
-from proj7k.dan import CANONICAL_DAN_SR, CANONICAL_DAN_TIERS
+from proj7k.dan import LEGACY_DAN_SR, CANONICAL_DAN_TIERS
 from proj7k.radar import TechniqueRadar
 from proj7k.strain import compute_raw_strain_star_rating
 
@@ -74,7 +74,7 @@ class RatingOptions:
             soft_cap_threshold=self.soft_cap_threshold,
             soft_cap_scale=self.soft_cap_scale,
             dan_tiers=tuple(CANONICAL_DAN_TIERS),
-            dan_sr=tuple(CANONICAL_DAN_SR[t] for t in CANONICAL_DAN_TIERS),
+            dan_sr=tuple(LEGACY_DAN_SR[t] for t in CANONICAL_DAN_TIERS),
         )
 
 

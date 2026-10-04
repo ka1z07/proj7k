@@ -2,7 +2,7 @@
 Issue #50's band acceptance as CI force, read the way the ticket reads it: **layered**.
 
 The calibration's own claim is that a technique's score for a tier-T chart lands within ±8% of
-`CANONICAL_DAN_SR[T]` (`guard.TECHNIQUE_BAND`), on at least `guard.TECHNIQUE_BAND_MIN_IN_BAND`
+`LEGACY_DAN_SR[T]` (`guard.TECHNIQUE_BAND`), on at least `guard.TECHNIQUE_BAND_MIN_IN_BAND`
 of that ladder's 15 charts. The ticket states the bar as hard **for the axes whose driver orders
 their own ladder** and as a recorded boundary for the rest — the same discipline ADR-0015 uses
 for the cross-technique criteria, and the reason this module is two-sided: an axis lifted over
@@ -16,11 +16,10 @@ below their own driver gates — which is ADR-0016's open question 1, recorded h
 argued in prose.
 """
 
-import statistics
 
 import pytest
 
-from proj7k.dan import CANONICAL_DAN_SR
+from proj7k.dan import LEGACY_DAN_SR
 from proj7k.guard import (
     CALIBRATED_METRIC_GATES,
     TECHNIQUE_BAND,
@@ -114,8 +113,8 @@ def test_the_axis_lands_its_own_ladder_as_recorded(
     measured = sum(
         1
         for tier in tiers
-        if abs(getattr(benchmark_radar(group, tier), axis) - CANONICAL_DAN_SR[tier])
-        <= TECHNIQUE_BAND * CANONICAL_DAN_SR[tier]
+        if abs(getattr(benchmark_radar(group, tier), axis) - LEGACY_DAN_SR[tier])
+        <= TECHNIQUE_BAND * LEGACY_DAN_SR[tier]
     )
     assert measured == KNOWN_IN_BAND[axis], (
         f"{axis} lands {measured}/15 of its own ladder, recorded {KNOWN_IN_BAND[axis]}/15 — "
@@ -146,8 +145,8 @@ def test_the_composed_star_lands_its_ladder_as_recorded(
     measured = sum(
         1
         for tier in tiers
-        if abs(benchmark_ladder(group, tier).star_rating - CANONICAL_DAN_SR[tier])
-        <= TECHNIQUE_BAND * CANONICAL_DAN_SR[tier]
+        if abs(benchmark_ladder(group, tier).star_rating - LEGACY_DAN_SR[tier])
+        <= TECHNIQUE_BAND * LEGACY_DAN_SR[tier]
     )
     assert measured == KNOWN_COMPOSITE_IN_BAND[group], (
         f"{group} composed total lands {measured}/15 in band, recorded "
@@ -166,21 +165,3 @@ def test_the_axes_meeting_the_bar_are_exactly_the_recorded_ones():
         f"axes meeting the ±{TECHNIQUE_BAND:.0%} bar are {sorted(at_bar)}, recorded "
         f"{sorted(BAR_MET)}"
     )
-
-
-def test_the_anchor_tier_medians_stay_where_the_guard_asserts_them(benchmark_ladder, benchmark_manifest):
-    """
-    The band counts above are per chart; the guard's anchor bands are per tier and are the harder
-    acceptance (a tier median outside its band is a red CI run). Read here as well so the two
-    readings of the same calibration cannot drift apart.
-    """
-    from proj7k.dan import CANONICAL_DAN_SR_BANDS
-
-    for tier, (low, high) in CANONICAL_DAN_SR_BANDS.items():
-        samples = [
-            benchmark_ladder(group, tier).star_rating
-            for group in benchmark_manifest
-            if tier in benchmark_manifest[group]
-        ]
-        median = statistics.median(samples)
-        assert low <= median <= high, f"{tier} median {median:.3f} outside [{low}, {high}]"

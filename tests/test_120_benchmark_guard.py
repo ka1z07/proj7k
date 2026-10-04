@@ -51,7 +51,9 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #: Issue #52 left this digest alone on purpose (its branch moved the drivers, not the star
 #: mapping); issue #50 is the second step, and this is its re-baselined value: the eight
 #: dimensions are absolute technique stars now (ADR-0016), so every chart's rating moved.
-EXPECTED_STAR_RATING_CHECKSUM = "sha256:81e4de64b214373012173886b63d7be3ccd9c5d7697abbd79b8317920eee3ee9"
+#:
+#: Re-baselined for the spec v0.2 engine (ADR-0017/0018): the engine was replaced, so every rating moved.
+EXPECTED_STAR_RATING_CHECKSUM = "sha256:e53623c5827198e32b8b6caba73a2a413d2c9b2481a57fad6a2667689c5f5428"
 
 #: The ladder-level acceptance bar itself lives in `guard`, next to the per-technique gates it
 #: complements, so the calibration tools can weigh the same numbers this module asserts. It was
@@ -99,7 +101,7 @@ def test_star_rating_ladder_is_monotone_for_every_technique(benchmark_report: Be
     assert result.passed, result.error_message
     assert set(result.metrics_summary) == set(EXPECTED_TECHNIQUES)
     for technique, metrics in result.metrics_summary.items():
-        assert set(metrics) == {"star_rating"}, technique
+        assert set(metrics) == {"star_rating", "own_skill"}, technique
         assert metrics["star_rating"]["kendall_tau"] >= 0.88, technique
         assert metrics["star_rating"]["spearman_rho"] >= 0.95, technique
 
@@ -142,9 +144,10 @@ def test_anchor_tier_medians_land_in_their_bands(benchmark_report: BenchmarkBatc
         assert low <= median <= high, f"{tier} median {median:.3f}★ outside [{low}, {high}]★"
 
 
-def test_star_ratings_stay_under_the_soft_cap_ceiling(benchmark_report: BenchmarkBatchReport):
+def test_star_ratings_are_positive_and_bounded(benchmark_report: BenchmarkBatchReport):
+    """The new scale has no soft cap (stars are one power law of D); this only catches a blow-up."""
     for result in benchmark_report.results:
-        assert 0.0 < result.star_rating <= 12.5
+        assert 0.0 < result.star_rating <= 13.0
 
 
 def test_diagnostic_metrics_stay_available_on_explicit_request(benchmark_report: BenchmarkBatchReport):
@@ -185,3 +188,33 @@ def test_guard_blocks_a_rating_regression_on_the_real_ladder(benchmark_report: B
     assert result.passed is False
     assert "LN Inverse" in result.error_message
     assert "star_rating" in result.error_message
+
+
+def test_only_ln_release_is_below_the_plain_own_skill_bar_and_the_ratchet_holds_each_pool(
+    benchmark_report: BenchmarkBatchReport,
+):
+    """
+    ADR-0018 decision 3: every pool's own skill climbs the ladder, held by a per-pool ratchet at the value the
+    engine has now. Against the plain star bar (tau .88 / rho .95 / 4 inversions) the one pool that does not
+    clear is LN Release, whose tail-isolation skill T1 records inversions on — a known defect, not an
+    acceptance. If it ever clears the plain bar, delete its ratchet entry.
+    """
+    from proj7k.guard import CALIBRATED_METRIC_GATES, OWN_SKILL_RATCHET
+
+    plain = CALIBRATED_METRIC_GATES["own_skill"]
+    own = {technique: reports["own_skill"] for technique, reports in benchmark_report.monotonicity.items()}
+    below_plain = {
+        technique
+        for technique, rep in own.items()
+        if rep["kendall_tau"] < plain.min_kendall_tau
+        or rep["spearman_rho"] < plain.min_spearman_rho
+        or len(rep["violations"]) > plain.max_violations
+    }
+
+    assert below_plain == {"LN Release"}
+    assert set(OWN_SKILL_RATCHET) == set(EXPECTED_TECHNIQUES)
+    assert evaluate_monotonicity_guard(benchmark_report).passed
+    config = MonotonicityGuardConfig()
+    for technique in EXPECTED_TECHNIQUES:
+        gate = config.gate_for("own_skill", technique)
+        assert own[technique]["kendall_tau"] >= gate.min_kendall_tau, technique

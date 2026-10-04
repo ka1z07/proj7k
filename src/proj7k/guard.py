@@ -81,7 +81,21 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
 #: Per-pool ratchet for the `own_skill` ladder, keyed by the pool's manifest name: the thresholds are the
 #: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an
 #: acceptance. A pool absent here is held to the plain `own_skill` gate.
-OWN_SKILL_RATCHET: Dict[str, MetricGate] = {}
+#: Measured on the spec v0.2 engine over the 120 charts (tau / rho / inversions), floored to three decimals.
+#: Only LN Release is below the plain bar (its tail-isolation skill is the one T1 records inversions on:
+#: tau .829 / rho .939 / 4 inversions against .88 / .95 / 4); the other seven clear it, and their entries
+#: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one
+#: needs a ruling.
+OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
+    "Regular Jack": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.992, max_violations=2),
+    "Regular Tech": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
+    "Regular Speed": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
+    "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
+    "LN General": MetricGate(min_kendall_tau=0.923, min_spearman_rho=0.975, max_violations=2),
+    "LN Tech": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
+    "LN Inverse": MetricGate(min_kendall_tau=0.942, min_spearman_rho=0.985, max_violations=2),
+    "LN Release": MetricGate(min_kendall_tau=0.828, min_spearman_rho=0.939, max_violations=4),
+}
 
 #: Applied to any metric without its own calibration entry.
 #: Measured worst for the raw density metrics: tau 0.780 / rho 0.894 / 6 inversions.
@@ -122,7 +136,7 @@ LADDER_MAX_TOTAL_INVERSIONS = 24
 
 # --- The absolute technique-star band (issue #50, ADR-0016) -----------------------------------
 #: The tolerance the calibration is judged by: a technique's score for a tier-T chart has to sit
-#: within this fraction of `dan.CANONICAL_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
+#: within this fraction of `dan.LEGACY_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
 #: of that ladder's 15 charts. Read by the calibration tool (`tools/technique_star_fit.py`)
 #: and asserted by `tests/test_technique_star_ladder.py`, so the band has one definition.
 #:

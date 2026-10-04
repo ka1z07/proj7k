@@ -14,7 +14,7 @@ from proj7k.lazer.bridge import (
     BeatmapUpdatePayload,
     LazerBeatmapRecord,
 )
-from proj7k.dan import estimate_canonical_dan
+from proj7k.dan import legacy_estimate_canonical_dan
 from proj7k.difficulty import current_engine_version
 
 # Regular expression matching injected difficulty name suffix, deliberately permissive:
@@ -184,7 +184,7 @@ def format_injected_difficulty_name(
     """
     base = strip_injected_suffix(difficulty_name)
     title = format_dominant_title(dominant_title)
-    tier = (dan_tier or estimate_canonical_dan(star_rating)).strip()
+    tier = (dan_tier or legacy_estimate_canonical_dan(star_rating)).strip()
     version_token = version or current_engine_version()
     suffix = f"({star_rating:.2f}★ {tier} {title} {version_token})"
     if base:
@@ -204,7 +204,7 @@ def generate_binned_skill_tags(
     """
     tech_key = _normalize_tech_key(dominant_tech)
     floor_star = max(0, int(star_rating))
-    tier = (dan_tier or estimate_canonical_dan(star_rating)).strip().lower().replace(" ", "_")
+    tier = (dan_tier or legacy_estimate_canonical_dan(star_rating)).strip().lower().replace(" ", "_")
     return [f"dominant_{tech_key}", f"{tech_key}_{floor_star}★", f"dan_{tier}"]
 
 

@@ -23,9 +23,9 @@ from proj7k.rating import RatingOptions
 from proj7k.strain import compute_raw_strain_star_rating
 
 from proj7k.dan import (
-    CANONICAL_DAN_SR,
+    LEGACY_DAN_SR,
     CANONICAL_DAN_TIERS,
-    estimate_canonical_dan,
+    legacy_estimate_canonical_dan,
     parse_dan_tier,
 )
 
@@ -174,10 +174,10 @@ class TwoTierDanMapper:
                 canonical_dan = self._estimate_closest_dan(effective_sr)
         elif target_dan is not None:
             canonical_dan = parse_dan_tier(target_dan)
-            effective_sr = CANONICAL_DAN_SR[canonical_dan]
+            effective_sr = LEGACY_DAN_SR[canonical_dan]
         else:
             canonical_dan = "7th"
-            effective_sr = CANONICAL_DAN_SR["7th"]
+            effective_sr = LEGACY_DAN_SR["7th"]
 
         target_strain = star_rating_to_strain(effective_sr, self.rating_options)
 
@@ -235,15 +235,15 @@ class TwoTierDanMapper:
 
     def _estimate_closest_dan(self, sr: float) -> str:
         """Finds closest canonical Dan tier for a given star rating."""
-        if sr <= CANONICAL_DAN_SR["0th"]:
+        if sr <= LEGACY_DAN_SR["0th"]:
             return "0th"
-        if sr >= CANONICAL_DAN_SR["Stellium"]:
+        if sr >= LEGACY_DAN_SR["Stellium"]:
             return "Stellium"
 
         best_tier = "7th"
         best_diff = float("inf")
         for tier in CANONICAL_DAN_TIERS:
-            diff = abs(CANONICAL_DAN_SR[tier] - sr)
+            diff = abs(LEGACY_DAN_SR[tier] - sr)
             if diff < best_diff:
                 best_diff = diff
                 best_tier = tier
@@ -251,10 +251,10 @@ class TwoTierDanMapper:
 
     def _interpolate_features(self, tech_name: str, sr: float) -> Dict[str, float]:
         """Interpolates feature vectors between two surrounding canonical tiers."""
-        if sr <= CANONICAL_DAN_SR["0th"]:
+        if sr <= LEGACY_DAN_SR["0th"]:
             p = self._get_tier_profile(tech_name, "0th")
             return dict(p["features"]) if p and "features" in p else {}
-        if sr >= CANONICAL_DAN_SR["Stellium"]:
+        if sr >= LEGACY_DAN_SR["Stellium"]:
             p = self._get_tier_profile(tech_name, "Stellium")
             return dict(p["features"]) if p and "features" in p else {}
 
@@ -263,13 +263,13 @@ class TwoTierDanMapper:
         for i in range(len(CANONICAL_DAN_TIERS) - 1):
             t_low = CANONICAL_DAN_TIERS[i]
             t_high = CANONICAL_DAN_TIERS[i + 1]
-            if CANONICAL_DAN_SR[t_low] <= sr <= CANONICAL_DAN_SR[t_high]:
+            if LEGACY_DAN_SR[t_low] <= sr <= LEGACY_DAN_SR[t_high]:
                 lower_tier = t_low
                 upper_tier = t_high
                 break
 
-        sr_low = CANONICAL_DAN_SR[lower_tier]
-        sr_high = CANONICAL_DAN_SR[upper_tier]
+        sr_low = LEGACY_DAN_SR[lower_tier]
+        sr_high = LEGACY_DAN_SR[upper_tier]
         factor = (sr - sr_low) / max(1e-6, sr_high - sr_low)
 
         p_low = self._get_tier_profile(tech_name, lower_tier)

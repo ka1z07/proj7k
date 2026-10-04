@@ -4,11 +4,11 @@ Fit each technique's absolute driver-to-star anchor on its own 15-tier ladder.
 Issue #50's reverse search. `tools/calibration_sandbox.py` evaluates a calibration *forwards*
 ("what would these constants do to the ladder"); this tool searches *backwards* for the
 constants: for each of the eight axes, which `a` and `exp` put `a * driver ** exp` inside
-`CANONICAL_DAN_SR[tier]`'s ±8% band on as many of the axis' own 15 benchmark charts as possible.
+`LEGACY_DAN_SR[tier]`'s ±8% band on as many of the axis' own 15 benchmark charts as possible.
 
 Both tools start from the same frozen core (`proj7k.benchmark_core`) and evaluate through the
 engine's own mapping (`radar.technique_star_scores`), so a fitted number means what it says. The
-acceptance bands and the ladder gates are read from `dan.CANONICAL_DAN_SR` and
+acceptance bands and the ladder gates are read from `dan.LEGACY_DAN_SR` and
 `guard.CALIBRATED_METRIC_GATES` — never re-typed here.
 
     PYTHONPATH=src python3 tools/technique_star_fit.py            # fit and report
@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from proj7k.benchmark_core import build_core, ladder_records
 from proj7k.calibration import DEFAULT_CALIBRATION, TechniqueStarAnchor
-from proj7k.dan import CANONICAL_DAN_SR, CANONICAL_DAN_SR_BANDS
+from proj7k.dan import LEGACY_DAN_SR, CANONICAL_DAN_SR_BANDS
 from proj7k.guard import (
     CALIBRATED_METRIC_GATES,
     LADDER_MAX_TOTAL_INVERSIONS,
@@ -158,7 +158,7 @@ def _rank(scores: Sequence[float], targets: Sequence[float], exp: float) -> Tupl
 def fit_axis(rows: Sequence[Dict[str, Any]], technique: str) -> Tuple[AxisFit, List[TierRow]]:
     """The anchor maximising the in-band count on one axis' own ladder."""
     drivers = [r["drivers"][technique] for r in rows]
-    targets = [CANONICAL_DAN_SR[r["tier"]] for r in rows]
+    targets = [LEGACY_DAN_SR[r["tier"]] for r in rows]
 
     best: Optional[Tuple[Tuple[float, ...], TechniqueStarAnchor]] = None
     for exp in EXP_GRID:
@@ -183,7 +183,7 @@ def fit_axis(rows: Sequence[Dict[str, Any]], technique: str) -> Tuple[AxisFit, L
             tier=r["tier"],
             song=r["song"],
             driver=r["drivers"][technique],
-            canonical=CANONICAL_DAN_SR[r["tier"]],
+            canonical=LEGACY_DAN_SR[r["tier"]],
             score=scores[i],
         )
         for i, r in enumerate(rows)
@@ -237,7 +237,7 @@ def axis_candidates(
 ) -> List[Candidate]:
     """Every anchor within `slack` charts of this axis' own best, best first."""
     drivers = [r["drivers"][technique] for r in rows]
-    targets = [CANONICAL_DAN_SR[r["tier"]] for r in rows]
+    targets = [LEGACY_DAN_SR[r["tier"]] for r in rows]
     scored: Dict[Tuple[float, float], Candidate] = {}
     for exp in EXP_GRID:
         exp_r = round(exp, ANCHOR_PRECISION)
@@ -314,7 +314,7 @@ def _select(
                 ladders_ok += 1
             composite_in_band += sum(
                 1 for tier, value in zip(tiers, values)
-                if _relative_error(value, CANONICAL_DAN_SR[tier]) <= BAND
+                if _relative_error(value, LEGACY_DAN_SR[tier]) <= BAND
             )
             ladders.append(
                 {
@@ -344,7 +344,7 @@ def _select(
             for row in ladder_records(list(records), group):
                 index = chart_index[(group, row["tier"])]
                 if (
-                    _relative_error(columns[technique][index], CANONICAL_DAN_SR[row["tier"]])
+                    _relative_error(columns[technique][index], LEGACY_DAN_SR[row["tier"]])
                     <= BAND
                 ):
                     dim_in_band += 1
@@ -409,7 +409,7 @@ def free_offset_ceiling(
     Returns (in-band, a, exp, b).
     """
     drivers = [r["drivers"][technique] for r in rows]
-    targets = [CANONICAL_DAN_SR[r["tier"]] for r in rows]
+    targets = [LEGACY_DAN_SR[r["tier"]] for r in rows]
     best: Tuple[int, float, float, float] = (0, 0.0, 0.0, 0.0)
     for exp in EXP_GRID:
         exp_r = round(exp, ANCHOR_PRECISION)
@@ -474,7 +474,7 @@ def ladder_report(
             "in_band": sum(
                 1
                 for tier, value in zip(tiers, values)
-                if _relative_error(value, CANONICAL_DAN_SR[tier]) <= BAND
+                if _relative_error(value, LEGACY_DAN_SR[tier]) <= BAND
             ),
             "kendall_tau": mono.kendall_tau,
             "spearman_rho": mono.spearman_rho,
@@ -646,7 +646,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"frozen core: {len(records)} charts  |  self-check max |ΔSR| {disagreement:.10f}")
     print()
     print(
-        f"=== per-axis best fit (band ±{BAND:.0%} of CANONICAL_DAN_SR[T]; bar ≥{BAND_MIN_IN_BAND}/15) ==="
+        f"=== per-axis best fit (band ±{BAND:.0%} of LEGACY_DAN_SR[T]; bar ≥{BAND_MIN_IN_BAND}/15) ==="
     )
     print(f"{'axis':12} {'a':>13} {'exp':>9}  {'in band':>8} {'worst':>7}  out of band")
     for technique in TECHNIQUE_NAMES:

@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from scipy.optimize import curve_fit
 
-from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
+from proj7k.dan import CANONICAL_DAN_TIERS, legacy_estimate_canonical_dan
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.profiler.aggregate import player_overall_star
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment
@@ -318,7 +318,7 @@ def analyze_strain_response(
                 dimension=dim,
                 effective_capacity=peak_strain,
                 star_rating=sr,
-                dan_tier=estimate_canonical_dan(sr),
+                dan_tier=legacy_estimate_canonical_dan(sr),
                 has_inflection=False,
                 peak_chart_strain=peak_strain,
                 tested=True,
@@ -364,7 +364,7 @@ def analyze_strain_response(
 
         raw_sr = compute_raw_strain_star_rating(effective_cap)
         sr = apply_tanh_soft_cap(raw_sr)
-        dan = estimate_canonical_dan(sr)
+        dan = legacy_estimate_canonical_dan(sr)
 
         results[dim] = DimensionCapacityResult(
             dimension=dim,
@@ -385,7 +385,7 @@ def analyze_strain_response(
         bottleneck_technique = min(tested_results, key=lambda r: r.star_rating).dimension
         tested_dict = {r.dimension: r.star_rating for r in tested_results}
         overall_sr = player_overall_star(tested_dict)
-        overall_dan = estimate_canonical_dan(overall_sr)
+        overall_dan = legacy_estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "None"
         bottleneck_technique = "None"
