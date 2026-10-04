@@ -2,6 +2,7 @@ import math
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 from proj7k.dan import CANONICAL_DAN_TIERS
+from proj7k.engine.skills import BENCHMARK_POOL_SKILL
 from proj7k.scaling import (
     compute_action_window,
     apply_inverse_bpm_scaling,
@@ -13,7 +14,8 @@ from proj7k.scaling import (
 #: a private copy here previously dropped 0th silently.
 TIER_ORDER: List[str] = list(CANONICAL_DAN_TIERS)
 
-#: Metrics gated on by default: the engine's own artifact, the star rating. The raw density
+#: Metrics gated on by default: the engine's own artifacts, the star rating and (`own_skill`) the
+#: stars of the skill a pool is the ladder of. The raw density
 #: features (`avg_nps`, `peak_4m_nps`) climb with the ladder too, but they are inputs to the
 #: rating rather than its output — a change to the rating formula that leaves the features
 #: untouched would slip past a gate that only watched them. `hold_pct` and
@@ -21,7 +23,7 @@ TIER_ORDER: List[str] = list(CANONICAL_DAN_TIERS)
 #: regime rather than the tier (pure rice charts are hold-poor, LN charts lock many fingers),
 #: so they are not monotone across tiers at all. Batch reports still evaluate every metric;
 #: this is the set the Monotonicity Guard validates unless asked for others explicitly.
-DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("star_rating",)
+DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("star_rating", "own_skill")
 
 #: Metrics evaluated for diagnosis by default, in addition to `DEFAULT_GUARD_METRICS`.
 DIAGNOSTIC_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
@@ -32,6 +34,13 @@ DIAGNOSTIC_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
 #: monotone per-chart rescaling of them, so a ladder that is collapsing shows up here before it
 #: moves a single star.
 DRIVER_METRIC_PREFIX: str = "driver_"
+
+#: The metric that reads, off a result, the stars of the skill its own pool is the ladder of
+#: (`engine.skills.BENCHMARK_POOL_SKILL`): Regular Jack's ladder reads `rc_jack`, LN Release's reads
+#: `ln_release`. It is one metric name rather than eight so that every pool is gated on its own
+#: skill and none on a skill it is not about (ADR-0018 decision 3). The `driver_` metrics above belong
+#: to the legacy engine and stay for the consumers that still read it.
+OWN_SKILL_METRIC: str = "own_skill"
 
 
 def compute_kendall_tau(y: List[float]) -> float:
@@ -176,10 +185,19 @@ def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
     Reads one ladder metric off a batch result.
 
     Physical quantities live on the feature tensor; the engine's star rating is carried by the
-    result itself, and the raw technique drivers by the result's `drivers` vector under the
-    `driver_` prefix. Consulting the features first and the result second lets a single metric
+    result itself, the legacy engine's raw technique drivers by the result's `drivers` vector under the
+    `driver_` prefix, and a pool's own skill by `own_skill`. Consulting the features first and the result second lets a single metric
     name work regardless of which of the two owns it, without either side knowing the other.
     """
+    if metric == OWN_SKILL_METRIC:
+        skills = getattr(result, "skills", None)
+        skill = BENCHMARK_POOL_SKILL.get(getattr(result, "technique", None))
+        if isinstance(skills, dict) and skill is not None:
+            value = skills.get(skill)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+        return None
+
     if metric.startswith(DRIVER_METRIC_PREFIX):
         drivers = getattr(result, "drivers", None)
         if isinstance(drivers, dict):

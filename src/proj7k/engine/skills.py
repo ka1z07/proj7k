@@ -13,6 +13,20 @@ SKILLS: Tuple[str, ...] = (
 )
 RC_COUNT = 4
 
+#: The benchmark manifest's technique pools (`docs/research/structured_index.json`) against the skill each
+#: pool is the ladder of. A pool's own skill is the one its charts are meant to be hard at, so it is the
+#: skill whose D_k must climb the 15 tiers (ADR-0018 decision 3).
+BENCHMARK_POOL_SKILL = {
+    "Regular Jack": "rc_jack",
+    "Regular Tech": "rc_tech",
+    "Regular Speed": "rc_speed",
+    "Regular Stream": "rc_stamina",
+    "LN General": "ln_general",
+    "LN Tech": "ln_tech",
+    "LN Inverse": "ln_inverse",
+    "LN Release": "ln_release",
+}
+
 FINGER = ("ring", "mid", "idx", "thumb", "idx", "mid", "ring")
 _SIDE = (0, 0, 0, None, 1, 1, 1)  # 0 = left hand, 1 = right; the thumb goes with `thumb`
 
