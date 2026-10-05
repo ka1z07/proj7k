@@ -4,7 +4,7 @@ Causal Hit-Window Matcher & Panic Ghost Tap Isolator for osu!mania.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.profiler.osr import ReplayFrame
@@ -63,6 +63,24 @@ def compute_mania_hit_windows(od: float, clock_rate: float = 1.0) -> ManiaHitWin
     )
 
 
+#: An LN's release is judged against wider windows than its press (osu!mania stable's tail windows).
+LN_TAIL_WINDOW_SCALE = 1.5
+
+
+def judge_offset(abs_offset_ms: float, windows: ManiaHitWindows, scale: float = 1.0) -> HitJudgment:
+    """The judgment of an absolute timing error against `windows`, every threshold widened by `scale`."""
+    for judg, w in (
+        (HitJudgment.MAX, windows.w_max),
+        (HitJudgment.PERFECT, windows.w_300),
+        (HitJudgment.GREAT, windows.w_200),
+        (HitJudgment.GOOD, windows.w_100),
+        (HitJudgment.MEH, windows.w_50),
+    ):
+        if abs_offset_ms <= w * scale:
+            return judg
+    return HitJudgment.MISS
+
+
 @dataclass
 class AlignedHit:
     """
@@ -77,6 +95,9 @@ class AlignedHit:
     end_time: Optional[float] = None
     tail_release_time: Optional[float] = None
     tail_offset_ms: Optional[float] = None
+    #: How the release of an LN was judged (`LN_TAIL_WINDOW_SCALE` times the head's windows). MISS when the
+    #: head was missed or the key was never let go; None for a rice.
+    tail_judgment: Optional[HitJudgment] = None
     strains: Optional[Dict[str, float]] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -91,6 +112,7 @@ class AlignedHit:
             "end_time": self.end_time,
             "tail_release_time": self.tail_release_time,
             "tail_offset_ms": self.tail_offset_ms,
+            "tail_judgment": self.tail_judgment.value if self.tail_judgment is not None else None,
         }
         if self.strains is not None:
             d["strains"] = {k: round(v, 2) for k, v in self.strains.items()}
@@ -195,6 +217,7 @@ def align_replay_hits(
                 judgment=HitJudgment.MISS,
                 note_type=note_obj.note_type,
                 end_time=note_obj.end_time,
+                tail_judgment=HitJudgment.MISS if note_obj.note_type == NoteType.LN else None,
             )
         )
 
@@ -239,27 +262,20 @@ def align_replay_hits(
             if window_start <= press.press_time <= window_end:
                 # Hit this note!
                 offset = press.press_time - note.time
-                abs_offset = abs(offset)
-
-                if abs_offset <= windows.w_max:
-                    judg = HitJudgment.MAX
-                elif abs_offset <= windows.w_300:
-                    judg = HitJudgment.PERFECT
-                elif abs_offset <= windows.w_200:
-                    judg = HitJudgment.GREAT
-                elif abs_offset <= windows.w_100:
-                    judg = HitJudgment.GOOD
-                elif abs_offset <= windows.w_50:
-                    judg = HitJudgment.MEH
-                else:
-                    judg = HitJudgment.MISS
+                judg = judge_offset(abs(offset), windows)
 
                 tail_release: Optional[float] = None
                 tail_offset: Optional[float] = None
+                tail_judg: Optional[HitJudgment] = None
                 if note.note_type == NoteType.LN and note.end_time is not None:
                     tail_release = press.release_time
                     if tail_release is not None:
                         tail_offset = tail_release - note.end_time
+                        tail_judg = judge_offset(abs(tail_offset), windows, LN_TAIL_WINDOW_SCALE)
+                    else:
+                        tail_judg = HitJudgment.MISS
+                    if judg == HitJudgment.MISS:
+                        tail_judg = HitJudgment.MISS
 
                 all_aligned_hits.append(
                     AlignedHit(
@@ -272,6 +288,7 @@ def align_replay_hits(
                         end_time=note.end_time,
                         tail_release_time=tail_release,
                         tail_offset_ms=tail_offset,
+                        tail_judgment=tail_judg,
                     )
                 )
                 press_idx += 1

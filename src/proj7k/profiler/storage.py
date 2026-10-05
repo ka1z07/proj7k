@@ -16,11 +16,19 @@ import time
 from typing import Any, Dict, List, Optional, Union
 
 from proj7k.parser import Beatmap7K
+from proj7k.engine.skills import SKILL_TECH_KEY
+from proj7k.field import trace_beatmap
 from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.strain import compute_8d_strain_timeseries
 
 
 logger = logging.getLogger("proj7k.profiler.storage")
+
+#: What a snapshot's capacities are measured on. A snapshot without it was written by the legacy strain
+#: engine, in a unit that cannot be converted (the replay is not in the database) and is left out of aggregates (ADR-0020).
+SNAPSHOT_ENGINE = "spec-v0.2"
+
+#: How far before the fatal break the demand it was under is read (ADR-0020 decision 3).
+FATAL_LOOKBACK_S = 1.0
 
 
 def normalize_player_name(player_name: Optional[str]) -> str:
@@ -78,7 +86,7 @@ class MatchSnapshot:
     is_valid_play: bool                    # duration >= 30s and completion >= 50%
     is_failed: bool                        # Failed mid-song before clearing
     overall_ur: Optional[float]            # Overall hit variance Unstable Rate (10 * sigma)
-    capacities: Dict[str, Dict[str, Any]]  # 8-dim strain capacities and ratings
+    capacities: Dict[str, Dict[str, Any]]  # 8-skill levels (the engine's unit) and ratings
     fatal_time_ms: Optional[float] = None
     fatal_column: Optional[int] = None
     fatal_peak_strains: Dict[str, float] = field(default_factory=dict)
@@ -179,7 +187,7 @@ def build_snapshot_from_report(
     if is_failed is None:
         is_failed = infer_is_failed(report)
 
-    # 2. Extract fatal point and peak strains
+    # 2. Extract fatal point and the demand it came under
     fatal_time_ms = None
     fatal_col = None
     fatal_strains: Dict[str, float] = {}
@@ -189,13 +197,15 @@ def build_snapshot_from_report(
         fatal_col = report.pathology.cascade_precursor.fatal_column
 
     if fatal_time_ms is not None:
-        if beatmap is not None:
-            ts = compute_8d_strain_timeseries(beatmap)
-            strains_at_fatal = ts.get_strains_at(fatal_time_ms / 1000.0)
-            fatal_strains = {k: round(float(v), 2) for k, v in strains_at_fatal.items()}
-        elif report.skill_radar:
-            for dim, res in report.skill_radar.dimensions.items():
-                fatal_strains[dim] = round(float(res.peak_chart_strain), 2)
+        field = getattr(report, "field", None)
+        rate = getattr(report, "clock_rate", 1.0) or 1.0
+        if field is None and beatmap is not None and beatmap.hit_objects:
+            field = trace_beatmap(beatmap)
+            rate = 1.0
+        if field is not None:
+            fatal_s = fatal_time_ms / 1000.0 / rate
+            demand = field.skill_demand(fatal_s - FATAL_LOOKBACK_S, fatal_s)
+            fatal_strains = {SKILL_TECH_KEY[k]: round(v, 2) for k, v in demand.items()}
 
     # 3. Extract 8-dim capacities dict
     capacities_dict: Dict[str, Dict[str, Any]] = {}
@@ -206,8 +216,8 @@ def build_snapshot_from_report(
                 "star_rating": round(float(res.star_rating), 2),
                 "dan_tier": res.dan_tier,
                 "tested": res.tested,
-                "has_inflection": res.has_inflection,
-                "peak_strain": round(float(res.peak_chart_strain), 2),
+                "broke_down": res.broke_down,
+                "chart_level": round(float(res.chart_level), 2),
             }
 
     # 4. Extract overall UR
@@ -243,6 +253,7 @@ def build_snapshot_from_report(
         "miss_count": report.miss_count,
         "ghost_tap_count": report.ghost_tap_count,
         "mods": report.mods,
+        "engine": SNAPSHOT_ENGINE,
     }
     if report.pathology and report.pathology.cascade_precursor:
         summary_info["dominant_break_technique"] = report.pathology.cascade_precursor.dominant_technique

@@ -2,7 +2,7 @@
 Rolling Time-Window Aggregator and Macro Profile Engine (ADR-0012).
 
 Provides Recent Rolling Form (e.g. 30 days) and All-time Peak Profile calculations,
-extracts fatal peak strains from failed runs, filters aborted noise, computes
+extracts the demand failed runs broke under, filters aborted noise, computes
 stability baseline UR exclusively from cleared runs, and generates historical trend
 comparisons.
 """
@@ -12,11 +12,11 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-from proj7k.dan import CANONICAL_DAN_TIERS, legacy_estimate_canonical_dan
-from proj7k.profiler.storage import MatchSnapshot, ProfilerStorage
+from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
+from proj7k.engine.scale import stars_of
+from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage
 from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.rating import aggregate_p_norm, apply_tanh_soft_cap
-from proj7k.strain import compute_raw_strain_star_rating
+from proj7k.rating import aggregate_p_norm
 
 
 #: The player-side aggregate's constants (see `rating.aggregate_p_norm`): a player's overall
@@ -41,11 +41,11 @@ class DimensionMacroMetric:
     Macro skill summary for a single technique dimension within a time window.
     """
     dimension: str
-    effective_capacity: float  # Effective strain capacity demonstrated in window (CONTEXT.md)
-    star_rating: float         # Continuous Star Rating (tanh soft capped)
+    effective_capacity: float  # Best level demonstrated in the window, in the engine's unit (ADR-0020)
+    star_rating: float         # Star rating on the engine's scale
     dan_tier: str              # Canonical Jinjin Dan tier
     match_count: int           # Number of tested runs in window
-    has_inflection: bool       # Whether an inflection was observed
+    broke_down: bool           # Whether any run in the window lost more than the skill's tolerance
 
     @property
     def peak_capacity(self) -> float:
@@ -60,7 +60,7 @@ class DimensionMacroMetric:
             "star_rating": round(self.star_rating, 2),
             "dan_tier": self.dan_tier,
             "match_count": self.match_count,
-            "has_inflection": self.has_inflection,
+            "broke_down": self.broke_down,
         }
 
 
@@ -76,7 +76,7 @@ class MacroProfile:
     end_timestamp: Optional[float]             # Window end (epoch seconds)
     total_matches: int                         # Total valid matches in window
     cleared_matches: int                       # Cleared / full runs
-    failed_matches: int                        # Failed runs preserved for peak strain
+    failed_matches: int                        # Failed runs, kept for the demand they broke under
     average_ur: Optional[float]                # Stability baseline UR (from cleared runs only)
     overall_dan: str
     overall_star_rating: float
@@ -84,6 +84,9 @@ class MacroProfile:
     bottleneck_technique: str
     dimensions: Dict[str, DimensionMacroMetric]
     trend_comparison: Optional[Dict[str, Any]] = None
+    #: Snapshots in the window that the legacy strain engine wrote; their unit cannot be converted, so they
+    #: are counted here and left out of everything above (ADR-0020 decision 4).
+    legacy_excluded: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -102,6 +105,7 @@ class MacroProfile:
             "bottleneck_technique": self.bottleneck_technique,
             "dimensions": {k: v.to_dict() for k, v in self.dimensions.items()},
             "trend_comparison": self.trend_comparison,
+            "legacy_excluded": self.legacy_excluded,
         }
 
 
@@ -131,7 +135,7 @@ def aggregate_macro_profile(
                 star_rating=0.0,
                 dan_tier="0th Dan",
                 match_count=0,
-                has_inflection=False,
+                broke_down=False,
             )
             for dim in TECHNIQUE_NAMES
         }
@@ -166,6 +170,9 @@ def aggregate_macro_profile(
         end_t = ref_t
         snapshots = [s for s in all_snapshots if start_t <= s.timestamp <= end_t]
 
+    legacy_excluded = sum(1 for s in snapshots if s.summary.get("engine") != SNAPSHOT_ENGINE)
+    snapshots = [s for s in snapshots if s.summary.get("engine") == SNAPSHOT_ENGINE]
+
     total_matches = len(snapshots)
     cleared_matches = sum(1 for s in snapshots if not s.is_failed)
     failed_matches = sum(1 for s in snapshots if s.is_failed)
@@ -190,7 +197,7 @@ def aggregate_macro_profile(
         dim_capacities: List[float] = []
         dim_star_ratings: List[float] = []
         tested_count = 0
-        has_any_inflection = False
+        has_any_breakdown = False
 
         for s in snapshots:
             # Check capacities recorded from strain-error analysis
@@ -204,25 +211,20 @@ def aggregate_macro_profile(
                         dim_capacities.append(cap)
                     if sr_val > 0:
                         dim_star_ratings.append(sr_val)
-                    if d_info.get("has_inflection"):
-                        has_any_inflection = True
+                    if d_info.get("broke_down"):
+                        has_any_breakdown = True
 
             # If failed run with fatal peak strain for this dimension, preserve it!
             if s.is_failed and dim in s.fatal_peak_strains:
                 f_strain = float(s.fatal_peak_strains[dim])
                 if f_strain > 0:
                     dim_capacities.append(f_strain)
-                    f_sr = apply_tanh_soft_cap(compute_raw_strain_star_rating(f_strain))
-                    dim_star_ratings.append(f_sr)
+                    dim_star_ratings.append(stars_of(f_strain))
 
         if dim_star_ratings or dim_capacities:
             peak_cap = max(dim_capacities) if dim_capacities else 0.0
-            if dim_star_ratings:
-                sr = max(dim_star_ratings)
-            else:
-                raw_sr = compute_raw_strain_star_rating(peak_cap)
-                sr = apply_tanh_soft_cap(raw_sr)
-            dan = legacy_estimate_canonical_dan(sr)
+            sr = max(dim_star_ratings) if dim_star_ratings else stars_of(peak_cap)
+            dan = estimate_canonical_dan(sr)
         else:
             peak_cap = 0.0
             sr = 0.0
@@ -234,7 +236,7 @@ def aggregate_macro_profile(
             star_rating=sr,
             dan_tier=dan,
             match_count=tested_count,
-            has_inflection=has_any_inflection,
+            broke_down=has_any_breakdown,
         )
 
     # 4. Overall Star Rating & Dan via extremum-dominant p-norm (p=4)
@@ -244,7 +246,7 @@ def aggregate_macro_profile(
         bottleneck_tech = min(tested_metrics, key=lambda m: m.star_rating).dimension
         tested_sr_dict = {m.dimension: m.star_rating for m in tested_metrics}
         overall_sr = player_overall_star(tested_sr_dict)
-        overall_dan = legacy_estimate_canonical_dan(overall_sr)
+        overall_dan = estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "stream"
         bottleneck_tech = "stream"
@@ -311,4 +313,5 @@ def aggregate_macro_profile(
         bottleneck_technique=bottleneck_tech,
         dimensions=dimensions,
         trend_comparison=trend_comparison,
+        legacy_excluded=legacy_excluded,
     )

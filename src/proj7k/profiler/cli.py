@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k.field import ChartField, trace_beatmap
 from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.profiler.aggregate import (
     DimensionMacroMetric,
@@ -71,6 +72,9 @@ class ProfilerIngestionReport:
     skill_radar: Optional[SkillRadarReport] = None
     replay_hash: str = ""
     life_bar: str = ""
+    #: The engine's difficulty field of the chart in physical time (ADR-0020), and the clock rate the play ran at.
+    field: Optional[ChartField] = None
+    clock_rate: float = 1.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -211,13 +215,14 @@ def run_ingestion(
     # 5. Micro-Biomechanics & Pathology Analysis (ADR-0012)
     pathology = analyze_pathology(alignment, beatmap)
 
-    # 6. Strain-Error Response & 8-Dim Dan Radar (ADR-0012)
-    if abs(clock_rate - 1.0) > 1e-4:
-        bm_strain = _scale_beatmap_clock_rate(beatmap, clock_rate)
-        align_strain = _scale_alignment_clock_rate(alignment, clock_rate)
-        skill_radar = analyze_strain_response(align_strain, bm_strain)
-    else:
-        skill_radar = analyze_strain_response(alignment, beatmap)
+    # 6. Skill-level response and the 8-skill radar (ADR-0012, ADR-0020), on the engine's field in physical time
+    field = trace_beatmap(_scale_beatmap_clock_rate(beatmap, clock_rate)) if beatmap.hit_objects else None
+    skill_radar = None
+    if field is not None:
+        played_until_s = replay.action_frames[-1].time_ms / 1000.0 / clock_rate if replay.action_frames else None
+        skill_radar = analyze_strain_response(
+            _scale_alignment_clock_rate(alignment, clock_rate), beatmap, field=field, played_until_s=played_until_s,
+        )
 
     return ProfilerIngestionReport(
         player_name=replay.player_name,
@@ -242,6 +247,8 @@ def run_ingestion(
         skill_radar=skill_radar,
         replay_hash=replay.replay_hash or replay_p.stem,
         life_bar=replay.life_bar,
+        field=field,
+        clock_rate=clock_rate,
     )
 
 
@@ -337,17 +344,17 @@ def format_ingestion_report(report: ProfilerIngestionReport) -> str:
             "------------------------------------------------------------",
             "8-Dimension Skill Radar & Dan Breakdown:",
             f"  Overall Dan: {radar.overall_dan} | Dominant: {radar.dominant_technique.capitalize()} | Bottleneck: {radar.bottleneck_technique.capitalize()}",
-            "  Dimension    | Capacity | Star Rating | Dan Tier  | Status",
+            "  Dimension    | Level Hz | Star Rating | Dan Tier  | Status",
             "  -------------+----------+-------------+-----------+-------------------------",
         ])
         for dim, cap in radar.dimensions.items():
             dim_name = format_technique_title(dim)
             if not cap.tested:
-                status = f"Untested (Peak: {cap.peak_chart_strain:.1f})"
-            elif cap.has_inflection:
-                status = f"Inflection @ {cap.effective_capacity:.1f}"
+                status = "Untested"
+            elif cap.broke_down:
+                status = f"Broke down (chart level {cap.chart_level:.1f})"
             else:
-                status = f"Stable (Peak: {cap.peak_chart_strain:.1f})"
+                status = f"Held (chart level {cap.chart_level:.1f})"
 
             lines.append(
                 f"  {dim_name:<12} | {cap.effective_capacity:>8.1f} | {cap.star_rating:>10.2f}★ | {cap.dan_tier:<9} | {status}"
@@ -376,6 +383,11 @@ def format_macro_profile(profile: MacroProfile) -> str:
         f"Analyzed Matches:   {profile.total_matches} (Cleared: {profile.cleared_matches}, Failed Preserved: {profile.failed_matches})",
     ]
 
+    if profile.legacy_excluded:
+        lines.append(
+            f"Legacy Snapshots:   {profile.legacy_excluded} excluded (written by the legacy strain engine; the unit cannot be converted)"
+        )
+
     if profile.average_ur is not None:
         lines.append(f"Stability Baseline UR: {profile.average_ur:.1f} (Cleared matches only)")
     else:
@@ -386,7 +398,7 @@ def format_macro_profile(profile: MacroProfile) -> str:
         f"Dominant Technique: {profile.dominant_technique.capitalize()} | Bottleneck: {profile.bottleneck_technique.capitalize()}",
         "------------------------------------------------------------",
         "8-Dimension Skill Breakdown:",
-        "  Dimension    | Peak Strain | Star Rating | Dan Tier  | Tests",
+        "  Dimension    | Level Hz    | Star Rating | Dan Tier  | Tests",
         "  -------------+-------------+-------------+-----------+------",
     ])
 
@@ -841,7 +853,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if fatal_t is None and report.miss_count > 0:
                 for h in report.alignment_result.aligned_hits:
                     if h.judgment == HitJudgment.MISS:
-                        fatal_t = h.hit_object_time_ms
+                        fatal_t = h.target_time
                         break
 
             if fatal_t is not None:

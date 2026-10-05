@@ -10,6 +10,7 @@ from proj7k.parser import parse_osu_7k
 from proj7k.profiler.matcher import HitJudgment
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
 from proj7k.profiler.storage import (
+    SNAPSHOT_ENGINE,
     MatchSnapshot,
     ProfilerStorage,
     infer_is_failed,
@@ -121,7 +122,7 @@ def make_snapshot(
         fatal_time_ms=None,
         fatal_column=None,
         fatal_peak_strains={},
-        summary={},
+        summary={"engine": SNAPSHOT_ENGINE},
         created_at=time.time(),
     )
 
@@ -265,7 +266,7 @@ def test_noise_filtering_and_fatal_peak_preservation_in_storage(tmp_path: Path):
         fatal_time_ms=None,
         fatal_column=None,
         fatal_peak_strains={},
-        summary={},
+        summary={"engine": SNAPSHOT_ENGINE},
         created_at=now,
     )
     saved_retry = storage.save_snapshot_with_filter(retry_snap)
@@ -288,7 +289,7 @@ def test_noise_filtering_and_fatal_peak_preservation_in_storage(tmp_path: Path):
         fatal_time_ms=21500.0,
         fatal_column=2,
         fatal_peak_strains={"chordjack": 19.5, "jack": 16.0},
-        summary={},
+        summary={"engine": SNAPSHOT_ENGINE},
         created_at=now,
     )
     saved_failed = storage.save_snapshot_with_filter(failed_snap)
@@ -312,7 +313,7 @@ def test_noise_filtering_and_fatal_peak_preservation_in_storage(tmp_path: Path):
         fatal_time_ms=None,
         fatal_column=None,
         fatal_peak_strains={},
-        summary={},
+        summary={"engine": SNAPSHOT_ENGINE},
         created_at=now,
     )
     saved_clear = storage.save_snapshot_with_filter(clear_snap)
@@ -355,7 +356,7 @@ def test_rolling_temporal_window_aggregation_and_historical_trend(tmp_path: Path
             fatal_time_ms=None,
             fatal_column=None,
             fatal_peak_strains={},
-            summary={},
+            summary={"engine": SNAPSHOT_ENGINE},
             created_at=now,
         )
     )
@@ -379,7 +380,7 @@ def test_rolling_temporal_window_aggregation_and_historical_trend(tmp_path: Path
             fatal_time_ms=None,
             fatal_column=None,
             fatal_peak_strains={},
-            summary={},
+            summary={"engine": SNAPSHOT_ENGINE},
             created_at=now,
         )
     )
@@ -403,7 +404,7 @@ def test_rolling_temporal_window_aggregation_and_historical_trend(tmp_path: Path
             fatal_time_ms=38000.0,
             fatal_column=3,
             fatal_peak_strains={"chordjack": 19.5},
-            summary={},
+            summary={"engine": SNAPSHOT_ENGINE},
             created_at=now,
         )
     )
