@@ -12,7 +12,7 @@ import json
 import time
 from typing import Any, Dict, List, Optional
 
-from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
+from proj7k.dan import CANONICAL_DAN_TIERS, legacy_estimate_canonical_dan
 from proj7k.profiler.storage import MatchSnapshot, ProfilerStorage
 from proj7k.radar import TECHNIQUE_NAMES
 from proj7k.rating import aggregate_p_norm, apply_tanh_soft_cap
@@ -222,7 +222,7 @@ def aggregate_macro_profile(
             else:
                 raw_sr = compute_raw_strain_star_rating(peak_cap)
                 sr = apply_tanh_soft_cap(raw_sr)
-            dan = estimate_canonical_dan(sr)
+            dan = legacy_estimate_canonical_dan(sr)
         else:
             peak_cap = 0.0
             sr = 0.0
@@ -244,7 +244,7 @@ def aggregate_macro_profile(
         bottleneck_tech = min(tested_metrics, key=lambda m: m.star_rating).dimension
         tested_sr_dict = {m.dimension: m.star_rating for m in tested_metrics}
         overall_sr = player_overall_star(tested_sr_dict)
-        overall_dan = estimate_canonical_dan(overall_sr)
+        overall_dan = legacy_estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "stream"
         bottleneck_tech = "stream"

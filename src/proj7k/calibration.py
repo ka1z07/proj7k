@@ -25,7 +25,7 @@ class TechniqueStarAnchor:
 
     The axis' raw driver is in the units its own operator produces, and the anchor is what puts
     that driver on the star scale the canonical Dan ladder is stated in: a chart at tier T has
-    its own axis' driver read as approximately `CANONICAL_DAN_SR[T]`. Anchoring per axis rather
+    its own axis' driver read as approximately `LEGACY_DAN_SR[T]`. Anchoring per axis rather
     than by a shared rescaling of the driver vector is the point — the eight drivers are in
     eight different units, so a common scale can only be established by calibrating each against
     the one ladder they all share.
@@ -54,7 +54,7 @@ class TechniqueStarAnchor:
 
 
 #: The eight absolute technique anchors, fitted by `tools/technique_star_fit.py` on each axis'
-#: own 15-tier ladder against `dan.CANONICAL_DAN_SR` (issue #50). Order is irrelevant — each
+#: own 15-tier ladder against `dan.LEGACY_DAN_SR` (issue #50). Order is irrelevant — each
 #: anchor names its own technique — and a test holds the names to `radar.TECHNIQUE_NAMES`.
 _TECHNIQUE_ANCHORS: Tuple[TechniqueStarAnchor, ...] = (
     TechniqueStarAnchor(technique="jack", a=2.653052, exp=0.183579),

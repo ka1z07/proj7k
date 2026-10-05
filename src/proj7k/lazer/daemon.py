@@ -4,7 +4,7 @@ LazerSyncManager and Daemon Coordinator for osu!lazer database ingestion.
 Implements SPEC-P2.3-03 / ADR-0009.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from pathlib import Path
 import threading
@@ -14,10 +14,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 logger = logging.getLogger("proj7k.lazer.daemon")
 
 from proj7k.cache import TwoLayerCache
-from proj7k.difficulty import evaluate_intrinsic_difficulty
+from proj7k.engine import evaluate_osu
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.lazer.annotator import (
     ALL_BIAXIAL_COLLECTIONS,
     BeatmapCollectionEntry,
+    current_engine_version,
     annotate_batch_and_build_collections,
     build_biaxial_collection_map,
     format_injected_difficulty_name,
@@ -25,7 +27,6 @@ from proj7k.lazer.annotator import (
     InjectedMetadata,
     parse_injected_metadata,
 )
-from proj7k.difficulty import current_engine_version
 from proj7k.lazer.backup import DEFAULT_CACHE_DIR, LazerBackupManager
 from proj7k.lazer.bridge import (
     BatchUpdateResult,
@@ -65,6 +66,13 @@ class SyncSummary:
     refreshed_count: int = 0
     snapshot_path: Optional[str] = None
     error: Optional[str] = None
+    #: A dry run evaluates and reports but never snapshots, locks or writes (ADR-0018 decision 5).
+    dry_run: bool = False
+    would_update: int = 0
+    #: Charts a dry run would re-tag with a different dominant technique, as "old->new": count.
+    dominant_changes: Dict[str, int] = field(default_factory=dict)
+    #: Mean of (new star rating - injected star rating) over the charts that carried an injection.
+    star_change_mean: Optional[float] = None
 
 
 def resolve_beatmap_file(files_dir: Path, record: LazerBeatmapRecord) -> Optional[Path]:
@@ -149,9 +157,13 @@ class LazerSyncManager:
         self,
         wait_for_lock: bool = False,
         preheat_on_locked: bool = False,
+        dry_run: bool = False,
     ) -> SyncSummary:
         """
         Execute a single incremental synchronization pass within a safe flush window.
+        If dry_run=True, evaluate every chart and report what would be rewritten (and how the dominant
+        technique tags would move) without touching the database, the lock or the backups; it reads the
+        database like a preheat, so it works while osu!lazer is running.
         If preheat_on_locked=True and osu!lazer is holding the database lock,
         dump beatmaps in read-only mode and pre-evaluate into TwoLayerCache,
         deferring batch write transactions until the lock is released.
@@ -180,7 +192,7 @@ class LazerSyncManager:
                 if win.is_acquired:
                     is_locked = False
 
-        if is_locked and not preheat_on_locked:
+        if is_locked and not (preheat_on_locked or dry_run):
             return SyncSummary(
                 success=False,
                 error=(
@@ -217,6 +229,8 @@ class LazerSyncManager:
         skipped_count = 0
         failed_count = 0
         refreshed_count = 0
+        dominant_changes: Dict[str, int] = {}
+        star_changes: List[float] = []
         engine_version = current_engine_version()
 
         total_maps = len(mania_7k)
@@ -240,15 +254,20 @@ class LazerSyncManager:
                     continue
 
                 try:
-                    result = evaluate_intrinsic_difficulty(osu_path)
-                    sr = result.star_rating
-                    dom_tech = result.radar.dominant_technique
+                    profile = evaluate_osu(Path(osu_path).read_text(encoding="utf-8", errors="replace"))
+                    sr = profile.total_stars
+                    dom_tech = SKILL_TECH_KEY[profile.dominant_skill]
                 except Exception:
                     failed_count += 1
                     continue
 
                 if injection is not None:
                     refreshed_count += 1
+                    star_changes.append(sr - injection.star_rating)
+                    old_dom = (injection.dominant_tech or "").lower()
+                    if old_dom != dom_tech:
+                        key = f"{old_dom}->{dom_tech}"
+                        dominant_changes[key] = dominant_changes.get(key, 0) + 1
 
             target_name = format_injected_difficulty_name(rec.difficulty_name, sr, dom_tech)
             target_tags = inject_binned_skill_tags(rec.tags, dom_tech, sr)
@@ -263,6 +282,20 @@ class LazerSyncManager:
                 continue
 
             items_to_update.append((rec, sr, dom_tech))
+
+        if dry_run:
+            return SyncSummary(
+                success=True,
+                total_7k=len(mania_7k),
+                evaluated_count=len(items_to_update),
+                skipped_count=skipped_count,
+                failed_count=failed_count,
+                refreshed_count=refreshed_count,
+                dry_run=True,
+                would_update=len(items_to_update),
+                dominant_changes=dominant_changes,
+                star_change_mean=sum(star_changes) / len(star_changes) if star_changes else None,
+            )
 
         if not items_to_update:
             return SyncSummary(

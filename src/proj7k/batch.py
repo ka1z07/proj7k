@@ -8,7 +8,7 @@ import argparse
 import concurrent.futures
 from typing import List, Optional, Dict, Any, Union, Literal, Tuple
 
-from proj7k.difficulty import evaluate_intrinsic_difficulty
+from proj7k.engine import evaluate_osu
 from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.features import extract_beatmap_features, BeatmapFeatures, get_dominant_bpm
 from proj7k.monotonicity import evaluate_batch_monotonicity
@@ -57,12 +57,12 @@ class BenchmarkItemResult:
     #: The engine's own output for this chart, carried so the ladder gates validate the
     #: artifact (star rating) rather than only the raw features behind it.
     star_rating: Optional[float] = None
-    uncompressed_star_rating: Optional[float] = None
-    dominant_technique: Optional[str] = None
-    #: The raw 8-dimension driver vector, keyed by technique name. Carried for the same reason
-    #: the star rating is: the per-technique ladder gates are stated on the drivers, and a gate
-    #: that re-derived them could gate a different vector than the rating read.
-    drivers: Optional[Dict[str, float]] = None
+    #: The dominant skill (`rc_jack`, ..., `ln_release`) of the engine's dominance ranking.
+    dominant_skill: Optional[str] = None
+    #: The eight skills' stars, keyed by skill name. Carried for the same reason the star rating
+    #: is: the per-pool ladder gates are stated on a skill's own stars, and a gate that
+    #: re-derived them could gate a different number than the rating read.
+    skills: Optional[Dict[str, float]] = None
     error: Optional[str] = None
     traceback: Optional[str] = None
 
@@ -76,9 +76,8 @@ class BenchmarkItemResult:
             "bpm": self.bpm,
             "features": self.features.to_dict() if self.features else None,
             "star_rating": self.star_rating,
-            "uncompressed_star_rating": self.uncompressed_star_rating,
-            "dominant_technique": self.dominant_technique,
-            "drivers": self.drivers,
+            "dominant_skill": self.dominant_skill,
+            "skills": self.skills,
             "error": self.error,
             "traceback": self.traceback,
         }
@@ -215,7 +214,8 @@ def process_benchmark_item(
     - Checks Layer 2 feature cache (bypassing feature extraction on hit)
     - Checks Layer 1 AST cache (bypassing raw file parsing on hit)
     - Extracts baseline and physiological features
-    - Computes the engine's star rating over those features (evaluate_rating)
+    - Rates the chart with the difficulty engine (evaluate_rating): total stars, the eight
+      skills' stars and the dominant skill
     - Fault tolerant: catches exceptions and returns FAILED_INGESTION status.
     """
     try:
@@ -237,11 +237,10 @@ def process_benchmark_item(
         if cache and content_hash and effective_bpm is not None:
             features = cache.get_features(content_hash, bpm=effective_bpm)
 
-        # The rating needs the parsed note stream (the radar reads the notes themselves), so a
-        # rated item is never answered from the Layer-2 feature cache alone: the AST comes back
-        # too. A feature-only run skips the parse when the cached tensor already answered.
+        # The rating reads the chart text itself, so it needs neither the AST nor the feature
+        # tensor; those are parsed only when the feature tensor has to be built.
         bm: Optional[Beatmap7K] = None
-        if features is None or evaluate_rating:
+        if features is None:
             if cache and content_hash:
                 bm = cache.get_ast(content_hash)
             if bm is None:
@@ -262,7 +261,7 @@ def process_benchmark_item(
                 if cache and content_hash:
                     cache.put_features(content_hash, effective_bpm, features)
 
-        rating = evaluate_intrinsic_difficulty(bm, features=features) if evaluate_rating else None
+        profile = evaluate_osu(raw_content) if evaluate_rating else None
 
         return BenchmarkItemResult(
             technique=item.technique,
@@ -272,10 +271,9 @@ def process_benchmark_item(
             bpm=effective_bpm,
             status="SUCCESS",
             features=features,
-            star_rating=rating.star_rating if rating else None,
-            uncompressed_star_rating=rating.raw_star_rating if rating else None,
-            dominant_technique=rating.metadata["dominant_technique"] if rating else None,
-            drivers=rating.drivers.to_dict() if rating and rating.drivers else None,
+            star_rating=profile.total_stars if profile else None,
+            dominant_skill=profile.dominant_skill if profile else None,
+            skills={k: r.stars for k, r in profile.skills.items()} if profile else None,
             error=None,
         )
     except Exception as e:
@@ -531,7 +529,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"CI Monotonicity Guard Failed:\n{guard_res.error_message}", file=sys.stderr)
             return 1
         else:
-            print("CI Monotonicity Guard: PASSED (all techniques and tiers strictly monotonic).", file=sys.stderr)
+            print("CI Monotonicity Guard: PASSED (every ladder within its gate; see the own-skill ratchet for recorded inversions).", file=sys.stderr)
 
     return 0
 

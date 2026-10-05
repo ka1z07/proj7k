@@ -5,6 +5,7 @@ Implements SPEC-P2.3-02 / ADR-0009 for osu!lazer database ingestion.
 """
 
 from dataclasses import dataclass
+from functools import lru_cache
 import re
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
@@ -15,7 +16,16 @@ from proj7k.lazer.bridge import (
     LazerBeatmapRecord,
 )
 from proj7k.dan import estimate_canonical_dan
-from proj7k.difficulty import current_engine_version
+from proj7k.engine import engine_version
+
+@lru_cache(maxsize=None)
+def current_engine_version() -> str:
+    """
+    The version token stamped into injected difficulty names: the difficulty engine's own eight-hex
+    methodology digest (`proj7k.engine.engine_version`), 'v'-prefixed, e.g. 'v1a2b3c4d' (ADR-0014).
+    """
+    return f"v{engine_version()}"
+
 
 # Regular expression matching injected difficulty name suffix, deliberately permissive:
 # it strips every shape this project has ever injected — historical " (6.42★ Jack)",
@@ -180,7 +190,7 @@ def format_injected_difficulty_name(
 
     The version token makes an injection self-describing: when the engine calibration changes,
     the token changes with it, and the daemon can tell which charts were evaluated by the
-    current methodology and which must be re-evaluated (see `proj7k.difficulty.current_engine_version`).
+    current methodology and which must be re-evaluated (see `proj7k.engine.engine_version`).
     """
     base = strip_injected_suffix(difficulty_name)
     title = format_dominant_title(dominant_title)

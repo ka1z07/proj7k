@@ -5,7 +5,7 @@ from pathlib import Path
 
 from proj7k.batch import run_benchmark_pipeline, BenchmarkBatchReport, BenchmarkItem
 from proj7k.dan import CANONICAL_DAN_SR_BANDS
-from proj7k.monotonicity import DEFAULT_GUARD_METRICS
+from proj7k.monotonicity import DEFAULT_GUARD_METRICS, OWN_SKILL_METRIC
 
 
 class MonotonicityGuardError(Exception):
@@ -37,9 +37,12 @@ class MetricGate:
 #: ladder rather than about any one technique and is asserted end-to-end alongside these
 #: (`tests/test_120_benchmark_guard.py`). Splitting them this way keeps the library gate
 #: meaningful for partial manifests, where a cross-technique mean would say nothing.
+#: The per-technique bar the star rating and every ladder metric below are held to.
+PLAIN_LADDER_GATE = MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4)
+
 CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # Measured worst over the benchmark corpus: tau 0.905 / rho 0.964 / 3 inversions.
-    "star_rating": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    "star_rating": PLAIN_LADDER_GATE,
     # --- The raw technique drivers (issue #52) -------------------------------------------------
     #
     # One gate per technique, on the technique's *own* ladder (`monotonicity.DRIVER_METRIC_
@@ -66,15 +69,37 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # reported, which is the point: the line is where the driver layer has to arrive, not where
     # it is. `tests/test_driver_ladder_gates.py` pins which two are below it, so the handoff
     # cannot outlive the defect.
-    "driver_jack": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_speed": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_stream": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_general": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_tech": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_inverse": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
-    "driver_ln_release": MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_violations=4),
+    # The new engine's own-skill ladder (ADR-0018 decision 3): each pool's own skill climbs the 15 tiers. The
+    # default is the per-technique star bar; `OWN_SKILL_RATCHET` overrides it per pool.
+    OWN_SKILL_METRIC: PLAIN_LADDER_GATE,
+    "driver_jack": PLAIN_LADDER_GATE,
+    "driver_tech": PLAIN_LADDER_GATE,
+    "driver_speed": PLAIN_LADDER_GATE,
+    "driver_stream": PLAIN_LADDER_GATE,
+    "driver_ln_general": PLAIN_LADDER_GATE,
+    "driver_ln_tech": PLAIN_LADDER_GATE,
+    "driver_ln_inverse": PLAIN_LADDER_GATE,
+    "driver_ln_release": PLAIN_LADDER_GATE,
 }
+#: Per-pool ratchet for the `own_skill` ladder, keyed by the pool's manifest name: the thresholds are the
+#: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an
+#: acceptance. A pool absent here is held to the plain `own_skill` gate.
+#: Measured on the spec v0.2 engine over the 120 charts (tau / rho / inversions), floored to three decimals.
+#: Only LN Release is below the plain bar (its tail-isolation skill is the one T1 records inversions on:
+#: tau .829 / rho .939 / 4 inversions against .88 / .95 / 4); the other seven clear it, and their entries
+#: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one
+#: needs a ruling.
+OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
+    "Regular Jack": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.992, max_violations=2),
+    "Regular Tech": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
+    "Regular Speed": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
+    "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
+    "LN General": MetricGate(min_kendall_tau=0.923, min_spearman_rho=0.975, max_violations=2),
+    "LN Tech": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
+    "LN Inverse": MetricGate(min_kendall_tau=0.942, min_spearman_rho=0.985, max_violations=2),
+    "LN Release": MetricGate(min_kendall_tau=0.828, min_spearman_rho=0.939, max_violations=4),
+}
+
 #: Applied to any metric without its own calibration entry.
 #: Measured worst for the raw density metrics: tau 0.780 / rho 0.894 / 6 inversions.
 DEFAULT_METRIC_GATE = MetricGate(min_kendall_tau=0.75, min_spearman_rho=0.85, max_violations=8)
@@ -114,7 +139,7 @@ LADDER_MAX_TOTAL_INVERSIONS = 24
 
 # --- The absolute technique-star band (issue #50, ADR-0016) -----------------------------------
 #: The tolerance the calibration is judged by: a technique's score for a tier-T chart has to sit
-#: within this fraction of `dan.CANONICAL_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
+#: within this fraction of `dan.LEGACY_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
 #: of that ladder's 15 charts. Read by the calibration tool (`tools/technique_star_fit.py`)
 #: and asserted by `tests/test_technique_star_ladder.py`, so the band has one definition.
 #:
@@ -152,9 +177,14 @@ class MonotonicityGuardConfig:
     )
     min_anchor_samples: int = DEFAULT_MIN_ANCHOR_SAMPLES
 
-    def gate_for(self, metric: str) -> MetricGate:
-        """Resolves the thresholds to apply to one metric: explicit override, else calibrated."""
+    def gate_for(self, metric: str, technique: Optional[str] = None) -> MetricGate:
+        """
+        Resolves the thresholds to apply to one metric of one technique: explicit override, else the
+        technique's ratchet (`own_skill` only), else the metric's calibrated gate.
+        """
         base = CALIBRATED_METRIC_GATES.get(metric, DEFAULT_METRIC_GATE)
+        if metric == OWN_SKILL_METRIC and technique in OWN_SKILL_RATCHET:
+            base = OWN_SKILL_RATCHET[technique]
         return MetricGate(
             min_kendall_tau=self.min_kendall_tau if self.min_kendall_tau is not None else base.min_kendall_tau,
             min_spearman_rho=self.min_spearman_rho if self.min_spearman_rho is not None else base.min_spearman_rho,
@@ -275,7 +305,7 @@ def evaluate_monotonicity_guard(
             if config.metrics and metric not in config.metrics:
                 continue
 
-            gate = config.gate_for(metric)
+            gate = config.gate_for(metric, technique)
             tau = rep.get("kendall_tau", 0.0)
             rho = rep.get("spearman_rho", 0.0)
             violations = rep.get("violations", [])

@@ -1014,7 +1014,7 @@ def technique_star_scores(
     The driver vector carried onto the star scale: one **absolute technique star** per axis.
 
     Every axis is put on the scale by its own anchor law (ADR-0016), so a score says what the
-    chart's load in that technique is worth in the same star units `dan.CANONICAL_DAN_SR` states
+    chart's load in that technique is worth in the same star units `dan.LEGACY_DAN_SR` states
     the ladder in. What this replaced was a *share*: one common `SR_base` (the strain rating)
     times each driver's fraction of the chart's largest, compressed by a back-pressure exponent
     — under which the dominant axis' score was `SR_base` on every chart, whatever the chart was,

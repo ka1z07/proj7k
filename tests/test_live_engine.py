@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from proj7k.cache import TwoLayerCache
+from proj7k.dan import estimate_canonical_dan
 from proj7k.live.engine import LiveEngine
 
 
@@ -56,8 +57,6 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     # Check star rating and Jinjin Dan tier
     assert "star_rating" in frame
     assert frame["star_rating"] > 0.0
-    assert "raw_star_rating" in frame
-    assert frame["raw_star_rating"] > 0.0
     assert "dan_tier" in frame
     assert "dan_tier" in meta
     assert isinstance(meta["dan_tier"], str)
@@ -70,15 +69,19 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert "dominant_technique" in radar
     assert "dominant_score" in radar
 
-    # Check StarRatingSynthesis contract
-    assert "synthesis" in frame
-    synth = frame["synthesis"]
-    assert "star_rating" in synth
-    assert "uncompressed_rating" in synth
-    assert "raw_strain_rating" in synth
-    assert "dominant_technique" in synth
-    assert "dominant_score" in synth
-    assert "synergy_bonus" in synth
+    # Stars, tier and radar come from the difficulty engine; the old strain/synthesis readings ride along
+    # under `legacy`, labelled (ADR-0018 decision 4).
+    profile = frame["profile"]
+    assert profile["total"]["stars"] == frame["star_rating"]
+    assert set(profile["skills"]) == {
+        "rc_jack", "rc_tech", "rc_speed", "rc_stamina", "ln_general", "ln_tech", "ln_inverse", "ln_release",
+    }
+    assert frame["dan_tier"] == estimate_canonical_dan(frame["star_rating"])
+    assert radar["dominant_technique"] in {"jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release"}
+    assert radar["dominant_score"] == radar[radar["dominant_technique"]]
+    legacy = frame["legacy"]
+    assert "legacy" in legacy["engine"].lower()
+    assert "synthesis" in legacy and "star_rating" in legacy["synthesis"]
 
     # Verify TwoLayerCache Layer 1 AST and Layer 2 Features were cached
     h = TwoLayerCache.compute_content_hash(content)
@@ -93,8 +96,9 @@ def test_live_engine_strain_profile_contract(tmp_path: Path):
     content = _make_dummy_osu_content("Strain Test")
     frame = engine.analyze_content(content)
 
-    assert "strain_profile" in frame
-    strain = frame["strain_profile"]
+    assert "strain_profile" not in frame
+    assert "strain_profile" in frame["legacy"]
+    strain = frame["legacy"]["strain_profile"]
 
     # Verify dual hand strain arrays
     assert "left_strains" in strain
@@ -182,12 +186,10 @@ def test_live_engine_includes_tech_breakdown(tmp_path: Path):
     content = _make_dummy_osu_content("4D Tech Song")
     frame = engine.analyze_content(content)
 
-    assert "tech_breakdown" in frame
-    tech = frame["tech_breakdown"]
+    assert "tech_breakdown" not in frame
+    assert "tech_breakdown" in frame["legacy"]
+    tech = frame["legacy"]["tech_breakdown"]
     for key in ("tortuosity", "bracket_shear", "spatial_entropy", "rhythm_irreg"):
         assert key in tech
         assert isinstance(tech[key], (int, float))
 
-    # Also verify it is present in metadata for client convenience
-    assert "tech_breakdown" in frame["metadata"]
-    assert frame["metadata"]["tech_breakdown"] == tech

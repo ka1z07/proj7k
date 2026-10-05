@@ -1,4 +1,9 @@
 """
+LEGACY ENGINE (ADR-0018 decision 4): this freezes the driver/strain engine's quantities (`p90`, the eight
+drivers) so that engine's star mapping can be calibrated cheaply. The replacement engine's scale is fitted from
+`engine/anchors.json` (`engine.scale.fit_star_scale`, re-run by `tests/engine/test_engine_scale.py`), so nothing
+here calibrates it; this module and the two tools that read it go when the legacy engine does.
+
 The frozen benchmark core: the 120-chart ladder evaluated once, up to but not including the
 stars.
 

@@ -4,7 +4,7 @@ from pathlib import Path
 from proj7k.downscaler.mapper import (
     TwoTierDanMapper,
     DanTarget,
-    CANONICAL_DAN_SR,
+    LEGACY_DAN_SR,
     CANONICAL_DAN_TIERS,
     parse_dan_tier,
     star_rating_to_strain,
@@ -44,7 +44,7 @@ def test_star_rating_to_strain_roundtrip():
 def test_canonical_dan_tiers_order_and_sr():
     assert len(CANONICAL_DAN_TIERS) == 15
     # Strict monotonicity of star ratings across canonical dan tiers
-    srs = [CANONICAL_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
+    srs = [LEGACY_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
     for i in range(len(srs) - 1):
         assert srs[i] < srs[i + 1]
 
@@ -88,3 +88,21 @@ def test_dan_mapper_boundary_sr():
     target_high = mapper.resolve(target_sr=11.5)
     assert target_high.target_dan == "Stellium"
     assert target_high.target_sr == 11.5
+
+
+def test_resolve_from_beatmap_reads_the_dominant_skill_from_the_difficulty_engine():
+    from proj7k.downscaler.mapper import TwoTierDanMapper
+    from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
+
+    # A two-column fast jack: the engine's dominant skill is jack, which the mapper speaks as "jack".
+    hit_objects = [
+        HitObject(column=c, time=i * 120.0, note_type=NoteType.RICE) for i in range(80) for c in (0, 2)
+    ]
+    beatmap = Beatmap7K(
+        title="t", artist="a", creator="c", version="v", hit_objects=hit_objects,
+        timing_points=[TimingPoint(time=0.0, beat_length=500.0, meter=4, uninherited=True)],
+    )
+
+    target = TwoTierDanMapper().resolve_from_beatmap(beatmap, target_dan="7th")
+
+    assert target.dominant_skill == "jack"

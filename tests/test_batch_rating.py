@@ -8,7 +8,7 @@ from proj7k.batch import (
     process_benchmark_item,
     run_benchmark_pipeline,
 )
-from proj7k.difficulty import evaluate_intrinsic_difficulty
+from proj7k.engine import evaluate_osu
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,17 +25,17 @@ def _manifest() -> list:
 def test_batch_results_carry_the_engine_star_rating():
     """
     The gate validates the engine's actual artifact, so a batch result must carry the very
-    star rating `evaluate_intrinsic_difficulty` produces for that chart — not a re-derivation
-    that could drift from the engine's own composition of radar, strain and calibration.
+    profile `evaluate_osu` produces for that chart — its total stars, the eight skills' stars and
+    the dominant skill — not a re-derivation that could drift from the engine's own composition.
     """
     report = run_benchmark_pipeline(_manifest(), enable_cache=False)
+    expected = evaluate_osu(SAMPLE_7K)
 
     assert report.summary.success == 2
     for result in report.results:
-        expected = evaluate_intrinsic_difficulty(SAMPLE_7K)
-        assert result.star_rating == expected.star_rating
-        assert result.uncompressed_star_rating == expected.raw_star_rating
-        assert result.dominant_technique == expected.metadata["dominant_technique"]
+        assert result.star_rating == expected.total_stars
+        assert result.dominant_skill == expected.dominant_skill
+        assert result.skills == {name: reading.stars for name, reading in expected.skills.items()}
 
 
 def test_batch_result_serializes_star_rating():
@@ -44,8 +44,11 @@ def test_batch_result_serializes_star_rating():
     payload = result.to_dict()
 
     assert payload["star_rating"] == result.star_rating
-    assert payload["uncompressed_star_rating"] == result.uncompressed_star_rating
-    assert payload["dominant_technique"] == result.dominant_technique
+    assert payload["dominant_skill"] == result.dominant_skill
+    assert payload["skills"] == result.skills
+    assert set(payload["skills"]) == {
+        "rc_jack", "rc_tech", "rc_speed", "rc_stamina", "ln_general", "ln_tech", "ln_inverse", "ln_release",
+    }
 
 
 def test_batch_rating_survives_a_warm_feature_cache(tmp_path: Path):
@@ -75,7 +78,7 @@ def test_batch_can_skip_rating_evaluation():
     """
     Feature-only runs opt out of the rating stage without losing the feature tensor.
 
-    The rating cost is the strain accumulation, not the features, and a caller re-freezing or
+    The rating cost is solving the chart, not the features, and a caller re-freezing or
     validating features (the checksum path, the distillation export) does not need it.
     """
     report = run_benchmark_pipeline(_manifest(), evaluate_rating=False)
@@ -84,7 +87,8 @@ def test_batch_can_skip_rating_evaluation():
     for result in report.results:
         assert result.features is not None
         assert result.star_rating is None
-        assert result.dominant_technique is None
+        assert result.dominant_skill is None
+        assert result.skills is None
 
 
 def test_cli_no_rating_flag_skips_the_rating_stage(tmp_path: Path):

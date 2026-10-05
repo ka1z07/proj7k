@@ -21,7 +21,7 @@ from proj7k.lazer.daemon import (
     resolve_beatmap_file,
 )
 from proj7k.lazer.annotator import parse_injected_metadata
-from proj7k.difficulty import current_engine_version
+from proj7k.lazer.annotator import current_engine_version
 
 
 def _make_osu_content(title="Test Song", version="Hard", mode=3, cs=7):
@@ -218,10 +218,11 @@ def test_sync_manager_incremental_skips_unchanged(tmp_path: Path):
     osu_file.write_text(_make_osu_content())
 
     # Pre-evaluated and already annotated record
-    from proj7k.difficulty import evaluate_intrinsic_difficulty
-    diff_res = evaluate_intrinsic_difficulty(osu_file)
-    sr = diff_res.star_rating
-    dom_tech = diff_res.radar.dominant_technique
+    from proj7k.engine import evaluate_osu
+    from proj7k.engine.skills import SKILL_TECH_KEY
+    diff_res = evaluate_osu(osu_file.read_text())
+    sr = diff_res.total_stars
+    dom_tech = SKILL_TECH_KEY[diff_res.dominant_skill]
 
     from proj7k.lazer.annotator import format_injected_difficulty_name, inject_binned_skill_tags
     annotated_name = format_injected_difficulty_name("Hard", sr, dom_tech)
@@ -333,9 +334,9 @@ def test_sync_manager_reevaluates_stale_injections(tmp_path: Path, stale_name: s
     # Stale injection whose self-consistent-looking metadata would otherwise be trusted as-is.
     record = _annotated_record(5.00, stale_name, hash_hex)
 
-    from proj7k.difficulty import evaluate_intrinsic_difficulty
+    from proj7k.engine import evaluate_osu
 
-    expected_sr = evaluate_intrinsic_difficulty(osu_file).star_rating
+    expected_sr = evaluate_osu(osu_file.read_text()).total_stars
 
     mock_bridge = MagicMock(spec=RealmBridgeClient)
     mock_bridge.dump_7k_beatmaps.return_value = [record]
@@ -607,8 +608,8 @@ def test_sync_manager_incremental_preserves_existing_collections(tmp_path: Path)
         md5_hash="md5-old",
         file_hash="hash-old",
         star_rating=5.50,
-        difficulty_name=f"Hard (5.50★ 5th Jack {current_engine_version()})",
-        tags="dominant_jack jack_5★ dan_5th",
+        difficulty_name=f"Hard (5.50★ 4th Jack {current_engine_version()})",
+        tags="dominant_jack jack_5★ dan_4th",
         title="Old Song",
         artist="Artist",
         ruleset_id=3,
@@ -726,6 +727,64 @@ def test_sync_manager_preheats_when_locked(tmp_path: Path):
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
+def _jack_chart_content() -> str:
+    """A fast two-column jack: the engine's dominant skill is jack, unambiguously."""
+    rows = [f"{x},192,{1000 + 120 * i},1,0,0:0:0:0:" for i in range(120) for x in (64, 320)]
+    return _make_osu_content().split("[HitObjects]")[0] + "[HitObjects]\n" + "\n".join(rows) + "\n"
 
 
+def test_dry_run_reports_what_would_change_and_writes_nothing(tmp_path: Path):
+    """
+    ADR-0018 decision 5: before the new engine rewrites anyone's library, `dry_run` says how many charts
+    would change and how the dominant technique tags move (old injected name -> the engine's), without
+    snapshotting, locking or touching the database.
+    """
+    from proj7k.engine import evaluate_osu
+    from proj7k.lazer.annotator import inject_binned_skill_tags
 
+    realm_file = tmp_path / "client.realm"
+    realm_file.touch()
+    files_dir = tmp_path / "files"
+    files_dir.mkdir(parents=True)
+
+    hash_hex = "dryrunabcdef123456"
+    content = _jack_chart_content()
+    (files_dir / hash_hex).write_text(content)
+
+    # Injected by an older engine: stale, and its tag says stream.
+    record = LazerBeatmapRecord(
+        id="rec-1", hash=hash_hex, md5_hash="md5-rec-1", file_hash=hash_hex, star_rating=5.00,
+        difficulty_name="Hard (5.00★ 5th Stream vdeadbeef)", tags=inject_binned_skill_tags("", "stream", 5.0),
+        title="Test Song", artist="Artist", ruleset_id=3, circle_size=7.0,
+    )
+    new_stars = evaluate_osu(content).total_stars
+    assert new_stars > 0.0
+
+    mock_bridge = MagicMock(spec=RealmBridgeClient)
+    mock_bridge.dump_7k_beatmaps.return_value = [record]
+    mock_backup = MagicMock(spec=LazerBackupManager)
+
+    manager = LazerSyncManager(
+        options=SyncOptions(
+            realm_path=realm_file,
+            files_dir=files_dir,
+            cache_dir=tmp_path / "cache",
+            lock_path=tmp_path / "client.realm.lock",
+            auto_setup=False,
+        ),
+        bridge_client=mock_bridge,
+        backup_manager=mock_backup,
+    )
+    summary = manager.sync_once(dry_run=True)
+
+    assert summary.success is True
+    assert summary.dry_run is True
+    assert summary.total_7k == 1
+    assert summary.would_update == 1
+    assert summary.updated_count == 0
+    assert summary.dominant_changes == {"stream->jack": 1}
+    assert summary.star_change_mean == pytest.approx(new_stars - 5.00)
+
+    mock_bridge.apply_batch_update.assert_not_called()
+    mock_backup.create_realm_snapshot.assert_not_called()
+    mock_backup.record_original_states.assert_not_called()

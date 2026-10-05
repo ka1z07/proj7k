@@ -16,7 +16,7 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
-from proj7k.radar import TechniqueRadar
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.lazer.annotator import (
     generate_binned_skill_tags,
     inject_binned_skill_tags,
@@ -274,10 +274,12 @@ def format_downscale_report(
     down_flux = result.bimanual_flux_ratio
     down_flux_str = f"{down_flux[0] * 100.0:.1f}% : {down_flux[1] * 100.0:.1f}%"
 
-    dom_orig = result.original_radar.dominant_technique
-    dom_down = result.downscaled_radar.dominant_technique
-    dom_score_orig = result.original_radar.dominant_score
-    dom_score_down = result.downscaled_radar.dominant_score
+    p_orig = result.original_profile
+    p_down = result.downscaled_profile
+    dom_orig = SKILL_TECH_KEY[p_orig.dominant_skill]
+    dom_down = SKILL_TECH_KEY[p_down.dominant_skill]
+    dom_score_orig = p_orig.skills[p_orig.dominant_skill].stars
+    dom_score_down = p_down.skills[p_down.dominant_skill].stars
 
     cos_sim = result.validation.cosine_similarity
     val_status = f"{GREEN}PASSED{RESET}" if result.validation.passed else f"{RED}FAILED{RESET}"
@@ -305,7 +307,7 @@ def format_downscale_report(
     lines.extend([
         f" {BOLD}{'METRIC COMPARISON':<28} {'ORIGINAL':<16} {'PRACTICE':<16} {'DELTA / STATUS':<16}{RESET}",
         "-" * 80,
-        f" Star Rating                  {orig_sr:5.2f}★           {GREEN}{down_sr:5.2f}★{RESET}           {sr_delta:+5.2f}★ ({sr_pct:+.1f}%)",
+        f" Star Rating (legacy SR)      {orig_sr:5.2f}★           {GREEN}{down_sr:5.2f}★{RESET}           {sr_delta:+5.2f}★ ({sr_pct:+.1f}%)",
         f" Notes Count                  {orig_notes:<16} {GREEN}{down_notes:<16}{RESET} {notes_delta:+d} ({notes_pct:+.1f}%)",
         f" P90 Strain                   {orig_strain.p90_strain:5.2f}           {GREEN}{down_strain.p90_strain:5.2f}{RESET}           {down_strain.p90_strain - orig_strain.p90_strain:+5.2f}",
         f" Peak Strain                  {orig_strain.peak_strain:5.2f}           {GREEN}{down_strain.peak_strain:5.2f}{RESET}           {down_strain.peak_strain - orig_strain.peak_strain:+5.2f}",
@@ -314,25 +316,20 @@ def format_downscale_report(
         f" Radar Cosine Similarity      -                {GREEN}{cos_sim:.3f}{RESET}            {'Passed (>= 0.80)' if result.validation.gate1_passed else 'Failed (< 0.80)'}",
         f" Validation Outcome           -                {val_status}",
         "-" * 80,
-        f" {BOLD}8-DIMENSION TECHNIQUE RADAR COMPARISON{RESET}",
+        f" {BOLD}8-SKILL COMPARISON (difficulty engine stars){RESET}",
         f" {'Dimension':<18} {'Original':<12} {'Practice':<12} {'Practice Visual Gauge':<20}",
         "-" * 80,
     ])
 
-    r_orig: TechniqueRadar = result.original_radar
-    r_down: TechniqueRadar = result.downscaled_radar
+    skill_labels = {
+        "rc_jack": "Jack", "rc_tech": "Tech", "rc_speed": "Speed", "rc_stamina": "Stream",
+        "ln_general": "LN General", "ln_tech": "LN Tech", "ln_inverse": "LN Inverse", "ln_release": "LN Release",
+    }
     dimensions: List[Tuple[str, float, float]] = [
-        ("Jack", r_orig.jack, r_down.jack),
-        ("Tech", r_orig.tech, r_down.tech),
-        ("Speed", r_orig.speed, r_down.speed),
-        ("Stream", r_orig.stream, r_down.stream),
-        ("LN General", r_orig.ln_general, r_down.ln_general),
-        ("LN Tech", r_orig.ln_tech, r_down.ln_tech),
-        ("LN Inverse", r_orig.ln_inverse, r_down.ln_inverse),
-        ("LN Release", r_orig.ln_release, r_down.ln_release),
+        (label, p_orig.skills[skill].stars, p_down.skills[skill].stars) for skill, label in skill_labels.items()
     ]
 
-    max_val = max(1.0, max(orig_sr, down_sr))
+    max_val = max(1.0, max(p_orig.total_stars, p_down.total_stars))
     for name, v_orig, v_down in dimensions:
         bar = _make_ascii_bar(v_down, max_val=max_val, width=16)
         color = GREEN if v_down <= v_orig else RED
@@ -416,8 +413,9 @@ def sync_practice_beatmaps_to_lazer(
             bm_md5 = hashlib.md5(dump_osu_7k(bm).encode("utf-8")).hexdigest()
         practice_hashes.append(bm_md5)
 
-        dom_tech = res.downscaled_radar.dominant_technique
-        sr = res.downscaled_rating.star_rating
+        dom_tech = SKILL_TECH_KEY[res.downscaled_profile.dominant_skill]
+        # The library carries the difficulty engine's scale (the daemon stamps it); the closed loop's legacy SR stays in the report.
+        sr = res.downscaled_profile.total_stars
 
         # If beatmap already exists in Realm, create mutation payload
         if bm_md5 in rec_by_md5:

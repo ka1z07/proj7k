@@ -18,14 +18,17 @@ import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from proj7k.parser import Beatmap7K
-from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar, compute_technique_radar
+from proj7k.engine import evaluate_notes
+from proj7k.engine.events import notes_from_beatmap
+from proj7k.engine.skills import SKILL_TECH_KEY
+from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar
 from proj7k.rating import RatingOptions
 from proj7k.strain import compute_raw_strain_star_rating
 
 from proj7k.dan import (
-    CANONICAL_DAN_SR,
+    LEGACY_DAN_SR,
     CANONICAL_DAN_TIERS,
-    estimate_canonical_dan,
+    legacy_estimate_canonical_dan,
     parse_dan_tier,
 )
 
@@ -174,10 +177,10 @@ class TwoTierDanMapper:
                 canonical_dan = self._estimate_closest_dan(effective_sr)
         elif target_dan is not None:
             canonical_dan = parse_dan_tier(target_dan)
-            effective_sr = CANONICAL_DAN_SR[canonical_dan]
+            effective_sr = LEGACY_DAN_SR[canonical_dan]
         else:
             canonical_dan = "7th"
-            effective_sr = CANONICAL_DAN_SR["7th"]
+            effective_sr = LEGACY_DAN_SR["7th"]
 
         target_strain = star_rating_to_strain(effective_sr, self.rating_options)
 
@@ -219,9 +222,8 @@ class TwoTierDanMapper:
         target_dan: Optional[str] = None,
         target_sr: Optional[float] = None,
     ) -> DanTarget:
-        """Resolves target, auto-detecting dominant technique from the beatmap."""
-        radar = compute_technique_radar(beatmap)
-        dominant = radar.dominant_technique
+        """Resolves target, auto-detecting the dominant skill from the beatmap with the difficulty engine."""
+        dominant = SKILL_TECH_KEY[evaluate_notes(notes_from_beatmap(beatmap)).dominant_skill]
         return self.resolve(target_dan=target_dan, target_sr=target_sr, dominant_skill=dominant)
 
     def _get_tier_profile(self, tech_name: str, dan_tier: str) -> Optional[Dict[str, Any]]:
@@ -235,15 +237,15 @@ class TwoTierDanMapper:
 
     def _estimate_closest_dan(self, sr: float) -> str:
         """Finds closest canonical Dan tier for a given star rating."""
-        if sr <= CANONICAL_DAN_SR["0th"]:
+        if sr <= LEGACY_DAN_SR["0th"]:
             return "0th"
-        if sr >= CANONICAL_DAN_SR["Stellium"]:
+        if sr >= LEGACY_DAN_SR["Stellium"]:
             return "Stellium"
 
         best_tier = "7th"
         best_diff = float("inf")
         for tier in CANONICAL_DAN_TIERS:
-            diff = abs(CANONICAL_DAN_SR[tier] - sr)
+            diff = abs(LEGACY_DAN_SR[tier] - sr)
             if diff < best_diff:
                 best_diff = diff
                 best_tier = tier
@@ -251,10 +253,10 @@ class TwoTierDanMapper:
 
     def _interpolate_features(self, tech_name: str, sr: float) -> Dict[str, float]:
         """Interpolates feature vectors between two surrounding canonical tiers."""
-        if sr <= CANONICAL_DAN_SR["0th"]:
+        if sr <= LEGACY_DAN_SR["0th"]:
             p = self._get_tier_profile(tech_name, "0th")
             return dict(p["features"]) if p and "features" in p else {}
-        if sr >= CANONICAL_DAN_SR["Stellium"]:
+        if sr >= LEGACY_DAN_SR["Stellium"]:
             p = self._get_tier_profile(tech_name, "Stellium")
             return dict(p["features"]) if p and "features" in p else {}
 
@@ -263,13 +265,13 @@ class TwoTierDanMapper:
         for i in range(len(CANONICAL_DAN_TIERS) - 1):
             t_low = CANONICAL_DAN_TIERS[i]
             t_high = CANONICAL_DAN_TIERS[i + 1]
-            if CANONICAL_DAN_SR[t_low] <= sr <= CANONICAL_DAN_SR[t_high]:
+            if LEGACY_DAN_SR[t_low] <= sr <= LEGACY_DAN_SR[t_high]:
                 lower_tier = t_low
                 upper_tier = t_high
                 break
 
-        sr_low = CANONICAL_DAN_SR[lower_tier]
-        sr_high = CANONICAL_DAN_SR[upper_tier]
+        sr_low = LEGACY_DAN_SR[lower_tier]
+        sr_high = LEGACY_DAN_SR[upper_tier]
         factor = (sr - sr_low) / max(1e-6, sr_high - sr_low)
 
         p_low = self._get_tier_profile(tech_name, lower_tier)

@@ -102,6 +102,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="When running with --once, wait up to 60s for the safe flush window to open.",
     )
     opts_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "With --once: evaluate every 7K chart and report how many would be rewritten and how the "
+            "dominant technique tags would move, without writing, snapshotting or needing the safe flush window."
+        ),
+    )
+    opts_group.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -133,6 +141,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     is_revert = args.revert or (pos_action == "revert")
     is_daemon = args.daemon or (pos_action == "daemon")
     is_once = args.once or (pos_action == "once") or (not is_setup and not is_revert and not is_daemon)
+
+    if args.dry_run and (is_setup or is_revert or is_daemon):
+        parser.error("--dry-run applies only to --once (a daemon or revert run would write the library)")
 
     # 1. Action: setup
     if is_setup:
@@ -193,7 +204,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # 4. Action: once (default)
     logging.info(f"Synchronizing osu!lazer database at '{realm_path}'...")
-    summary = manager.sync_once(wait_for_lock=args.wait)
+    summary = manager.sync_once(wait_for_lock=args.wait, dry_run=args.dry_run)
+    if summary.success and summary.dry_run:
+        lines = [
+            f"Dry run (nothing written): Total 7K: {summary.total_7k}, Would update: {summary.would_update} "
+            f"({summary.refreshed_count} re-evaluated from an older engine), Unchanged: {summary.skipped_count}, "
+            f"Failed: {summary.failed_count}",
+        ]
+        if summary.star_change_mean is not None:
+            lines.append(f"Mean star change on previously injected charts: {summary.star_change_mean:+.2f}★")
+        if summary.dominant_changes:
+            lines.append("Dominant technique tag changes (old->new):")
+            lines.extend(
+                f"  {change}: {count}"
+                for change, count in sorted(summary.dominant_changes.items(), key=lambda kv: -kv[1])
+            )
+        else:
+            lines.append("Dominant technique tags: no changes.")
+        for line in lines:
+            logging.info(line)
+            print(line)
+        return 0
     if summary.success:
         msg = (
             f"Sync completed successfully: Total 7K: {summary.total_7k}, "

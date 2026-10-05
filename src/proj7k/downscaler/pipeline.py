@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 import hashlib
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from proj7k.engine import DifficultyProfile
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K, dump_osu_7k
 from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
@@ -45,6 +47,10 @@ class DownscaleResult:
     target: DanTarget
     original_features: BeatmapFeatures
     downscaled_features: BeatmapFeatures
+    #: The difficulty engine's profiles: the dominant skill and the eight skills' stars the validator gates on.
+    original_profile: DifficultyProfile
+    downscaled_profile: DifficultyProfile
+    #: The legacy radar and star rating, which the closed loop still steers by (ADR-0018 decision 4).
     original_radar: TechniqueRadar
     downscaled_radar: TechniqueRadar
     original_strain: StrainTimeseriesProfile
@@ -89,7 +95,8 @@ def downscale_beatmap(
     - Metric skeleton protection (1/1 downbeats and chord bases)
     - Bimanual striking flux balance guidance towards [45%, 55%]
     - Closed-loop peak strain damping
-    - Dual-gate technique preservation (radar cosine similarity >= 0.80 & dominant preserved)
+    - Dual-gate technique preservation (skill-stars cosine similarity >= 0.80 & dominant skill preserved,
+      both read from the difficulty engine; the loop itself still steers by the legacy star and strain)
     """
     if options is None:
         options = DownscaleOptions()
@@ -107,8 +114,10 @@ def downscale_beatmap(
     orig_rating = synthesize_star_rating(orig_radar, p90_strain=orig_strain.p90_strain, options=rating_opts)
 
     # 2. Resolve target Dan and target strain
+    validator = DualGateValidator(min_cosine_similarity=options.min_cosine_similarity)
+    orig_profile = validator.profile_of(beatmap)
     mapper = TwoTierDanMapper()
-    dom_skill = options.dominant_skill or orig_radar.dominant_technique
+    dom_skill = options.dominant_skill or SKILL_TECH_KEY[orig_profile.dominant_skill]
     target = mapper.resolve(
         target_dan=options.target_dan,
         target_sr=options.target_sr,
@@ -123,7 +132,6 @@ def downscale_beatmap(
     warnings: List[str] = []
 
     # 3. Setup components
-    validator = DualGateValidator(min_cosine_similarity=options.min_cosine_similarity)
     balancer = BimanualFluxBalancer()
     pruner = WindowedPeakBatchPruner(
         prune_ratio=options.prune_ratio,
@@ -153,7 +161,7 @@ def downscale_beatmap(
         pruned_bm,
         target_dan=target.target_dan,
         original_md5=orig_md5,
-        dominant_skill=orig_radar.dominant_technique,
+        dominant_skill=SKILL_TECH_KEY[orig_profile.dominant_skill],
     )
 
     # 6. Re-evaluate final practice beatmap
@@ -178,8 +186,10 @@ def downscale_beatmap(
         target=target,
         original_features=orig_feat,
         downscaled_features=final_feat,
+        original_profile=orig_profile,
         original_radar=orig_radar,
         downscaled_radar=final_radar,
+        downscaled_profile=validator.profile_of(practice_bm),
         original_strain=orig_strain,
         downscaled_strain=final_strain,
         original_rating=orig_rating,

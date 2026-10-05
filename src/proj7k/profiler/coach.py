@@ -22,7 +22,7 @@ from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-from proj7k.dan import estimate_canonical_dan, parse_dan_tier
+from proj7k.dan import legacy_estimate_canonical_dan, parse_dan_tier
 from proj7k.downscaler.locator import package_into_osz
 from proj7k.downscaler.mapper import CANONICAL_TO_TECH_KEY, TECH_ALIAS_MAP
 from proj7k.downscaler.mutation import update_practice_metadata
@@ -208,7 +208,7 @@ def recall_candidate_beatmaps(
         if target_dan and f"dan_{target_dan.lower()}" in tags_lower:
             score += 25.0
 
-        tier = estimate_canonical_dan(rec.star_rating)
+        tier = legacy_estimate_canonical_dan(rec.star_rating)
         total_score = score - (sr_diff * 10.0)
 
         if total_score > 0.0:
@@ -296,10 +296,10 @@ def generate_coaching_recommendations(
         b_info = dim_dict.get(bottleneck_tech)
         b_cap = getattr(b_info, "effective_capacity", getattr(b_info, "peak_capacity", 15.0)) if b_info else 15.0
         b_sr = getattr(b_info, "star_rating", 4.5) if b_info else 4.5
-        b_dan = getattr(b_info, "dan_tier", estimate_canonical_dan(b_sr)) if b_info else estimate_canonical_dan(b_sr)
+        b_dan = getattr(b_info, "dan_tier", legacy_estimate_canonical_dan(b_sr)) if b_info else legacy_estimate_canonical_dan(b_sr)
 
         target_sr = round(b_sr + 0.25, 2)
-        target_dan = estimate_canonical_dan(target_sr)
+        target_dan = legacy_estimate_canonical_dan(target_sr)
         tech_title = bottleneck_tech.replace("_", " ").title()
 
         candidates = recall_candidate_beatmaps(
@@ -334,10 +334,10 @@ def generate_coaching_recommendations(
         d_info = dim_dict.get(dominant_tech)
         d_cap = getattr(d_info, "effective_capacity", getattr(d_info, "peak_capacity", 25.0)) if d_info else 25.0
         d_sr = getattr(d_info, "star_rating", 6.5) if d_info else 6.5
-        d_dan = getattr(d_info, "dan_tier", estimate_canonical_dan(d_sr)) if d_info else estimate_canonical_dan(d_sr)
+        d_dan = getattr(d_info, "dan_tier", legacy_estimate_canonical_dan(d_sr)) if d_info else legacy_estimate_canonical_dan(d_sr)
 
         target_sr = round(d_sr + 0.40, 2)
-        target_dan = estimate_canonical_dan(target_sr)
+        target_dan = legacy_estimate_canonical_dan(target_sr)
         tech_title = dominant_tech.replace("_", " ").title()
 
         candidates = recall_candidate_beatmaps(
@@ -544,7 +544,7 @@ def generate_targeted_practice_bundle(
     slice_strain_prof = compute_dual_hand_strain(sliced_bm)
     push_strain = slice_strain_prof.p90_strain
     push_sr = synthesize_star_rating(slice_radar, p90_strain=push_strain).star_rating
-    push_dan = estimate_canonical_dan(push_sr)
+    push_dan = legacy_estimate_canonical_dan(push_sr)
 
     # 3. Determine strain targets for Recovery and Bridge tiers
     if player_capacity is not None and player_capacity > 0:
@@ -579,7 +579,7 @@ def generate_targeted_practice_bundle(
     )
     bridge_bm = bridge_res.downscaled_beatmap
     bridge_sr = bridge_res.downscaled_rating.star_rating
-    bridge_dan = estimate_canonical_dan(bridge_sr)
+    bridge_dan = legacy_estimate_canonical_dan(bridge_sr)
     bridge_bm.version = f"[p-{bridge_dan} {dom_tech} Bridge] {beatmap.version} (Slice)"
     if "Metadata" in bridge_bm.extra_sections:
         bridge_bm.extra_sections["Metadata"]["Version"] = bridge_bm.version
@@ -596,7 +596,7 @@ def generate_targeted_practice_bundle(
     )
     rec_bm = rec_res.downscaled_beatmap
     rec_sr = rec_res.downscaled_rating.star_rating
-    rec_dan = estimate_canonical_dan(rec_sr)
+    rec_dan = legacy_estimate_canonical_dan(rec_sr)
     rec_bm.version = f"[p-{rec_dan} {dom_tech} Recovery] {beatmap.version} (Slice)"
     if "Metadata" in rec_bm.extra_sections:
         rec_bm.extra_sections["Metadata"]["Version"] = rec_bm.version

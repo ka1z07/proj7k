@@ -86,7 +86,7 @@ def test_cli_once_success(tmp_path, capsys):
 
         code = main(["--once", "--realm", str(realm_path), "--files-dir", str(files_dir)])
         assert code == 0
-        instance.sync_once.assert_called_once_with(wait_for_lock=False)
+        instance.sync_once.assert_called_once_with(wait_for_lock=False, dry_run=False)
         captured = capsys.readouterr()
         assert "Sync completed successfully" in captured.out
         assert "Updated: 2" in captured.out
@@ -104,7 +104,7 @@ def test_cli_once_with_wait(tmp_path):
 
         code = main(["--once", "--wait", "--realm", str(realm_path)])
         assert code == 0
-        instance.sync_once.assert_called_once_with(wait_for_lock=True)
+        instance.sync_once.assert_called_once_with(wait_for_lock=True, dry_run=False)
 
 
 def test_cli_once_failure(tmp_path, capsys):
@@ -258,3 +258,38 @@ def test_daemon_reports_lock_status_at_info_level(tmp_path: Path):
             )
         finally:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+def test_cli_dry_run_prints_the_report_and_passes_the_flag(capsys):
+    with patch("proj7k.sync.LazerSyncManager") as manager_cls:
+        instance = manager_cls.return_value
+        instance.sync_once.return_value = SyncSummary(
+            success=True,
+            total_7k=10,
+            dry_run=True,
+            would_update=4,
+            refreshed_count=3,
+            skipped_count=6,
+            dominant_changes={"stream->speed": 2},
+            star_change_mean=0.25,
+        )
+
+        code = main(["--once", "--dry-run"])
+
+    assert code == 0
+    instance.sync_once.assert_called_once_with(wait_for_lock=False, dry_run=True)
+    out = capsys.readouterr().out
+    assert "Dry run (nothing written)" in out
+    assert "Would update: 4" in out
+    assert "stream->speed: 2" in out
+    assert "+0.25★" in out
+
+
+def test_cli_rejects_dry_run_with_the_daemon_instead_of_writing(capsys):
+    with patch("proj7k.sync.LazerSyncManager"), patch("proj7k.sync.run_daemon") as run_daemon_mock:
+        with pytest.raises(SystemExit) as exit_info:
+            main(["--daemon", "--dry-run"])
+
+    assert exit_info.value.code == 2
+    run_daemon_mock.assert_not_called()
+    assert "--dry-run" in capsys.readouterr().err
