@@ -66,7 +66,7 @@ def test_validator_passes_when_conserved():
     target = DanTarget(
         target_dan="7th",
         target_sr=6.1,
-        target_strain=115.8,
+        target_D=27.0,
         dominant_skill="jack",
         features={"hold_pct": 0.0, "avg_nps": 20.0},
     )

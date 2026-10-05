@@ -4,10 +4,9 @@ from pathlib import Path
 from proj7k.downscaler.mapper import (
     TwoTierDanMapper,
     DanTarget,
-    LEGACY_DAN_SR,
+    CANONICAL_DAN_SR,
     CANONICAL_DAN_TIERS,
     parse_dan_tier,
-    star_rating_to_strain,
 )
 
 
@@ -31,20 +30,30 @@ def test_parse_dan_tier():
         parse_dan_tier("InvalidDan99")
 
 
-def test_star_rating_to_strain_roundtrip():
-    # SR_raw = a * S^0.65 + b with a=0.268980, b=0.129915
+def test_target_level_is_the_inverse_of_the_star_scale():
+    from proj7k.engine.scale import stars_of
+
+    mapper = TwoTierDanMapper()
+    for sr in [3.5, 5.0, 6.1, 7.5, 9.0, 10.5]:
+        target = mapper.resolve(target_sr=sr)
+        assert stars_of(target.target_D) == pytest.approx(sr, rel=1e-9)
+    # an explicit engine level is a star by the engine's own scale
+    by_level = mapper.resolve(target_D=target.target_D)
+    assert by_level.target_sr == pytest.approx(10.5, rel=1e-9)
+
+
+def test_legacy_strain_law_inverse_still_round_trips():
+    from proj7k.downscaler.mapper import star_rating_to_strain
     from proj7k.strain import compute_raw_strain_star_rating
 
-    for sr in [3.5, 5.0, 6.1, 7.5, 9.0, 10.5]:
-        s = star_rating_to_strain(sr)
-        sr_recomputed = compute_raw_strain_star_rating(s)
-        assert pytest.approx(sr, rel=1e-3) == sr_recomputed
+    for sr in [3.5, 6.1, 10.5]:
+        assert compute_raw_strain_star_rating(star_rating_to_strain(sr)) == pytest.approx(sr, rel=1e-3)
 
 
 def test_canonical_dan_tiers_order_and_sr():
     assert len(CANONICAL_DAN_TIERS) == 15
     # Strict monotonicity of star ratings across canonical dan tiers
-    srs = [LEGACY_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
+    srs = [CANONICAL_DAN_SR[tier] for tier in CANONICAL_DAN_TIERS]
     for i in range(len(srs) - 1):
         assert srs[i] < srs[i + 1]
 
@@ -55,8 +64,8 @@ def test_dan_mapper_tier1_lookup():
 
     assert isinstance(target, DanTarget)
     assert target.target_dan == "7th"
-    assert pytest.approx(target.target_sr, abs=0.2) == 6.1
-    assert target.target_strain > 0.0
+    assert target.target_sr == CANONICAL_DAN_SR["7th"]
+    assert target.target_D > 0.0
     assert target.dominant_skill == "jack"
     assert "peak_4m_nps" in target.features
     assert "hold_pct" in target.features
@@ -65,12 +74,12 @@ def test_dan_mapper_tier1_lookup():
 
 def test_dan_mapper_tier2_continuous_sr_interpolation():
     mapper = TwoTierDanMapper()
-    # 6.3 falls between 7th (6.1) and 8th (6.5)
-    target = mapper.resolve(target_sr=6.3, dominant_skill="stream")
+    # 6.8 falls between 7th (6.55) and 8th (6.96)
+    target = mapper.resolve(target_sr=6.8, dominant_skill="stream")
 
     assert isinstance(target, DanTarget)
-    assert target.target_sr == 6.3
-    assert target.target_strain > 0.0
+    assert target.target_sr == 6.8
+    assert target.target_D > 0.0
     # Should interpolate features between 7th and 8th
     assert "avg_nps" in target.features
     assert target.dominant_skill == "stream"
@@ -78,16 +87,16 @@ def test_dan_mapper_tier2_continuous_sr_interpolation():
 
 def test_dan_mapper_boundary_sr():
     mapper = TwoTierDanMapper()
-    # Below lowest dan (3.2)
+    # Below the lowest dan
     target_low = mapper.resolve(target_sr=2.5)
     assert target_low.target_dan == "0th"
     assert target_low.target_sr == 2.5
-    assert target_low.target_strain > 0.0
+    assert target_low.target_D > 0.0
 
-    # Above highest dan (10.5)
-    target_high = mapper.resolve(target_sr=11.5)
+    # Above the highest dan
+    target_high = mapper.resolve(target_sr=12.5)
     assert target_high.target_dan == "Stellium"
-    assert target_high.target_sr == 11.5
+    assert target_high.target_sr == 12.5
 
 
 def test_resolve_from_beatmap_reads_the_dominant_skill_from_the_difficulty_engine():

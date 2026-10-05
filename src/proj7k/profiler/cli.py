@@ -6,10 +6,12 @@ import argparse
 from dataclasses import dataclass, field as dc_field
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.field import ChartField, trace_beatmap
 from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.profiler.aggregate import (
@@ -226,6 +228,13 @@ def run_ingestion(
         skill_radar = analyze_strain_response(
             _scale_alignment_clock_rate(alignment, clock_rate), beatmap, field=field, played_until_s=played_until_s,
         )
+
+    if field is not None and pathology.cascade_precursor and pathology.cascade_precursor.fatal_time_ms is not None:
+        pre = pathology.cascade_precursor
+        carrying = field.carrying_skill(
+            (pre.fatal_time_ms - 500.0) / 1000.0 / clock_rate, pre.fatal_time_ms / 1000.0 / clock_rate
+        )
+        pre.skill = SKILL_TECH_KEY[carrying] if carrying else None
 
     return ProfilerIngestionReport(
         player_name=replay.player_name,
@@ -515,6 +524,46 @@ def run_batch_ingestion(
     return stats
 
 
+def resolve_lazer_replay(
+    player_name: str,
+    realm_path: Optional[Path | str] = None,
+    files_dir: Optional[Path | str] = None,
+    index: int = 0,
+    client: Any = None,
+) -> Dict[str, Any]:
+    """
+    The player's `index`-th most recent 7K replay in the osu!lazer library, as its replay and beatmap files
+    in lazer's content-addressed store: `{"replay": Path, "beatmap": Path, "title", "difficulty_name", "date"}`.
+    """
+    from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
+
+    target_realm = Path(realm_path) if realm_path else DEFAULT_REALM_PATH
+    target_files_dir = Path(files_dir) if files_dir else (target_realm.parent / "files")
+    if client is None:
+        if not target_realm.exists():
+            raise FileNotFoundError(f"osu!lazer realm database not found at {target_realm}")
+        client = RealmBridgeClient(default_realm_path=target_realm)
+    scores = [
+        s for s in client.dump_7k_scores(realm_path=target_realm, user=player_name)
+        if s.get("beatmap_file_hash") and s.get("replay_file_hash")
+    ]
+    scores.sort(key=lambda s: s.get("date", ""), reverse=True)
+    if not 0 <= index < len(scores):
+        raise LookupError(f"{player_name!r} has {len(scores)} 7K replay(s) in the library; no index {index}")
+    item = scores[index]
+
+    def store_path(h: str) -> Path:
+        return target_files_dir / h[0] / h[:2] / h
+
+    replay, beatmap = store_path(item["replay_file_hash"]), store_path(item["beatmap_file_hash"])
+    if not replay.exists() or not beatmap.exists():
+        raise FileNotFoundError(f"the replay or beatmap file is missing from {target_files_dir}")
+    return {
+        "replay": replay, "beatmap": beatmap, "title": item.get("title", ""),
+        "difficulty_name": item.get("difficulty_name", ""), "date": item.get("date", ""),
+    }
+
+
 def run_replay_import(
     player_name: str,
     realm_path: Optional[Path | str] = None,
@@ -722,6 +771,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open the viewer page in the default browser once written.",
     )
+    parser.add_argument(
+        "--view-lazer",
+        action="store_true",
+        help="View a replay straight from the osu!lazer library: needs --player; the newest 7K replay unless --lazer-index.",
+    )
+    parser.add_argument(
+        "--lazer-index",
+        type=int,
+        default=0,
+        help="With --view-lazer: which of the player's replays, newest first (default: 0).",
+    )
     # Lazer replay import flags (inbound: client.realm -> SQLite).
     # Deliberately not "--sync-lazer": the downscaler already owns that flag for the
     # opposite direction (ADR-0011, injecting practice beatmaps INTO the realm).
@@ -742,6 +802,40 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # 0. Mode: View a replay from the osu!lazer library
+    if args.view_lazer:
+        if not args.player:
+            print("Error: --player <name> is required with --view-lazer.", file=sys.stderr)
+            return 1
+        try:
+            found = resolve_lazer_replay(args.player, realm_path=args.realm, index=args.lazer_index)
+            report = run_ingestion(found["replay"], found["beatmap"])
+        except Exception as e:
+            print(f"Lazer replay view error: {e}", file=sys.stderr)
+            return 1
+        from proj7k.profiler.replay_view import write_replay_view
+
+        label = re.sub(r"[^\w.-]+", "_", f"{found['title']}_{found['difficulty_name']}_{found['date'][:10]}").strip("_") or "replay"
+        target = Path(args.view) if args.view else Path("replay_views") / f"{label}.html"
+        try:
+            view_path = write_replay_view(
+                report, target, audio_path=Path(args.audio) if args.audio else None,
+                replay_path=found["replay"], beatmap_path=found["beatmap"],
+            )
+        except Exception as e:
+            print(f"Replay viewer error: {e}", file=sys.stderr)
+            return 1
+        if args.open:
+            import webbrowser
+
+            webbrowser.open(view_path.resolve().as_uri())
+        if args.json:
+            print(json.dumps({"replay_view": str(view_path), "report": report.to_dict()}, indent=2, ensure_ascii=False))
+        else:
+            print(format_ingestion_report(report))
+            print(f"Replay viewer: {view_path}")
+        return 0
 
     # 1. Mode: Lazer Replay Import
     if args.import_replays:
@@ -869,7 +963,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             audio = Path(args.audio) if args.audio else find_audio(Path(args.beatmap), report.beatmap.audio_filename if report.beatmap else "")
             target = Path(args.view) if args.view else Path(args.replay).with_suffix(".html")
             try:
-                view_path = write_replay_view(report, target, audio_path=audio)
+                view_path = write_replay_view(report, target, audio_path=audio, replay_path=args.replay, beatmap_path=args.beatmap)
             except Exception as e:
                 print(f"Replay viewer error: {e}", file=sys.stderr)
                 return 1
@@ -926,7 +1020,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 player_cap = None
                 dom_tech = None
                 if report.pathology and report.pathology.cascade_precursor:
-                    dom_tech = report.pathology.cascade_precursor.dominant_technique
+                    dom_tech = report.pathology.cascade_precursor.skill
                 if report.skill_radar:
                     if dom_tech and dom_tech in report.skill_radar.dimensions:
                         player_cap = report.skill_radar.dimensions[dom_tech].effective_capacity

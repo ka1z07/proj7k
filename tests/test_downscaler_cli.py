@@ -68,7 +68,7 @@ def test_cli_single_beatmap_success(tmp_path, capsys):
     assert "PROJ7K PRACTICE GENERATOR & DOWNSCALER REPORT" in captured.out
     assert "Star Rating" in captured.out
     assert "8-SKILL COMPARISON" in captured.out.upper()
-    assert "legacy SR" in captured.out
+    assert "Star Rating (engine)" in captured.out
 
     # Verify both derivative .osu and standalone .osz generated in output directory
     practice_files = [f for f in tmp_path.glob("*.osu") if f.name != "test.osu"]

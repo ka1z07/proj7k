@@ -71,7 +71,7 @@ class LazerPracticeSyncResult:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m proj7k.downscaler",
-        description="proj7k - Closed-loop strain downscaler and derivative practice beatmap generator (SPEC-P5.1-04 / ADR-0011).",
+        description="proj7k - Closed-loop downscaler on the difficulty engine and derivative practice beatmap generator (SPEC-P5.1-04 / ADR-0011 / ADR-0021).",
     )
 
     req_group = parser.add_argument_group("Input & Target Configuration")
@@ -94,13 +94,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--target-sr",
         type=float,
         default=None,
-        help="Target continuous Star Rating (e.g. 6.5). Overrides or interpolates Dan.",
+        help="Target continuous Star Rating on the difficulty engine's scale (e.g. 6.5). Overrides or interpolates Dan.",
     )
     req_group.add_argument(
-        "--target-strain",
+        "--target-d",
         type=float,
         default=None,
-        help="Explicit strain target override S_target.",
+        help="Target engine level D* in equivalent Hz (what --target-sr stands for, by the star scale).",
     )
     req_group.add_argument(
         "--dominant-skill",
@@ -158,19 +158,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-iterations",
         type=int,
         default=25,
-        help="Maximum closed-loop strain damping iterations (default: 25).",
+        help="Maximum closed-loop pruning iterations (default: 25).",
     )
     opt_group.add_argument(
         "--tolerance",
         type=float,
         default=0.05,
-        help="Strain convergence tolerance epsilon (default: 0.05 = 5%%).",
+        help="Star convergence tolerance: arrived within this share of the target star (default: 0.05 = 5%%).",
     )
     opt_group.add_argument(
         "--min-cosine-similarity",
         type=float,
         default=0.80,
-        help="Minimum 8D technique radar cosine similarity preservation gate (default: 0.80).",
+        help="Minimum 8-skill star-vector cosine similarity preservation gate (default: 0.80).",
     )
 
     lazer_group = parser.add_argument_group("osu!lazer Integration")
@@ -255,8 +255,8 @@ def format_downscale_report(
     down_bm = result.downscaled_beatmap
     target = result.target
 
-    orig_sr = result.original_rating.star_rating
-    down_sr = result.downscaled_rating.star_rating
+    orig_sr = result.original_stars
+    down_sr = result.downscaled_stars
     sr_delta = down_sr - orig_sr
     sr_pct = (sr_delta / max(0.01, orig_sr)) * 100.0
 
@@ -264,9 +264,6 @@ def format_downscale_report(
     down_notes = len(down_bm.hit_objects)
     notes_delta = down_notes - orig_notes
     notes_pct = (notes_delta / max(1, orig_notes)) * 100.0
-
-    orig_strain = result.original_strain
-    down_strain = result.downscaled_strain
 
     balancer = BimanualFluxBalancer()
     orig_flux = balancer.compute_flux_ratio(orig_bm.hit_objects)
@@ -300,20 +297,19 @@ def format_downscale_report(
     if osz_path:
         header_lines.append(f" OSZ Package: {CYAN}{osz_path.name}{RESET} ({osz_path})")
     header_lines.extend([
-        f" Target Dan : {YELLOW}{target.target_dan}{RESET} (SR Target: {target.target_sr:.2f}★ | Strain Target: {target.target_strain:.2f})",
+        f" Target Dan : {YELLOW}{target.target_dan}{RESET} (Star Target: {target.target_sr:.2f}★ | Level D*: {target.target_D:.2f})",
         "-" * 80,
     ])
     lines = list(header_lines)
     lines.extend([
         f" {BOLD}{'METRIC COMPARISON':<28} {'ORIGINAL':<16} {'PRACTICE':<16} {'DELTA / STATUS':<16}{RESET}",
         "-" * 80,
-        f" Star Rating (legacy SR)      {orig_sr:5.2f}★           {GREEN}{down_sr:5.2f}★{RESET}           {sr_delta:+5.2f}★ ({sr_pct:+.1f}%)",
+        f" Star Rating (engine)          {orig_sr:5.2f}★           {GREEN}{down_sr:5.2f}★{RESET}           {sr_delta:+5.2f}★ ({sr_pct:+.1f}%)",
         f" Notes Count                  {orig_notes:<16} {GREEN}{down_notes:<16}{RESET} {notes_delta:+d} ({notes_pct:+.1f}%)",
-        f" P90 Strain                   {orig_strain.p90_strain:5.2f}           {GREEN}{down_strain.p90_strain:5.2f}{RESET}           {down_strain.p90_strain - orig_strain.p90_strain:+5.2f}",
-        f" Peak Strain                  {orig_strain.peak_strain:5.2f}           {GREEN}{down_strain.peak_strain:5.2f}{RESET}           {down_strain.peak_strain - orig_strain.peak_strain:+5.2f}",
+        f" Level D (Hz)                 {p_orig.total_D:5.2f}           {GREEN}{p_down.total_D:5.2f}{RESET}           {p_down.total_D - p_orig.total_D:+5.2f}",
         f" Bimanual Flux (L:R)          {orig_flux_str:<16} {GREEN}{down_flux_str:<16}{RESET} Balanced",
         f" Dominant Technique           {MAGENTA}{dom_orig.capitalize()} ({dom_score_orig:.2f}★){RESET}    {MAGENTA}{dom_down.capitalize()} ({dom_score_down:.2f}★){RESET}    {dom_status}",
-        f" Radar Cosine Similarity      -                {GREEN}{cos_sim:.3f}{RESET}            {'Passed (>= 0.80)' if result.validation.gate1_passed else 'Failed (< 0.80)'}",
+        f" Skill-star Cosine Similarity     -                {GREEN}{cos_sim:.3f}{RESET}            {'Passed (>= 0.80)' if result.validation.gate1_passed else 'Failed (< 0.80)'}",
         f" Validation Outcome           -                {val_status}",
         "-" * 80,
         f" {BOLD}8-SKILL COMPARISON (difficulty engine stars){RESET}",
@@ -414,7 +410,7 @@ def sync_practice_beatmaps_to_lazer(
         practice_hashes.append(bm_md5)
 
         dom_tech = SKILL_TECH_KEY[res.downscaled_profile.dominant_skill]
-        # The library carries the difficulty engine's scale (the daemon stamps it); the closed loop's legacy SR stays in the report.
+        # The library carries the difficulty engine's scale (the daemon stamps it), the same one the loop steered by.
         sr = res.downscaled_profile.total_stars
 
         # If beatmap already exists in Realm, create mutation payload
@@ -541,9 +537,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         datefmt="%H:%M:%S",
     )
 
-    if not args.target_dan and args.target_sr is None and args.target_strain is None:
+    if not args.target_dan and args.target_sr is None and args.target_d is None:
         print(
-            "Error: At least one of --target-dan, --target-sr, or --target-strain must be specified.",
+            "Error: At least one of --target-dan, --target-sr, or --target-d must be specified.",
             file=sys.stderr,
         )
         return 1
@@ -592,7 +588,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     downscale_opts = DownscaleOptions(
         target_dan=args.target_dan,
         target_sr=args.target_sr,
-        target_strain=args.target_strain,
+        target_D=args.target_d,
         dominant_skill=args.dominant_skill,
         prune_ratio=args.prune_ratio,
         max_iterations=args.max_iterations,

@@ -58,10 +58,12 @@ def build_replay_view(
     report: ProfilerIngestionReport,
     frames: Optional[Sequence[ReplayFrame]] = None,
     audio_src: Optional[str] = None,
+    sources: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """
     The viewer's payload for an ingested replay. `frames` defaults to the report's own; `audio_src` is the
-    audio file as the page should load it (a URL or a path relative to where the page is written).
+    audio file as the page should load it (a URL or a path relative to where the page is written); `sources` are
+    the replay and chart paths, so the page can hand back the command that turns a moment into a practice bundle.
     """
     field, beatmap = report.field, report.beatmap
     if field is None or beatmap is None:
@@ -174,6 +176,7 @@ def build_replay_view(
             "ghost_taps": report.ghost_tap_count, "fatal_ms": fatal_ms,
         },
         "audio": audio_src,
+        "sources": sources or {},
     }
 
 
@@ -201,6 +204,8 @@ def write_replay_view(
     report: ProfilerIngestionReport,
     output: Path | str,
     audio_path: Optional[Path | str] = None,
+    replay_path: Optional[Path | str] = None,
+    beatmap_path: Optional[Path | str] = None,
 ) -> Path:
     """Write the viewer page for `report` to `output`; the audio is referenced, relative to the page, not embedded."""
     out = Path(output)
@@ -208,5 +213,6 @@ def write_replay_view(
     audio_src = None
     if audio_path is not None:
         audio_src = Path(os.path.relpath(Path(audio_path).resolve(), out.resolve().parent)).as_posix()
-    out.write_text(render_replay_html(build_replay_view(report, audio_src=audio_src)), encoding="utf-8")
+    sources = {k: str(Path(v).resolve()) for k, v in (("replay", replay_path), ("beatmap", beatmap_path)) if v is not None}
+    out.write_text(render_replay_html(build_replay_view(report, audio_src=audio_src, sources=sources)), encoding="utf-8")
     return out

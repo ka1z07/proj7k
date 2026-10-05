@@ -40,6 +40,11 @@ def compute_skill_cosine_similarity(profile1: DifficultyProfile, profile2: Diffi
     return _cosine([r.stars for r in profile1.skills.values()], [r.stars for r in profile2.skills.values()])
 
 
+#: Dominance shares closer than this are a tie: a chart whose top two skills are that close has no single dominant
+#: skill to conserve, and a swap between them is not a change of technique (ADR-0021).
+DOMINANCE_TIE = 0.03
+
+
 def _cosine(v1: Any, v2: Any) -> float:
     dot = sum(a * b for a, b in zip(v1, v2))
     norm1 = math.sqrt(sum(a * a for a in v1))
@@ -159,7 +164,11 @@ class DualGateValidator:
         dominant_orig = profile_orig.dominant_skill
         dominant_downscaled = profile_downscaled.dominant_skill
 
-        dominant_conserved = (dominant_orig == dominant_downscaled)
+        # Conserved: still the dominant skill, or within a tie of whatever is (spec §9.4's shares, not a bare argmax)
+        top_share = profile_downscaled.skills[dominant_downscaled].dominance
+        dominant_conserved = (dominant_orig == dominant_downscaled) or (
+            top_share - profile_downscaled.skills[dominant_orig].dominance <= DOMINANCE_TIE
+        )
         gate1_passed = (cosine_sim >= self.min_cosine_similarity) and dominant_conserved
 
         # Gate 2: Microscopic centroid confidence band

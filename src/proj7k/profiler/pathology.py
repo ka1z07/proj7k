@@ -135,6 +135,9 @@ class CascadePrecursor:
     has_bracket_inversion: bool = False
     has_ln_negative_space: bool = False
     dominant_technique: str = PrecursorMotif.STREAM.value
+    #: The engine's reading of the same 500 ms (ADR-0020): the skill (short key, as the radar reports it) carrying the
+    #: expected loss there. Set when the play is laid on the difficulty field; the motif above is the chord-step topology.
+    skill: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -146,6 +149,7 @@ class CascadePrecursor:
             "has_bracket_inversion": self.has_bracket_inversion,
             "has_ln_negative_space": self.has_ln_negative_space,
             "dominant_technique": self.dominant_technique,
+            "skill": self.skill,
         }
 
 

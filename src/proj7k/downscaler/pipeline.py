@@ -1,42 +1,39 @@
 """
-proj7k.downscaler.pipeline - High-level Beatmap Downscaling Pipeline Seam (SPEC-P5.1-03).
+proj7k.downscaler.pipeline - High-level Beatmap Downscaling Pipeline Seam (SPEC-P5.1-03, ADR-0021).
 
 Provides the core Python interface:
 downscale_beatmap(beatmap: Beatmap7K, options: Optional[DownscaleOptions] = None) -> DownscaleResult
+
+The loop steers by the spec-v0.2 engine's own star rating (ADR-0021); there is no second scale.
 """
 
 from dataclasses import dataclass, field
 import hashlib
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from proj7k.engine import DifficultyProfile
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K, dump_osu_7k
-from proj7k.radar import RadarOptions, TechniqueRadar, compute_technique_radar
-from proj7k.rating import RatingOptions, StarRatingSynthesis, synthesize_star_rating
-from proj7k.strain import StrainOptions, StrainTimeseriesProfile, compute_dual_hand_strain
-from proj7k.downscaler.mapper import DanTarget, TwoTierDanMapper
-from proj7k.downscaler.validator import DualGateValidator, ValidationResult
-from proj7k.downscaler.pruner import WindowedPeakBatchPruner, PruningResult
 from proj7k.downscaler.balancer import BimanualFluxBalancer
+from proj7k.downscaler.mapper import DanTarget, TwoTierDanMapper
 from proj7k.downscaler.mutation import update_practice_metadata
+from proj7k.downscaler.pruner import ExcessLossPruner, PruningResult
+from proj7k.downscaler.validator import DualGateValidator, ValidationResult
 
 
 @dataclass(frozen=True)
 class DownscaleOptions:
-    """Configuration options for beatmap downscaling."""
+    """Configuration options for beatmap downscaling. A target is a Dan tier, a star rating, or an engine level."""
     target_dan: Optional[str] = "7th"
     target_sr: Optional[float] = None
-    target_strain: Optional[float] = None
+    target_D: Optional[float] = None
     dominant_skill: Optional[str] = None
     prune_ratio: float = 0.20
     max_iterations: int = 25
     tolerance: float = 0.05
+    window_s: float = 1.0
     min_cosine_similarity: float = 0.80
-    strain_options: Optional[StrainOptions] = None
-    radar_options: Optional[RadarOptions] = None
-    rating_options: Optional[RatingOptions] = None
 
 
 @dataclass(frozen=True)
@@ -47,22 +44,23 @@ class DownscaleResult:
     target: DanTarget
     original_features: BeatmapFeatures
     downscaled_features: BeatmapFeatures
-    #: The difficulty engine's profiles: the dominant skill and the eight skills' stars the validator gates on.
+    #: The difficulty engine's profiles: stars, the eight skills' stars, dominance.
     original_profile: DifficultyProfile
     downscaled_profile: DifficultyProfile
-    #: The legacy radar and star rating, which the closed loop still steers by (ADR-0018 decision 4).
-    original_radar: TechniqueRadar
-    downscaled_radar: TechniqueRadar
-    original_strain: StrainTimeseriesProfile
-    downscaled_strain: StrainTimeseriesProfile
-    original_rating: StarRatingSynthesis
-    downscaled_rating: StarRatingSynthesis
     validation: ValidationResult
     pruning_result: PruningResult
     notes_removed: int
     removal_ratio: float
     bimanual_flux_ratio: Tuple[float, float]
     warnings: List[str] = field(default_factory=list)
+
+    @property
+    def original_stars(self) -> float:
+        return self.original_profile.total_stars
+
+    @property
+    def downscaled_stars(self) -> float:
+        return self.downscaled_profile.total_stars
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -73,10 +71,10 @@ class DownscaleResult:
                 round(self.bimanual_flux_ratio[0], 3),
                 round(self.bimanual_flux_ratio[1], 3),
             ),
-            "original_star_rating": self.original_rating.star_rating,
-            "downscaled_star_rating": self.downscaled_rating.star_rating,
-            "original_p90_strain": round(self.original_strain.p90_strain, 3),
-            "downscaled_p90_strain": round(self.downscaled_strain.p90_strain, 3),
+            "original_star_rating": round(self.original_stars, 4),
+            "downscaled_star_rating": round(self.downscaled_stars, 4),
+            "original_D": round(self.original_profile.total_D, 4),
+            "downscaled_D": round(self.downscaled_profile.total_D, 4),
             "validation": self.validation.to_dict(),
             "pruning": self.pruning_result.to_dict(),
             "warnings": self.warnings,
@@ -88,116 +86,68 @@ def downscale_beatmap(
     options: Optional[DownscaleOptions] = None,
 ) -> DownscaleResult:
     """
-    Downscales an osu!mania 7K beatmap towards target Dan or Star Rating (ADR-0011, SPEC-P5.1-03).
+    Downscales an osu!mania 7K beatmap towards target Dan, Star Rating or engine level (ADR-0011, ADR-0021).
 
     Enforces:
     - Pure deletion mutation (no deformed hit objects)
     - Metric skeleton protection (1/1 downbeats and chord bases)
     - Bimanual striking flux balance guidance towards [45%, 55%]
-    - Closed-loop peak strain damping
-    - Dual-gate technique preservation (skill-stars cosine similarity >= 0.80 & dominant skill preserved,
-      both read from the difficulty engine; the loop itself still steers by the legacy star and strain)
+    - Closed-loop excess-loss pruning on the engine's own star
+    - Dual-gate technique preservation (skill-stars cosine similarity >= 0.80 & dominant skill preserved)
     """
     if options is None:
         options = DownscaleOptions()
 
-    strain_opts = options.strain_options or StrainOptions()
-    radar_opts = options.radar_options or RadarOptions()
-    rating_opts = options.rating_options or RatingOptions()
-
-    # 1. Evaluate baseline characteristics of original beatmap
-    orig_feat = extract_beatmap_features(beatmap)
-    orig_radar = compute_technique_radar(
-        beatmap, options=radar_opts, calibration=rating_opts.calibration
-    )
-    orig_strain = compute_dual_hand_strain(beatmap, options=strain_opts)
-    orig_rating = synthesize_star_rating(orig_radar, p90_strain=orig_strain.p90_strain, options=rating_opts)
-
-    # 2. Resolve target Dan and target strain
     validator = DualGateValidator(min_cosine_similarity=options.min_cosine_similarity)
+    orig_feat = extract_beatmap_features(beatmap)
     orig_profile = validator.profile_of(beatmap)
-    mapper = TwoTierDanMapper()
+
     dom_skill = options.dominant_skill or SKILL_TECH_KEY[orig_profile.dominant_skill]
-    target = mapper.resolve(
+    target = TwoTierDanMapper().resolve(
         target_dan=options.target_dan,
         target_sr=options.target_sr,
+        target_D=options.target_D,
         dominant_skill=dom_skill,
     )
 
-    target_strain = options.target_strain or target.target_strain
-    # An explicit --target-strain is a request for a strain target, so the loop keeps converging
-    # on strain; otherwise the target is star-defined and the star is what decides arrival
-    # (ADR-0016 made the rating a maximum over technique stars, not a strain reading).
-    star_criterion = target.target_sr if options.target_strain is None else None
-    warnings: List[str] = []
-
-    # 3. Setup components
     balancer = BimanualFluxBalancer()
-    pruner = WindowedPeakBatchPruner(
+    pruner = ExcessLossPruner(
         prune_ratio=options.prune_ratio,
         max_iterations=options.max_iterations,
         tolerance=options.tolerance,
-        strain_options=strain_opts,
+        window_s=options.window_s,
         validator=validator,
         balancer=balancer,
     )
+    pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr, dominant_skill=dom_skill)
+    warnings: List[str] = list(pruning_res.warnings)
 
-    # 4. Execute closed-loop pruning
-    pruning_res = pruner.prune(
-        beatmap=beatmap,
-        target_strain=target_strain,
-        dominant_technique=dom_skill,
-        target_sr=star_criterion,
-        rating_options=rating_opts,
-        radar_options=radar_opts,
-    )
-
-    pruned_bm = pruning_res.downscaled_beatmap
-    warnings.extend(pruning_res.warnings)
-
-    # 5. Compute original MD5 and update derivative practice metadata
+    # Derivative practice metadata: the original's identity, the target tier and the dominant skill's tag
     orig_md5 = beatmap.md5 or hashlib.md5(dump_osu_7k(beatmap).encode("utf-8")).hexdigest()
     practice_bm = update_practice_metadata(
-        pruned_bm,
+        pruning_res.downscaled_beatmap,
         target_dan=target.target_dan,
         original_md5=orig_md5,
         dominant_skill=SKILL_TECH_KEY[orig_profile.dominant_skill],
     )
-
-    # 6. Re-evaluate final practice beatmap
-    final_feat = extract_beatmap_features(practice_bm)
-    final_radar = compute_technique_radar(
-        practice_bm, options=radar_opts, calibration=rating_opts.calibration
-    )
-    final_strain = compute_dual_hand_strain(practice_bm, options=strain_opts)
-    final_rating = synthesize_star_rating(final_radar, p90_strain=final_strain.p90_strain, options=rating_opts)
 
     validation_res = validator.validate(beatmap, practice_bm, target=target)
     if not validation_res.passed:
         warnings.append("Technique preservation validation reported non-conforming metrics.")
 
     notes_removed = len(beatmap.hit_objects) - len(practice_bm.hit_objects)
-    removal_ratio = notes_removed / max(1, len(beatmap.hit_objects))
-    final_flux_ratio = balancer.compute_flux_ratio(practice_bm.hit_objects)
-
     return DownscaleResult(
         original_beatmap=beatmap,
         downscaled_beatmap=practice_bm,
         target=target,
         original_features=orig_feat,
-        downscaled_features=final_feat,
+        downscaled_features=extract_beatmap_features(practice_bm),
         original_profile=orig_profile,
-        original_radar=orig_radar,
-        downscaled_radar=final_radar,
         downscaled_profile=validator.profile_of(practice_bm),
-        original_strain=orig_strain,
-        downscaled_strain=final_strain,
-        original_rating=orig_rating,
-        downscaled_rating=final_rating,
         validation=validation_res,
         pruning_result=pruning_res,
         notes_removed=notes_removed,
-        removal_ratio=removal_ratio,
-        bimanual_flux_ratio=final_flux_ratio,
+        removal_ratio=notes_removed / max(1, len(beatmap.hit_objects)),
+        bimanual_flux_ratio=balancer.compute_flux_ratio(practice_bm.hit_objects),
         warnings=warnings,
     )

@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
-from proj7k.engine.attribution import dominance, memberships
+from proj7k.engine.attribution import dominance, ln_context, memberships
 from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_beatmap, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
@@ -103,6 +103,11 @@ class ChartField:
         return self.profile.total_D
 
     @property
+    def eps_total(self) -> float:
+        """The tolerance the total difficulty was solved at (§3.3)."""
+        return self.params.eps_rc + self.params.eps_total_ln_slope * ln_context(self.events, self.params).mean()
+
+    @property
     def duration_s(self) -> float:
         return float(self.t[-1] - self.t[0]) if len(self.t) else 0.0
 
@@ -141,6 +146,14 @@ class ChartField:
             return {k: 0.0 for k in SKILLS}
         peak = (self.d[sel, None] * self.w[sel]).max(0)
         return {k: float(peak[n]) for n, k in enumerate(SKILLS)}
+
+    def carrying_skill(self, t0_s: float, t1_s: float) -> Optional[str]:
+        """The skill that carries most of the expected loss in [t0_s, t1_s] (None if the stretch carries none)."""
+        sel = (self.t >= t0_s) & (self.t <= t1_s)
+        if not sel.any():
+            return None
+        carried = (self.a[sel] * self.p[sel, None]).sum(0)
+        return SKILLS[int(carried.argmax())] if carried.max() > 1e-12 else None
 
     def curve(self, bin_s: float = 1.0, start_s: Optional[float] = None, end_s: Optional[float] = None) -> Curve:
         """Load, risk and carrying skill per bin of `bin_s` over [start_s, end_s] (default: the chart's span)."""
