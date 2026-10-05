@@ -3,7 +3,7 @@ CLI entrypoint, batch ingestion runner, and macro profile query interface for 7K
 """
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dc_field
 import hashlib
 import json
 from pathlib import Path
@@ -33,7 +33,7 @@ from proj7k.profiler.matcher import (
     align_replay_hits,
     column_to_canonical_lane,
 )
-from proj7k.profiler.osr import OSRReplay, parse_osr
+from proj7k.profiler.osr import OSRReplay, ReplayFrame, parse_osr
 from proj7k.profiler.pathology import PathologyReport, analyze_pathology
 from proj7k.profiler.response import SkillRadarReport, analyze_strain_response
 from proj7k.profiler.storage import (
@@ -75,6 +75,9 @@ class ProfilerIngestionReport:
     #: The engine's difficulty field of the chart in physical time (ADR-0020), and the clock rate the play ran at.
     field: Optional[ChartField] = None
     clock_rate: float = 1.0
+    #: The replay's input frames (song time) and the parsed chart, kept so the replay can be viewed (`replay_view`).
+    replay_frames: List[ReplayFrame] = dc_field(default_factory=list)
+    beatmap: Optional[Beatmap7K] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -249,6 +252,8 @@ def run_ingestion(
         life_bar=replay.life_bar,
         field=field,
         clock_rate=clock_rate,
+        replay_frames=replay.action_frames,
+        beatmap=beatmap,
     )
 
 
@@ -696,6 +701,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Explicit fatal failure timestamp in ms to override automatic detection for practice slice extraction.",
     )
+    # Replay viewer flags (ADR-0021)
+    parser.add_argument(
+        "--view",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="HTML",
+        help="Write a self-contained replay viewer page (falling-note playback of the keystrokes, difficulty timeline) "
+        "for --replay/--beatmap. Without a path it is written next to the replay as <replay>.html.",
+    )
+    parser.add_argument(
+        "--audio",
+        type=str,
+        default=None,
+        help="Audio file the viewer plays along with (default: the chart's own audio beside the .osu, if found).",
+    )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the viewer page in the default browser once written.",
+    )
     # Lazer replay import flags (inbound: client.realm -> SQLite).
     # Deliberately not "--sync-lazer": the downscaler already owns that flag for the
     # opposite direction (ADR-0011, injecting practice beatmaps INTO the realm).
@@ -836,6 +862,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             except Exception:
                 pass
 
+        view_path: Optional[Path] = None
+        if args.view is not None:
+            from proj7k.profiler.replay_view import find_audio, write_replay_view
+
+            audio = Path(args.audio) if args.audio else find_audio(Path(args.beatmap), report.beatmap.audio_filename if report.beatmap else "")
+            target = Path(args.view) if args.view else Path(args.replay).with_suffix(".html")
+            try:
+                view_path = write_replay_view(report, target, audio_path=audio)
+            except Exception as e:
+                print(f"Replay viewer error: {e}", file=sys.stderr)
+                return 1
+            if args.open:
+                import webbrowser
+
+                webbrowser.open(view_path.resolve().as_uri())
+
         coaching_recs = None
         if args.recommend:
             realm_p = Path(args.realm) if args.realm else None
@@ -909,9 +951,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 data["coaching_recommendations"] = [r.to_dict() for r in coaching_recs]
             if bundle_result is not None:
                 data["practice_bundle"] = bundle_result.to_dict()
+            if view_path is not None:
+                data["replay_view"] = str(view_path)
             print(json.dumps(data, indent=2, ensure_ascii=False))
         else:
             print(format_ingestion_report(report))
+            if view_path is not None:
+                print(f"Replay viewer: {view_path}")
             if coaching_recs:
                 print(format_coaching_report(coaching_recs))
             if bundle_result:

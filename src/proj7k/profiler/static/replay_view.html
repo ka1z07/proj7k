@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>proj7k Replay Viewer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #090d16;
+    --card: #121826;
+    --card-2: #0e1420;
+    --border: #242f48;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --gold: #f59e0b;
+    --red: #ef4444;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; padding: 16px; }
+  button, select, input { font: inherit; color: inherit; }
+  header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+  .chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .chip b { color: var(--text); font-weight: 600; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+  .stage-wrap { position: relative; height: min(66vh, 640px); min-height: 380px; overflow: hidden; }
+  #stage { width: 100%; height: 100%; display: block; }
+  .hud { position: absolute; pointer-events: none; font-family: var(--mono); text-shadow: 0 1px 3px #000; }
+  .hud.tl { top: 10px; left: 12px; font-size: 13px; line-height: 1.55; }
+  .hud.tl .big { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .hud.tr { top: 10px; right: 12px; text-align: right; font-size: 13px; line-height: 1.55; }
+  .hud .j { display: inline-block; min-width: 3.2em; }
+  .gauge { display: inline-block; width: 90px; height: 7px; background: #222c42; border-radius: 4px; vertical-align: middle; overflow: hidden; margin-left: 6px; }
+  .gauge i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .side { display: flex; flex-direction: column; gap: 12px; max-height: calc(min(66vh, 640px) + 250px); overflow: auto; }
+  .side section { padding: 10px 12px; }
+  .side h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .skill { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; }
+  .skill .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .skill .val { font-family: var(--mono); color: var(--muted); }
+  .skill .val b { color: var(--text); }
+  .skill.off { opacity: .4; }
+  .skill .bd { color: var(--red); font-size: 11px; margin-left: 4px; }
+  .row { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+  .row:hover, .row:focus-visible { background: #1b2336; outline: none; }
+  .row .t { font-family: var(--mono); color: var(--muted); min-width: 4.4em; }
+  .row .tag { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+  .empty { color: var(--muted); font-size: 12.5px; padding: 4px 6px; }
+  .list { max-height: 210px; overflow: auto; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 6px; }
+  .seg button { background: transparent; border: 0; padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: #1b2a44; color: var(--text); }
+  .timeline-card { margin-top: 12px; padding: 10px 12px 8px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .btn { background: #1b2336; border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; cursor: pointer; min-height: 30px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: #123452; border-color: #1f5f93; min-width: 74px; }
+  .toolbar label { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .toolbar input[type=range] { width: 100px; accent-color: var(--accent); }
+  .toolbar input[type=number] { width: 64px; background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
+  .toolbar select { background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
+  .spacer { flex: 1; }
+  .time { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  #tlwrap { position: relative; }
+  #tl { width: 100%; height: 158px; display: block; touch-action: none; cursor: ew-resize; border-radius: 6px; background: var(--card-2); }
+  #tip { position: absolute; pointer-events: none; display: none; background: #05080f; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; font-family: var(--mono); white-space: nowrap; z-index: 3; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  kbd { background: #1b2336; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-family: var(--mono); font-size: 11px; }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { max-height: none; }
+    .stage-wrap { height: 60vh; }
+    .chips { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="sub" id="sub"></span>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="layout">
+  <div class="panel stage-wrap">
+    <canvas id="stage" aria-label="Falling-note playback of the replay"></canvas>
+    <div class="hud tl"><div class="big" id="hudCombo">0x</div><div id="hudAcc">100.00%</div><div id="hudCounts"></div></div>
+    <div class="hud tr"><div id="hudTime">0:00.0</div><div>demand <b id="hudLoad">–</b><span class="gauge"><i id="hudGauge"></i></span></div><div id="hudSkill" style="color:var(--muted)"></div></div>
+  </div>
+  <aside class="side">
+    <section class="panel"><h2>Skill levels</h2><div id="skills"></div></section>
+    <section class="panel"><h2>Hardest sections</h2><div class="list" id="hot"></div></section>
+    <section class="panel">
+      <h2>Mistakes</h2>
+      <div class="seg" role="group" aria-label="Mistake filter"><button id="fAll" aria-pressed="true">Bad hits</button><button id="fMiss" aria-pressed="false">Misses</button></div>
+      <div class="list" id="mistakes"></div>
+    </section>
+  </aside>
+</div>
+
+<div class="panel timeline-card">
+  <div class="toolbar">
+    <button class="btn primary" id="play">Play</button>
+    <button class="btn" id="prevErr" title="Previous mistake ([)">&#9664; mistake</button>
+    <button class="btn" id="nextErr" title="Next mistake (])">mistake &#9654;</button>
+    <button class="btn" id="hardest" title="Jump to the hardest section (H)">Hardest</button>
+    <label>Speed
+      <select id="rate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
+    </label>
+    <label>Scroll <input type="range" id="scroll" min="0.2" max="1.3" step="0.05" value="0.55"></label>
+    <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="5"> ms</label>
+    <span class="spacer"></span>
+    <span class="time" id="clock">0:00.0 / 0:00.0</span>
+  </div>
+  <div id="tlwrap"><canvas id="tl" aria-label="Difficulty timeline; drag to seek"></canvas><div id="tip"></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="hint"><kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> ±1 s (<kbd>Shift</kbd> ±5 s) · <kbd>↑</kbd><kbd>↓</kbd> scroll speed · <kbd>[</kbd><kbd>]</kbd> mistakes · <kbd>H</kbd> hardest · drag the timeline to scrub anywhere in the replay. Bars are the engine's demand reading (taller is harder), coloured by the skill carrying it; red ticks below are where accuracy was lost.</div>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+
+<script>
+"use strict";
+const P = /*__PAYLOAD__*/null;
+if (!P) { document.body.innerHTML = '<p style="padding:24px">No replay data embedded.</p>'; throw new Error("no payload"); }
+
+// ---------- constants ----------
+const JN = P.judgments;                        // ["MAX","300","200","100","50","MISS"]
+const JCOL = ["#9fe3ff", "#5bb4f5", "#86e072", "#f2c94c", "#f2994a", "#ff5d5d"];
+const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
+const SKILL_NAME = P.skills.map(s => s.replace("_", " "));
+const LANE_COL = ["#d7dde8", "#6fa8e8", "#6fa8e8", "#f5c451", "#6fa8e8", "#6fa8e8", "#d7dde8"];
+const RATE = P.meta.rate || 1;
+const WIN = P.windows;
+const N = P.notes;
+const TL = P.timeline;
+const DUR = P.duration_ms;
+
+const $ = id => document.getElementById(id);
+const fmt = ms => { ms = Math.max(0, ms); const s = ms / 1000; return Math.floor(s / 60) + ":" + (s % 60).toFixed(1).padStart(4, "0"); };
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lowerBound = (arr, x, f) => { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (f(arr[m]) < x) lo = m + 1; else hi = m; } return lo; };
+
+// ---------- header and static panels ----------
+$("title").textContent = P.meta.artist + " – " + P.meta.title;
+$("sub").textContent = "[" + P.meta.version + "] by " + P.meta.creator + " · played by " + P.meta.player + (RATE !== 1 ? " · " + (RATE > 1 ? "DT" : "HT") : "");
+const S = P.summary;
+const chip = (k, v) => { const e = document.createElement("span"); e.className = "chip"; e.innerHTML = k + " <b>" + v + "</b>"; $("chips").appendChild(e); };
+chip("★", P.meta.stars.toFixed(2));
+if (P.radar.overall_dan) chip("level", P.radar.overall_dan);
+chip("acc", (S.accuracy * 100).toFixed(2) + "%");
+chip("miss", S.counts.MISS);
+chip("ghost taps", S.ghost_taps);
+if (!P.meta.hash_matched) chip("beatmap", "hash mismatch");
+
+(function skills() {
+  const box = $("skills");
+  P.skills.forEach((k, i) => {
+    const r = P.radar.skills && P.radar.skills[k];
+    const d = document.createElement("div");
+    d.className = "skill" + (r && r.tested ? "" : " off");
+    d.innerHTML = '<span class="sw" style="background:' + SKILL_COL[i] + '"></span><span>' + SKILL_NAME[i] + '</span>' +
+      '<span class="val">' + (r && r.tested ? '<b>' + r.stars.toFixed(2) + '★</b> ' + r.dan + (r.broke_down ? '<span class="bd">broke down</span>' : '') : 'not tested') + '</span>';
+    box.appendChild(d);
+  });
+  const lg = $("legend");
+  P.skills.forEach((k, i) => { const s = document.createElement("span"); s.innerHTML = '<i style="background:' + SKILL_COL[i] + '"></i>' + SKILL_NAME[i]; lg.appendChild(s); });
+  const e = document.createElement("span"); e.innerHTML = '<i style="background:#ff5d5d"></i>accuracy lost'; lg.appendChild(e);
+  const g = document.createElement("span"); g.innerHTML = '<i style="background:#c084fc"></i>ghost taps'; lg.appendChild(g);
+})();
+
+// ---------- derived data ----------
+// judged events in time order: a head is judged when it was pressed (or when its window closed, for a miss)
+const missAt = WIN.miss;
+const events = [];
+N.forEach((n, i) => {
+  events.push({ t: n.o != null ? n.t + n.o : n.t + missAt, j: n.j, i, tail: false });
+  if (n.e != null && n.tj != null) events.push({ t: n.to != null ? n.e + n.to : n.e + missAt * WIN.tail_scale, j: n.tj, i, tail: true });
+});
+events.sort((a, b) => a.t - b.t);
+// prefix state after each event: judgment counts of heads, combo, max combo
+const pre = [];
+{
+  const c = [0, 0, 0, 0, 0, 0]; let combo = 0, best = 0;
+  for (const e of events) {
+    if (e.tail) { if (e.j >= 5) combo = 0; }                    // a dropped tail breaks the combo; a late one does not
+    else { c[e.j]++; if (e.j >= 4) combo = 0; else combo++; }
+    best = Math.max(best, combo);
+    pre.push({ c: c.slice(), combo, best });
+  }
+}
+const evTimes = events.map(e => e.t);
+let maxLN = 0; N.forEach(n => { if (n.e != null) maxLN = Math.max(maxLN, n.e - n.t); });
+const isBad = n => n.j >= 3 || (n.tj != null && n.tj >= 4);
+const mistakes = N.map((n, i) => ({ n, i })).filter(x => isBad(x.n));
+const hotSpots = TL.hot;
+
+function stateAt(t) {
+  const k = lowerBound(evTimes, t + 1e-9, x => x) - 1;
+  return k >= 0 ? pre[k] : { c: [0, 0, 0, 0, 0, 0], combo: 0, best: 0 };
+}
+function keyDown(col, t) {
+  const iv = P.keys[col];
+  let lo = 0, hi = iv.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (iv[m][0] <= t) lo = m + 1; else hi = m; }
+  if (lo === 0) return false;
+  const up = iv[lo - 1][1];
+  return up == null || up > t;
+}
+function binAt(t) { return clamp(Math.floor(t / TL.bin_ms), 0, TL.load.length - 1); }
+
+// ---------- clock ----------
+const audio = $("audio");
+let audioOK = false;
+if (P.audio) {
+  audio.src = encodeURI(P.audio).replace(/#/g, "%23");
+  audio.addEventListener("canplay", () => { audioOK = true; });
+  audio.addEventListener("error", () => { audioOK = false; $("offLabel").style.display = "none"; });
+} else { $("offLabel").style.display = "none"; }
+let now = 0, playing = false, userRate = 1, lastTs = 0, audioOffset = 0, dragging = false, resumeAfterDrag = false;
+
+function setRate() { audio.playbackRate = userRate * RATE; audio.preservesPitch = false; }
+function seek(t) {
+  now = clamp(t, 0, DUR);
+  if (audioOK) { try { audio.currentTime = Math.max(0, (now - audioOffset) / 1000); } catch (e) {} }
+  lastTs = performance.now();
+  needDraw = true;
+}
+function play() {
+  if (now >= DUR - 50) seek(0);
+  playing = true; lastTs = performance.now(); $("play").textContent = "Pause";
+  if (audioOK) { setRate(); audio.currentTime = Math.max(0, (now - audioOffset) / 1000); audio.play().catch(() => { audioOK = false; }); }
+}
+function pause() { playing = false; $("play").textContent = "Play"; if (audioOK) audio.pause(); }
+const toggle = () => playing ? pause() : play();
+
+// ---------- stage ----------
+const stage = $("stage"), sctx = stage.getContext("2d");
+let scroll = 0.55, needDraw = true, dpr = 1;
+function fitCanvas(cv) {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect();
+  const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; needDraw = true; }
+  return { w: r.width, h: r.height };
+}
+
+function drawStage() {
+  const { w: W, h: H } = fitCanvas(stage);
+  const ctx = sctx;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const laneW = clamp(Math.min(W / 8.2, 74), 28, 74);
+  const sw = laneW * 7, x0 = (W - sw) / 2;
+  const lineY = Math.round(H * 0.7);
+  const ppm = scroll;                                    // px per ms
+  const Y = t => lineY - (t - now) * ppm;
+  const noteH = Math.max(8, laneW * 0.26);
+
+  // playfield: the chart above the line, the player's own play below it
+  ctx.fillStyle = "#0b111d"; ctx.fillRect(x0, 0, sw, lineY);
+  ctx.fillStyle = "#0f1626"; ctx.fillRect(x0, lineY, sw, H - lineY);
+  ctx.strokeStyle = "#1d2740"; ctx.lineWidth = 1;
+  for (let c = 0; c <= 7; c++) { const x = Math.round(x0 + c * laneW) + 0.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  // beat-free time grid: every second, to give the eye something to measure with
+  ctx.strokeStyle = "rgba(255,255,255,0.045)";
+  const t0 = now - (H - lineY) / ppm, t1 = now + lineY / ppm;
+  for (let s = Math.ceil(t0 / 1000) * 1000; s <= t1; s += 1000) { const y = Math.round(Y(s)) + 0.5; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + sw, y); ctx.stroke(); }
+
+  ctx.fillStyle = "rgba(148,163,184,0.55)"; ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+  ctx.textAlign = "left"; ctx.fillText("CHART", x0 + sw + 8, lineY - 8); ctx.fillText("YOUR PLAY", x0 + sw + 8, lineY + 16);
+
+  // notes
+  const lo = lowerBound(N, t0 - maxLN, n => n.t), hi = lowerBound(N, t1, n => n.t);
+  for (let i = lo; i < hi; i++) {
+    const n = N[i];
+    const cx = x0 + n.c * laneW + laneW / 2, nw = laneW * 0.84;
+    const past = n.t <= now;
+    const yh = Y(n.t);
+    const col = past ? JCOL[n.j] : LANE_COL[n.c];
+    const faded = past && n.j <= 1 && (n.tj == null || n.tj <= 1);
+    ctx.globalAlpha = faded ? 0.38 : 1;
+    if (n.e != null) {
+      const yt = Y(n.e);
+      const held = past && n.e > now && keyDown(n.c, now);
+      const body = past ? (n.tj != null && n.tj >= 4 ? "rgba(255,93,93,0.35)" : "rgba(111,168,232,0.35)") : "rgba(111,168,232,0.28)";
+      ctx.fillStyle = held ? "rgba(159,227,255,0.55)" : body;
+      ctx.fillRect(cx - nw * 0.36, yt, nw * 0.72, yh - yt);
+      // tail cap, marked with how the release was judged once it is past
+      ctx.fillStyle = n.e <= now && n.tj != null ? JCOL[n.tj] : LANE_COL[n.c];
+      ctx.fillRect(cx - nw / 2, yt - noteH * 0.35, nw, noteH * 0.7);
+      if (n.e <= now && n.tj != null && n.tj >= 4) { ctx.strokeStyle = "#ff5d5d"; ctx.lineWidth = 2; ctx.strokeRect(cx - nw / 2, yt - noteH * 0.35, nw, noteH * 0.7); }
+    }
+    ctx.fillStyle = col;
+    ctx.fillRect(cx - nw / 2, yh - noteH / 2, nw, noteH);
+    if (past && n.j === 5) {                           // a miss: an X where the note was
+      ctx.globalAlpha = 1; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - 7, yh - 7); ctx.lineTo(cx + 7, yh + 7); ctx.moveTo(cx + 7, yh - 7); ctx.lineTo(cx - 7, yh + 7); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // the player's keystrokes: a bar from press to release, only what has happened by `now`
+  for (let c = 0; c < 7; c++) {
+    const iv = P.keys[c];
+    const cx = x0 + c * laneW + laneW / 2;
+    for (let k = lowerBound(iv, t0 - 4000, a => a[0]); k < iv.length; k++) {
+      const [d, u] = iv[k];
+      if (d > now) break;
+      const up = u == null || u > now ? now : u;
+      if (up < t0) continue;
+      const yd = Y(d), yu = Y(up);
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.fillRect(cx - 3, yu, 6, Math.max(3, yd - yu));
+      ctx.fillStyle = "#fff"; ctx.fillRect(cx - 9, yd - 1.5, 18, 3);      // the press itself
+    }
+  }
+  // the hit error of each note, drawn as a short bar from where the note was to where it was pressed
+  for (let i = lo; i < hi; i++) {
+    const n = N[i];
+    if (n.o == null || n.t + n.o > now || Math.abs(n.o) < 12) continue;
+    const cx = x0 + n.c * laneW + laneW / 2 + laneW * 0.42;
+    ctx.strokeStyle = JCOL[n.j]; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, Y(n.t)); ctx.lineTo(cx, Y(n.t + n.o)); ctx.stroke();
+  }
+  // ghost taps: presses that hit nothing
+  for (const g of P.ghosts) {
+    if (g.t > now || g.t < t0) continue;
+    const cx = x0 + g.c * laneW + laneW / 2, y = Y(g.t);
+    ctx.fillStyle = "#c084fc"; ctx.beginPath(); ctx.moveTo(cx, y - 7); ctx.lineTo(cx + 7, y); ctx.lineTo(cx, y + 7); ctx.lineTo(cx - 7, y); ctx.closePath(); ctx.fill();
+  }
+
+  // the line and the receptors
+  ctx.fillStyle = "rgba(245,158,11,0.9)"; ctx.fillRect(x0, lineY - 1.5, sw, 3);
+  for (let c = 0; c < 7; c++) {
+    const down = keyDown(c, now);
+    ctx.fillStyle = down ? "rgba(159,227,255,0.85)" : "rgba(255,255,255,0.08)";
+    ctx.fillRect(x0 + c * laneW + 3, lineY + 3, laneW - 6, 8);
+  }
+
+  // hit-error meter: where the last few seconds of hits landed against the windows
+  const mw = Math.min(sw, 280), mx = (W - mw) / 2, my = H - 16, half = WIN.miss;
+  ctx.fillStyle = "#0a0f1a"; ctx.fillRect(mx - 12, my - 24, mw + 24, 34);
+  const px = ms => mx + mw / 2 + (ms / half) * (mw / 2);
+  [[WIN.miss, JCOL[4]], [WIN["100"], JCOL[3]], [WIN["200"], JCOL[2]], [WIN["300"], JCOL[1]], [WIN.max, JCOL[0]]].forEach(([wd, col]) => {
+    ctx.fillStyle = col; ctx.globalAlpha = 0.22; ctx.fillRect(px(-wd), my - 4, px(wd) - px(-wd), 8);
+  });
+  ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.fillRect(mx + mw / 2 - 1, my - 7, 2, 14);
+  for (let k = lowerBound(evTimes, now - 4000, x => x); k < events.length && evTimes[k] <= now; k++) {
+    const e = events[k]; if (e.tail) continue;
+    const n = N[e.i]; if (n.o == null) continue;
+    ctx.globalAlpha = clamp(1 - (now - e.t) / 4000, 0.1, 1);
+    ctx.fillStyle = JCOL[n.j]; ctx.fillRect(px(clamp(n.o, -half, half)) - 1, my - 7, 2, 14);
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(148,163,184,0.7)"; ctx.textAlign = "center"; ctx.fillText("early", mx + 14, my - 11); ctx.fillText("late", mx + mw - 12, my - 11);
+}
+
+function updateHud() {
+  const st = stateAt(now);
+  const c = st.c, tot = c.reduce((a, b) => a + b, 0);
+  const pts = 300 * (c[0] + c[1]) + 200 * c[2] + 100 * c[3] + 50 * c[4];
+  $("hudCombo").textContent = st.combo + "x";
+  $("hudAcc").textContent = (tot ? pts / (300 * tot) * 100 : 100).toFixed(2) + "%";
+  $("hudCounts").innerHTML = JN.map((n, i) => '<span class="j" style="color:' + JCOL[i] + '">' + n + '</span> ' + c[i]).join('<br>');
+  $("hudTime").textContent = fmt(now);
+  const b = binAt(now), load = TL.load[b];
+  $("hudLoad").textContent = load.toFixed(2) + "×";
+  const sk = TL.skill[b];
+  $("hudGauge").style.width = clamp(load / loadMax * 100, 0, 100) + "%";
+  $("hudGauge").style.background = sk >= 0 ? SKILL_COL[sk] : "#475569";
+  $("hudSkill").textContent = sk >= 0 ? SKILL_NAME[sk] : "";
+  $("clock").textContent = fmt(now) + " / " + fmt(DUR);
+}
+
+// ---------- timeline ----------
+const tl = $("tl"), tctx = tl.getContext("2d");
+const loadMax = Math.max(1.15, ...TL.load);
+const riskMax = Math.max(1e-6, ...TL.risk);
+const errMax = Math.max(1, ...TL.errors);
+const TOP = 6, ERR_H = 30, RULER_H = 16;
+
+function drawTimeline() {
+  const { w: W, h: H } = fitCanvas(tl);
+  const ctx = tctx;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const ph = H - TOP - ERR_H - RULER_H;                 // height of the demand area
+  const X = t => (t / DUR) * W;
+  const bw = Math.max(1, TL.bin_ms / DUR * W);
+
+  // what has been played is a little brighter than what is to come
+  for (let b = 0; b < TL.load.length; b++) {
+    const x = X(b * TL.bin_ms), v = clamp(TL.load[b] / loadMax, 0, 1), h = v * ph;
+    const sk = TL.skill[b];
+    ctx.globalAlpha = (b + 1) * TL.bin_ms <= now ? 1 : 0.6;
+    ctx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#475569";
+    ctx.fillRect(x, TOP + ph - h, Math.ceil(bw) - (bw > 3 ? 1 : 0), h);
+  }
+  ctx.globalAlpha = 1;
+  // the level the chart is rated at: demand 1.0
+  const y1 = TOP + ph - (1 / loadMax) * ph;
+  ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(0, y1); ctx.lineTo(W, y1); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.font = "10px " + getComputedStyle(document.body).fontFamily; ctx.textAlign = "left";
+  ctx.fillText("chart level", 4, y1 - 3);
+  // expected losses at the chart's own level: where a player at that level would be dropping notes
+  ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let b = 0; b < TL.risk.length; b++) {
+    const x = X((b + 0.5) * TL.bin_ms), y = TOP + ph - (TL.risk[b] / riskMax) * ph * 0.9;
+    if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke(); ctx.lineWidth = 1;
+
+  // hardest sections
+  hotSpots.forEach((h, k) => {
+    ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(X(h.start), TOP, X(h.end) - X(h.start), ph);
+    ctx.strokeStyle = SKILL_COL[h.skill]; ctx.lineWidth = 1.5; ctx.strokeRect(X(h.start) + 0.5, TOP + 0.5, X(h.end) - X(h.start) - 1, ph - 1); ctx.lineWidth = 1;
+    ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.fillText("#" + (k + 1), X(h.start) + 3, TOP + 11);
+  });
+
+  // where accuracy was lost, and ghost taps
+  const ey = TOP + ph + 2;
+  for (let b = 0; b < TL.errors.length; b++) {
+    const v = TL.errors[b]; if (v <= 0) continue;
+    const h = Math.max(3, (v / errMax) * (ERR_H - 4));
+    ctx.fillStyle = "#ff5d5d"; ctx.fillRect(X(b * TL.bin_ms), ey + (ERR_H - 4) - h, Math.ceil(bw) - (bw > 3 ? 1 : 0), h);
+  }
+  for (let b = 0; b < TL.ghosts.length; b++) if (TL.ghosts[b] > 0) { ctx.fillStyle = "#c084fc"; ctx.fillRect(X((b + 0.5) * TL.bin_ms) - 1.5, ey, 3, 3); }
+
+  if (S.fatal_ms != null) {
+    const x = X(S.fatal_ms);
+    ctx.strokeStyle = "#ef4444"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, TOP + ph + ERR_H); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#ef4444"; ctx.textAlign = x > W - 60 ? "right" : "left"; ctx.fillText("fatal", x + (x > W - 60 ? -3 : 3), TOP + ph + ERR_H - 4);
+  }
+
+  // ruler
+  const step = DUR > 360000 ? 60000 : DUR > 120000 ? 30000 : 10000;
+  ctx.fillStyle = "rgba(148,163,184,0.8)"; ctx.textAlign = "center";
+  for (let t = 0; t <= DUR; t += step) { const x = clamp(X(t), 14, W - 14); ctx.fillText(fmt(t).replace(/\.\d$/, ""), x, H - 4); ctx.fillRect(X(t), TOP + ph + ERR_H, 1, 4); }
+
+  // playhead
+  const px = X(now);
+  ctx.fillStyle = "#fff"; ctx.fillRect(px - 1, 0, 2, TOP + ph + ERR_H);
+  ctx.beginPath(); ctx.moveTo(px - 6, 0); ctx.lineTo(px + 6, 0); ctx.lineTo(px, 8); ctx.closePath(); ctx.fill();
+}
+
+function timeAtPointer(ev) {
+  const r = tl.getBoundingClientRect();
+  return clamp((ev.clientX - r.left) / r.width, 0, 1) * DUR;
+}
+tl.addEventListener("pointerdown", ev => {
+  tl.setPointerCapture(ev.pointerId);
+  dragging = true; resumeAfterDrag = playing; if (playing) pause();
+  seek(timeAtPointer(ev));
+});
+tl.addEventListener("pointermove", ev => {
+  const t = timeAtPointer(ev);
+  if (dragging) seek(t);
+  const b = binAt(t), sk = TL.skill[b];
+  const tip = $("tip");
+  tip.style.display = "block";
+  tip.innerHTML = fmt(t) + " · demand " + TL.load[b].toFixed(2) + "×" + (sk >= 0 ? " · " + SKILL_NAME[sk] : "") +
+    (TL.errors[b] > 0 ? '<br><span style="color:#ff8a8a">accuracy lost ' + TL.errors[b].toFixed(1) + '</span>' : "") + (TL.ghosts[b] ? " · " + TL.ghosts[b] + " ghost tap" + (TL.ghosts[b] > 1 ? "s" : "") : "");
+  const r = tl.getBoundingClientRect(), tw = tip.offsetWidth;
+  tip.style.left = clamp(ev.clientX - r.left - tw / 2, 0, r.width - tw) + "px";
+  tip.style.top = "-34px";
+});
+tl.addEventListener("pointerleave", () => { $("tip").style.display = "none"; });
+const endDrag = () => { if (dragging) { dragging = false; if (resumeAfterDrag) play(); } };
+tl.addEventListener("pointerup", endDrag);
+tl.addEventListener("pointercancel", endDrag);
+
+// ---------- sidebar lists and navigation ----------
+function jump(t) { seek(t); updateHud(); }
+(function hot() {
+  const box = $("hot");
+  if (!hotSpots.length) { box.innerHTML = '<div class="empty">No section stands out.</div>'; return; }
+  hotSpots.forEach((h, k) => {
+    const r = document.createElement("div"); r.className = "row"; r.tabIndex = 0;
+    r.innerHTML = '<span class="t">' + fmt(h.start) + '</span><span style="color:' + SKILL_COL[h.skill] + '">' + SKILL_NAME[h.skill] + '</span><span class="tag">' + (h.share * 100).toFixed(0) + '% of risk</span>';
+    r.onclick = () => jump(h.start - 1500);
+    r.onkeydown = e => { if (e.key === "Enter") r.onclick(); };
+    box.appendChild(r);
+  });
+})();
+let onlyMiss = false;
+function renderMistakes() {
+  const box = $("mistakes"); box.innerHTML = "";
+  const list = mistakes.filter(x => !onlyMiss || x.n.j === 5 || (x.n.tj === 5));
+  if (!list.length) { box.innerHTML = '<div class="empty">None. A clean play.</div>'; return; }
+  list.slice(0, 400).forEach(x => {
+    const n = x.n, r = document.createElement("div"); r.className = "row"; r.tabIndex = 0;
+    const tag = n.j >= 3 ? JN[n.j] : "tail " + JN[n.tj];
+    const col = n.j >= 3 ? JCOL[n.j] : JCOL[n.tj];
+    r.innerHTML = '<span class="t">' + fmt(n.t) + '</span><span>lane ' + (n.c + 1) + (n.e != null ? " LN" : "") + '</span><span class="tag" style="color:' + col + '">' + tag + (n.o != null && n.j >= 3 && n.j < 5 ? " " + (n.o > 0 ? "+" : "") + Math.round(n.o) + "ms" : "") + '</span>';
+    r.onclick = () => jump(n.t - 1500);
+    r.onkeydown = e => { if (e.key === "Enter") r.onclick(); };
+    box.appendChild(r);
+  });
+}
+$("fAll").onclick = () => { onlyMiss = false; $("fAll").setAttribute("aria-pressed", "true"); $("fMiss").setAttribute("aria-pressed", "false"); renderMistakes(); };
+$("fMiss").onclick = () => { onlyMiss = true; $("fMiss").setAttribute("aria-pressed", "true"); $("fAll").setAttribute("aria-pressed", "false"); renderMistakes(); };
+renderMistakes();
+
+function stepMistake(dir) {
+  const ts = mistakes.map(x => x.n.t);
+  if (!ts.length) return;
+  const cur = now + 1500;                                // the mistake is shown 1.5 s ahead of the line
+  let t;
+  if (dir > 0) t = ts.find(x => x > cur + 50); else { const before = ts.filter(x => x < cur - 50); t = before.length ? before[before.length - 1] : undefined; }
+  if (t !== undefined) jump(t - 1500);
+}
+function hardest() {
+  if (!hotSpots.length) return;
+  const nextHot = hotSpots.map(h => h.start).sort((a, b) => a - b).find(t => t - 1500 > now + 100);
+  jump((nextHot !== undefined ? nextHot : hotSpots[0].start) - 1500);
+}
+
+// ---------- controls ----------
+$("play").onclick = toggle;
+$("prevErr").onclick = () => stepMistake(-1);
+$("nextErr").onclick = () => stepMistake(1);
+$("hardest").onclick = hardest;
+$("rate").onchange = e => { userRate = parseFloat(e.target.value); if (audioOK) setRate(); };
+$("scroll").oninput = e => { scroll = parseFloat(e.target.value); needDraw = true; };
+$("offset").onchange = e => { audioOffset = parseFloat(e.target.value) || 0; seek(now); };
+window.addEventListener("keydown", e => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
+  const k = e.key;
+  if (k === " ") { e.preventDefault(); toggle(); }
+  else if (k === "ArrowLeft") { e.preventDefault(); jump(now - (e.shiftKey ? 5000 : 1000)); }
+  else if (k === "ArrowRight") { e.preventDefault(); jump(now + (e.shiftKey ? 5000 : 1000)); }
+  else if (k === "ArrowUp") { e.preventDefault(); scroll = clamp(scroll + 0.05, 0.2, 1.3); $("scroll").value = scroll; needDraw = true; }
+  else if (k === "ArrowDown") { e.preventDefault(); scroll = clamp(scroll - 0.05, 0.2, 1.3); $("scroll").value = scroll; needDraw = true; }
+  else if (k === "[") stepMistake(-1);
+  else if (k === "]") stepMistake(1);
+  else if (k === "h" || k === "H") hardest();
+  else if (k === "Home") jump(0);
+  else if (k === "End") jump(DUR);
+});
+window.addEventListener("resize", () => { needDraw = true; });
+
+// ---------- main loop ----------
+let lastDrawn = -1;
+function frame(ts) {
+  if (playing && !dragging) {
+    if (audioOK && !audio.paused) now = audio.currentTime * 1000 + audioOffset;
+    else { now += (ts - lastTs) * userRate * RATE; }
+    if (now >= DUR) { now = DUR; pause(); }
+    needDraw = true;
+  }
+  lastTs = ts;
+  if (needDraw || now !== lastDrawn) { drawStage(); drawTimeline(); updateHud(); lastDrawn = now; needDraw = false; }
+  requestAnimationFrame(frame);
+}
+// open a little before the first note, or where #t=<ms> says
+now = Math.max(0, (N.length ? N[0].t : 0) - 1500);
+{ const m = /[#&]t=(\d+(?:\.\d+)?)/.exec(location.hash); if (m) now = clamp(parseFloat(m[1]), 0, DUR); }   // #t=<ms> opens at a moment
+requestAnimationFrame(frame);
+window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }) };   // for scripted checks
+</script>
+</body>
+</html>
