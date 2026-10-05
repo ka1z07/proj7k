@@ -12,6 +12,7 @@
 6. **验证。** `tests/test_replay_view.py` 钉住载荷与引擎场的守恒（风险和、最大读数、丢失和）、DT 下的时间换算、页面脚本的 JS 语法（`node --check`）与不可被 `</script>` 截断；`tests/replay_sim.py` 是按引擎自己的 `p_i(θ)` 打谱的模拟玩家，同一夹具也用于演示页面。
 
 7. **从某一刻起练。** 页面的「Practice from here」把播放头所在时刻拼成 `--bundle --fatal-time` 的完整命令（回放与谱面路径已写进载荷），可复制；静态页面不执行命令，也不开本地服务。
+8. **直接从 lazer 库看。** `--view-lazer --player X [--lazer-index N]` 经已有的 realm 桥取该玩家第 N 新的 7K 回放（回放与谱面在 lazer 的内容寻址库里，原样可读），默认写到 `./replay_views/`。lazer 库里的音频要经谱面集文件映射，此处不做，需要声音时用 `--audio`。
 
 ## 二、下缩器
 

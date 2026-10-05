@@ -143,6 +143,7 @@ PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsernam
 | **回放微观诊断** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu"` | 诊断离散度、双手偏载、Jack漂移与8维承压段位 |
 | **双教练智能推荐** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --recommend` | 推荐本地曲库练习谱（短板突破/长板专精，严格排除考题） |
 | **回放查看器** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --view --open` | 下落式同步回放按键 + 可拖动的难度时间线（失误、难点、技法一目了然） |
+| **直接看 lazer 里最新的回放** | `PYTHONPATH=src python3 -m proj7k.profiler --view-lazer --player "Username" --open` | 从 osu!lazer 库取该玩家最新的 7K 回放并打开查看器（`--lazer-index N` 取第 N 新的） |
 | **致死降阶练习包** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --bundle` | 自动切出致死高应变切片并导出 Recovery/Bridge/Push 三阶梯 .osz |
 | **近期30天画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --horizon-days 30` | 聚合近 30 天竞技状态并对比全历史巅峰 |
 | **全历史巅峰画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --all-time` | 查看全历史极限承压雷达与各技法巅峰 |

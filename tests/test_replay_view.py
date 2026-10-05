@@ -145,3 +145,39 @@ def test_a_double_time_replay_is_laid_out_in_song_time(played, tmp_path):
     spots = p["timeline"]["hot"]
     assert spots and all(s["end"] <= p["duration_ms"] + 8000 * 1.5 for s in spots)
     assert sum(p["timeline"]["risk"]) > 0
+
+
+def test_view_lazer_resolves_the_newest_replay_in_the_content_addressed_store(played, tmp_path, capsys, monkeypatch):
+    folder, osu, osr, *_ = played
+    files = tmp_path / "files"
+    b_hash, r_hash, old_hash = "ab" * 16, "cd" * 16, "ef" * 16
+    for h, src in ((b_hash, osu), (r_hash, osr), (old_hash, osr)):
+        dest = files / h[0] / h[:2] / h
+        dest.parent.mkdir(parents=True)
+        shutil.copy(src, dest)
+    realm = tmp_path / "client.realm"
+    realm.write_bytes(b"")
+
+    class Stub:
+        def __init__(self, default_realm_path=None):
+            pass
+
+        def dump_7k_scores(self, realm_path=None, user=None, auto_setup=True):
+            assert user == "Sim"
+            return [
+                {"beatmap_file_hash": b_hash, "replay_file_hash": old_hash, "date": "2026-01-01T00:00:00Z", "title": "T", "difficulty_name": "Old"},
+                {"beatmap_file_hash": b_hash, "replay_file_hash": r_hash, "date": "2026-02-01T00:00:00Z", "title": "T", "difficulty_name": "New"},
+            ]
+
+    monkeypatch.setattr("proj7k.lazer.bridge.RealmBridgeClient", Stub)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["--view-lazer", "--player", "Sim", "--realm", str(realm), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    page = Path(data["replay_view"])
+    assert page.name == "T_New_2026-02-01.html" and page.is_file()
+    payload = json.loads(re.search(r"const P = (.*?);\nif \(!P\)", page.read_text(encoding="utf-8"), re.S).group(1))
+    assert payload["sources"]["replay"].endswith(r_hash)
+
+    assert main(["--view-lazer", "--player", "Sim", "--realm", str(realm), "--lazer-index", "5"]) == 1
+    assert main(["--view-lazer", "--realm", str(realm)]) == 1
