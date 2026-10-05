@@ -20,6 +20,7 @@ package and a consumer must not make stamped charts stale.
 """
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -105,12 +106,41 @@ class ChartField:
     def duration_s(self) -> float:
         return float(self.t[-1] - self.t[0]) if len(self.t) else 0.0
 
-    def head_events(self) -> Dict[Tuple[int, int], int]:
-        """Press events by (column, time in ms rounded): how a played note finds its event."""
-        out: Dict[Tuple[int, int], int] = {}
-        for i in np.flatnonzero(~self.release):
-            out[(int(self.col[i]), int(round(self.t[i] * 1000.0)))] = int(i)
+    @cached_property
+    def _presses(self) -> Dict[int, Tuple[np.ndarray, np.ndarray]]:
+        """Per column: the times of its press events (sorted) and the events' indices."""
+        out = {}
+        for c in range(7):
+            idx = np.flatnonzero((self.col == c) & ~self.release)
+            out[c] = (self.t[idx], idx)
         return out
+
+    @cached_property
+    def _release_of(self) -> Dict[int, int]:
+        """Event index of an LN's release by the event index of its press."""
+        by_obj = {int(self.events.obj[i]): int(i) for i in np.flatnonzero(self.release)}
+        return {int(i): by_obj[int(self.events.obj[i])] for i in np.flatnonzero(~self.release) if int(self.events.obj[i]) in by_obj}
+
+    def press_index(self, col: int, t_s: float, tol_s: float = 0.0025) -> Optional[int]:
+        """The press event of a played note: the one on `col` nearest `t_s`, within `tol_s` (rows snap within 1 ms)."""
+        times, idx = self._presses.get(col, (np.empty(0), np.empty(0, dtype=int)))
+        if len(times) == 0:
+            return None
+        k = int(np.searchsorted(times, t_s))
+        best = min((j for j in (k - 1, k) if 0 <= j < len(times)), key=lambda j: abs(times[j] - t_s))
+        return int(idx[best]) if abs(times[best] - t_s) <= tol_s else None
+
+    def release_index(self, press: int) -> Optional[int]:
+        """The release event of the LN whose press is event `press`; None for a rice (or an LN folded to one, §2.2)."""
+        return self._release_of.get(press)
+
+    def skill_demand(self, t0_s: float, t1_s: float) -> Dict[str, float]:
+        """The largest demand reading in [t0_s, t1_s], per skill, each event counting by its membership in the skill."""
+        sel = (self.t >= t0_s) & (self.t <= t1_s)
+        if not sel.any():
+            return {k: 0.0 for k in SKILLS}
+        peak = (self.d[sel, None] * self.w[sel]).max(0)
+        return {k: float(peak[n]) for n, k in enumerate(SKILLS)}
 
     def curve(self, bin_s: float = 1.0, start_s: Optional[float] = None, end_s: Optional[float] = None) -> Curve:
         """Load, risk and carrying skill per bin of `bin_s` over [start_s, end_s] (default: the chart's span)."""

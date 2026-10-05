@@ -5,11 +5,10 @@ import pytest
 from proj7k.parser import Beatmap7K, HitObject, NoteType, parse_osu_7k
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment, align_replay_hits
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
+from proj7k.engine.scale import stars_of
+from proj7k.field import trace_beatmap
+from proj7k.profiler.response import analyze_strain_response
 from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.strain import (
-    TechniqueStrainTimeseries,
-    compute_8d_strain_timeseries,
-)
 
 
 def create_synthetic_chart(tmp_path: Path, bpm: float = 150.0, num_notes: int = 40) -> Path:
@@ -43,124 +42,119 @@ def create_synthetic_chart(tmp_path: Path, bpm: float = 150.0, num_notes: int = 
     return osu_path
 
 
-def test_8d_strain_timeseries_computation_and_point_to_point_alignment(tmp_path: Path):
-    osu_path = create_synthetic_chart(tmp_path)
-    beatmap = parse_osu_7k(str(osu_path))
-
-    # 1. Compute continuous 8-dimensional strain curves
-    timeseries: TechniqueStrainTimeseries = compute_8d_strain_timeseries(beatmap)
-
-    assert timeseries.step_seconds == 0.25
-    assert len(timeseries.times) > 0
-    for tech in TECHNIQUE_NAMES:
-        curve = getattr(timeseries, tech)
-        assert len(curve) == len(timeseries.times)
-        assert all(isinstance(v, (int, float)) for v in curve)
-
-    # Jack strain should be positive where col 0 repeated notes exist
-    assert max(timeseries.jack) > 0.0
-
-    # 2. Point-to-point interpolation at hit timestamps
-    t_probe = 1500.0  # ms
-    strains_at_t = timeseries.get_strains_at(t_probe / 1000.0)
-    assert set(strains_at_t.keys()) == set(TECHNIQUE_NAMES)
-    assert strains_at_t["jack"] >= 0.0
+def create_jack_chart(tmp_path: Path, num_notes: int = 240, gap_ms: int = 140) -> Path:
+    """One long jack on column 0: nearly all of its weight is the Jack skill's."""
+    lines = ["osu file format v14", "", "[General]", "Mode: 3", "", "[Difficulty]", "CircleSize: 7",
+             "OverallDifficulty: 8", "", "[TimingPoints]", "0,400,4,2,0,100,1,0", "", "[HitObjects]"]
+    lines += [f"36,192,{1000 + i * gap_ms},1,0,0:0:0:0:" for i in range(num_notes)]
+    path = tmp_path / "jack.osu"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
-def test_strain_response_inflection_detection_and_dan_mapping(tmp_path: Path):
-    from proj7k.profiler.response import analyze_strain_response
-
-    osu_path = create_synthetic_chart(tmp_path, bpm=160.0, num_notes=50)
-    beatmap = parse_osu_7k(str(osu_path))
-    timeseries = compute_8d_strain_timeseries(beatmap)
-
-    # Synthetic player with breakdown at high strain:
-    # First 25 notes (lower strain): accurate hits (offset 2..5ms, MAX/PERFECT)
-    # Next 25 notes (higher strain): breakdown (offset 35..60ms and MISSes)
-    aligned_hits = []
+def _play(beatmap, judge) -> HitAlignmentResult:
+    """An alignment where `judge(i, note)` gives (judgment, tail judgment | None) of note i; a MISS has no hit time."""
+    hits = []
     for i, ho in enumerate(beatmap.hit_objects):
-        t = ho.time
-        strains = timeseries.get_strains_at(t / 1000.0)
-        if i < 25:
-            offset = 3.0
-            judgment = HitJudgment.MAX
-            hit_t = t + offset
-        else:
-            if i % 3 == 0:
-                offset = None
-                judgment = HitJudgment.MISS
-                hit_t = None
-            else:
-                offset = 40.0
-                judgment = HitJudgment.GOOD
-                hit_t = t + offset
-
-        aligned_hits.append(
-            AlignedHit(
-                column=ho.column,
-                target_time=t,
-                hit_time=hit_t,
-                offset_ms=offset,
-                judgment=judgment,
-                strains=strains,
-            )
-        )
-
-    alignment = HitAlignmentResult(
-        aligned_hits=aligned_hits,
-        total_hits=sum(1 for h in aligned_hits if h.judgment != HitJudgment.MISS),
-        miss_count=sum(1 for h in aligned_hits if h.judgment == HitJudgment.MISS),
+        judgment, tail = judge(i, ho)
+        missed = judgment == HitJudgment.MISS
+        hits.append(AlignedHit(
+            column=ho.column, target_time=ho.time,
+            hit_time=None if missed else ho.time + 3.0, offset_ms=None if missed else 3.0,
+            judgment=judgment, note_type=ho.note_type, end_time=ho.end_time, tail_judgment=tail,
+        ))
+    return HitAlignmentResult(
+        aligned_hits=hits, total_hits=len(hits), miss_count=sum(h.judgment == HitJudgment.MISS for h in hits),
     )
 
-    report = analyze_strain_response(alignment, beatmap, strain_timeseries=timeseries)
 
-    assert "jack" in report.dimensions
-    jack_res = report.dimensions["jack"]
-    assert jack_res.tested is True
-    assert jack_res.has_inflection is True
-    assert jack_res.effective_capacity > 0.0
-    assert jack_res.star_rating > 0.0
-    assert jack_res.dan_tier != ""
-    assert len(jack_res.bins) > 0
+def test_every_hit_is_laid_on_the_fields_demand_readings(tmp_path: Path):
+    beatmap = parse_osu_7k(str(create_synthetic_chart(tmp_path)))
+    field = trace_beatmap(beatmap)
+    alignment = _play(beatmap, lambda i, ho: (HitJudgment.MAX, None))
 
-    # LN General should be untested (pure rice chart)
-    ln_gen = report.dimensions["ln_general"]
-    assert ln_gen.tested is False
-    assert ln_gen.effective_capacity == 0.0
-    assert ln_gen.dan_tier == "0th"
+    analyze_strain_response(alignment, beatmap, field=field)
 
-
-def test_stable_player_without_inflection_reaches_peak_strain(tmp_path: Path):
-    from proj7k.profiler.response import analyze_strain_response
-
-    osu_path = create_synthetic_chart(tmp_path, bpm=160.0, num_notes=40)
-    beatmap = parse_osu_7k(str(osu_path))
-    timeseries = compute_8d_strain_timeseries(beatmap)
-
-    # Player hits all notes cleanly with no misses
-    aligned_hits = [
-        AlignedHit(
-            column=ho.column,
-            target_time=ho.time,
-            hit_time=ho.time + 2.0,
-            offset_ms=2.0,
-            judgment=HitJudgment.MAX,
-            strains=timeseries.get_strains_at(ho.time / 1000.0),
-        )
-        for ho in beatmap.hit_objects
-    ]
-
-    alignment = HitAlignmentResult(
-        aligned_hits=aligned_hits,
-        total_hits=len(aligned_hits),
-        miss_count=0,
+    for hit in alignment.aligned_hits:
+        assert set(hit.strains) == set(TECHNIQUE_NAMES)
+    assert max(sum(h.strains.values()) for h in alignment.aligned_hits) > 0.0
+    assert max(h.strains["jack"] for h in alignment.aligned_hits) == pytest.approx(
+        max(field.d[i] * field.w[i, 0] for i in range(field.events.n))
     )
 
-    report = analyze_strain_response(alignment, beatmap, strain_timeseries=timeseries)
-    jack_res = report.dimensions["jack"]
-    assert jack_res.tested is True
-    assert jack_res.has_inflection is False
-    assert pytest.approx(jack_res.effective_capacity, abs=1e-1) == jack_res.peak_chart_strain
+
+def test_a_player_who_breaks_down_reads_lower_than_one_who_does_not(tmp_path: Path):
+    beatmap = parse_osu_7k(str(create_jack_chart(tmp_path)))
+    field = trace_beatmap(beatmap)
+    clean = analyze_strain_response(_play(beatmap, lambda i, ho: (HitJudgment.MAX, None)), beatmap, field=field)
+    broke = analyze_strain_response(
+        _play(beatmap, lambda i, ho: (HitJudgment.MISS if i >= 120 and i % 3 == 0 else (HitJudgment.GOOD if i >= 120 else HitJudgment.MAX), None)),
+        beatmap, field=field,
+    )
+
+    cj, bj = clean.dimensions["jack"], broke.dimensions["jack"]
+    assert cj.tested and bj.tested
+    assert cj.broke_down is False and bj.broke_down is True
+    assert bj.effective_capacity < bj.chart_level < cj.effective_capacity
+    assert bj.star_rating == pytest.approx(stars_of(bj.effective_capacity))
+    assert bj.dan_tier != ""
+    assert len(bj.bins) > 0
+    # the rice chart has no LN to fail at
+    ln = clean.dimensions["ln_general"]
+    assert ln.tested is False and ln.effective_capacity == 0.0 and ln.dan_tier == "0th"
+    assert broke.dominant_technique == "jack" == broke.bottleneck_technique
+
+
+def test_losing_exactly_the_tolerance_reads_the_charts_own_difficulty(tmp_path: Path):
+    """The inverse of the engine's equation: a player at the chart's D loses eps of it, so reads D (ADR-0020)."""
+    beatmap = parse_osu_7k(str(create_jack_chart(tmp_path)))
+    field = trace_beatmap(beatmap)
+    from proj7k.engine.params import DEFAULT
+    from proj7k.engine.skills import SKILLS
+    k = SKILLS.index("rc_jack")
+    weight = float(field.w[:, k].sum())
+    lost_notes = int(round(DEFAULT.eps_rc * weight))
+    alignment = _play(beatmap, lambda i, ho: (HitJudgment.MISS if i < lost_notes else HitJudgment.MAX, None))
+    # losing a whole number of notes is not exactly eps * W, so read what was lost, not the idealisation
+    report = analyze_strain_response(alignment, beatmap, field=field)
+    jack = report.dimensions["jack"]
+    assert jack.chart_level == pytest.approx(field.profile.skills["rc_jack"].D)
+    assert jack.effective_capacity == pytest.approx(jack.chart_level, rel=0.15)
+
+
+def test_a_play_that_failed_out_is_not_held_to_the_rest_of_the_song(tmp_path: Path):
+    beatmap = parse_osu_7k(str(create_jack_chart(tmp_path)))
+    field = trace_beatmap(beatmap)
+    half_ms = beatmap.hit_objects[120].time
+    alignment = _play(beatmap, lambda i, ho: (HitJudgment.MAX if i < 120 else HitJudgment.MISS, None))
+
+    held_to_all = analyze_strain_response(alignment, beatmap, field=field).dimensions["jack"]
+    failed_out = analyze_strain_response(alignment, beatmap, field=field, played_until_s=half_ms / 1000.0 - 0.01).dimensions["jack"]
+
+    assert failed_out.events < held_to_all.events
+    assert failed_out.broke_down is False
+    assert failed_out.effective_capacity > held_to_all.effective_capacity
+
+
+def test_ln_releases_are_what_the_ln_skills_are_read_from(tmp_path: Path):
+    lines = ["osu file format v14", "", "[General]", "Mode: 3", "", "[Difficulty]", "CircleSize: 7",
+             "OverallDifficulty: 8", "", "[TimingPoints]", "0,400,4,2,0,100,1,0", "", "[HitObjects]"]
+    xs = [36, 109, 182, 256, 329, 402, 475]
+    for i in range(150):
+        c = (i * 3) % 7
+        lines.append(f"{xs[c]},192,{1000 + i * 100},128,0,{1000 + i * 100 + 260}:0:0:0:0:")
+    beatmap = parse_osu_7k("\n".join(lines) + "\n")
+    field = trace_beatmap(beatmap)
+
+    clean = analyze_strain_response(_play(beatmap, lambda i, ho: (HitJudgment.MAX, HitJudgment.MAX)), beatmap, field=field)
+    dropped = analyze_strain_response(_play(beatmap, lambda i, ho: (HitJudgment.MAX, HitJudgment.MISS)), beatmap, field=field)
+
+    assert clean.dimensions["ln_release"].tested and dropped.dimensions["ln_release"].tested
+    assert dropped.dimensions["ln_release"].effective_capacity < clean.dimensions["ln_release"].effective_capacity
+    # Inverse is read at the press (§8.1); the tails dropped here are not what it measures
+    assert dropped.dimensions["ln_inverse"].effective_capacity == clean.dimensions["ln_inverse"].effective_capacity
+    # an LN chart's rice skills are not what dropping tails shows
+    assert not dropped.dimensions["jack"].tested
 
 
 def test_end_to_end_profiler_cli_radar_output(tmp_path: Path, capsys):
@@ -212,10 +206,11 @@ def test_end_to_end_profiler_cli_radar_output(tmp_path: Path, capsys):
     assert "dimensions" in report_dict["skill_radar"]
     assert "overall_dan" in report_dict["skill_radar"]
 
-    # Point-to-point strain alignment check in aligned_hits dict
+    # Point-to-point alignment with the engine's demand readings, in aligned_hits dict
     assert len(report_dict["aligned_hits"]) > 0
     assert "strains" in report_dict["aligned_hits"][0]
     assert set(report_dict["aligned_hits"][0]["strains"].keys()) == set(TECHNIQUE_NAMES)
+    assert report.field is not None and report.field.total_D > 0
 
     # 2. Test CLI stdout formatting
     ret_code = main(["--replay", str(osr_path), "--beatmap", str(osu_path)])
@@ -235,9 +230,9 @@ def test_end_to_end_profiler_cli_radar_output(tmp_path: Path, capsys):
     assert "jack" in data["skill_radar"]["dimensions"]
 
 
-def test_black_box_osr_synthetic_breakdown_inflection(tmp_path: Path):
+def test_black_box_osr_synthetic_breakdown(tmp_path: Path):
     """
-    Black-box test verifying accurate strain-error inflection detection and Dan tier
+    Black-box test verifying the skill level read for a high-demand breakdown and Dan tier
     mapping from a serialized .osr replay exhibiting high-strain breakdown (Ticket 0017 AC5).
     """
     from proj7k.profiler.cli import run_ingestion
@@ -327,8 +322,8 @@ def test_black_box_osr_synthetic_breakdown_inflection(tmp_path: Path):
     assert report.skill_radar is not None
     jack_result = report.skill_radar.dimensions["jack"]
     assert jack_result.tested is True
-    assert jack_result.has_inflection is True
-    # Inflection capacity should be strictly lower than peak chart strain
-    assert jack_result.effective_capacity < jack_result.peak_chart_strain
+    assert jack_result.broke_down is True
+    # the player's level is strictly lower than what the chart asks
+    assert jack_result.effective_capacity < jack_result.chart_level
     assert jack_result.star_rating > 0.0
     assert jack_result.dan_tier != ""

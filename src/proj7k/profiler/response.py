@@ -1,77 +1,76 @@
 """
-Strain-Error Response Engine & 8-Dimension Dan Radar for 7K Player Replay Profiler.
+Skill-level response of a player to a chart, on the spec-v0.2 engine's difficulty field (ADR-0020).
 
-Aligns discrete hit deviations against continuous 8-dimensional strain curves S_d(t)
-computed by proj7k.strain, detects critical performance inflection thresholds
-(Effective Strain Capacity) via Sigmoid/tanh response fitting, and maps capacities
-to the 15-level Jinjin Dan progression hierarchy and continuous star rating (ADR-0012).
+The engine defines a chart's difficulty in skill k as the level `theta` at which the weighted expected
+loss reaches a tolerance. A replay says how much was actually lost, so the same equation read the
+other way gives the level the player showed in that skill: `level_for_loss`. There is no curve to fit
+and no threshold to detect; the player's level in a skill is the engine's own number for what they
+lost, in the engine's own unit, on the engine's own star scale and dan table.
 """
 
 from dataclasses import dataclass
-import math
 from typing import Any, Dict, List, Optional, Tuple
-import numpy as np
-from scipy.optimize import curve_fit
 
-from proj7k.dan import CANONICAL_DAN_TIERS, legacy_estimate_canonical_dan
+import numpy as np
+
+from proj7k.dan import estimate_canonical_dan
+from proj7k.engine.params import DEFAULT, Params
+from proj7k.engine.scale import stars_of
+from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
+from proj7k.engine.solver import loss
+from proj7k.field import ChartField, level_for_loss, trace_beatmap
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.profiler.aggregate import player_overall_star
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment
 from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.rating import apply_tanh_soft_cap
-from proj7k.strain import (
-    TechniqueStrainTimeseries,
-    compute_8d_strain_timeseries,
-    compute_raw_strain_star_rating,
-)
+
+#: What an osu!mania judgment costs in accuracy, as a share of a perfect hit (the score's 300/200/100/50/0 of 300).
+JUDGMENT_LOSS: Dict[HitJudgment, float] = {
+    HitJudgment.MAX: 0.0,
+    HitJudgment.PERFECT: 0.0,
+    HitJudgment.GREAT: 1.0 / 3.0,
+    HitJudgment.GOOD: 2.0 / 3.0,
+    HitJudgment.MEH: 5.0 / 6.0,
+    HitJudgment.MISS: 1.0,
+}
+
+#: The engine name of a skill against the short key the profiler stores and reports (`radar.TECHNIQUE_NAMES`).
+KEY_OF = SKILL_TECH_KEY
 
 
 @dataclass(frozen=True)
-class StrainBin:
-    """
-    Hit error variance and miss rate statistics within a discrete strain slice [min, max).
-    """
+class DemandBin:
+    """Events of one skill whose demand reading falls in [d_min, d_max): what the engine predicted against what was lost."""
     bin_index: int
-    strain_min: float
-    strain_max: float
-    strain_center: float
-    total_notes: int
-    hit_count: int
-    miss_count: int
-    miss_rate: float
-    mean_offset_ms: float
-    std_offset_ms: float
-    ur: float
+    d_min: float
+    d_max: float
+    events: float          # membership-weighted event count
+    observed_loss: float   # mean accuracy loss of the bin's events
+    predicted_loss: float  # mean p_i at the player's level for that skill
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "bin_index": self.bin_index,
-            "strain_min": round(self.strain_min, 2),
-            "strain_max": round(self.strain_max, 2),
-            "strain_center": round(self.strain_center, 2),
-            "total_notes": self.total_notes,
-            "hit_count": self.hit_count,
-            "miss_count": self.miss_count,
-            "miss_rate": round(self.miss_rate, 4),
-            "mean_offset_ms": round(self.mean_offset_ms, 2),
-            "std_offset_ms": round(self.std_offset_ms, 2),
-            "ur": round(self.ur, 2),
+            "d_min": round(self.d_min, 2),
+            "d_max": round(self.d_max, 2),
+            "events": round(self.events, 1),
+            "observed_loss": round(self.observed_loss, 4),
+            "predicted_loss": round(self.predicted_loss, 4),
         }
 
 
 @dataclass(frozen=True)
 class DimensionCapacityResult:
-    """
-    Player's effective strain capacity and Dan mapping for a single technique dimension.
-    """
-    dimension: str
-    effective_capacity: float       # Inflection point S_eff in strain units
-    star_rating: float              # Continuous star rating SR (with tanh soft cap)
-    dan_tier: str                   # 15-level Jinjin Dan tier (0th .. Stellium)
-    has_inflection: bool            # True if breakdown inflection was detected
-    peak_chart_strain: float        # Maximum strain observed in the chart for this dimension
-    tested: bool                    # True if the chart had significant strain in this dimension
-    bins: List[StrainBin]
+    """The player's level in one skill, on the engine's scale."""
+    dimension: str                  # the short key (`jack` ... `ln_release`)
+    effective_capacity: float       # the level Theta_k, in the engine's unit (equivalent Hz)
+    star_rating: float              # stars_of(Theta_k)
+    dan_tier: str
+    broke_down: bool                # lost more than the skill's tolerance: Theta_k is below the chart's D_k
+    chart_level: float              # the chart's own D_k for this skill
+    tested: bool                    # the chart has something to fail at in this skill, and some of it was played
+    events: float                   # membership-weighted events played in this skill
+    bins: List[DemandBin]
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -79,18 +78,17 @@ class DimensionCapacityResult:
             "effective_capacity": round(self.effective_capacity, 2),
             "star_rating": round(self.star_rating, 2),
             "dan_tier": self.dan_tier,
-            "has_inflection": self.has_inflection,
-            "peak_chart_strain": round(self.peak_chart_strain, 2),
+            "broke_down": self.broke_down,
+            "chart_level": round(self.chart_level, 2),
             "tested": self.tested,
+            "events": round(self.events, 1),
             "bins": [b.to_dict() for b in self.bins],
         }
 
 
 @dataclass(frozen=True)
 class SkillRadarReport:
-    """
-    8-dimensional player capability radar and canonical Jinjin Dan tier breakdown.
-    """
+    """The eight-skill radar of a play and its dan tier."""
     dimensions: Dict[str, DimensionCapacityResult]
     overall_dan: str
     dominant_technique: str
@@ -107,293 +105,125 @@ class SkillRadarReport:
 
 @dataclass(frozen=True)
 class StrainResponseOptions:
-    """Configuration options for response engine binning and fitting."""
-    min_testable_strain: float = 5.0
-    num_bins: int = 10
-    min_samples_per_bin: int = 2
-    breakdown_std_delta_ms: float = 12.0
-    breakdown_miss_rate: float = 0.10
+    num_bins: int = 8
+    #: A skill is tested only if this much membership weight was played; below it the level is the prior's, not the player's.
+    min_events: float = 8.0
 
 
-def _sigmoid_response(x: np.ndarray, y_min: float, delta_y: float, x0: float, k: float) -> np.ndarray:
-    """Sigmoid degradation response curve."""
-    z = np.clip(k * (x - x0), -30.0, 30.0)
-    return y_min + delta_y / (1.0 + np.exp(-z))
+@dataclass(frozen=True)
+class PlayOutcome:
+    """What a play lost, per event of the field."""
+    loss: np.ndarray       # [n] accuracy loss in [0, 1]
+    played: np.ndarray     # [n] bool: the event was reached (an event after the fail is not a loss)
 
 
-def _tanh_response(x: np.ndarray, y_min: float, delta_y: float, x0: float, k: float) -> np.ndarray:
-    """Hyperbolic tangent (tanh) threshold degradation curve."""
-    z = np.clip(0.5 * k * (x - x0), -15.0, 15.0)
-    return y_min + delta_y * 0.5 * (1.0 + np.tanh(z))
-
-
-def _fit_inflection_threshold(
-    strains: np.ndarray,
-    scores: np.ndarray,
-    s_min: float,
-    s_max: float,
-) -> float:
+def play_outcome(field: ChartField, alignment: HitAlignmentResult, played_until_s: Optional[float] = None) -> PlayOutcome:
     """
-    Fits Sigmoid / tanh threshold function to find the inflection point s0
-    where performance degradation is steepest. Falls back to numerical midpoint crossing.
+    Lay a causal alignment on the field's events. A note's press takes its judgment's loss; the release of
+    an LN takes its tail judgment's. A note nobody hit is lost whole, but an event after `played_until_s`
+    (the replay's last input) is `played = False`: a play that failed out is not held to the song it did
+    not reach.
     """
-    if len(strains) < 3:
-        return float(np.median(strains))
-
-    y_min_obs = float(np.min(scores))
-    y_max_obs = float(np.max(scores))
-    delta_y_obs = max(1.0, y_max_obs - y_min_obs)
-    x0_init = float(np.median(strains))
-
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # Try both tanh and sigmoid parameterizations
-        for fit_fn in (_tanh_response, _sigmoid_response):
-            try:
-                popt, _ = curve_fit(
-                    fit_fn,
-                    strains,
-                    scores,
-                    p0=[y_min_obs, delta_y_obs, x0_init, 0.1],
-                    bounds=(
-                        [0.0, 0.0, s_min, 0.005],
-                        [y_max_obs * 1.5 + 10.0, delta_y_obs * 2.5 + 50.0, s_max, 2.0],
-                    ),
-                    maxfev=2000,
-                )
-                fitted_s0 = float(popt[2])
-                if s_min <= fitted_s0 <= s_max:
-                    return fitted_s0
-            except Exception:
-                continue
-
-    # Robust numerical fallback: find strain where score crosses 50% midpoint
-    target_mid = y_min_obs + 0.5 * delta_y_obs
-    for i in range(len(strains) - 1):
-        s1, s2 = strains[i], strains[i + 1]
-        y1, y2 = scores[i], scores[i + 1]
-        if (y1 <= target_mid <= y2) or (y2 <= target_mid <= y1):
-            if abs(y2 - y1) > 1e-6:
-                frac = (target_mid - y1) / (y2 - y1)
-                return float(s1 + frac * (s2 - s1))
-            return float(0.5 * (s1 + s2))
-
-    return float(x0_init)
+    n = field.events.n
+    lost = np.zeros(n)
+    played = np.zeros(n, dtype=bool)
+    for hit in alignment.aligned_hits:
+        i = field.press_index(hit.column, hit.target_time / 1000.0)
+        if i is None:
+            continue
+        # the point-to-point reading: the demand this note came under, in each skill it belongs to
+        hit.strains = {KEY_OF[name]: float(field.d[i] * field.w[i, k]) for k, name in enumerate(SKILLS)}
+        lost[i] = JUDGMENT_LOSS[hit.judgment]
+        played[i] = True
+        r = field.release_index(i)
+        if r is not None and hit.note_type == NoteType.LN:
+            tail = hit.tail_judgment if hit.tail_judgment is not None else HitJudgment.MISS
+            lost[r] = JUDGMENT_LOSS[tail]
+            played[r] = True
+    if played_until_s is not None:
+        played &= field.t <= played_until_s
+    return PlayOutcome(loss=lost, played=played)
 
 
-def _make_untested_result(dim: str, peak_strain: float) -> DimensionCapacityResult:
-    """Helper to create an untested dimension result."""
+def _untested(dim: str, chart_level: float, events: float) -> DimensionCapacityResult:
     return DimensionCapacityResult(
-        dimension=dim,
-        effective_capacity=0.0,
-        star_rating=0.0,
-        dan_tier="0th",
-        has_inflection=False,
-        peak_chart_strain=peak_strain,
-        tested=False,
-        bins=[],
+        dimension=dim, effective_capacity=0.0, star_rating=0.0, dan_tier="0th",
+        broke_down=False, chart_level=chart_level, tested=False, events=events, bins=[],
     )
+
+
+def _bins(d: np.ndarray, w: np.ndarray, lost: np.ndarray, p_at_level: np.ndarray, n_bins: int) -> List[DemandBin]:
+    live = w > 0
+    if not live.any():
+        return []
+    edges = np.linspace(0.0, float(d[live].max()), n_bins + 1)
+    which = np.clip(np.searchsorted(edges, d, side="right") - 1, 0, n_bins - 1)
+    out: List[DemandBin] = []
+    for b in range(n_bins):
+        sel = live & (which == b)
+        wb = w[sel].sum()
+        if wb <= 0:
+            continue
+        out.append(DemandBin(
+            bin_index=b, d_min=float(edges[b]), d_max=float(edges[b + 1]), events=float(wb),
+            observed_loss=float(np.dot(w[sel], lost[sel]) / wb), predicted_loss=float(np.dot(w[sel], p_at_level[sel]) / wb),
+        ))
+    return out
 
 
 def analyze_strain_response(
     alignment: HitAlignmentResult,
     beatmap: Beatmap7K,
-    strain_timeseries: Optional[TechniqueStrainTimeseries] = None,
+    field: Optional[ChartField] = None,
     options: Optional[StrainResponseOptions] = None,
+    params: Params = DEFAULT,
+    played_until_s: Optional[float] = None,
 ) -> SkillRadarReport:
     """
-    Analyzes player hit errors and misses against 8-dimensional continuous strain curves,
-    detects critical inflection thresholds, and maps capabilities to the canonical Dan hierarchy.
+    The player's level in each of the eight skills, read off the field of `beatmap` (in physical time,
+    the same time the alignment's target times are in) by inverting the engine's loss equation.
+    `played_until_s` is where the play ended, if it ended early.
     """
     opts = options or StrainResponseOptions()
-
-    if strain_timeseries is None:
-        strain_timeseries = compute_8d_strain_timeseries(beatmap)
-
-    # 1. Point-to-point alignment of hits with instantaneous 8D strain values
-    # Samples strain at the player's actual hit timestamp (or target time for misses)
-    for hit in alignment.aligned_hits:
-        t_sec = (hit.hit_time if hit.hit_time is not None else hit.target_time) / 1000.0
-        hit.strains = strain_timeseries.get_strains_at(t_sec)
+    if field is None:
+        field = trace_beatmap(beatmap, params)
+    outcome = play_outcome(field, alignment, played_until_s)
 
     results: Dict[str, DimensionCapacityResult] = {}
-
-    for dim in TECHNIQUE_NAMES:
-        curve = getattr(strain_timeseries, dim)
-        peak_strain = float(max(curve)) if curve else 0.0
-
-        if peak_strain < opts.min_testable_strain:
-            results[dim] = _make_untested_result(dim, peak_strain)
+    for k, name in enumerate(SKILLS):
+        key = KEY_OF[name]
+        D_k = field.profile.skills[name].D
+        w = field.w[:, k] * outcome.played
+        events = float(w.sum())
+        if D_k <= 0.0 or events < opts.min_events:
+            results[key] = _untested(key, D_k, events)
             continue
-
-        # Extract hit deviations and strain values for this dimension
-        # For ln_release: decouple LN tail release deviation from head press (ADR-0012)
-        note_data: List[Tuple[float, Optional[float], bool]] = []
-        for hit in alignment.aligned_hits:
-            s_val = hit.strains[dim] if hit.strains else 0.0
-            if dim == "ln_release" and hit.note_type == NoteType.LN:
-                is_miss = (hit.judgment == HitJudgment.MISS) or (hit.tail_offset_ms is None)
-                err_val = hit.tail_offset_ms
-            else:
-                is_miss = (hit.judgment == HitJudgment.MISS) or (hit.offset_ms is None)
-                err_val = hit.offset_ms
-            note_data.append((s_val, err_val, is_miss))
-
-        if not note_data:
-            results[dim] = _make_untested_result(dim, peak_strain)
-            continue
-
-        strains_all = [x[0] for x in note_data]
-        s_min = float(min(strains_all))
-        s_max = float(max(strains_all))
-
-        if s_max - s_min < 1e-4:
-            s_max = s_min + 1.0
-
-        num_bins = opts.num_bins
-        bin_edges = np.linspace(0.0, s_max, num_bins + 1)
-        bins_list: List[StrainBin] = []
-
-        valid_bin_strains: List[float] = []
-        valid_bin_scores: List[float] = []
-
-        for b_idx in range(num_bins):
-            b_low = float(bin_edges[b_idx])
-            b_high = float(bin_edges[b_idx + 1])
-            b_center = 0.5 * (b_low + b_high)
-
-            # Filter notes in this bin
-            bin_notes = [
-                n for n in note_data
-                if (b_low <= n[0] < b_high) or (b_idx == num_bins - 1 and b_low <= n[0] <= b_high)
-            ]
-
-            if not bin_notes:
-                continue
-
-            tot = len(bin_notes)
-            hits_in_bin = [n[1] for n in bin_notes if not n[2] and n[1] is not None]
-            hit_cnt = len(hits_in_bin)
-            miss_cnt = tot - hit_cnt
-            miss_rate = miss_cnt / tot if tot > 0 else 0.0
-
-            if hit_cnt >= opts.min_samples_per_bin:
-                mean_err = float(np.mean(hits_in_bin))
-                std_err = float(np.std(hits_in_bin, ddof=1))
-            elif hit_cnt == 1:
-                mean_err = float(hits_in_bin[0])
-                std_err = max(5.0, abs(hits_in_bin[0]))  # Meaningful fallback instead of artificial 0.0
-            else:
-                mean_err = 0.0
-                std_err = 60.0  # High default error when all notes missed
-
-            ur = std_err * 10.0
-
-            bins_list.append(
-                StrainBin(
-                    bin_index=b_idx,
-                    strain_min=b_low,
-                    strain_max=b_high,
-                    strain_center=b_center,
-                    total_notes=tot,
-                    hit_count=hit_cnt,
-                    miss_count=miss_cnt,
-                    miss_rate=miss_rate,
-                    mean_offset_ms=mean_err,
-                    std_offset_ms=std_err,
-                    ur=ur,
-                )
-            )
-
-            # Combined degradation metric: timing std + miss rate penalty
-            combined_score = std_err + 200.0 * miss_rate
-            valid_bin_strains.append(b_center)
-            valid_bin_scores.append(combined_score)
-
-        if not valid_bin_scores:
-            raw_sr = compute_raw_strain_star_rating(peak_strain)
-            sr = apply_tanh_soft_cap(raw_sr)
-            results[dim] = DimensionCapacityResult(
-                dimension=dim,
-                effective_capacity=peak_strain,
-                star_rating=sr,
-                dan_tier=legacy_estimate_canonical_dan(sr),
-                has_inflection=False,
-                peak_chart_strain=peak_strain,
-                tested=True,
-                bins=bins_list,
-            )
-            continue
-
-        # Check for degradation breakdown
-        min_score = min(valid_bin_scores)
-        max_score = max(valid_bin_scores)
-        max_miss_rate = max(b.miss_rate for b in bins_list) if bins_list else 0.0
-
-        is_breakdown = (
-            (max_score - min_score >= opts.breakdown_std_delta_ms)
-            or (max_miss_rate >= opts.breakdown_miss_rate)
-        )
-
-        if not is_breakdown:
-            effective_cap = peak_strain
-            has_inflection = False
-        else:
-            fitted_inflection = _fit_inflection_threshold(
-                np.array(valid_bin_strains),
-                np.array(valid_bin_scores),
-                s_min=0.0,
-                s_max=peak_strain,
-            )
-            effective_cap = float(np.clip(fitted_inflection, 0.0, peak_strain))
-            has_inflection = True
-
-            # Competence Gating: capacity cannot exceed the highest strain where the player
-            # demonstrated controlled execution (miss rate <= 15% and UR <= 350)
-            clean_bins = [
-                b for b in bins_list
-                if b.miss_rate <= 0.15 and b.ur <= 350.0 and b.total_notes >= opts.min_samples_per_bin
-            ]
-            if clean_bins:
-                max_clean_strain = max(b.strain_max for b in clean_bins)
-                effective_cap = min(effective_cap, max_clean_strain)
-            elif bins_list and any(b.total_notes >= 5 for b in bins_list):
-                # No clean bins exist: player failed across all strain levels
-                effective_cap = 0.0
-
-        raw_sr = compute_raw_strain_star_rating(effective_cap)
-        sr = apply_tanh_soft_cap(raw_sr)
-        dan = legacy_estimate_canonical_dan(sr)
-
-        results[dim] = DimensionCapacityResult(
-            dimension=dim,
-            effective_capacity=effective_cap,
-            star_rating=sr,
-            dan_tier=dan,
-            has_inflection=has_inflection,
-            peak_chart_strain=peak_strain,
+        eps = params.eps_rc if name.startswith("rc") else params.eps_ln
+        observed = float(np.dot(w, outcome.loss))
+        level = level_for_loss(field.d, w, observed, eps, params)
+        stars = stars_of(level)
+        results[key] = DimensionCapacityResult(
+            dimension=key,
+            effective_capacity=level,
+            star_rating=stars,
+            dan_tier=estimate_canonical_dan(stars),
+            broke_down=observed > eps * events,
+            chart_level=D_k,
             tested=True,
-            bins=bins_list,
+            events=events,
+            bins=_bins(field.d, w, outcome.loss, loss(field.d, level, params), opts.num_bins),
         )
 
-    # Calculate macro radar attributes using extremum-dominant p-norm (p=4)
-    tested_results = [r for r in results.values() if r.tested]
-
-    if tested_results:
-        dominant_tech = max(tested_results, key=lambda r: r.star_rating).dimension
-        bottleneck_technique = min(tested_results, key=lambda r: r.star_rating).dimension
-        tested_dict = {r.dimension: r.star_rating for r in tested_results}
-        overall_sr = player_overall_star(tested_dict)
-        overall_dan = legacy_estimate_canonical_dan(overall_sr)
+    # keep the radar in the profiler's key order
+    results = {k: results[k] for k in TECHNIQUE_NAMES}
+    tested = [r for r in results.values() if r.tested]
+    if tested:
+        dominant = max(tested, key=lambda r: r.star_rating).dimension
+        bottleneck = min(tested, key=lambda r: r.star_rating).dimension
+        overall_dan = estimate_canonical_dan(player_overall_star({r.dimension: r.star_rating for r in tested}))
     else:
-        dominant_tech = "None"
-        bottleneck_technique = "None"
+        dominant = bottleneck = "None"
         overall_dan = "0th"
-
     return SkillRadarReport(
-        dimensions=results,
-        overall_dan=overall_dan,
-        dominant_technique=dominant_tech,
-        bottleneck_technique=bottleneck_technique,
+        dimensions=results, overall_dan=overall_dan, dominant_technique=dominant, bottleneck_technique=bottleneck,
     )

@@ -29,7 +29,7 @@ from proj7k.profiler.pathology import (
 from proj7k.profiler.response import (
     DimensionCapacityResult,
     SkillRadarReport,
-    StrainBin,
+    DemandBin,
     StrainResponseOptions,
     analyze_strain_response,
 )
@@ -74,7 +74,7 @@ __all__ = [
     "CascadePrecursor",
     "PathologyReport",
     "analyze_pathology",
-    "StrainBin",
+    "DemandBin",
     "DimensionCapacityResult",
     "SkillRadarReport",
     "StrainResponseOptions",

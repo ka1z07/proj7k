@@ -96,8 +96,12 @@ def test_star_scale_inverse():
     assert d_of_stars(0.0) == 0.0
 
 
-def test_head_events_find_each_press(traced):
+def test_played_notes_find_their_events(traced):
     notes, f = traced
-    heads = f.head_events()
-    found = sum(1 for c, t, _ in notes if (c, int(round(t * 1000.0))) in heads)
-    assert found >= 0.98 * len(notes)
+    found = [f.press_index(c, t) for c, t, _ in notes]
+    assert sum(i is not None for i in found) >= 0.98 * len(notes)
+    # an LN's release is the release event of the same object, on the same column, at its tail
+    for (c, t, e), i in zip(notes, found):
+        r = None if i is None else f.release_index(i)
+        if r is not None:
+            assert f.release[r] and f.col[r] == c == f.col[i] and abs(f.t[r] - e) < 0.0025
