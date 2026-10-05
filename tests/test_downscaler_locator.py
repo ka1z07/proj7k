@@ -140,6 +140,8 @@ def test_locate_beatmap_in_lazer_mock(tmp_path):
         asset = locate_beatmap_in_lazer(
             "https://osu.ppy.sh/beatmapsets/1000#mania/2000",
             files_dir=files_dir,
+            # a client is passed so that the lookup does not depend on an osu!lazer install existing on the machine
+            bridge_client=mock_client,
         )
 
         assert asset is not None
