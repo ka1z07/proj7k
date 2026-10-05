@@ -119,6 +119,7 @@ def test_cli_writes_the_page_with_the_audio_referenced_relatively(played, tmp_pa
     assert "Replay viewer:" in capsys.readouterr().out
     data = json.loads(re.search(r"const P = (.*?);\nif \(!P\)", out.read_text(encoding="utf-8"), re.S).group(1))
     assert (out.parent / data["audio"]).resolve() == (folder / "song.mp3").resolve()
+    assert data["sources"] == {"replay": str(osr.resolve()), "beatmap": str(osu.resolve())}
     assert find_audio(osu, "") == folder / "song.mp3"
     assert find_audio(osu, "song.mp3") == folder / "song.mp3"
 

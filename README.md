@@ -99,9 +99,14 @@ PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --rec
 ```
 **终端输出效果：**
 - 诊断各轨击键偏差均值与 UR、左右手偏载比例、连叠漂移疲劳告警；
-- 点对点对齐 8 维瞬时应变与击键偏差，输出有效承压上限与 8 维 Jinjin Dan 段位雷达；
+- 把回放丢掉的准度放回新引擎的逐事件难度读数上，反解出你在 8 个技法上的水平（与星级、段位同一把尺），输出 8 维 Jinjin Dan 段位雷达；
 - 运用双教练策略（短板突破 / 长板专精），扫描本地已装曲库（严格排除段位考题）推荐针对性练习谱；
-- 自动截取致死高应变切片（$-10\text{s}, +5\text{s}$），并在 `./practice_bundles/` 生成独立三阶梯练习谱面及 `.osz` 包。
+- 自动截取致死高应变切片（$-10\text{s}, +5\text{s}$），并在 `./practice_bundles/` 生成独立三阶梯练习谱面及 `.osz` 包：Recovery 落在你自己的水平、Push 是原切片、Bridge 居中，各档由下缩器直接对着引擎星级收敛。
+
+加上 `--view` 得到一页自包含的**回放查看器**（`--audio` 指定音频，`--open` 直接打开）：下落式谱面与你的实际按键同步回放，判定线以上是谱面、以下是你的游玩（失误、漏拍、乱敲、长条尾放一目了然）；底部是可拖动的难度时间线，显示每一段的难度读数、承载它的技法和你在该段丢掉的准度，可拖到回放的任意时刻，并能在失误与最难段之间跳转：
+```bash
+PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --view --open
+```
 
 ### 6. 查询玩家宏观技能画像与历史趋势 (5秒)
 查询近 30 天滑动窗口竞技状态（Recent Rolling Form）并对比全历史巅峰（All-Time Peak）：
@@ -134,9 +139,10 @@ PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsernam
 | **同步 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync` | 批量将客观星级写入 lazer 数据库 |
 | **还原 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync --revert` | 彻底还原为官方原始星级 |
 | **降级练习** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "7th" -o ./out` | 降级到指定 Jinjin 段位 |
-| **指定星级降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -s 6.5 -o ./out` | 降级到指定连续星级 |
+| **指定星级降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -s 6.5 -o ./out` | 降级到指定连续星级（新引擎的星级，直接对着它收敛） |
 | **回放微观诊断** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu"` | 诊断离散度、双手偏载、Jack漂移与8维承压段位 |
 | **双教练智能推荐** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --recommend` | 推荐本地曲库练习谱（短板突破/长板专精，严格排除考题） |
+| **回放查看器** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --view --open` | 下落式同步回放按键 + 可拖动的难度时间线（失误、难点、技法一目了然） |
 | **致死降阶练习包** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --bundle` | 自动切出致死高应变切片并导出 Recovery/Bridge/Push 三阶梯 .osz |
 | **近期30天画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --horizon-days 30` | 聚合近 30 天竞技状态并对比全历史巅峰 |
 | **全历史巅峰画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --all-time` | 查看全历史极限承压雷达与各技法巅峰 |

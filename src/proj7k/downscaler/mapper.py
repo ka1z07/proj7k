@@ -1,12 +1,12 @@
 """
 TwoTierDanMapper - Dual-tier Dan cascade mapping engine (ADR-0011, SPEC-P5.1-03).
 
-Resolves target Dan or continuous star rating into target strain S_target,
+Resolves target Dan or continuous star rating into the engine's target star and level `D*`,
 technique radar target profile, and benchmark feature centroids:
 - Tier 1: Ground-truth retrieval from distilled_ground_truth.json for known
   dominant technique and standard Dan tier.
 - Tier 2: Continuous interpolation along the 15-tier Canonical Dan Progression
-  Hierarchy and inversion of the physical strain star rating formula.
+  Hierarchy, whose stars are the spec-v0.2 engine's (`dan_table.json`).
 """
 
 from dataclasses import dataclass, field
@@ -21,14 +21,14 @@ from proj7k.parser import Beatmap7K
 from proj7k.engine import evaluate_notes
 from proj7k.engine.events import notes_from_beatmap
 from proj7k.engine.skills import SKILL_TECH_KEY
-from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar
-from proj7k.rating import RatingOptions
-from proj7k.strain import compute_raw_strain_star_rating
+from proj7k.calibration import DEFAULT_CALIBRATION
+from proj7k.field import d_of_stars
+from proj7k.radar import TECHNIQUE_NAMES
 
 from proj7k.dan import (
-    LEGACY_DAN_SR,
+    CANONICAL_DAN_SR,
     CANONICAL_DAN_TIERS,
-    legacy_estimate_canonical_dan,
+    estimate_canonical_dan,
     parse_dan_tier,
 )
 
@@ -82,18 +82,14 @@ def normalize_technique_name(tech: str) -> str:
 
 def star_rating_to_strain(
     sr: float,
-    options: Optional[RatingOptions] = None,
+    a: float = DEFAULT_CALIBRATION.strain_a,
+    b: float = DEFAULT_CALIBRATION.strain_b,
+    exp: float = DEFAULT_CALIBRATION.strain_exp,
 ) -> float:
     """
-    Inverts the physical strain star rating formula:
-    SR_raw = a * S^exp + b  ==>  S = max(0, (SR - b) / a)^(1 / exp).
-    Uses canonical constants from RatingOptions (strain_a, strain_b, strain_exp).
+    Inverts the legacy physical strain star law `SR = a * S**exp + b`. Not used by the downscaler any more (it steers
+    by the engine's star, ADR-0021); it stays here because the legacy dimension curves of `proj7k.strain` import it.
     """
-    opts = options or RatingOptions()
-    a = opts.strain_a
-    b = opts.strain_b
-    exp = opts.strain_exp
-
     if sr <= b:
         return 0.0
     return math.pow((sr - b) / a, 1.0 / exp)
@@ -104,7 +100,7 @@ class DanTarget:
     """Target difficulty specifications resolved by TwoTierDanMapper."""
     target_dan: str
     target_sr: float
-    target_strain: float
+    target_D: float          # the engine level that `target_sr` stands for (Hz)
     dominant_skill: str
     features: Dict[str, float] = field(default_factory=dict)
     radar_profile: Dict[str, float] = field(default_factory=dict)
@@ -113,7 +109,7 @@ class DanTarget:
         return {
             "target_dan": self.target_dan,
             "target_sr": round(self.target_sr, 3),
-            "target_strain": round(self.target_strain, 3),
+            "target_D": round(self.target_D, 3),
             "dominant_skill": self.dominant_skill,
             "features": {k: round(v, 4) for k, v in self.features.items()},
             "radar_profile": {k: round(v, 4) for k, v in self.radar_profile.items()},
@@ -134,9 +130,7 @@ class TwoTierDanMapper:
     def __init__(
         self,
         ground_truth_path: Optional[Union[str, Path]] = None,
-        rating_options: Optional[RatingOptions] = None,
     ):
-        self.rating_options = rating_options or RatingOptions()
         self._ground_truth: Dict[str, Any] = {}
         if ground_truth_path is None:
             candidates = [
@@ -160,6 +154,7 @@ class TwoTierDanMapper:
         target_dan: Optional[str] = None,
         target_sr: Optional[float] = None,
         dominant_skill: Optional[str] = None,
+        target_D: Optional[float] = None,
     ) -> DanTarget:
         """
         Resolves target Dan tier and/or target star rating into a complete DanTarget.
@@ -168,7 +163,11 @@ class TwoTierDanMapper:
         canonical_tech_name = normalize_technique_name(skill_key)
         short_tech_name = CANONICAL_TO_TECH_KEY.get(canonical_tech_name, skill_key)
 
-        # 1. Resolve effective SR and canonical Dan name
+        # 1. Resolve effective SR and canonical Dan name; an explicit engine level is a star by the engine's scale
+        if target_D is not None and target_sr is None:
+            from proj7k.engine.scale import stars_of
+
+            target_sr = stars_of(float(target_D))
         if target_sr is not None:
             effective_sr = float(target_sr)
             if target_dan is not None:
@@ -177,12 +176,10 @@ class TwoTierDanMapper:
                 canonical_dan = self._estimate_closest_dan(effective_sr)
         elif target_dan is not None:
             canonical_dan = parse_dan_tier(target_dan)
-            effective_sr = LEGACY_DAN_SR[canonical_dan]
+            effective_sr = CANONICAL_DAN_SR[canonical_dan]
         else:
             canonical_dan = "7th"
-            effective_sr = LEGACY_DAN_SR["7th"]
-
-        target_strain = star_rating_to_strain(effective_sr, self.rating_options)
+            effective_sr = CANONICAL_DAN_SR["7th"]
 
         # 2. Try Tier 1 Lookup from distilled_ground_truth.json
         tier_profile = self._get_tier_profile(canonical_tech_name, canonical_dan)
@@ -210,7 +207,7 @@ class TwoTierDanMapper:
         return DanTarget(
             target_dan=canonical_dan,
             target_sr=effective_sr,
-            target_strain=target_strain,
+            target_D=d_of_stars(effective_sr),
             dominant_skill=short_tech_name,
             features=features,
             radar_profile=radar_profile,
@@ -236,27 +233,15 @@ class TwoTierDanMapper:
         return None
 
     def _estimate_closest_dan(self, sr: float) -> str:
-        """Finds closest canonical Dan tier for a given star rating."""
-        if sr <= LEGACY_DAN_SR["0th"]:
-            return "0th"
-        if sr >= LEGACY_DAN_SR["Stellium"]:
-            return "Stellium"
-
-        best_tier = "7th"
-        best_diff = float("inf")
-        for tier in CANONICAL_DAN_TIERS:
-            diff = abs(LEGACY_DAN_SR[tier] - sr)
-            if diff < best_diff:
-                best_diff = diff
-                best_tier = tier
-        return best_tier
+        """The canonical Dan tier nearest to a star rating on the engine's scale."""
+        return estimate_canonical_dan(sr)
 
     def _interpolate_features(self, tech_name: str, sr: float) -> Dict[str, float]:
         """Interpolates feature vectors between two surrounding canonical tiers."""
-        if sr <= LEGACY_DAN_SR["0th"]:
+        if sr <= CANONICAL_DAN_SR["0th"]:
             p = self._get_tier_profile(tech_name, "0th")
             return dict(p["features"]) if p and "features" in p else {}
-        if sr >= LEGACY_DAN_SR["Stellium"]:
+        if sr >= CANONICAL_DAN_SR["Stellium"]:
             p = self._get_tier_profile(tech_name, "Stellium")
             return dict(p["features"]) if p and "features" in p else {}
 
@@ -265,13 +250,13 @@ class TwoTierDanMapper:
         for i in range(len(CANONICAL_DAN_TIERS) - 1):
             t_low = CANONICAL_DAN_TIERS[i]
             t_high = CANONICAL_DAN_TIERS[i + 1]
-            if LEGACY_DAN_SR[t_low] <= sr <= LEGACY_DAN_SR[t_high]:
+            if CANONICAL_DAN_SR[t_low] <= sr <= CANONICAL_DAN_SR[t_high]:
                 lower_tier = t_low
                 upper_tier = t_high
                 break
 
-        sr_low = LEGACY_DAN_SR[lower_tier]
-        sr_high = LEGACY_DAN_SR[upper_tier]
+        sr_low = CANONICAL_DAN_SR[lower_tier]
+        sr_high = CANONICAL_DAN_SR[upper_tier]
         factor = (sr - sr_low) / max(1e-6, sr_high - sr_low)
 
         p_low = self._get_tier_profile(tech_name, lower_tier)

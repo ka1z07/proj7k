@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.field import ChartField, trace_beatmap
 from proj7k.parser import Beatmap7K, parse_osu_7k
 from proj7k.profiler.aggregate import (
@@ -226,6 +227,13 @@ def run_ingestion(
         skill_radar = analyze_strain_response(
             _scale_alignment_clock_rate(alignment, clock_rate), beatmap, field=field, played_until_s=played_until_s,
         )
+
+    if field is not None and pathology.cascade_precursor and pathology.cascade_precursor.fatal_time_ms is not None:
+        pre = pathology.cascade_precursor
+        carrying = field.carrying_skill(
+            (pre.fatal_time_ms - 500.0) / 1000.0 / clock_rate, pre.fatal_time_ms / 1000.0 / clock_rate
+        )
+        pre.skill = SKILL_TECH_KEY[carrying] if carrying else None
 
     return ProfilerIngestionReport(
         player_name=replay.player_name,
@@ -869,7 +877,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             audio = Path(args.audio) if args.audio else find_audio(Path(args.beatmap), report.beatmap.audio_filename if report.beatmap else "")
             target = Path(args.view) if args.view else Path(args.replay).with_suffix(".html")
             try:
-                view_path = write_replay_view(report, target, audio_path=audio)
+                view_path = write_replay_view(report, target, audio_path=audio, replay_path=args.replay, beatmap_path=args.beatmap)
             except Exception as e:
                 print(f"Replay viewer error: {e}", file=sys.stderr)
                 return 1
@@ -926,7 +934,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 player_cap = None
                 dom_tech = None
                 if report.pathology and report.pathology.cascade_precursor:
-                    dom_tech = report.pathology.cascade_precursor.dominant_technique
+                    dom_tech = report.pathology.cascade_precursor.skill
                 if report.skill_radar:
                     if dom_tech and dom_tech in report.skill_radar.dimensions:
                         player_cap = report.skill_radar.dimensions[dom_tech].effective_capacity

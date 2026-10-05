@@ -1,4 +1,4 @@
-"""proj7k.downscaler - Closed-loop strain downscaler and technique preservation engine."""
+"""proj7k.downscaler - Closed-loop downscaler on the difficulty engine, and technique preservation (ADR-0021)."""
 
 from proj7k.downscaler.mutation import (
     apply_pure_deletion,
@@ -11,18 +11,18 @@ from proj7k.downscaler.balancer import BimanualFluxBalancer
 from proj7k.downscaler.mapper import (
     TwoTierDanMapper,
     DanTarget,
-    LEGACY_DAN_SR,
+    CANONICAL_DAN_SR,
     CANONICAL_DAN_TIERS,
     parse_dan_tier,
-    star_rating_to_strain,
 )
+from proj7k.downscaler.marginal import removal_benefit
 from proj7k.downscaler.validator import (
     DualGateValidator,
     ValidationResult,
     compute_radar_cosine_similarity,
 )
 from proj7k.downscaler.pruner import (
-    WindowedPeakBatchPruner,
+    ExcessLossPruner,
     PruningResult,
     PruneIterationRecord,
 )
@@ -48,14 +48,14 @@ __all__ = [
     "BimanualFluxBalancer",
     "TwoTierDanMapper",
     "DanTarget",
-    "LEGACY_DAN_SR",
+    "CANONICAL_DAN_SR",
     "CANONICAL_DAN_TIERS",
     "parse_dan_tier",
-    "star_rating_to_strain",
+    "removal_benefit",
     "DualGateValidator",
     "ValidationResult",
     "compute_radar_cosine_similarity",
-    "WindowedPeakBatchPruner",
+    "ExcessLossPruner",
     "PruningResult",
     "PruneIterationRecord",
     "downscale_beatmap",

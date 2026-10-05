@@ -99,6 +99,12 @@
   </div>
   <aside class="side">
     <section class="panel"><h2>Skill levels</h2><div id="skills"></div></section>
+    <section class="panel" id="practice" style="display:none">
+      <h2>Practice from here</h2>
+      <div class="empty" style="padding:0 0 6px">Three-tier bundle (Recovery · Bridge · Push) from the 15 s around the playhead, made at your level.</div>
+      <input id="cmd" readonly aria-label="Practice bundle command" style="width:100%;background:#0b111d;border:1px solid var(--border);border-radius:5px;padding:5px 7px;font-family:var(--mono);font-size:11px">
+      <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" id="copyCmd">Copy command</button><button class="btn" id="cmdHard">At hardest</button></div>
+    </section>
     <section class="panel"><h2>Hardest sections</h2><div class="list" id="hot"></div></section>
     <section class="panel">
       <h2>Mistakes</h2>
@@ -366,7 +372,25 @@ function drawStage() {
   ctx.fillStyle = "rgba(148,163,184,0.7)"; ctx.textAlign = "center"; ctx.fillText("early", mx + 14, my - 11); ctx.fillText("late", mx + mw - 12, my - 11);
 }
 
+// ---------- practice command ----------
+const SRC = P.sources || {};
+if (SRC.replay && SRC.beatmap) {
+  $("practice").style.display = "";
+  const q = x => "'" + x.replace(/'/g, "'\\''") + "'";
+  const refresh = () => {
+    $("cmd").value = "python3 -m proj7k.profiler -r " + q(SRC.replay) + " -b " + q(SRC.beatmap) + " --no-save --bundle --fatal-time " + Math.round(now + 1500);
+  };
+  window.__refreshCmd = refresh;
+  $("copyCmd").onclick = () => {
+    refresh(); $("cmd").select();
+    try { (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText($("cmd").value) : document.execCommand("copy"); } catch (e) { try { document.execCommand("copy"); } catch (e2) {} }
+    $("copyCmd").textContent = "Copied"; setTimeout(() => { $("copyCmd").textContent = "Copy command"; }, 1200);
+  };
+  $("cmdHard").onclick = () => { if (hotSpots.length) { jump(hotSpots[0].start - 1500); refresh(); } };
+}
+
 function updateHud() {
+  if (window.__refreshCmd && !playing) window.__refreshCmd();
   const st = stateAt(now);
   const c = st.c, tot = c.reduce((a, b) => a + b, 0);
   const pts = 300 * (c[0] + c[1]) + 200 * c[2] + 100 * c[3] + 50 * c[4];

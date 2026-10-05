@@ -12,10 +12,9 @@ from proj7k.parser import (
 )
 from proj7k.downscaler.mapper import TwoTierDanMapper, DanTarget
 from proj7k.downscaler.validator import DualGateValidator
-from proj7k.downscaler.pruner import WindowedPeakBatchPruner, PruningResult
+from proj7k.downscaler.pruner import ExcessLossPruner, PruningResult
 from proj7k.downscaler.pipeline import downscale_beatmap, DownscaleOptions, DownscaleResult
-from proj7k.strain import compute_dual_hand_strain
-from proj7k.radar import compute_technique_radar
+from proj7k.field import trace_beatmap
 
 
 def _build_dense_chordjack_beatmap(bpm: float = 290.0, measures: int = 16) -> Beatmap7K:
@@ -87,80 +86,91 @@ def _build_dense_stream_beatmap(bpm: float = 280.0, measures: int = 16) -> Beatm
     )
 
 
+def _stars(bm: Beatmap7K) -> float:
+    return trace_beatmap(bm).profile.total_stars
+
+
 def test_pruner_already_below_target_noop():
     bm = _build_dense_chordjack_beatmap(bpm=120.0, measures=4)
-    init_strain = compute_dual_hand_strain(bm)
 
-    pruner = WindowedPeakBatchPruner()
-    # Target strain higher than initial
-    target_strain = init_strain.p90_strain + 50.0
-    res = pruner.prune(bm, target_strain=target_strain)
+    res = ExcessLossPruner().prune(bm, target_sr=_stars(bm) + 2.0)
 
     assert isinstance(res, PruningResult)
-    assert res.iterations_run == 0
+    assert res.iterations_run == 0 and res.converged
     assert len(res.downscaled_beatmap.hit_objects) == len(bm.hit_objects)
+    assert res.final_star == res.initial_star
 
 
-def test_pruner_converges_to_target_strain():
+def test_pruner_lands_on_the_target_star_within_tolerance():
     bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=12)
-    init_strain = compute_dual_hand_strain(bm)
+    init = _stars(bm)
+    target = init * 0.75
 
-    # Set target to 75% of original P90 strain
-    target_strain = init_strain.p90_strain * 0.75
+    pruner = ExcessLossPruner(prune_ratio=0.20, max_iterations=20, tolerance=0.05)
+    res = pruner.prune(bm, target_sr=target)
 
-    pruner = WindowedPeakBatchPruner(prune_ratio=0.20, max_iterations=20)
-    res = pruner.prune(bm, target_strain=target_strain)
-
-    assert res.iterations_run > 0
-    assert res.final_p90_strain < init_strain.p90_strain
-    # Final P90 strain should converge close to target
-    assert res.final_p90_strain <= target_strain * 1.15
-    # Notes were removed monotonically
+    assert res.iterations_run > 0 and res.converged
+    assert res.final_star < init
+    # the engine's own star, read back from the pruned chart, is at the target: from above, within tolerance...
+    assert _stars(res.downscaled_beatmap) == pytest.approx(res.final_star)
+    assert res.final_star <= target * 1.05
+    # ...and the batches were halved on overshoot rather than blowing through it
+    assert res.final_star >= target * 0.85
     assert len(res.downscaled_beatmap.hit_objects) < len(bm.hit_objects)
+    assert [r.removed_in_batch for r in res.history] and all(r.passed_validation for r in res.history)
+
+
+def test_pruner_only_deletes_whole_notes_and_never_adds_any():
+    bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=8)
+    res = ExcessLossPruner().prune(bm, target_sr=_stars(bm) * 0.8)
+
+    original = {(h.column, round(h.time, 3)) for h in bm.hit_objects}
+    kept = {(h.column, round(h.time, 3)) for h in res.downscaled_beatmap.hit_objects}
+    assert kept < original
+    assert res.total_notes_removed == len(original) - len(kept)
 
 
 def test_end_to_end_downscale_chordjack_preservation():
-    # 9th/10th Dan Chordjack (~7.0★) downscaled to 7th Dan (~6.1★)
     bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=16)
-    orig_radar = compute_technique_radar(bm)
-    assert orig_radar.dominant_technique == "jack"
+    orig = trace_beatmap(bm).profile
+    target = DownscaleOptions(target_sr=orig.total_stars * 0.8, target_dan=None, prune_ratio=0.18, max_iterations=20)
 
-    opts = DownscaleOptions(target_dan="7th", prune_ratio=0.18, max_iterations=20)
-    result = downscale_beatmap(bm, opts)
+    result = downscale_beatmap(bm, target)
 
     assert isinstance(result, DownscaleResult)
-    assert result.target.target_dan == "7th"
-    # Dominant technique strictly conserved, as the difficulty engine reads it (the gate's own reading)
-    assert result.original_profile.dominant_skill == result.downscaled_profile.dominant_skill
+    assert result.target.target_sr == pytest.approx(orig.total_stars * 0.8)
+    # Dominant skill conserved, as the difficulty engine reads it (the gate's own reading)
     assert result.validation.dominant_conserved is True
-    # Cosine similarity >= 0.80
     assert result.validation.cosine_similarity >= 0.80
-    # Both gates passed
     assert result.validation.passed is True
-
-    # P90 strain and Star rating decreased
-    assert result.downscaled_strain.p90_strain < result.original_strain.p90_strain
-    assert result.downscaled_rating.star_rating < result.original_rating.star_rating
+    # The star the loop steered by is the star of the practice chart
+    assert result.downscaled_stars < result.original_stars
+    assert result.downscaled_stars == pytest.approx(result.pruning_result.final_star)
+    assert result.downscaled_stars <= result.target.target_sr * 1.05
     assert result.notes_removed > 0
 
     # Roundtrip .osu text check
-    dumped_osu = dump_osu_7k(result.downscaled_beatmap)
-    reparsed = parse_osu_7k(dumped_osu)
+    reparsed = parse_osu_7k(dump_osu_7k(result.downscaled_beatmap))
     assert len(reparsed.hit_objects) == len(result.downscaled_beatmap.hit_objects)
-    assert "[P-7th" in reparsed.version
+    assert "[P-" in reparsed.version
     assert "proj7k_downscaled" in reparsed.tags
 
 
+def test_end_to_end_downscale_by_dan_tier():
+    bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=16)
+    result = downscale_beatmap(bm, DownscaleOptions(target_dan="5th", max_iterations=20))
+
+    assert result.target.target_dan == "5th"
+    assert result.downscaled_stars <= result.target.target_sr * 1.05
+    assert "[P-5th" in result.downscaled_beatmap.version
+
+
 def test_end_to_end_downscale_stream_preservation():
-    # Stream/Speed map (~5.1★) downscaled to 2nd Dan (~4.1★)
     bm = _build_dense_stream_beatmap(bpm=280.0, measures=16)
-    orig_radar = compute_technique_radar(bm)
-    assert orig_radar.dominant_technique in ("stream", "speed")
+    orig = trace_beatmap(bm).profile
+    result = downscale_beatmap(bm, DownscaleOptions(target_sr=orig.total_stars * 0.8, target_dan=None, prune_ratio=0.18, max_iterations=20))
 
-    opts = DownscaleOptions(target_dan="2nd", prune_ratio=0.18, max_iterations=20)
-    result = downscale_beatmap(bm, opts)
-
-    assert result.downscaled_strain.p90_strain < result.original_strain.p90_strain
+    assert result.downscaled_stars < result.original_stars
     assert result.validation.cosine_similarity >= 0.80
     assert result.validation.dominant_conserved is True
     assert result.notes_removed > 0
@@ -168,8 +178,9 @@ def test_end_to_end_downscale_stream_preservation():
 
 def test_downbeat_and_chord_invariants_preserved():
     bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=10)
-    opts = DownscaleOptions(target_dan="5th", prune_ratio=0.25, max_iterations=20)
+    opts = DownscaleOptions(target_dan="2nd", prune_ratio=0.25, max_iterations=20)
     result = downscale_beatmap(bm, opts)
+    assert result.notes_removed > 0
 
     # Invariants verification:
     # 1. 1/1 measure downbeats must have at least 1 note

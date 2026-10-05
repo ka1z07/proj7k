@@ -10,8 +10,9 @@ Implements ADR-0012 & SPEC-P4.1-05 (ka1z07/proj7k#37):
    - Strictly excludes Jinjin Dan and other Dan test courses
 3. High-Strain Section Slice Extraction:
    - Extracts [t_fatal - 10s, t_fatal + 5s] window with rhythmic/audio buffers
-4. Three-Tier Targeted Practice Bundle:
-   - Derives Recovery (current capacity), Bridge (intermediate), and Push (original) tiers
+4. Three-Tier Targeted Practice Bundle (ADR-0021):
+   - Tiers are engine stars: Recovery is the player's own level in the skill (ADR-0020), Push the slice as it
+     is, Bridge halfway; each lower tier is made by the engine-native downscaler
    - Packages standalone .osz files and combined progression bundles
 """
 
@@ -31,13 +32,9 @@ from proj7k.features import extract_beatmap_features
 from proj7k.lazer.annotator import _normalize_tech_key, get_technique_collection_name
 from proj7k.lazer.bridge import DEFAULT_REALM_PATH, LazerBeatmapRecord, RealmBridgeClient
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint, dump_osu_7k, parse_osu_7k
-from proj7k.radar import (
-    RadarOptions,
-    TechniqueRadar,
-    compute_technique_radar,
-)
-from proj7k.rating import RatingOptions, synthesize_star_rating
-from proj7k.strain import StrainOptions, compute_dual_hand_strain
+from proj7k.engine.scale import stars_of
+from proj7k.engine.skills import SKILL_TECH_KEY
+from proj7k.field import trace_beatmap
 
 
 class CoachingStrategy(str, Enum):
@@ -467,8 +464,8 @@ def extract_high_strain_slice(
 class ProgressionTierResult:
     """Result for an individual tier in the practice bundle."""
     tier_name: str
-    target_strain: float
-    star_rating: float
+    target_sr: float          # the star the tier was made to land on
+    star_rating: float        # the star the engine reads off the tier's chart
     dan_tier: str
     beatmap: Beatmap7K
     osu_path: Optional[Path] = None
@@ -477,7 +474,7 @@ class ProgressionTierResult:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tier_name": self.tier_name,
-            "target_strain": round(self.target_strain, 2),
+            "target_sr": round(self.target_sr, 2),
             "star_rating": round(self.star_rating, 2),
             "dan_tier": self.dan_tier,
             "total_notes": len(self.beatmap.hit_objects),
@@ -493,7 +490,7 @@ class PracticeBundleResult:
     slice_start_ms: float
     slice_end_ms: float
     dominant_technique: str
-    original_strain: float
+    original_star: float      # the slice's own star: the Push tier
     tiers: Dict[str, ProgressionTierResult]
     combined_osz_path: Optional[Path] = None
 
@@ -503,10 +500,17 @@ class PracticeBundleResult:
             "slice_start_ms": round(self.slice_start_ms, 1),
             "slice_end_ms": round(self.slice_end_ms, 1),
             "dominant_technique": self.dominant_technique,
-            "original_strain": round(self.original_strain, 2),
+            "original_star": round(self.original_star, 2),
             "tiers": {k: v.to_dict() for k, v in self.tiers.items()},
             "combined_osz_path": str(self.combined_osz_path) if self.combined_osz_path else None,
         }
+
+
+#: Recovery sits at least this share below the slice's own star even for a player whose level is higher: a
+#: recovery tier that is not easier than the push is not one.
+RECOVERY_MAX_SHARE = 0.80
+#: Without a measured level, recovery is this share of the slice's star.
+RECOVERY_DEFAULT_SHARE = 0.70
 
 
 def generate_targeted_practice_bundle(
@@ -521,10 +525,11 @@ def generate_targeted_practice_bundle(
     buffer_after_ms: float = 5000.0,
 ) -> PracticeBundleResult:
     """
-    Extracts fatal section slice and generates Three-Tier Progression Bundle (ADR-0012):
-    - Recovery: Downscaled to player's stable capacity (or 70% strain) for 98%+ accuracy rebuilding.
-    - Bridge: Intermediate transition strain midpoint.
-    - Push: Original full-strain section slice for targeted breakthrough.
+    Extracts fatal section slice and generates Three-Tier Progression Bundle (ADR-0012, ADR-0021):
+    - Recovery: downscaled to the player's own level in the failing skill (`player_capacity`, the engine's unit,
+      from the profiler's response model), at most 80% of the slice, for 98%+ accuracy rebuilding.
+    - Bridge: the midpoint between Recovery and Push in stars.
+    - Push: the original slice, for targeted breakthrough.
     Packages standalone .osz files and combined progression bundle.
     """
     slice_start = max(0.0, fatal_time_ms - buffer_before_ms)
@@ -538,25 +543,21 @@ def generate_targeted_practice_bundle(
         buffer_after_ms=buffer_after_ms,
     )
 
-    # 2. Analyze slice baseline characteristics
-    slice_radar = compute_technique_radar(sliced_bm)
-    dom_tech = dominant_technique or slice_radar.dominant_technique
-    slice_strain_prof = compute_dual_hand_strain(sliced_bm)
-    push_strain = slice_strain_prof.p90_strain
-    push_sr = synthesize_star_rating(slice_radar, p90_strain=push_strain).star_rating
+    # 2. The slice as the engine reads it
+    slice_profile = trace_beatmap(sliced_bm).profile
+    dom_tech = dominant_technique or SKILL_TECH_KEY[slice_profile.dominant_skill]
+    push_sr = slice_profile.total_stars
     push_dan = estimate_canonical_dan(push_sr)
 
-    # 3. Determine strain targets for Recovery and Bridge tiers
+    # 3. Star targets for Recovery and Bridge
     if player_capacity is not None and player_capacity > 0:
-        # Recovery targets player's current capacity, ensuring at least 20% reduction if near peak
-        recovery_strain = min(player_capacity, push_strain * 0.80)
+        recovery_sr = min(stars_of(player_capacity), push_sr * RECOVERY_MAX_SHARE)
     else:
-        recovery_strain = push_strain * 0.70
+        recovery_sr = push_sr * RECOVERY_DEFAULT_SHARE
+    recovery_sr = max(1.0, min(recovery_sr, push_sr))
+    bridge_sr = (recovery_sr + push_sr) / 2.0
 
-    recovery_strain = max(1.0, recovery_strain)
-    bridge_strain = (recovery_strain + push_strain) / 2.0
-
-    # 4. Generate tiers via downscaler
+    # 4. Generate tiers
     # Push Tier (Original slice)
     push_bm = update_practice_metadata(
         sliced_bm,
@@ -567,62 +568,34 @@ def generate_targeted_practice_bundle(
     if "Metadata" in push_bm.extra_sections:
         push_bm.extra_sections["Metadata"]["Version"] = push_bm.version
 
-    # Bridge Tier
-    bridge_res = downscale_beatmap(
-        sliced_bm,
-        DownscaleOptions(
-            target_strain=bridge_strain,
-            dominant_skill=dom_tech,
-            prune_ratio=0.15,
-            max_iterations=20,
-        ),
-    )
-    bridge_bm = bridge_res.downscaled_beatmap
-    bridge_sr = bridge_res.downscaled_rating.star_rating
-    bridge_dan = estimate_canonical_dan(bridge_sr)
-    bridge_bm.version = f"[p-{bridge_dan} {dom_tech} Bridge] {beatmap.version} (Slice)"
-    if "Metadata" in bridge_bm.extra_sections:
-        bridge_bm.extra_sections["Metadata"]["Version"] = bridge_bm.version
+    def lower_tier(name: str, target_sr: float, prune_ratio: float, max_iterations: int) -> Tuple[Beatmap7K, float, str]:
+        res = downscale_beatmap(
+            sliced_bm,
+            DownscaleOptions(
+                target_dan=None, target_sr=target_sr, dominant_skill=dom_tech,
+                prune_ratio=prune_ratio, max_iterations=max_iterations,
+            ),
+        )
+        bm, sr = res.downscaled_beatmap, res.downscaled_stars
+        dan = estimate_canonical_dan(sr)
+        bm.version = f"[p-{dan} {dom_tech} {name}] {beatmap.version} (Slice)"
+        if "Metadata" in bm.extra_sections:
+            bm.extra_sections["Metadata"]["Version"] = bm.version
+        return bm, sr, dan
 
-    # Recovery Tier
-    rec_res = downscale_beatmap(
-        sliced_bm,
-        DownscaleOptions(
-            target_strain=recovery_strain,
-            dominant_skill=dom_tech,
-            prune_ratio=0.25,
-            max_iterations=25,
-        ),
-    )
-    rec_bm = rec_res.downscaled_beatmap
-    rec_sr = rec_res.downscaled_rating.star_rating
-    rec_dan = estimate_canonical_dan(rec_sr)
-    rec_bm.version = f"[p-{rec_dan} {dom_tech} Recovery] {beatmap.version} (Slice)"
-    if "Metadata" in rec_bm.extra_sections:
-        rec_bm.extra_sections["Metadata"]["Version"] = rec_bm.version
+    bridge_bm, bridge_actual, bridge_dan = lower_tier("Bridge", bridge_sr, 0.15, 20)
+    rec_bm, rec_actual, rec_dan = lower_tier("Recovery", recovery_sr, 0.25, 25)
 
     # 5. File persistence and .osz packaging if output_dir provided
     tier_results: Dict[str, ProgressionTierResult] = {
         "recovery": ProgressionTierResult(
-            tier_name="Recovery",
-            target_strain=recovery_strain,
-            star_rating=rec_sr,
-            dan_tier=rec_dan,
-            beatmap=rec_bm,
+            tier_name="Recovery", target_sr=recovery_sr, star_rating=rec_actual, dan_tier=rec_dan, beatmap=rec_bm,
         ),
         "bridge": ProgressionTierResult(
-            tier_name="Bridge",
-            target_strain=bridge_strain,
-            star_rating=bridge_sr,
-            dan_tier=bridge_dan,
-            beatmap=bridge_bm,
+            tier_name="Bridge", target_sr=bridge_sr, star_rating=bridge_actual, dan_tier=bridge_dan, beatmap=bridge_bm,
         ),
         "push": ProgressionTierResult(
-            tier_name="Push",
-            target_strain=push_strain,
-            star_rating=push_sr,
-            dan_tier=push_dan,
-            beatmap=push_bm,
+            tier_name="Push", target_sr=push_sr, star_rating=push_sr, dan_tier=push_dan, beatmap=push_bm,
         ),
     }
 
@@ -674,7 +647,7 @@ def generate_targeted_practice_bundle(
         slice_start_ms=slice_start,
         slice_end_ms=slice_end,
         dominant_technique=dom_tech,
-        original_strain=push_strain,
+        original_star=push_sr,
         tiers=tier_results,
         combined_osz_path=combined_osz_path,
     )
@@ -730,9 +703,9 @@ def format_bundle_report(bundle: PracticeBundleResult) -> str:
         f"Fatal Failure Time: {bundle.fatal_time_ms / 1000.0:.2f}s",
         f"Slice Window:       {bundle.slice_start_ms / 1000.0:.2f}s -> {bundle.slice_end_ms / 1000.0:.2f}s (-10s, +5s buffer)",
         f"Dominant Technique: {bundle.dominant_technique.replace('_', ' ').title()}",
-        f"Original Strain:    {bundle.original_strain:.2f}",
+        f"Slice Star Rating: {bundle.original_star:.2f}★",
         "Three-Tier Progression Hierarchy:",
-        "  Tier     | Strain | Star Rating | Dan  | Notes | Package (.osz)",
+        "  Tier     | Target | Star Rating | Dan  | Notes | Package (.osz)",
         "  ---------+--------+-------------+------+-------+------------------------------",
     ]
 
@@ -741,7 +714,7 @@ def format_bundle_report(bundle: PracticeBundleResult) -> str:
             t = bundle.tiers[t_key]
             pkg = t.osz_path.name if t.osz_path else "Generated"
             lines.append(
-                f"  {t.tier_name:<8} | {t.target_strain:>6.2f} | {t.star_rating:>9.2f}★ | {t.dan_tier:<4} | {len(t.beatmap.hit_objects):>5} | {pkg}"
+                f"  {t.tier_name:<8} | {t.target_sr:>5.2f}★ | {t.star_rating:>9.2f}★ | {t.dan_tier:<4} | {len(t.beatmap.hit_objects):>5} | {pkg}"
             )
 
     if bundle.combined_osz_path:
