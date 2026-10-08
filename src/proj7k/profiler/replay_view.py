@@ -71,7 +71,9 @@ def build_replay_view(
     frames = list(report.replay_frames if frames is None else frames)
     rate = report.clock_rate or 1.0
     align = report.alignment_result
-    windows = compute_mania_hit_windows(beatmap.overall_difficulty, clock_rate=rate)
+    mods = report.play_mods
+    od = beatmap.overall_difficulty if mods.od_override is None else mods.od_override
+    windows = compute_mania_hit_windows(od, clock_rate=rate, window_multiplier=mods.window_multiplier)
     D = field.total_D if field.total_D > 0 else 1.0
 
     # 1. the notes, each with what the player did to it and how hard the engine reads it

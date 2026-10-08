@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
 from proj7k.engine.scale import stars_of
-from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage
+from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage, snapshot_is_current
 from proj7k.field import TECH_KEYS
 
 
@@ -98,6 +98,8 @@ class MacroProfile:
     #: Snapshots in the window that the legacy strain engine wrote; their unit cannot be converted, so they
     #: are counted here and left out of everything above (ADR-0020 decision 4).
     legacy_excluded: int = 0
+    #: Snapshots of mod plays read before mods were honoured; re-importing the replays brings them back.
+    stale_excluded: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -117,6 +119,7 @@ class MacroProfile:
             "dimensions": {k: v.to_dict() for k, v in self.dimensions.items()},
             "trend_comparison": self.trend_comparison,
             "legacy_excluded": self.legacy_excluded,
+            "stale_excluded": self.stale_excluded,
         }
 
 
@@ -183,6 +186,8 @@ def aggregate_macro_profile(
 
     legacy_excluded = sum(1 for s in snapshots if s.summary.get("engine") != SNAPSHOT_ENGINE)
     snapshots = [s for s in snapshots if s.summary.get("engine") == SNAPSHOT_ENGINE]
+    stale_excluded = sum(1 for s in snapshots if not snapshot_is_current(s.summary))
+    snapshots = [s for s in snapshots if snapshot_is_current(s.summary)]
 
     total_matches = len(snapshots)
     cleared_matches = sum(1 for s in snapshots if not s.is_failed)
@@ -325,4 +330,5 @@ def aggregate_macro_profile(
         dimensions=dimensions,
         trend_comparison=trend_comparison,
         legacy_excluded=legacy_excluded,
+        stale_excluded=stale_excluded,
     )
