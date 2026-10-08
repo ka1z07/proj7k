@@ -156,6 +156,7 @@ class RealmBridgeClient:
             cwd=str(self.bridge_dir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         if proc.returncode != 0:
             raise RealmBridgeError(f"Failed to install Realm dependencies: {proc.stderr}")
@@ -335,6 +336,7 @@ class RealmBridgeClient:
                 input=input_data,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 check=False,
             )
         except FileNotFoundError as e:
