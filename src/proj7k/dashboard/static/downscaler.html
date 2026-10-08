@@ -18,12 +18,22 @@
 
     <div class="card">
       <h2>输入</h2>
-      <div class="field">
-        <label for="input">谱面：.osu 文件路径、文件夹（批量）、谱面 ID 或 osu! 谱面链接</label>
-        <input type="text" id="input" placeholder="例如 C:\Songs\xxx\map [Hard].osu，或 4061023">
+      <div class="choice">
+        <label><input type="radio" name="src" value="game" checked> 游戏当前谱面</label>
+        <label><input type="radio" name="src" value="manual"> 指定谱面</label>
       </div>
-      <div class="field">
-        <div class="drop" id="drop">或把 .osu 文件拖到这里 / 点击选择</div>
+      <div id="gameSrc" class="field">
+        <div id="gameLine"></div>
+        <span class="hint">跟随 osu!lazer：在游戏里换一张谱，这里就跟着换，不用复制路径。</span>
+      </div>
+      <div id="manualSrc" class="hidden">
+        <div class="field">
+          <label for="input">谱面：.osu 文件路径、文件夹（批量）、谱面 ID 或 osu! 谱面链接</label>
+          <input type="text" id="input" placeholder="例如 C:\Songs\xxx\map [Hard].osu，或 4061023">
+        </div>
+        <div class="field">
+          <div class="drop" id="drop">或把 .osu 文件拖到这里 / 点击选择</div>
+        </div>
       </div>
 
       <div class="row">
@@ -35,7 +45,7 @@
           </div>
         </div>
         <div class="field" id="danField">
-          <label for="dan">目标段位</label>
+          <label for="dan">目标段位 <span class="hint" id="danHint"></span></label>
           <select id="dan"></select>
         </div>
         <div class="field hidden" id="srField">
@@ -70,6 +80,59 @@
     const { el, $ } = P7;
     const panel = P7.jobPanel($("#job"));
     const drop = P7.dropZone($("#drop"), ".osu", (f) => { $("#input").disabled = !!f; });
+    const source = () => document.querySelector("input[name=src]:checked").value;
+    let gameChart = null;
+    let danTiers = [];
+    let danTouched = false;
+
+    function showSource() {
+      const game = source() === "game";
+      $("#gameSrc").classList.toggle("hidden", !game);
+      $("#manualSrc").classList.toggle("hidden", game);
+      refreshRunButton();
+    }
+    // Until the player picks a source, it follows the game: its chart when there is one, else a file of their own.
+    let sourceTouched = false;
+    function setSource(value) {
+      document.querySelector(`input[name=src][value=${value}]`).checked = true;
+      showSource();
+    }
+    document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => { sourceTouched = true; showSource(); }));
+    // Dropping a file anywhere on the page means "this one, not the game's".
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => {
+      if (e.target.closest && e.target.closest("#drop")) return;
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
+      if (f) { sourceTouched = true; setSource("manual"); drop.set(f); }
+    });
+
+    let running = false;
+    function refreshRunButton() {
+      $("#runBtn").disabled = running || (source() === "game" && !gameChart);
+    }
+
+    // A practice chart one tier below the game's chart, until the player picks a tier themselves.
+    function suggestDan() {
+      if (!gameChart || !danTiers.length) { $("#danHint").textContent = ""; return; }
+      const i = danTiers.findIndex((t) => t.name === gameChart.dan_tier);
+      if (i < 0) return;
+      const suggested = danTiers[Math.max(0, i - 1)].name;
+      if (!danTouched) $("#dan").value = suggested;
+      if (!srTouched) $("#sr").value = danTiers[Math.max(0, i - 1)].stars.toFixed(1);
+      $("#danHint").textContent = `（当前谱 ${gameChart.dan_tier}，建议 ${suggested}）`;
+    }
+    let srTouched = false;
+    $("#dan").addEventListener("change", () => { danTouched = true; });
+    $("#sr").addEventListener("input", () => { srTouched = true; });
+
+    P7.onGameChart((state) => {
+      gameChart = state.chart;
+      $("#gameLine").replaceChildren(P7.gameChartLine(state));
+      if (!sourceTouched) setSource(gameChart ? "game" : "manual");
+      if (source() === "game") suggestDan();
+      refreshRunButton();
+    });
 
     document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener("change", () => {
       const sr = document.querySelector('input[name=mode]:checked').value === "sr";
@@ -78,10 +141,12 @@
     }));
 
     P7.getJSON("/api/config").then((cfg) => {
+      danTiers = cfg.dan_tiers;
       cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: `${t.name}（${t.stars.toFixed(2)}★）` })));
       $("#dan").value = "7th";
       cfg.skills.forEach((k) => $("#skill").appendChild(el("option", { value: k, text: P7.skillName(k) })));
       $("#outDir").placeholder = `默认：${cfg.practice_dir}`;
+      suggestDan();
     });
 
     function chartCard(c) {
@@ -105,8 +170,10 @@
 
     $("#runBtn").onclick = async () => {
       const mode = document.querySelector('input[name=mode]:checked').value;
+      const fromGame = source() === "game";
       const params = {
-        input: $("#input").value,
+        // The game's chart goes by its MD5: osu!lazer finds it, with its audio and background for the .osz.
+        input: fromGame ? gameChart.md5_hash : $("#input").value,
         target_dan: mode === "dan" ? $("#dan").value : "",
         target_sr: mode === "sr" ? $("#sr").value : "",
         dominant_skill: $("#skill").value,
@@ -114,15 +181,17 @@
         package: $("#pkg").checked,
         sync_lazer: $("#syncLazer").checked,
       };
-      $("#runBtn").disabled = true;
+      running = true;
+      refreshRunButton();
       $("#jobCard").classList.remove("hidden");
       $("#results").replaceChildren();
       panel.reset();
       const job = await P7.startJob("downscale", params, {
-        uploads: drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
+        uploads: !fromGame && drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
       });
       panel.update(job);
-      $("#runBtn").disabled = false;
+      running = false;
+      refreshRunButton();
       if (job.status !== "done") { panel.showLog(); return; }
       const r = job.result;
       const nodes = r.charts.map(chartCard);

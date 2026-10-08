@@ -160,6 +160,18 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .stat .k { color: var(--text-muted); font-size: 0.72rem; }
 .stat .v { font-weight: 700; font-variant-numeric: tabular-nums; }
 
+.now-playing { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.now-playing .np-title { font-weight: 700; word-break: break-word; }
+.now-playing .np-meta { color: var(--text-muted); font-size: 0.82rem; }
+
+.choice { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.choice label {
+  display: inline-flex; gap: 6px; align-items: center; cursor: pointer; user-select: none;
+  border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 12px;
+}
+.choice label:has(input:checked) { border-color: var(--accent-blue); background: rgba(56, 189, 248, 0.12); }
+.choice input { accent-color: var(--accent-blue); }
+
 .hidden { display: none !important; }
 
 @media (max-width: 600px) {

@@ -439,3 +439,107 @@ def test_cli_config_follows_lazer_dir(tmp_path):
     assert cfg.db_path == tmp_path / "p.db"
     args = build_parser().parse_args(["--realm", str(tmp_path / "r" / "client.realm")])
     assert build_config(args).lazer_files_dir == tmp_path / "r" / "files"
+
+
+def test_the_games_current_chart_reaches_every_page(tmp_path):
+    async def _run():
+        s = _Server(tmp_path)
+        await s.server.start()
+        try:
+            assert json.loads((await s.get("/api/current"))[2]) == {"type": "game_chart", "chart": None, "unresolved": None}
+            async with s.ws() as ws:
+                await ws.recv()
+                # A chart dropped on the live page is not the game's: no game_chart for it.
+                await s.server.broadcast(s.server.engine.analyze_content(SAMPLE_OSU.read_text(encoding="utf-8")))
+                assert json.loads(await ws.recv())["type"] == "beatmap_update"
+
+                frame = s.server.engine.analyze_content(SAMPLE_OSU.read_text(encoding="utf-8"))
+                lazer = {"md5_hash": "m" * 32, "file_hash": "f" * 64, "osu_path": "/lazer/files/f/ff/fff"}
+                frame["metadata"] = {**frame["metadata"], "lazer": lazer}
+                await s.server.broadcast(frame)
+                assert json.loads(await ws.recv())["type"] == "beatmap_update"
+                msg = json.loads(await ws.recv())
+                assert msg["type"] == "game_chart" and msg["unresolved"] is None
+                chart = msg["chart"]
+                assert chart["md5_hash"] == "m" * 32 and chart["file_hash"] == "f" * 64
+                assert chart["title"] == frame["metadata"]["title"] and chart["dan_tier"] == frame["dan_tier"]
+                assert json.loads((await s.get("/api/current"))[2])["chart"] == chart
+
+                event = {"artist": "A", "title": "Not 7K", "difficulty": "4K", "creator": "M"}
+                await s.server.broadcast({"type": "error", "code": "beatmap_not_found", "message": "x", "event": event})
+                assert json.loads(await ws.recv())["type"] == "error"
+                msg = json.loads(await ws.recv())
+                assert msg == {"type": "game_chart", "chart": None, "unresolved": event}
+        finally:
+            await s.server.stop()
+
+    asyncio.run(_run())
+
+
+def test_profile_replay_of_the_games_current_chart(tmp_path, monkeypatch):
+    """The latest replay of the game's chart, by the library's own player, with the chart's music in the viewer."""
+    import hashlib
+
+    files = tmp_path / "lazer" / "files"
+    chart_hash, other_hash, audio_hash = "ab" * 32, "cd" * 32, "ef" * 32
+    mine_new, mine_old, theirs, other_chart = "11" * 32, "22" * 32, "33" * 32, "44" * 32
+
+    def store(h: str, data: bytes) -> Path:
+        path = files / h[0] / h[:2] / h
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return path
+
+    osu = store(chart_hash, SAMPLE_OSU.read_bytes())
+    store(other_hash, SAMPLE_OSU.read_bytes())
+    for h, player in ((mine_new, "Me"), (mine_old, "Me"), (theirs, "Watched"), (other_chart, "Me")):
+        store(h, _perfect_replay(osu, player))
+    store(audio_hash, b"ID3lazer-audio")
+    md5 = hashlib.md5(osu.read_bytes()).hexdigest()
+
+    class Stub:
+        def __init__(self, default_realm_path=None):
+            pass
+
+        def dump_7k_scores(self, realm_path=None, user=None, auto_setup=True):
+            assert user is None  # no player name given: the library's own player is worked out
+            return [
+                {"player_name": "Me", "beatmap_file_hash": chart_hash, "replay_file_hash": mine_old, "date": "2026-01-01T00:00:00Z", "title": "T", "difficulty_name": "D"},
+                {"player_name": "Me", "beatmap_file_hash": chart_hash, "replay_file_hash": mine_new, "date": "2026-03-01T00:00:00Z", "title": "T", "difficulty_name": "D"},
+                {"player_name": "Me", "beatmap_file_hash": other_hash, "replay_file_hash": other_chart, "date": "2026-04-01T00:00:00Z", "title": "U", "difficulty_name": "E"},
+                {"player_name": "Watched", "beatmap_file_hash": chart_hash, "replay_file_hash": theirs, "date": "2026-05-01T00:00:00Z", "title": "T", "difficulty_name": "D"},
+            ]
+
+        def locate_beatmap(self, online_id=None, file_hash=None, set_id=None, realm_path=None, auto_setup=True):
+            assert file_hash == md5
+            return {"title": "T", "artist": "A", "difficulty_name": "D", "osu_file_hash": chart_hash,
+                    "audio_file": {"filename": "song.ogg", "hash": audio_hash}, "files": []}
+
+    monkeypatch.setattr("proj7k.lazer.bridge.RealmBridgeClient", Stub)
+    monkeypatch.setattr("proj7k.downscaler.locator.RealmBridgeClient", Stub)
+
+    async def _run():
+        s = _Server(tmp_path)
+        s.config.realm_path.parent.mkdir(parents=True, exist_ok=True)
+        s.config.realm_path.write_bytes(b"")
+        await s.server.start()
+        try:
+            async with s.ws() as ws:
+                await ws.recv()
+                job, _ = await _run_job(ws, "profile_replay", {"source": "current", "beatmap_hash": chart_hash, "save": False})
+                assert job["status"] == "done", job["error"]
+                # Me's newest replay of this chart: not Me's newer one of another chart, nor a watched one.
+                assert job["result"]["report"]["player_name"] == "Me"
+                assert {a["name"] for a in job["artifacts"]} == {"T_D_2026-03-01.html", "T_D_2026-03-01.ogg"}
+                audio = next(a for a in job["artifacts"] if a["label"] == "音频")
+                assert audio["name"].endswith(".ogg")
+                assert (await s.get(audio["url"]))[2] == b"ID3lazer-audio"
+
+                job, _ = await _run_job(ws, "profile_replay", {"source": "current", "beatmap_hash": "99" * 32, "view": False, "save": False})
+                assert job["status"] == "failed" and "还没有这张谱面的回放" in job["error"]
+                job, _ = await _run_job(ws, "profile_replay", {"source": "current", "view": False})
+                assert job["status"] == "failed" and "当前谱面" in job["error"]
+        finally:
+            await s.server.stop()
+
+    asyncio.run(_run())

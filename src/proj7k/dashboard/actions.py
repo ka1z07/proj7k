@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 import re
 import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from proj7k.lazer.backup import DEFAULT_CACHE_DIR
 from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
@@ -161,7 +161,7 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
 
     source = _text(params, "input").strip('"')
     if not source:
-        raise ValueError("缺少输入谱面（.osu 路径、文件夹、谱面 ID 或链接）")
+        raise ValueError("缺少输入谱面（游戏当前谱面、.osu 路径、文件夹、谱面 ID 或链接）")
     target_dan = _text(params, "target_dan") or None
     target_sr = _float(params, "target_sr")
     if target_dan is None and target_sr is None:
@@ -241,6 +241,26 @@ def _report_summary(report) -> Dict[str, Any]:
     }
 
 
+def _lazer_audio(config: DashboardConfig, beatmap_path: Path) -> Optional[Tuple[Path, str]]:
+    """
+    The audio of a chart in osu!lazer's store, and the name the chart gives it (the store's files carry no name, so
+    no extension either). None when osu!lazer does not know the chart or has no audio for it.
+    """
+    import hashlib
+
+    from proj7k.downscaler.locator import locate_beatmap_in_lazer
+
+    try:
+        md5 = hashlib.md5(Path(beatmap_path).read_bytes()).hexdigest()
+        asset = locate_beatmap_in_lazer(md5, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
+    except Exception as e:
+        logger.debug(f"No audio from osu!lazer for {beatmap_path}: {e}")
+        return None
+    if asset is None or asset.audio_path is None or not asset.audio_path.is_file():
+        return None
+    return asset.audio_path, asset.audio_filename
+
+
 def _beatmap_title(report) -> str:
     bm = report.beatmap
     if bm is None:
@@ -249,7 +269,10 @@ def _beatmap_title(report) -> str:
 
 
 def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
-    """Diagnose one replay: from two files, or the player's N-th most recent 7K replay in the lazer library."""
+    """
+    Diagnose one replay: from two files, the player's N-th most recent 7K replay in the lazer library, or (`current`)
+    the N-th most recent replay of the chart the game has selected. No player name means the library's own player.
+    """
     from proj7k.parser import parse_osu_7k
     from proj7k.profiler.cli import build_practice_bundle, resolve_lazer_replay, run_ingestion
     from proj7k.profiler.coach import generate_coaching_recommendations
@@ -257,16 +280,26 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     from proj7k.profiler.storage import ProfilerStorage
 
     audio: Optional[Path] = None
-    if _text(params, "source") == "lazer":
-        player = _text(params, "player")
-        if not player:
-            raise ValueError("请填写玩家名")
-        found = resolve_lazer_replay(
-            player, realm_path=config.realm_path, files_dir=config.lazer_files_dir, index=_int(params, "index") or 0,
-        )
+    source = _text(params, "source")
+    if source in ("lazer", "current"):
+        # "current": the latest replay of the chart the game has selected (the page sends its file hash).
+        chart_hash = _text(params, "beatmap_hash") if source == "current" else ""
+        if source == "current" and not chart_hash:
+            raise ValueError("还没有检测到游戏里的当前谱面：在 osu!lazer 里选一张 7K 谱")
+        try:
+            found = resolve_lazer_replay(
+                _text(params, "player") or None, realm_path=config.realm_path, files_dir=config.lazer_files_dir,
+                index=_int(params, "index") or 0, beatmap_file_hash=chart_hash or None,
+            )
+        except LookupError as e:
+            if chart_hash:
+                raise LookupError(f"osu!lazer 里还没有这张谱面的回放，先打一局再来（{e}）") from e
+            raise
         replay_path, beatmap_path = found["replay"], found["beatmap"]
         label = _safe_label(f"{found['title']}_{found['difficulty_name']}_{found['date'][:10]}")
-        logger.info(f"Latest lazer replay: {found['title']} [{found['difficulty_name']}] {found['date'][:19]}")
+        logger.info(
+            f"Latest lazer replay of {found['player_name']}: {found['title']} [{found['difficulty_name']}] {found['date'][:19]}"
+        )
     else:
         replay_path = _path(params, "replay", "回放文件")
         beatmap_path = _path(params, "beatmap", "谱面文件")
@@ -274,8 +307,14 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
     logger.info("Aligning the replay against the chart and running the diagnosis...")
     report = run_ingestion(replay_path, beatmap_path)
-    if _text(params, "source") != "lazer":
+    audio_name = ""
+    if source in ("lazer", "current"):
+        found_audio = _lazer_audio(config, Path(beatmap_path)) if _flag(params, "view", True) else None
+        if found_audio is not None:
+            audio, audio_name = found_audio
+    else:
         audio = find_audio(Path(beatmap_path), report.beatmap.audio_filename if report.beatmap else "")
+        audio_name = audio.name if audio is not None else ""
 
     saved = None
     if _flag(params, "save", True):
@@ -295,7 +334,7 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         view_audio = None
         if audio is not None and audio.is_file():
             # The page references its audio relatively; a copy beside it keeps that link valid when served.
-            view_audio = view_dir / f"{label}{audio.suffix.lower()}"
+            view_audio = view_dir / f"{label}{Path(audio_name).suffix.lower() or '.mp3'}"
             if not view_audio.exists():
                 shutil.copyfile(audio, view_audio)
         view = write_replay_view(

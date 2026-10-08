@@ -9,6 +9,11 @@ ADR-0024. One port serves every page and one WebSocket carries both the live rad
 - `open_artifact {id, index, reveal?}` hands a job's output to the desktop: an .osz opens in osu!lazer (its import),
   `reveal` opens the folder holding it. Only registered outputs can be opened, by index.
 
+`game_chart {chart, unresolved}` goes to every client whenever the game selects another chart: `chart` is the 7K chart
+osu!lazer has selected (title, stars, dan, and where it is in the library), `unresolved` the selection the live index
+could not find (not 7K, or not in the library yet). The pages preselect it as the downscaler's input and the profiler's
+replay source. `/api/current` answers the same.
+
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
 `/live`, `/sync`, `/downscaler`, `/profiler` are its pages, `/api/*` is read-only state, and
 `/files/<job>/<index>/<name>` serves a job's registered outputs.
@@ -85,6 +90,7 @@ class DashboardServer(LiveServer):
         self.jobs.notify = self._notify_from_thread
         self.opener = opener
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._game_chart: Dict[str, Any] = {"type": "game_chart", "chart": None, "unresolved": None}
         # Every page and asset is read once: the set of servable static paths is fixed at start.
         self._static: Dict[str, Tuple[bytes, str]] = {}
         for page_path, name in PAGES.items():
@@ -178,6 +184,8 @@ class DashboardServer(LiveServer):
                 return self._json_response(self._players())
             except Exception as e:
                 return self._json_response({"players": [], "error": str(e)})
+        if path == "/api/current":
+            return self._json_response(self._game_chart)
         if path == "/api/jobs":
             return self._json_response({"jobs": [j.to_dict() for j in self.jobs.list()]})
         if path.startswith("/api/jobs/"):
@@ -286,4 +294,32 @@ class DashboardServer(LiveServer):
                 )
             return
         await super().broadcast(frame)
+        game_chart = self._game_chart_frame(frame)
+        if game_chart is not None:
+            self._game_chart = game_chart
+            await super().broadcast(game_chart)
+
+    @staticmethod
+    def _game_chart_frame(frame: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """The `game_chart` frame a live frame implies: only the game's own selections count, not a dropped file."""
+        if frame.get("type") == "beatmap_update":
+            meta = frame.get("metadata") or {}
+            lazer = meta.get("lazer")
+            if not lazer:
+                return None
+            return {"type": "game_chart", "unresolved": None, "chart": {
+                "title": meta.get("title", ""),
+                "artist": meta.get("artist", ""),
+                "creator": meta.get("creator", ""),
+                "version": meta.get("version", ""),
+                "star_rating": round(float(frame.get("star_rating") or 0.0), 3),
+                "dan_tier": frame.get("dan_tier"),
+                "dominant_technique": meta.get("dominant_technique"),
+                "total_notes": meta.get("total_notes"),
+                "duration_seconds": meta.get("duration_seconds"),
+                **lazer,
+            }}
+        if frame.get("type") == "error" and frame.get("code") == "beatmap_not_found":
+            return {"type": "game_chart", "chart": None, "unresolved": frame.get("event")}
+        return None
 

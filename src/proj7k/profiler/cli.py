@@ -525,16 +525,22 @@ def run_batch_ingestion(
 
 
 def resolve_lazer_replay(
-    player_name: str,
+    player_name: Optional[str],
     realm_path: Optional[Path | str] = None,
     files_dir: Optional[Path | str] = None,
     index: int = 0,
     client: Any = None,
+    beatmap_file_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     The player's `index`-th most recent 7K replay in the osu!lazer library, as its replay and beatmap files
-    in lazer's content-addressed store: `{"replay": Path, "beatmap": Path, "title", "difficulty_name", "date"}`.
+    in lazer's content-addressed store: `{"replay": Path, "beatmap": Path, "title", "difficulty_name", "date",
+    "player_name"}`. With `beatmap_file_hash`, only replays of that chart count. Without a player name, the player
+    is the one with the most 7K replays in the library: the person whose game it is, not a leaderboard replay they
+    watched.
     """
+    from collections import Counter
+
     from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
 
     target_realm = Path(realm_path) if realm_path else DEFAULT_REALM_PATH
@@ -544,12 +550,21 @@ def resolve_lazer_replay(
             raise FileNotFoundError(f"osu!lazer realm database not found at {target_realm}")
         client = RealmBridgeClient(default_realm_path=target_realm)
     scores = [
-        s for s in client.dump_7k_scores(realm_path=target_realm, user=player_name)
+        s for s in client.dump_7k_scores(realm_path=target_realm, user=player_name or None)
         if s.get("beatmap_file_hash") and s.get("replay_file_hash")
     ]
+    if not player_name:
+        counts = Counter(s.get("player_name") or "" for s in scores)
+        if not counts:
+            raise LookupError("the osu!lazer library has no 7K replays")
+        player_name = counts.most_common(1)[0][0]
+        scores = [s for s in scores if (s.get("player_name") or "") == player_name]
+    if beatmap_file_hash:
+        scores = [s for s in scores if s["beatmap_file_hash"] == beatmap_file_hash]
     scores.sort(key=lambda s: s.get("date", ""), reverse=True)
     if not 0 <= index < len(scores):
-        raise LookupError(f"{player_name!r} has {len(scores)} 7K replay(s) in the library; no index {index}")
+        what = "replay(s) of this chart" if beatmap_file_hash else "7K replay(s)"
+        raise LookupError(f"{player_name!r} has {len(scores)} {what} in the library; no index {index}")
     item = scores[index]
 
     def store_path(h: str) -> Path:
@@ -561,6 +576,7 @@ def resolve_lazer_replay(
     return {
         "replay": replay, "beatmap": beatmap, "title": item.get("title", ""),
         "difficulty_name": item.get("difficulty_name", ""), "date": item.get("date", ""),
+        "player_name": item.get("player_name") or player_name,
     }
 
 

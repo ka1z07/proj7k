@@ -205,7 +205,13 @@ class LiveSessionCoordinator:
             # 3. Analyze chart
             try:
                 frame = self.engine.analyze_file(osu_file)
-                frame["metadata"]["realm_id"] = record.id
+                # Where the game's chart lives in the library, so the dashboard can hand it to the downscaler and the
+                # profiler. A fresh dict: the engine's cache shares the metadata among identical charts.
+                frame["metadata"] = {
+                    **frame["metadata"],
+                    "realm_id": record.id,
+                    "lazer": {"md5_hash": record.md5_hash, "file_hash": record.file_hash, "osu_path": str(osu_file)},
+                }
                 await self.server.broadcast(frame)
                 await self.server.broadcast(reset_clock_frame)
                 return frame

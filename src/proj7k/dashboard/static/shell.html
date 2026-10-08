@@ -27,6 +27,7 @@
     .status { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: var(--text-muted); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); display: inline-block; margin-right: 6px; }
     .dot.on { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .game-state { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
     .frames { flex: 1; position: relative; }
     .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-dark); }
   </style>
@@ -41,6 +42,7 @@
       <a href="#profiler" data-page="profiler">回放与画像</a>
     </nav>
     <div class="status">
+      <span id="gameState" class="game-state" title="osu!lazer 里当前选中的谱面"></span>
       <span id="lazerState" title="osu!lazer 数据库状态"></span>
       <span id="jobState"></span>
       <span><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
@@ -88,6 +90,14 @@
       if (j.status === "queued" || j.status === "running") active.set(j.id, j); else active.delete(j.id);
       renderJobs();
       if (!["queued", "running"].includes(j.status) && j.kind.startsWith("sync")) refreshLazer();
+    });
+
+    // The game's current chart, which the downscaler and profiler pages preselect.
+    P7.onGameChart((state) => {
+      const node = document.getElementById("gameState");
+      const c = state.chart;
+      node.textContent = c ? `♪ ${c.title} [${c.version}] · ${Number(c.star_rating).toFixed(2)}★ ${c.dan_tier || ""}` : "";
+      node.title = c ? `osu!lazer 当前谱面：${P7.chartName(c)}` : "osu!lazer 里当前选中的谱面";
     });
 
     async function refreshLazer() {

@@ -37,6 +37,7 @@ from proj7k.downscaler.pipeline import (
     downscale_beatmap,
 )
 from proj7k.downscaler.locator import (
+    MD5_PATTERN,
     ResolvedBeatmapAsset,
     fetch_beatmap_from_web,
     locate_beatmap_in_lazer,
@@ -585,7 +586,8 @@ def run_downscale(
     lock_path: Optional[Path] = None,
 ) -> DownscaleRun:
     """
-    Downscale `input_ref` (an .osu file, a directory of them, or an osu! URL / beatmap ID), write the practice
+    Downscale `input_ref` (an .osu file, a directory of them, an osu! URL / beatmap ID, or the MD5 of a chart in
+    the osu!lazer library), write the practice
     charts, package them as .osz unless told not to, and optionally sync them into osu!lazer. The CLI and the
     dashboard both run this; a failure that stops the run comes back as `error`.
     """
@@ -599,7 +601,7 @@ def run_downscale(
         input_str.startswith("http://")
         or input_str.startswith("https://")
         or input_str.isdigit()
-        or (not input_path.exists() and "osu.ppy.sh" in input_str)
+        or (not input_path.exists() and ("osu.ppy.sh" in input_str or MD5_PATTERN.match(input_str) is not None))
     )
 
     if is_url_or_id:
@@ -616,6 +618,8 @@ def run_downscale(
                     beatmap_files = [web_path]
             if not beatmap_files:
                 return DownscaleRun(error=f"Could not locate beatmap for '{input_str}' in osu!lazer database or web.")
+        if resolved_asset is not None:
+            logger.info(f"Found in osu!lazer: {resolved_asset.artist} - {resolved_asset.title} [{resolved_asset.difficulty_name}]")
     else:
         if not input_path.exists():
             return DownscaleRun(error=f"Input path does not exist: '{input_path}'")
