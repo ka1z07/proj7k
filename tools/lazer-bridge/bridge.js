@@ -44,9 +44,18 @@ function parseArgs() {
     }
 
     if (!realmPath) {
-        // Fallback default osu!lazer path on macOS
-        const homeDir = process.env.HOME || '';
-        realmPath = path.join(homeDir, 'Library', 'Application Support', 'osu', 'client.realm');
+        // Fallback: osu!lazer's default data directory on this platform
+        // (the Python client always passes --realm, resolved by proj7k.lazer.paths).
+        const homeDir = require('os').homedir();
+        let lazerDir;
+        if (process.platform === 'darwin') {
+            lazerDir = path.join(homeDir, 'Library', 'Application Support', 'osu');
+        } else if (process.platform === 'win32') {
+            lazerDir = path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'osu');
+        } else {
+            lazerDir = path.join(process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share'), 'osu');
+        }
+        realmPath = path.join(lazerDir, 'client.realm');
     }
 
     return { command, realmPath, onlineId, fileHash, setId, userName };

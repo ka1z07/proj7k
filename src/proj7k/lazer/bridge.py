@@ -10,8 +10,10 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k.lazer.paths import LAZER_DIR
 
-DEFAULT_REALM_PATH = Path.home() / "Library" / "Application Support" / "osu" / "client.realm"
+
+DEFAULT_REALM_PATH = LAZER_DIR / "client.realm"
 DEFAULT_BRIDGE_DIR = Path(__file__).resolve().parents[3] / "tools" / "lazer-bridge"
 
 

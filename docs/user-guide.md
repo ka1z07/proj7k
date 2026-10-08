@@ -100,7 +100,8 @@ PYTHONPATH=src python3 -m proj7k.live --open
 ```bash
 PYTHONPATH=src python3 -m proj7k.sync
 ```
-- 程序会自动在 macOS (`~/Library/Application Support/osu`)、Windows (`%APPDATA%/osu`) 或 Linux 标准路径下寻址您的曲库与数据库。
+- 程序会自动在 macOS (`~/Library/Application Support/osu`)、Windows (`%APPDATA%\osu`) 或 Linux (`$XDG_DATA_HOME/osu`，默认 `~/.local/share/osu`) 下寻址您的曲库与数据库；若在游戏内迁移过数据目录，会跟随该目录下 `storage.ini` 的 `FullPath`。
+- Flatpak 版 lazer 的数据在沙箱目录（通常是 `~/.var/app/sh.ppy.osu/data/osu`），需用 `--realm`、`--files-dir` 手动指定。
 - 采用双层缓存与多进程并发提取，首次同步后建立缓存，后续新增图秒级处理。
 
 #### Step 3: 一键彻底还原（可选）

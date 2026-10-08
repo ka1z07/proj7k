@@ -2,7 +2,9 @@
 Tests for POSIX File Lock Probe and Safe Flush Window (Ticket 6 / SPEC-P2.3-03).
 """
 
-import fcntl
+import pytest
+
+fcntl = pytest.importorskip("fcntl")  # the tests simulate the game with flock(), POSIX only
 import os
 from pathlib import Path
 import threading

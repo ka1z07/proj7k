@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -206,6 +207,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def open_with_system_handler(path: Path) -> None:
+    """Hand a file to the desktop's default handler (osu!lazer registers itself for .osz)."""
+    if sys.platform == "win32":
+        os.startfile(str(path))
+    elif sys.platform == "darwin":
+        subprocess.run(["open", str(path)], check=False)
+    else:
+        subprocess.run(["xdg-open", str(path)], check=False)
 
 
 def sanitize_filename(filename: str) -> str:
@@ -704,16 +715,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # Synchronization with osu!lazer if requested
     sync_result: Optional[LazerPracticeSyncResult] = None
     if args.sync_lazer and not args.dry_run:
-        # Trigger native OS import if on macOS (Q3 - A)
-        if sys.platform == "darwin" and osz_map:
-            for osz_file in osz_map.values():
-                if osz_file.exists():
-                    logger.info(f"Triggering osu!lazer native import via system open: {osz_file.name}")
-                    try:
-                        import subprocess
-                        subprocess.run(["open", str(osz_file)], check=False)
-                    except Exception as e:
-                        logger.warning(f"Failed to trigger system open for {osz_file}: {e}")
+        # Trigger native OS import through the .osz file association (Q3 - A)
+        for osz_file in osz_map.values():
+            if osz_file.exists():
+                logger.info(f"Triggering osu!lazer native import via system open: {osz_file.name}")
+                try:
+                    open_with_system_handler(osz_file)
+                except Exception as e:
+                    logger.warning(f"Failed to trigger system open for {osz_file}: {e}")
 
         sync_result = sync_practice_beatmaps_to_lazer(
             results=[r for r, _, _ in results],
