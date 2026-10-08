@@ -1,14 +1,39 @@
 """
-POSIX File Lock Probe and Safe Flush Window for osu!lazer client.realm.
+File Lock Probe and Safe Flush Window for osu!lazer client.realm.
 
 Implements SPEC-P2.3-03 / ADR-0009.
+
+Realm Core holds a shared lock on client.realm.lock for as long as any process has the
+database open: flock() on macOS and Linux, LockFileEx() on the first byte on Windows. Taking
+the matching exclusive lock without blocking therefore succeeds only while osu!lazer is closed.
 """
 
-import fcntl
 import os
+import sys
 from pathlib import Path
 import time
 from typing import Optional, Union
+
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _try_exclusive_lock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _try_exclusive_lock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
 
 
 class LockBusyError(RuntimeError):
@@ -18,7 +43,7 @@ class LockBusyError(RuntimeError):
 
 class SafeFlushWindow:
     """
-    Context manager that acquires and holds an exclusive POSIX lock on client.realm.lock.
+    Context manager that acquires and holds an exclusive lock on client.realm.lock.
     Ensures safe atomic write transactions without conflicting with a running osu!lazer instance.
     """
 
@@ -50,7 +75,7 @@ class SafeFlushWindow:
         deadline = time.time() + self.timeout_s
         while True:
             try:
-                fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _try_exclusive_lock(self._file.fileno())
                 self.is_acquired = True
                 return self
             except (BlockingIOError, OSError):
@@ -76,7 +101,7 @@ class SafeFlushWindow:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._file and self.is_acquired:
             try:
-                fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+                _unlock(self._file.fileno())
             except OSError:
                 pass
             finally:

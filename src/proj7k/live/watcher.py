@@ -12,9 +12,11 @@ from pathlib import Path
 import re
 from typing import Any, Awaitable, Callable, List, Optional
 
+from proj7k.lazer.paths import LAZER_DIR
+
 logger = logging.getLogger("proj7k.live.watcher")
 
-DEFAULT_LOGS_DIR = Path.home() / "Library" / "Application Support" / "osu" / "logs"
+DEFAULT_LOGS_DIR = LAZER_DIR / "logs"
 
 # Regex matching working beatmap update in osu!lazer logs:
 # Canonical osu!lazer format: "Game-wide working beatmap updated to Artist - Title (Creator) [Difficulty]"
