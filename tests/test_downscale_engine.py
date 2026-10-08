@@ -11,7 +11,7 @@ from proj7k.parser import (
     dump_osu_7k,
 )
 from proj7k.downscaler.mapper import TwoTierDanMapper, DanTarget
-from proj7k.downscaler.validator import DualGateValidator
+from proj7k.downscaler.validator import DualGateValidator, longest_new_silence
 from proj7k.downscaler.pruner import ExcessLossPruner, PruningResult
 from proj7k.downscaler.pipeline import downscale_beatmap, DownscaleOptions, DownscaleResult
 from proj7k.field import trace_beatmap
@@ -192,3 +192,84 @@ def test_downbeat_and_chord_invariants_preserved():
             if abs(ho.time - t_downbeat) <= 3.0
         ]
         assert len(notes_at_db) >= 1, f"Measure {m} downbeat at {t_downbeat}ms was emptied!"
+
+
+# --- free mode: the target difficulty without the dominant technique ------------------------------------------
+
+
+def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_mode_reaches_it():
+    bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=12)
+    target = _stars(bm) * 0.6
+
+    kept = downscale_beatmap(bm, DownscaleOptions(target_sr=target, target_dan=None))
+    # Keeping the chordjack, the loop runs out of deletions the dual gate allows well above the target...
+    assert kept.mode == "technique" and kept.pruning_result.stopped_by_validation
+    assert kept.downscaled_stars > target * 1.05
+    assert kept.suggest_free_mode is True and kept.to_dict()["suggest_free_mode"] is True
+
+    free = downscale_beatmap(bm, DownscaleOptions(target_sr=target, target_dan=None, preserve_technique=False))
+    # ...and free mode, which lets the technique go, lands on it.
+    assert free.mode == "free" and free.to_dict()["mode"] == "free"
+    assert target * 0.85 <= free.downscaled_stars <= target * 1.05
+    assert free.suggest_free_mode is False
+    assert free.validation.passed is True and free.validation.details["preserve_technique"] is False
+    # Free mode keeps no dominant skill, so the practice chart is not labelled with one.
+    assert free.downscaled_beatmap.version.startswith("[P-") and "jack" not in free.downscaled_beatmap.version
+    assert not any(t.startswith("dominant_") for t in free.downscaled_beatmap.tags.split())
+
+
+def test_free_mode_still_keeps_the_chart_reasonable():
+    bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=12)
+    free = downscale_beatmap(bm, DownscaleOptions(target_sr=_stars(bm) * 0.6, target_dan=None, preserve_technique=False))
+    out = free.downscaled_beatmap
+
+    # Pure deletion, every downbeat still sounded, hands in balance, no silence opened.
+    original = {(h.column, round(h.time, 3)) for h in bm.hit_objects}
+    assert {(h.column, round(h.time, 3)) for h in out.hit_objects} < original
+    measure_len = 60000.0 / 290.0 * 4.0
+    for m in range(12):
+        assert any(abs(h.time - m * measure_len) <= 3.0 for h in out.hit_objects)
+    left, right = free.bimanual_flux_ratio
+    assert 0.40 <= left <= 0.60
+    assert longest_new_silence(bm, out) == (0.0, 0.0)
+
+
+def test_a_chart_already_at_the_target_suggests_nothing():
+    bm = _build_dense_chordjack_beatmap(bpm=120.0, measures=4)
+    res = downscale_beatmap(bm, DownscaleOptions(target_sr=_stars(bm) + 2.0, target_dan=None))
+    assert res.suggest_free_mode is False
+
+
+def _quarter_notes(measures: int, skip=()) -> Beatmap7K:
+    beat = 500.0
+    return Beatmap7K(
+        title="t", artist="a", creator="c", version="v",
+        hit_objects=[
+            HitObject(column=b % 7, time=b * beat, note_type=NoteType.RICE)
+            for b in range(measures * 4) if b not in skip
+        ],
+        timing_points=[TimingPoint(time=0.0, beat_length=beat, meter=4, uninherited=True)],
+    )
+
+
+def test_longest_new_silence_allows_a_measure_and_flags_more():
+    original = _quarter_notes(6)
+    assert longest_new_silence(original, original) == (0.0, 0.0)
+    # Emptying one measure's worth of beats is allowed: the gap is the beat that was there plus a measure.
+    assert longest_new_silence(original, _quarter_notes(6, skip=range(5, 9))) == (0.0, 0.0)
+    # Two measures is not; the silence is reported where it opens.
+    at, excess = longest_new_silence(original, _quarter_notes(6, skip=range(5, 13)))
+    assert at == 2000.0 and excess == pytest.approx(2000.0)
+
+
+def test_free_mode_validator_ignores_the_technique_but_not_a_new_silence():
+    original = _quarter_notes(6)
+    silenced = _quarter_notes(6, skip=range(5, 13))
+
+    technique = DualGateValidator().validate(original, silenced)
+    free = DualGateValidator(preserve_technique=False).validate(original, silenced)
+    assert free.passed is False and "silence" in free.details["gate2_violations"][0]
+    assert free.cosine_similarity == pytest.approx(technique.cosine_similarity)
+
+    thinned = _quarter_notes(6, skip=range(1, 24, 2))
+    assert DualGateValidator(preserve_technique=False).validate(original, thinned).passed is True

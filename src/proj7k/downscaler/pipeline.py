@@ -5,6 +5,12 @@ Provides the core Python interface:
 downscale_beatmap(beatmap: Beatmap7K, options: Optional[DownscaleOptions] = None) -> DownscaleResult
 
 The loop steers by the spec-v0.2 engine's own star rating (ADR-0021); there is no second scale.
+
+Two modes. The default keeps the chart's dominant technique (the dual gate). Free mode
+(`preserve_technique=False`) lets the technique go and only chases the target star; the chart still has to be
+reasonable: pure deletion, the metric skeleton, hand balance, and no deletion opening a silence of more than a
+measure. When the default mode cannot reach the target, the result says that free mode might
+(`suggest_free_mode`).
 """
 
 from dataclasses import dataclass, field
@@ -34,6 +40,8 @@ class DownscaleOptions:
     tolerance: float = 0.05
     window_s: float = 1.0
     min_cosine_similarity: float = 0.80
+    #: Keep the dominant technique (the dual gate); False is free mode, which only chases the target star.
+    preserve_technique: bool = True
 
 
 @dataclass(frozen=True)
@@ -53,6 +61,13 @@ class DownscaleResult:
     removal_ratio: float
     bimanual_flux_ratio: Tuple[float, float]
     warnings: List[str] = field(default_factory=list)
+    preserve_technique: bool = True
+    #: The technique-preserving loop stopped above the target: free mode can take what it would not.
+    suggest_free_mode: bool = False
+
+    @property
+    def mode(self) -> str:
+        return "technique" if self.preserve_technique else "free"
 
     @property
     def original_stars(self) -> float:
@@ -64,6 +79,8 @@ class DownscaleResult:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "mode": self.mode,
+            "suggest_free_mode": self.suggest_free_mode,
             "target": self.target.to_dict(),
             "notes_removed": self.notes_removed,
             "removal_ratio": round(self.removal_ratio, 4),
@@ -93,12 +110,16 @@ def downscale_beatmap(
     - Metric skeleton protection (1/1 downbeats and chord bases)
     - Bimanual striking flux balance guidance towards [45%, 55%]
     - Closed-loop excess-loss pruning on the engine's own star
-    - Dual-gate technique preservation (skill-stars cosine similarity >= 0.80 & dominant skill preserved)
+    - Dual-gate technique preservation (skill-stars cosine similarity >= 0.80 & dominant skill preserved),
+      or in free mode only playability (see the module docstring)
     """
     if options is None:
         options = DownscaleOptions()
 
-    validator = DualGateValidator(min_cosine_similarity=options.min_cosine_similarity)
+    validator = DualGateValidator(
+        min_cosine_similarity=options.min_cosine_similarity,
+        preserve_technique=options.preserve_technique,
+    )
     orig_feat = extract_beatmap_features(beatmap)
     orig_profile = validator.profile_of(beatmap)
 
@@ -121,19 +142,27 @@ def downscale_beatmap(
     )
     pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr, dominant_skill=dom_skill)
     warnings: List[str] = list(pruning_res.warnings)
+    # Only when the technique gate is what stopped the loop: free mode lifts that gate and nothing else.
+    suggest_free_mode = options.preserve_technique and pruning_res.stopped_by_validation and (
+        pruning_res.final_star > target.target_sr * (1.0 + options.tolerance)
+    )
 
     # Derivative practice metadata: the original's identity, the target tier and the dominant skill's tag
+    # (free mode keeps no dominant skill, so its practice chart carries none)
     orig_md5 = beatmap.md5 or hashlib.md5(dump_osu_7k(beatmap).encode("utf-8")).hexdigest()
     practice_bm = update_practice_metadata(
         pruning_res.downscaled_beatmap,
         target_dan=target.target_dan,
         original_md5=orig_md5,
-        dominant_skill=SKILL_TECH_KEY[orig_profile.dominant_skill],
+        dominant_skill=SKILL_TECH_KEY[orig_profile.dominant_skill] if options.preserve_technique else None,
     )
 
     validation_res = validator.validate(beatmap, practice_bm, target=target)
     if not validation_res.passed:
-        warnings.append("Technique preservation validation reported non-conforming metrics.")
+        warnings.append(
+            "Technique preservation validation reported non-conforming metrics."
+            if options.preserve_technique else "Playability validation reported non-conforming metrics."
+        )
 
     notes_removed = len(beatmap.hit_objects) - len(practice_bm.hit_objects)
     return DownscaleResult(
@@ -150,4 +179,6 @@ def downscale_beatmap(
         removal_ratio=notes_removed / max(1, len(beatmap.hit_objects)),
         bimanual_flux_ratio=balancer.compute_flux_ratio(practice_bm.hit_objects),
         warnings=warnings,
+        preserve_technique=options.preserve_technique,
+        suggest_free_mode=suggest_free_mode,
     )

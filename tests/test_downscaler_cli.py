@@ -393,3 +393,43 @@ def test_lazer_practice_sync_stamps_the_difficulty_engines_stars_not_the_legacy_
     (update,) = bridge.apply_batch_update.call_args.kwargs["updates"]
     assert update.star_rating == 6.55
     assert "dominant_stream" in update.tags and "dan_7th" in update.tags
+
+
+def _create_chordjack_osu_file(path: Path) -> Path:
+    """A 290 BPM chordjack the technique-keeping loop cannot take far down (see test_downscale_engine)."""
+    step_ms = 60000.0 / 290.0 / 2.0
+    patterns = ([0, 2, 4], [0, 3, 5], [1, 3, 6], [1, 4, 6])
+    hit_objects = [
+        HitObject(column=c, time=step * step_ms, note_type=NoteType.RICE)
+        for step in range(12 * 8) for c in patterns[step % 4]
+    ]
+    bm = Beatmap7K(
+        title="Chordjack", artist="Test Artist", creator="Tester", version="Extra", hit_objects=hit_objects,
+        timing_points=[TimingPoint(time=0.0, beat_length=step_ms * 2.0, meter=4, uninherited=True)],
+    )
+    path.write_text(dump_osu_7k(bm), encoding="utf-8")
+    return path
+
+
+def test_cli_suggests_free_mode_when_keeping_the_technique_falls_short_and_free_mode_reaches_the_target(tmp_path, capsys):
+    import json
+    from proj7k.field import trace_beatmap
+
+    osu_file = _create_chordjack_osu_file(tmp_path / "cj.osu")
+    target = trace_beatmap(parse_osu_7k(osu_file.read_text(encoding="utf-8"))).profile.total_stars * 0.6
+
+    assert main(["--input", str(osu_file), "--target-sr", f"{target:.3f}", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "Keep dominant technique" in out and "--mode free" in out
+
+    assert main(["--input", str(osu_file), "--target-sr", f"{target:.3f}", "--mode", "free", "--dry-run", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)["results"][0]["report"]
+    assert report["mode"] == "free" and report["suggest_free_mode"] is False
+    assert report["downscaled_star_rating"] <= target * 1.05
+
+
+def test_cli_rejects_an_unknown_mode(tmp_path):
+    osu_file = _create_synthetic_osu_file(tmp_path / "m.osu")
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--input", str(osu_file), "--target-dan", "7th", "--mode", "fast"])
+    assert exc_info.value.code != 0

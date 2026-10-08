@@ -166,10 +166,14 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
     target_sr = _float(params, "target_sr")
     if target_dan is None and target_sr is None:
         raise ValueError("请选择目标段位或填写目标星级")
+    mode = _text(params, "mode") or "technique"
+    if mode not in ("technique", "free"):
+        raise ValueError(f"未知的降阶方式：{mode}")
     options = DownscaleOptions(
         target_dan=target_dan,
         target_sr=target_sr,
         dominant_skill=_text(params, "dominant_skill") or None,
+        preserve_technique=mode == "technique",
     )
     output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.practice_dir
     run = run_downscale(
@@ -207,6 +211,8 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
             "removal_ratio": report["removal_ratio"],
             "bimanual_flux_ratio": report["bimanual_flux_ratio"],
             "target": report["target"],
+            "mode": report["mode"],
+            "suggest_free_mode": report["suggest_free_mode"],
             "validation": validation,
             "warnings": report["warnings"],
             "skills_original": _profile_skills(res.original_profile),

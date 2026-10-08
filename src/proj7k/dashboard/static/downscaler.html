@@ -11,7 +11,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">降阶练习</div>
-        <div class="page-sub">把一张谱降到目标段位或星级，保留它的主技法；输出练习谱与 .osz，可一键导入 osu!。</div>
+        <div class="page-sub">把一张谱降到目标段位或星级，可以保留它的主技法，也可以只追难度；输出练习谱与 .osz，可一键导入 osu!。</div>
       </div>
       <a class="standalone-only" href="/#downscaler">← 返回控制台</a>
     </div>
@@ -53,10 +53,18 @@
           <input type="number" id="sr" step="0.1" min="0.5" value="6.5">
         </div>
         <div class="field">
+          <span class="label">降阶方式</span>
+          <div class="row">
+            <label class="check"><input type="radio" name="keep" value="technique" checked> 保留主技法</label>
+            <label class="check"><input type="radio" name="keep" value="free"> 只追难度</label>
+          </div>
+        </div>
+        <div class="field" id="skillField">
           <label for="skill">保留的主技法</label>
           <select id="skill"><option value="">自动（谱面自身主技法）</option></select>
         </div>
       </div>
+      <div class="hint hidden" id="freeHint" style="margin-bottom:10px">只追难度：不再要求练习谱保留原谱的主技法，只把星级降到目标附近；仍然只删不改，保住强拍与和弦骨架、左右手平衡，也不会删出超过一小节的新空白。</div>
 
       <div class="field">
         <label for="outDir">输出文件夹</label>
@@ -134,6 +142,14 @@
       refreshRunButton();
     });
 
+    const keepMode = () => document.querySelector("input[name=keep]:checked").value;
+    function showKeepMode() {
+      const free = keepMode() === "free";
+      $("#skillField").classList.toggle("hidden", free);
+      $("#freeHint").classList.toggle("hidden", !free);
+    }
+    document.querySelectorAll("input[name=keep]").forEach((r) => r.addEventListener("change", showKeepMode));
+
     document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener("change", () => {
       const sr = document.querySelector('input[name=mode]:checked').value === "sr";
       $("#srField").classList.toggle("hidden", !sr);
@@ -149,13 +165,25 @@
       suggestDan();
     });
 
+    // The technique-keeping run stopped above the target: offer the same run in free mode, one click away.
+    function freeModeOffer(c) {
+      return el("div", { class: "warn", style: "margin-top:8px" },
+        el("div", { text: `保留主技法时只能降到 ${c.downscaled_stars.toFixed(2)}★，没到目标 ${Number(c.target.target_sr).toFixed(2)}★：再删就会改变这张谱的主技法。` +
+          "改用「只追难度」可以继续往下降，练习谱仍然保持节奏骨架与左右手平衡。" }),
+        el("button", { class: "small", style: "margin-top:6px", text: "改用只追难度重新降阶", disabled: running,
+          onclick: () => { document.querySelector("input[name=keep][value=free]").checked = true; showKeepMode(); run(); } }));
+    }
+
     function chartCard(c) {
       const v = c.validation || {};
+      const free = c.mode === "free";
+      const check = free ? "可玩性校验" : "技法保留校验";
       return el("div", { class: "card" },
         el("h2", { text: c.title }),
         el("div", { class: "row" },
           el("span", { class: "big", text: `${c.original_stars.toFixed(2)}★ → ${c.downscaled_stars.toFixed(2)}★` }),
-          el("span", { class: `badge ${v.passed ? "done" : "failed"}`, text: v.passed ? "技法保留校验通过" : "技法保留校验未通过" })),
+          el("span", { class: `badge ${v.passed ? "done" : "failed"}`, text: v.passed ? `${check}通过` : `${check}未通过` }),
+          free ? el("span", { class: "badge", text: "只追难度" }) : null),
         el("div", { class: "stats" },
           P7.stat("目标", `${c.target.target_dan || ""} ${Number(c.target.target_sr).toFixed(2)}★`.trim()),
           P7.stat("物件数", `${c.original_notes} → ${c.downscaled_notes}`),
@@ -165,10 +193,13 @@
           P7.stat("主技法", `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`)),
         el("h3", { text: "八项技法星级（灰：原谱，彩：练习谱）" }),
         P7.skillBars(c.skills_original, c.skills_downscaled),
+        c.suggest_free_mode ? freeModeOffer(c) : null,
         (c.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, c.warnings.join("；")) : null);
     }
 
-    $("#runBtn").onclick = async () => {
+    $("#runBtn").onclick = () => run();
+    async function run() {
+      if (running) return;
       const mode = document.querySelector('input[name=mode]:checked').value;
       const fromGame = source() === "game";
       const params = {
@@ -176,7 +207,8 @@
         input: fromGame ? gameChart.md5_hash : $("#input").value,
         target_dan: mode === "dan" ? $("#dan").value : "",
         target_sr: mode === "sr" ? $("#sr").value : "",
-        dominant_skill: $("#skill").value,
+        mode: keepMode(),
+        dominant_skill: keepMode() === "free" ? "" : $("#skill").value,
         output_dir: $("#outDir").value,
         package: $("#pkg").checked,
         sync_lazer: $("#syncLazer").checked,
@@ -199,7 +231,7 @@
       if (r.sync) nodes.push(el("div", { class: r.sync.success ? "good" : "bad",
         text: r.sync.success ? `已加入 osu!lazer「${r.sync.collection}」收藏夹（${r.sync.synced_hashes.length} 张）。` : "osu!lazer 同步失败。" }));
       $("#results").replaceChildren(...nodes);
-    };
+    }
   </script>
 </body>
 </html>
