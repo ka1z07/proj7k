@@ -29,6 +29,9 @@ logger = logging.getLogger("proj7k.live.coordinator")
 
 __all__ = ["ClockState", "ClockStatus", "LiveSessionCoordinator"]
 
+#: The shortest gap, in seconds, between two re-reads of the library on a chart the index does not know.
+INDEX_REFRESH_INTERVAL_S: float = 10.0
+
 
 class LiveSessionCoordinator:
     """
@@ -52,6 +55,7 @@ class LiveSessionCoordinator:
         self._watcher_task: Optional[asyncio.Task] = None
         self._lock = asyncio.Lock()
         self._current_event: Optional[BeatmapChangedEvent] = None
+        self._last_index_refresh = float("-inf")
 
     @property
     def is_playing(self) -> bool:
@@ -65,6 +69,7 @@ class LiveSessionCoordinator:
         if self.index is not None and not self.index.is_warmed_up:
             try:
                 count = self.index.warmup()
+                self._last_index_refresh = time.monotonic()
                 logger.info(f"LiveSessionCoordinator: index warmed up with {count} charts.")
             except Exception as e:
                 logger.warning(f"Could not warm up Realm index (osu!lazer may not be installed): {e}")
@@ -144,6 +149,23 @@ class LiveSessionCoordinator:
                 self._watcher_task.cancel()
             self._watcher_task = None
 
+    async def _refresh_index(self) -> bool:
+        """
+        Re-read the library into the index, at most once per `INDEX_REFRESH_INTERVAL_S`: browsing through charts the
+        library lacks (osu!'s menu music, other modes) must not re-read it on every selection. True when it re-read.
+        """
+        now = time.monotonic()
+        if self.index is None or now - self._last_index_refresh < INDEX_REFRESH_INTERVAL_S:
+            return False
+        self._last_index_refresh = now
+        try:
+            count = await asyncio.to_thread(self.index.warmup)
+        except Exception as e:
+            logger.warning(f"Could not re-read the Realm index: {e}")
+            return False
+        logger.info(f"LiveSessionCoordinator: index re-read, {count} charts.")
+        return True
+
     async def on_beatmap_changed(
         self,
         event: BeatmapChangedEvent,
@@ -166,12 +188,15 @@ class LiveSessionCoordinator:
                 logger.warning("No Realm index configured in LiveSessionCoordinator.")
                 return None
 
-            # 1. Lookup beatmap record
-            record = self.index.lookup(
-                title=event.title,
-                difficulty=event.difficulty,
-                artist=event.artist,
-            )
+            # 1. Lookup beatmap record. The index is read once at start, so a chart imported since then (a new set, or a
+            # new difficulty of a set already there) is only known after a re-read; that comes before the fuzzy match,
+            # which would otherwise hand back a sibling difficulty.
+            query = {"title": event.title, "difficulty": event.difficulty, "artist": event.artist}
+            record = self.index.lookup_exact(**query)
+            if record is None and await self._refresh_index():
+                record = self.index.lookup_exact(**query)
+            if record is None:
+                record = self.index.lookup(**query)
 
             if record is None:
                 msg = f"Beatmap not found in 7K Realm index: {event.title} [{event.difficulty}]"

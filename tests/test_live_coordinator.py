@@ -478,3 +478,44 @@ def test_end_to_end_gameplay_clock_sync_from_log_watcher(tmp_path: Path):
 
     asyncio.run(_run())
 
+
+
+def test_coordinator_rereads_the_library_for_a_chart_imported_after_start(tmp_path: Path):
+    """
+    A chart imported into osu!lazer after the index was built (here a new difficulty of a set it has) is found once the
+    index re-reads the library, rather than fuzzy-matched to its sibling.
+    """
+    from proj7k.live import coordinator as coordinator_module
+
+    async def _run():
+        files_dir, index, engine = _setup_test_environment(tmp_path)
+        server = LiveServer(host="127.0.0.1", port=_get_free_port(), engine=engine)
+        coordinator = LiveSessionCoordinator(server=server, engine=engine, index=index)
+
+        new_hash = "fedcba0987654321"
+        new_file = files_dir / new_hash[:1] / new_hash[:2] / new_hash
+        new_file.parent.mkdir(parents=True, exist_ok=True)
+        new_file.write_text(_make_dummy_osu_content("Live Chart", "7K Insane"), encoding="utf-8")
+        index._initial_records.append(LazerBeatmapRecord(
+            id="202", hash=new_hash, md5_hash=new_hash, file_hash=new_hash, star_rating=6.0,
+            difficulty_name="7K Insane", tags="", title="Live Chart", artist="Live Artist", ruleset_id=3, circle_size=7.0,
+        ))
+        ev = BeatmapChangedEvent(artist="Live Artist", title="Live Chart", difficulty="7K Insane", creator="Mapper")
+
+        # Right after the index was built a miss does not re-read it: the best it has is the sibling difficulty.
+        coordinator._last_index_refresh = time.monotonic()
+        frame = await coordinator.on_beatmap_changed(ev)
+        assert frame["metadata"]["lazer"]["md5_hash"] == "abcdef1234567890"
+
+        coordinator._last_index_refresh -= coordinator_module.INDEX_REFRESH_INTERVAL_S
+        frame = await coordinator.on_beatmap_changed(ev)
+        assert frame["metadata"]["version"] == "7K Insane"
+        assert frame["metadata"]["lazer"]["md5_hash"] == new_hash
+
+        # Unknown selections within the interval cost no further re-reads.
+        calls = []
+        index.warmup = lambda: calls.append(1) or 0
+        await coordinator.on_beatmap_changed(BeatmapChangedEvent(artist="cYsmix", title="triangles", difficulty="peppy", creator="peppy"))
+        assert calls == []
+
+    asyncio.run(_run())
