@@ -4,10 +4,11 @@ Binary parser and serializer for osu!mania replay files (.osr).
 
 from dataclasses import dataclass, field
 import io
+import json
 import lzma
 from pathlib import Path
 import struct
-from typing import BinaryIO, List, Optional, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Union
 
 
 @dataclass
@@ -49,6 +50,10 @@ class OSRReplay:
     timestamp_ticks: int = 0
     score_id: Optional[int] = None
     action_frames: List[ReplayFrame] = field(default_factory=list)
+    #: osu!lazer's own mod list (`[{"acronym": "DT", "settings": {"speed_change": 1.1}}, ...]`) from the score info
+    #: lazer appends after the frames; None for a replay without it (osu!stable). Unlike `mods`, it carries a
+    #: rate mod's actual speed and lazer-only mods.
+    lazer_mods: Optional[List[Dict[str, Any]]] = None
 
 
 def _read_uleb128(stream: BinaryIO) -> int:
@@ -99,6 +104,24 @@ def _write_osu_string(stream: BinaryIO, s: str) -> None:
     encoded = s.encode("utf-8")
     _write_uleb128(stream, len(encoded))
     stream.write(encoded)
+
+
+def _read_lazer_mods(stream: BinaryIO) -> Optional[List[Dict[str, Any]]]:
+    """The mod list of the score info osu!lazer appends to a replay, or None when there is none or it is unreadable."""
+    head = stream.read(4)
+    if len(head) < 4:
+        return None
+    length = struct.unpack("<i", head)[0]
+    if length <= 0:
+        return None
+    try:
+        info = json.loads(lzma.decompress(stream.read(length)))
+    except (lzma.LZMAError, ValueError, EOFError):
+        return None
+    mods = info.get("mods") if isinstance(info, dict) else None
+    if not isinstance(mods, list):
+        return None
+    return [m for m in mods if isinstance(m, dict)]
 
 
 def parse_osr(source: Union[bytes, BinaryIO, Path, str]) -> OSRReplay:
@@ -161,6 +184,9 @@ def parse_osr(source: Union[bytes, BinaryIO, Path, str]) -> OSRReplay:
     if len(remaining) == 8:
         score_id = struct.unpack("<q", remaining)[0]
 
+    # 10. osu!lazer's score info: int32 length + LZMA-compressed JSON, absent in osu!stable replays
+    lazer_mods = _read_lazer_mods(stream)
+
     # Decompress action frames
     action_frames: List[ReplayFrame] = []
     if compressed_data:
@@ -205,6 +231,7 @@ def parse_osr(source: Union[bytes, BinaryIO, Path, str]) -> OSRReplay:
         timestamp_ticks=timestamp_ticks,
         score_id=score_id,
         action_frames=action_frames,
+        lazer_mods=lazer_mods,
     )
 
 
@@ -267,8 +294,14 @@ def serialize_osr(replay: OSRReplay) -> bytes:
     stream.write(struct.pack("<i", len(compressed_bytes)))
     stream.write(compressed_bytes)
 
-    # 9. Score ID if provided
-    if replay.score_id is not None:
-        stream.write(struct.pack("<q", replay.score_id))
+    # 9. Score ID if provided (always, when lazer's score info follows it)
+    if replay.score_id is not None or replay.lazer_mods is not None:
+        stream.write(struct.pack("<q", replay.score_id or 0))
+
+    # 10. osu!lazer's score info, carrying its mod list
+    if replay.lazer_mods is not None:
+        info = lzma.compress(json.dumps({"mods": replay.lazer_mods}).encode("utf-8"))
+        stream.write(struct.pack("<i", len(info)))
+        stream.write(info)
 
     return stream.getvalue()

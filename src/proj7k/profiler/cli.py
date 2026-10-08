@@ -35,6 +35,7 @@ from proj7k.profiler.matcher import (
     align_replay_hits,
     column_to_canonical_lane,
 )
+from proj7k.profiler.mods import PlayMods, resolve_play_mods
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, parse_osr
 from proj7k.profiler.pathology import PathologyReport, analyze_pathology
 from proj7k.profiler.response import SkillRadarReport, analyze_strain_response
@@ -77,9 +78,12 @@ class ProfilerIngestionReport:
     #: The engine's difficulty field of the chart in physical time (ADR-0020), and the clock rate the play ran at.
     field: Optional[ChartField] = None
     clock_rate: float = 1.0
-    #: The replay's input frames (song time) and the parsed chart, kept so the replay can be viewed (`replay_view`).
+    #: The replay's input frames (song time) and the chart as played (mirrored under MR), kept so the replay can
+    #: be viewed (`replay_view`).
     replay_frames: List[ReplayFrame] = dc_field(default_factory=list)
     beatmap: Optional[Beatmap7K] = None
+    #: What the play's mods did (rate, hit windows, mirror), and which of them the profiler cannot honour.
+    play_mods: PlayMods = dc_field(default_factory=PlayMods)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -89,6 +93,7 @@ class ProfilerIngestionReport:
             "hash_matched": self.hash_matched,
             "game_version": self.game_version,
             "mods": self.mods,
+            "play_mods": self.play_mods.to_dict(),
             "timestamp_ticks": self.timestamp_ticks,
             "official_counts": self.official_counts,
             "total_notes": self.total_notes,
@@ -110,17 +115,14 @@ class ProfilerIngestionReport:
         }
 
 
-def _determine_clock_rate(mods: int) -> float:
-    """
-    Determines gameplay clock rate multiplier based on mods bitmask.
-    DoubleTime (64) / Nightcore (512): 1.5x
-    HalfTime (256): 0.75x
-    """
-    if mods & (64 | 512):
-        return 1.5
-    if mods & 256:
-        return 0.75
-    return 1.0
+def _mirror_beatmap(beatmap: Beatmap7K) -> Beatmap7K:
+    """The chart with its columns flipped, as osu!lazer's Mirror plays it."""
+    import copy
+    bm = copy.deepcopy(beatmap)
+    last = (bm.circle_size if bm.circle_size > 0 else 7) - 1
+    for ho in bm.hit_objects:
+        ho.column = last - ho.column
+    return bm
 
 
 def _scale_beatmap_clock_rate(beatmap: Beatmap7K, clock_rate: float) -> Beatmap7K:
@@ -189,12 +191,17 @@ def run_ingestion(
 
     beatmap = parse_osu_7k(str(beatmap_p))
 
-    # 3. Causally align hits
-    clock_rate = _determine_clock_rate(replay.mods)
+    # 3. Causally align hits against the chart as the mods made it
+    play_mods = resolve_play_mods(replay.mods, replay.lazer_mods)
+    clock_rate = play_mods.clock_rate
+    if play_mods.mirror:
+        beatmap = _mirror_beatmap(beatmap)
     alignment: HitAlignmentResult = align_replay_hits(
         beatmap,
         replay.action_frames,
+        od=play_mods.od_override,
         clock_rate=clock_rate,
+        window_multiplier=play_mods.window_multiplier,
     )
 
     # 4. Play duration and completion metrics (ADR-0012 data quality standards)
@@ -263,6 +270,7 @@ def run_ingestion(
         clock_rate=clock_rate,
         replay_frames=replay.action_frames,
         beatmap=beatmap,
+        play_mods=play_mods,
     )
 
 
@@ -401,6 +409,10 @@ def format_macro_profile(profile: MacroProfile) -> str:
         lines.append(
             f"Legacy Snapshots:   {profile.legacy_excluded} excluded (written by the legacy strain engine; the unit cannot be converted)"
         )
+    if profile.stale_excluded:
+        lines.append(
+            f"Stale Mod Plays:    {profile.stale_excluded} excluded (read before mods were honoured; re-run --import-replays)"
+        )
 
     if profile.average_ur is not None:
         lines.append(f"Stability Baseline UR: {profile.average_ur:.1f} (Cleared matches only)")
@@ -479,6 +491,7 @@ def run_batch_ingestion(
         "noise_filtered": 0,
         "failed_preserved": 0,
         "skipped_other_player": 0,
+        "unsupported_mods": 0,
         "errors": 0,
     }
 
@@ -509,8 +522,10 @@ def run_batch_ingestion(
                     continue
 
                 report = run_ingestion(osr_file, matching_osu)
-                beatmap = parse_osu_7k(str(matching_osu))
-                saved = storage.save_report_with_filter(report, beatmap=beatmap)
+                if not report.play_mods.supported:
+                    stats["unsupported_mods"] += 1
+                    continue
+                saved = storage.save_report_with_filter(report, beatmap=report.beatmap)
 
                 if saved is not None:
                     stats["saved"] += 1
@@ -614,8 +629,10 @@ def run_replay_import(
         "replays_discovered": len(scores),
         "saved": 0,
         "already_exists": 0,
+        "reingested": 0,
         "noise_filtered": 0,
         "failed_preserved": 0,
+        "unsupported_mods": 0,
         "missing_files": 0,
         "errors": 0,
     }
@@ -629,7 +646,9 @@ def run_replay_import(
                 stats["missing_files"] += 1
                 continue
 
-            if storage.has_replay(r_hash):
+            # A snapshot ingested before its mods were honoured is re-ingested in place (`is_current_replay`).
+            stale = storage.has_replay(r_hash)
+            if stale and storage.is_current_replay(r_hash):
                 stats["already_exists"] += 1
                 continue
 
@@ -644,7 +663,11 @@ def run_replay_import(
                 report = run_ingestion(rp, bp)
                 # Use Lazer's physical replay file hash to guarantee global deduplication across formats
                 report.replay_hash = r_hash
-                beatmap = parse_osu_7k(str(bp))
+                if stale:
+                    storage.delete_replay(r_hash)
+                if not report.play_mods.supported:
+                    stats["unsupported_mods"] += 1
+                    continue
 
                 # Resolve the Failed verdict once, so this pre-filter and the persistence
                 # layer agree on it. The verdict is inferred from the life bar and the
@@ -656,10 +679,10 @@ def run_replay_import(
                     stats["noise_filtered"] += 1
                     continue
 
-                saved = storage.save_report_with_filter(report, is_failed=is_failed, beatmap=beatmap)
+                saved = storage.save_report_with_filter(report, is_failed=is_failed, beatmap=report.beatmap)
 
                 if saved is not None:
-                    stats["saved"] += 1
+                    stats["reingested" if stale else "saved"] += 1
                     if saved.is_failed:
                         stats["failed_preserved"] += 1
                 else:
@@ -944,7 +967,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"Player Target:        {args.player}")
             print(f"Replays Discovered:   {stats['replays_discovered']}")
             print(f"Newly Ingested:       {stats['saved']}")
+            if stats["reingested"] > 0:
+                print(f"Re-ingested (mods):   {stats['reingested']}")
             print(f"Already In DB:        {stats['already_exists']}")
+            if stats["unsupported_mods"] > 0:
+                print(f"Unsupported Mods:     {stats['unsupported_mods']} (Random, key mods, Autoplay, ... not stored)")
             print(f"Noise Filtered:       {stats['noise_filtered']} (<30s or <50% completion)")
             print(f"Failed Preserved:     {stats['failed_preserved']}")
             if stats["missing_files"] > 0:
@@ -1032,8 +1059,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not args.no_save:
             try:
                 storage = ProfilerStorage(db_path=args.db)
-                beatmap = parse_osu_7k(str(args.beatmap))
-                storage.save_report_with_filter(report, beatmap=beatmap)
+                storage.save_report_with_filter(report, beatmap=report.beatmap)
                 storage.close()
             except Exception:
                 pass

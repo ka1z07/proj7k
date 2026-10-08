@@ -227,6 +227,7 @@ def _report_summary(report) -> Dict[str, Any]:
         "hash_matched": report.hash_matched,
         "mods": report.mods,
         "clock_rate": report.clock_rate,
+        "play_mods": report.play_mods.to_dict(),
         "official_counts": report.official_counts,
         "judgment_counts": {k.value: v for k, v in report.judgment_counts.items()},
         "total_notes": report.total_notes,
@@ -273,7 +274,6 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     Diagnose one replay: from two files, the player's N-th most recent 7K replay in the lazer library, or (`current`)
     the N-th most recent replay of the chart the game has selected. No player name means the library's own player.
     """
-    from proj7k.parser import parse_osu_7k
     from proj7k.profiler.cli import build_practice_bundle, resolve_lazer_replay, run_ingestion
     from proj7k.profiler.coach import generate_coaching_recommendations
     from proj7k.profiler.replay_view import find_audio, write_replay_view
@@ -319,8 +319,11 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     saved = None
     if _flag(params, "save", True):
         with ProfilerStorage(db_path=config.db_path) as storage:
-            saved = storage.save_report_with_filter(report, beatmap=parse_osu_7k(str(beatmap_path)))
-        logger.info("Saved to the profiler database." if saved is not None else "Not saved (noise-filtered or already in the database).")
+            saved = storage.save_report_with_filter(report, beatmap=report.beatmap)
+        if not report.play_mods.supported:
+            logger.info(f"Not saved: the profiler cannot align plays under {', '.join(report.play_mods.unsupported)}.")
+        else:
+            logger.info("Saved to the profiler database." if saved is not None else "Not saved (noise-filtered or already in the database).")
 
     result: Dict[str, Any] = {
         "title": _beatmap_title(report),
@@ -406,7 +409,10 @@ def import_replays(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         db_path=config.db_path,
         limit=_int(params, "limit"),
     )
-    logger.info(f"Imported {stats['saved']} new replay(s); {stats['already_exists']} already in the database.")
+    logger.info(
+        f"Imported {stats['saved']} new replay(s), re-read {stats['reingested']} mod play(s); "
+        f"{stats['already_exists']} already in the database, {stats['unsupported_mods']} under unsupported mods."
+    )
     return stats
 
 

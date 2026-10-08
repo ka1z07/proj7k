@@ -47,12 +47,14 @@ class ManiaHitWindows:
     w_miss: float
 
 
-def compute_mania_hit_windows(od: float, clock_rate: float = 1.0) -> ManiaHitWindows:
+def compute_mania_hit_windows(od: float, clock_rate: float = 1.0, window_multiplier: float = 1.0) -> ManiaHitWindows:
     """
-    Computes standard osu!mania OD-dependent hit windows (ms), scaled by mod clock rate.
+    osu!mania's OD-dependent hit windows (ms) in song time, the clock replay frames are in. osu!mania keeps its
+    windows fixed in real time, so at `clock_rate` they span `clock_rate` times as much song time (DT widens them,
+    HT narrows them). `window_multiplier` is HR's 1/1.4 or EZ's 1.4.
     """
     od = max(0.0, min(10.0, float(od)))
-    scale = 1.0 / clock_rate if clock_rate > 0 else 1.0
+    scale = (clock_rate if clock_rate > 0 else 1.0) * window_multiplier
     return ManiaHitWindows(
         w_max=16.0 * scale,
         w_300=(64.0 - 3.0 * od) * scale,
@@ -197,12 +199,13 @@ def align_replay_hits(
     frames: List[ReplayFrame],
     od: Optional[float] = None,
     clock_rate: float = 1.0,
+    window_multiplier: float = 1.0,
 ) -> HitAlignmentResult:
     """
     Causally aligns replay discrete input frames to beatmap hit objects column by column.
     """
     effective_od = od if od is not None else beatmap.overall_difficulty
-    windows = compute_mania_hit_windows(effective_od, clock_rate=clock_rate)
+    windows = compute_mania_hit_windows(effective_od, clock_rate=clock_rate, window_multiplier=window_multiplier)
 
     all_aligned_hits: List[AlignedHit] = []
     all_ghost_taps: List[PanicGhostTap] = []

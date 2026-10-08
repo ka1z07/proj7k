@@ -16,6 +16,7 @@ import time
 from typing import Any, Dict, List, Optional, Union
 
 from proj7k.parser import Beatmap7K
+from proj7k.profiler.mods import AFFECTING_BITS
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.field import trace_beatmap
 
@@ -25,6 +26,19 @@ logger = logging.getLogger("proj7k.profiler.storage")
 #: What a snapshot's capacities are measured on. A snapshot without it was written by the legacy strain
 #: engine, in a unit that cannot be converted (the replay is not in the database) and is left out of aggregates (ADR-0020).
 SNAPSHOT_ENGINE = "spec-v0.2"
+
+#: How a snapshot's replay was read. 2: the play's mods are honoured (actual lazer rate, hit windows widening with
+#: the rate, HR/EZ, Mirror; plays under mods that cannot be aligned are not stored). A version-1 snapshot of a play
+#: under any of `AFFECTING_BITS` was misread and is left out of aggregates until it is re-imported.
+SNAPSHOT_INGEST_VERSION = 2
+
+
+def snapshot_is_current(summary: Dict[str, Any]) -> bool:
+    """Whether a snapshot's reading of its replay is still right (see `SNAPSHOT_INGEST_VERSION`)."""
+    if int(summary.get("ingest", 1)) >= SNAPSHOT_INGEST_VERSION:
+        return True
+    return not (int(summary.get("mods") or 0) & AFFECTING_BITS)
+
 
 #: How far before the fatal break the demand it was under is read (ADR-0020 decision 3).
 FATAL_LOOKBACK_S = 1.0
@@ -228,7 +242,9 @@ def build_snapshot_from_report(
         ]
         if valid_offsets:
             import numpy as np
-            overall_ur = float(np.std(valid_offsets) * 10.0)
+            # Offsets are in song time; UR is read in real time, so a rate-mod play is comparable to a 1.0x one.
+            rate = getattr(report, "clock_rate", 1.0) or 1.0
+            overall_ur = float(np.std(valid_offsets) * 10.0 / rate)
 
     if overall_ur is None and report.pathology:
         if report.pathology.bimanual:
@@ -253,7 +269,12 @@ def build_snapshot_from_report(
         "ghost_tap_count": report.ghost_tap_count,
         "mods": report.mods,
         "engine": SNAPSHOT_ENGINE,
+        "ingest": SNAPSHOT_INGEST_VERSION,
     }
+    play_mods = getattr(report, "play_mods", None)
+    if play_mods is not None:
+        summary_info["clock_rate"] = play_mods.clock_rate
+        summary_info["mod_acronyms"] = list(play_mods.acronyms)
     if report.pathology and report.pathology.cascade_precursor:
         summary_info["dominant_break_technique"] = report.pathology.cascade_precursor.dominant_technique
 
@@ -398,6 +419,20 @@ class ProfilerStorage:
         )
         return cur.fetchone() is not None
 
+    def is_current_replay(self, replay_hash: str) -> bool:
+        """Whether a replay is stored and its snapshot's reading of it is current (`snapshot_is_current`)."""
+        if not replay_hash:
+            return False
+        row = self.conn.execute(
+            "SELECT summary_json FROM match_snapshots WHERE replay_hash = ? LIMIT 1", (replay_hash,)
+        ).fetchone()
+        return row is not None and snapshot_is_current(json.loads(row["summary_json"] or "{}"))
+
+    def delete_replay(self, replay_hash: str) -> int:
+        """Removes a replay's snapshot (so it can be ingested again), returning the number of rows removed."""
+        with self.conn:
+            return self.conn.execute("DELETE FROM match_snapshots WHERE replay_hash = ?", (replay_hash,)).rowcount
+
     def save_snapshot(self, snapshot: MatchSnapshot) -> Optional[int]:
         """
         Inserts a match snapshot, returning its row id, or None when a snapshot for the
@@ -461,8 +496,11 @@ class ProfilerStorage:
     ) -> Optional[MatchSnapshot]:
         """
         Constructs a MatchSnapshot from a ProfilerIngestionReport, applies the noise filter,
-        and saves it to SQLite if valid.
+        and saves it to SQLite if valid. A play under mods the profiler cannot honour is not saved.
         """
+        play_mods = getattr(report, "play_mods", None)
+        if play_mods is not None and not play_mods.supported:
+            return None
         snapshot = build_snapshot_from_report(report, is_failed=is_failed, beatmap=beatmap)
         snapshot_id = self.save_snapshot_with_filter(snapshot)
         if snapshot_id is None:

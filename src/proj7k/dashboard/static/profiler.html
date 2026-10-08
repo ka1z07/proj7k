@@ -190,7 +190,8 @@
       const nodes = [el("div", { class: "card" },
         el("h2", { text: r.title || "回放" }),
         el("div", { class: "row" }, el("span", { class: "big", text: radar ? radar.overall_dan : "—" }),
-          el("span", { class: "hint", text: `玩家 ${rep.player_name} · ${rep.clock_rate !== 1 ? `${rep.clock_rate}x · ` : ""}${rep.is_valid_play ? "有效对局" : "无效对局（过短或完成度过低）"}${r.saved ? " · 已存档" : ""}` })),
+          el("span", { class: "hint", text: `玩家 ${rep.player_name} · ${rep.play_mods.acronyms.length ? `${rep.play_mods.acronyms.join(" ")} · ` : ""}${rep.clock_rate !== 1 ? `${rep.clock_rate}x · ` : ""}${rep.is_valid_play ? "有效对局" : "无效对局（过短或完成度过低）"}${r.saved ? " · 已存档" : ""}` })),
+        rep.play_mods.unsupported.length ? el("div", { class: "warn", text: `这局开了 ${rep.play_mods.unsupported.join(" ")}，回放无法和谱面文件对齐，结果不可信，也不会计入画像。` }) : null,
         rep.hash_matched ? null : el("div", { class: "warn", text: "回放记录的谱面与给的谱面文件不一致（MD5 不匹配），结果可能不可信。" }),
         el("div", { class: "stats" },
           P7.stat("完成度", P7.pct(rep.completion_rate)), P7.stat("时长", `${rep.play_duration_s.toFixed(0)}s`),
@@ -235,7 +236,8 @@
             Object.entries(tc.dimension_deltas || {}).map(([k, d]) => el("tr", {}, el("td", { text: P7.skillName(k) }),
               el("td", { class: "num", text: d.recent_sr.toFixed(2) }), el("td", { class: "num", text: d.all_time_sr.toFixed(2) }),
               el("td", { class: "num", text: `${d.delta_sr >= 0 ? "+" : ""}${d.delta_sr.toFixed(2)}` }), el("td", { text: d.status }))))] : null,
-        p.legacy_excluded ? el("p", { class: "hint", text: `${p.legacy_excluded} 条旧引擎写入的快照未计入。` }) : null)];
+        p.legacy_excluded ? el("p", { class: "hint", text: `${p.legacy_excluded} 条旧引擎写入的快照未计入。` }) : null,
+        p.stale_excluded ? el("p", { class: "warn", text: `${p.stale_excluded} 局开了变速 / Mirror 等 mod 的对局是按旧方式读的，暂未计入；重新「导入回放」即可按 mod 重新计算。` }) : null)];
       const rec = recommendations(r.recommendations);
       if (rec) nodes.push(rec);
       return nodes;
@@ -271,7 +273,8 @@
       if (!job) return;
       const s = job.result;
       $("#results").replaceChildren(el("div", { class: "card" }, el("h2", { text: "导入完成" }), el("div", { class: "stats" },
-        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("已在库中", s.already_exists),
+        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("按 mod 重算", s.reingested), P7.stat("已在库中", s.already_exists),
+        P7.stat("不支持的 mod（未入库）", s.unsupported_mods),
         P7.stat("过滤（过短 / 完成度低）", s.noise_filtered), P7.stat("失败局（保留）", s.failed_preserved),
         P7.stat("缺文件", s.missing_files), P7.stat("出错", s.errors))));
       loadPlayers();

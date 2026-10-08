@@ -106,20 +106,30 @@ def test_causal_matching_miss_and_panic_ghost_taps(simple_beatmap):
 
 
 def test_clock_rate_scaling(simple_beatmap):
-    # At OD 8, 1.0x rate: W_300 = 40ms
-    # At 1.5x DT rate: W_300 = 40 / 1.5 = 26.67ms
-    # A hit at +30ms would be PERFECT (300) on 1.0x, but GREAT (200) on 1.5x DT
+    # osu!mania keeps its hit windows fixed in real time; frames are in song time, so in song time the windows
+    # are `rate` times as wide. At OD 8, W_300 = 40ms: 60ms of song time at 1.5x DT, 30ms at 0.75x HT.
+    # A hit at +35ms (song time) is PERFECT at 1.0x and 1.5x, GREAT at 0.75x.
     frames = [
         ReplayFrame(time_ms=0.0, keys=0),
-        ReplayFrame(time_ms=1030.0, keys=1),  # +30ms
+        ReplayFrame(time_ms=1035.0, keys=1),  # +35ms
         ReplayFrame(time_ms=1080.0, keys=0),
     ]
 
-    res_1x = align_replay_hits(simple_beatmap, frames, clock_rate=1.0)
-    hit_1x = [h for h in res_1x.aligned_hits if h.column == 0 and h.hit_time is not None][0]
-    assert hit_1x.judgment == HitJudgment.PERFECT
+    def judgment(**kw):
+        res = align_replay_hits(simple_beatmap, frames, **kw)
+        return [h for h in res.aligned_hits if h.column == 0 and h.hit_time is not None][0].judgment
 
-    res_dt = align_replay_hits(simple_beatmap, frames, clock_rate=1.5)
-    hit_dt = [h for h in res_dt.aligned_hits if h.column == 0 and h.hit_time is not None][0]
-    assert hit_dt.judgment == HitJudgment.GREAT
+    assert judgment(clock_rate=1.0) == HitJudgment.PERFECT
+    assert judgment(clock_rate=1.5) == HitJudgment.PERFECT
+    assert judgment(clock_rate=0.75) == HitJudgment.GREAT
+    # HR divides the windows by 1.4 (W_300 = 28.6ms), EZ multiplies them (56ms)
+    assert judgment(window_multiplier=1 / 1.4) == HitJudgment.GREAT
+    assert judgment(clock_rate=0.75, window_multiplier=1.4) == HitJudgment.PERFECT
+
+
+def test_hit_windows_widen_with_rate_in_song_time():
+    base = compute_mania_hit_windows(od=8.0)
+    dt = compute_mania_hit_windows(od=8.0, clock_rate=1.5)
+    assert dt.w_300 == pytest.approx(base.w_300 * 1.5)
+    assert dt.w_miss == pytest.approx(base.w_miss * 1.5)
 
