@@ -115,7 +115,7 @@
         <label title="Scroll speed, as osu!lazer counts it (↑ ↓)">Scroll <input type="range" id="scroll" min="5" max="40" step="1" value="24"><output id="scrollOut">24</output></label>
         <label>Skin <select id="skin"></select></label>
         <label title="Outline the chart's notes behind your keystrokes"><input type="checkbox" id="overlay" checked> chart in input</label>
-        <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="5"> ms</label>
+        <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="1"> ms <button class="btn" id="offAuto" title="Line the music's attacks up with the chart's notes" disabled>Auto</button> <span id="offInfo"></span></label>
         <span class="spacer"></span>
         <span class="time" id="clock">0:00.0 / 0:00.0</span>
       </div>
@@ -292,6 +292,81 @@ if (P.audio) {
 let now = 0, playing = false, userRate = 1, audioOffset = 0, dragging = false, resumeAfterDrag = false;
 let baseTs = 0, baseT = 0;                                  // while playing: now = baseT + (ts - baseTs) * speed
 const speed = () => userRate * RATE;
+
+// ---------- audio offset ----------
+// The page's audio can sit a few ms off the chart (a decoder's priming samples, a mapper's offset). The music's
+// attacks are where its notes are, so decode it, mark how sharply its loudness rises each millisecond, and slide that
+// against the chart's note times: the lag where the two line up best is how far the audio runs behind the chart.
+const OFFSET_SEARCH_MS = 300;                             // lags tried, either way
+const OFFSET_MIN_Z = 4;                                   // how far the best lag must stand above the rest to be trusted
+let detected = null;                                      // {offset, z} once measured
+
+// how sharply the audio's high end rises in each 1 ms step: the log energy of its first difference against the
+// trailing 15 ms, kept where it rises
+function onsetEnvelope(buf) {
+  const sr = buf.sampleRate, hop = sr / 1000, n = Math.floor(buf.length / hop);
+  const chans = []; for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
+  const L = new Float32Array(n);
+  let prev = 0;
+  for (let k = 0; k < n; k++) {
+    let e = 0;
+    const a = Math.floor(k * hop), b = Math.floor((k + 1) * hop);
+    for (let i = a; i < b; i++) {
+      let x = 0; for (const ch of chans) x += ch[i];
+      const d = x - prev; prev = x; e += d * d;
+    }
+    L[k] = Math.log(1e-9 + e);
+  }
+  const env = new Float32Array(n);
+  let acc = 0; const W = 15;
+  for (let k = 0; k < n; k++) {
+    if (k >= W) { env[k] = Math.max(0, L[k] - acc / W); acc -= L[k - W]; }
+    acc += L[k];
+  }
+  return env;
+}
+
+// the lag (ms, audio after chart) where the envelope best matches the chart's heads, and how much it stands out
+function matchOnsets(env, times) {
+  const w = new Map();
+  for (const t of times) { const k = Math.round(t); w.set(k, (w.get(k) || 0) + 1); }
+  const ks = [...w.keys()], ws = ks.map(k => Math.sqrt(w.get(k)));
+  const S = OFFSET_SEARCH_MS, score = new Float64Array(2 * S + 1);
+  for (let l = -S; l <= S; l++) {
+    let s = 0;
+    for (let i = 0; i < ks.length; i++) { const j = ks[i] + l; if (j >= 1 && j < env.length - 1) s += ws[i] * (env[j - 1] + env[j] + env[j + 1]); }
+    score[l + S] = s;
+  }
+  let best = 0; for (let i = 1; i < score.length; i++) if (score[i] > score[best]) best = i;
+  const sorted = Array.from(score).sort((a, b) => a - b), med = sorted[sorted.length >> 1];
+  const mad = sorted.reduce((a, x) => a + Math.abs(x - med), 0) / sorted.length || 1e-9;
+  // refine between the 1 ms steps
+  let frac = 0;
+  if (best > 0 && best < score.length - 1) { const a = score[best - 1], b = score[best], c = score[best + 1], den = a - 2 * b + c; if (den < 0) frac = 0.5 * (a - c) / den; }
+  return { lag: best - S + frac, z: (score[best] - med) / mad };
+}
+
+async function detectOffset() {
+  $("offInfo").textContent = "measuring…";
+  try {
+    const res = await fetch(audio.src);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const buf = await new Ctx(1, 1, 44100).decodeAudioData(await res.arrayBuffer());
+    const m = matchOnsets(onsetEnvelope(buf), N.map(n => n.t));
+    detected = { offset: Math.round(-m.lag), z: m.z };
+    $("offAuto").disabled = false;
+    if (m.z >= OFFSET_MIN_Z) applyOffset(detected.offset, true);
+    else $("offInfo").textContent = "auto: unsure (" + (detected.offset > 0 ? "+" : "") + detected.offset + " ms?)";
+  } catch (e) {
+    // a page opened straight from disk can play its audio but not read it
+    $("offInfo").textContent = "";
+  }
+}
+function applyOffset(v, auto) {
+  audioOffset = v; $("offset").value = v; seek(now);
+  $("offInfo").textContent = auto ? "auto" : "";
+}
 
 function setRate() { audio.playbackRate = userRate * RATE; audio.preservesPitch = false; }
 function rebase(t) { baseT = t; baseTs = performance.now(); }
@@ -746,7 +821,9 @@ $("nextErr").onclick = () => stepMistake(1);
 $("hardest").onclick = hardest;
 $("rate").onchange = e => { userRate = parseFloat(e.target.value); rebase(now); if (audioOK) setRate(); };
 $("scroll").oninput = e => setScroll(parseFloat(e.target.value));
-$("offset").onchange = e => { audioOffset = parseFloat(e.target.value) || 0; seek(now); };
+$("offset").onchange = e => applyOffset(parseFloat(e.target.value) || 0, false);
+$("offAuto").onclick = () => { if (detected) applyOffset(detected.offset, true); };
+if (P.audio) setTimeout(detectOffset, 50);
 window.addEventListener("keydown", e => {
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
   const k = e.key;
@@ -784,7 +861,7 @@ function frame(ts) {
 now = Math.max(0, (N.length ? N[0].t : 0) - 1500);
 { const m = /[#&]t=(\d+(?:\.\d+)?)/.exec(location.hash); if (m) now = clamp(parseFloat(m[1]), 0, DUR); }   // #t=<ms> opens at a moment
 requestAnimationFrame(frame);
-window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }), setSkin: k => { skinName = k; $("skin").value = k; needDraw = true; }, setScroll, setOverlay: v => { overlay = v; $("overlay").checked = v; needDraw = true; } };   // for scripted checks
+window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }), setSkin: k => { skinName = k; $("skin").value = k; needDraw = true; }, setScroll, offset: () => ({ audioOffset, detected }), setOverlay: v => { overlay = v; $("overlay").checked = v; needDraw = true; } };   // for scripted checks
 </script>
 </body>
 </html>
