@@ -20,18 +20,21 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; padding: 16px; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); padding: 12px 14px; display: flex; flex-direction: column; overflow: hidden; }
   button, select, input { font: inherit; color: inherit; }
-  header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 12px; }
-  header h1 { font-size: 18px; font-weight: 600; }
+  header { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; margin-bottom: 10px; flex: none; }
+  header h1 { font-size: 17px; font-weight: 600; }
   header .sub { color: var(--muted); font-size: 13px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
-  .chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
   .chip b { color: var(--text); font-weight: 600; }
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+  /* one screen: the playfields and the timeline share the left column, the panels scroll on the right */
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+  .viewcol { display: flex; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; }
   .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
-  .stage-wrap { position: relative; height: min(66vh, 640px); min-height: 380px; overflow: hidden; }
-  #stage { width: 100%; height: 100%; display: block; }
+  .stage-wrap { position: relative; flex: 1; min-height: 320px; overflow: hidden; background: #05070c; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .hud { position: absolute; pointer-events: none; font-family: var(--mono); text-shadow: 0 1px 3px #000; }
   .hud.tl { top: 10px; left: 12px; font-size: 13px; line-height: 1.55; }
   .hud.tl .big { font-size: 26px; font-weight: 700; line-height: 1.1; }
@@ -39,7 +42,7 @@
   .hud .j { display: inline-block; min-width: 3.2em; }
   .gauge { display: inline-block; width: 90px; height: 7px; background: #222c42; border-radius: 4px; vertical-align: middle; overflow: hidden; margin-left: 6px; }
   .gauge i { display: block; height: 100%; width: 0; background: var(--accent); }
-  .side { display: flex; flex-direction: column; gap: 12px; max-height: calc(min(66vh, 640px) + 250px); overflow: auto; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
   .side section { padding: 10px 12px; }
   .side h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
   .skill { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; }
@@ -57,29 +60,31 @@
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 6px; }
   .seg button { background: transparent; border: 0; padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
   .seg button[aria-pressed="true"] { background: #1b2a44; color: var(--text); }
-  .timeline-card { margin-top: 12px; padding: 10px 12px 8px; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin-bottom: 8px; font-size: 13px; }
-  .btn { background: #1b2336; border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; cursor: pointer; min-height: 30px; }
+  .timeline-card { flex: none; padding: 8px 12px 6px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .btn { background: #1b2336; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; min-height: 28px; }
   .btn:hover { border-color: var(--accent); }
-  .btn.primary { background: #123452; border-color: #1f5f93; min-width: 74px; }
+  .btn.primary { background: #123452; border-color: #1f5f93; min-width: 70px; }
   .toolbar label { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
-  .toolbar input[type=range] { width: 100px; accent-color: var(--accent); }
-  .toolbar input[type=number] { width: 64px; background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
-  .toolbar select { background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
+  .toolbar input[type=range] { width: 96px; accent-color: var(--accent); }
+  .toolbar input[type=number] { width: 60px; background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; }
+  .toolbar select { background: #0b111d; border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px; }
+  .toolbar output { font-family: var(--mono); color: var(--text); min-width: 1.6em; }
   .spacer { flex: 1; }
   .time { font-family: var(--mono); font-size: 13px; color: var(--muted); }
   #tlwrap { position: relative; }
-  #tl { width: 100%; height: 158px; display: block; touch-action: none; cursor: ew-resize; border-radius: 6px; background: var(--card-2); }
+  #tl { width: 100%; height: 104px; display: block; touch-action: none; cursor: ew-resize; border-radius: 6px; background: var(--card-2); }
   #tip { position: absolute; pointer-events: none; display: none; background: #05080f; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; font-family: var(--mono); white-space: nowrap; z-index: 3; }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; font-size: 11.5px; color: var(--muted); align-items: center; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
   .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .legend .keys { margin-left: auto; }
   kbd { background: #1b2336; border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-family: var(--mono); font-size: 11px; }
   @media (max-width: 920px) {
-    .layout { grid-template-columns: 1fr; }
-    .side { max-height: none; }
-    .stage-wrap { height: 60vh; }
+    body { overflow: auto; height: auto; }
+    .main { grid-template-columns: 1fr; }
+    .stage-wrap { flex: none; height: 70vh; }
+    .side { overflow: visible; }
     .chips { margin-left: 0; }
   }
 </style>
@@ -91,11 +96,32 @@
   <div class="chips" id="chips"></div>
 </header>
 
-<div class="layout">
-  <div class="panel stage-wrap">
-    <canvas id="stage" aria-label="Falling-note playback of the replay"></canvas>
-    <div class="hud tl"><div class="big" id="hudCombo">0x</div><div id="hudAcc">100.00%</div><div id="hudCounts"></div></div>
-    <div class="hud tr"><div id="hudTime">0:00.0</div><div>demand <b id="hudLoad">–</b><span class="gauge"><i id="hudGauge"></i></span></div><div id="hudSkill" style="color:var(--muted)"></div></div>
+<div class="main">
+  <div class="viewcol">
+    <div class="panel stage-wrap">
+      <canvas id="stage" aria-label="The chart and the replay's keystrokes falling side by side"></canvas>
+      <div class="hud tl"><div class="big" id="hudCombo">0x</div><div id="hudAcc">100.00%</div><div id="hudCounts"></div></div>
+      <div class="hud tr"><div id="hudTime">0:00.0</div><div>demand <b id="hudLoad">–</b><span class="gauge"><i id="hudGauge"></i></span></div><div id="hudSkill" style="color:var(--muted)"></div></div>
+    </div>
+    <div class="panel timeline-card">
+      <div class="toolbar">
+        <button class="btn primary" id="play">Play</button>
+        <button class="btn" id="prevErr" title="Previous mistake ([)">&#9664; mistake</button>
+        <button class="btn" id="nextErr" title="Next mistake (])">mistake &#9654;</button>
+        <button class="btn" id="hardest" title="Jump to the hardest section (H)">Hardest</button>
+        <label>Speed
+          <select id="rate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
+        </label>
+        <label title="Scroll speed, as osu!lazer counts it (↑ ↓)">Scroll <input type="range" id="scroll" min="5" max="40" step="1" value="24"><output id="scrollOut">24</output></label>
+        <label>Skin <select id="skin"></select></label>
+        <label title="Outline the chart's notes behind your keystrokes"><input type="checkbox" id="overlay" checked> chart in input</label>
+        <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="5"> ms</label>
+        <span class="spacer"></span>
+        <span class="time" id="clock">0:00.0 / 0:00.0</span>
+      </div>
+      <div id="tlwrap"><canvas id="tl" aria-label="Difficulty timeline; drag to seek"></canvas><div id="tip"></div></div>
+      <div class="legend" id="legend"><span class="keys" title="Bars are the engine's demand reading (taller is harder), coloured by the skill carrying it; red ticks below are where accuracy was lost. Drag the timeline or scroll the wheel over the playfield to scrub."><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> ±1 s · <kbd>↑</kbd><kbd>↓</kbd> scroll · <kbd>[</kbd><kbd>]</kbd> mistakes · <kbd>H</kbd> hardest</span></div>
+    </div>
   </div>
   <aside class="side">
     <section class="panel"><h2>Skill levels</h2><div id="skills"></div></section>
@@ -114,25 +140,6 @@
   </aside>
 </div>
 
-<div class="panel timeline-card">
-  <div class="toolbar">
-    <button class="btn primary" id="play">Play</button>
-    <button class="btn" id="prevErr" title="Previous mistake ([)">&#9664; mistake</button>
-    <button class="btn" id="nextErr" title="Next mistake (])">mistake &#9654;</button>
-    <button class="btn" id="hardest" title="Jump to the hardest section (H)">Hardest</button>
-    <label>Speed
-      <select id="rate"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
-    </label>
-    <label>Scroll <input type="range" id="scroll" min="0.2" max="1.3" step="0.05" value="0.55"></label>
-    <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="5"> ms</label>
-    <span class="spacer"></span>
-    <span class="time" id="clock">0:00.0 / 0:00.0</span>
-  </div>
-  <div id="tlwrap"><canvas id="tl" aria-label="Difficulty timeline; drag to seek"></canvas><div id="tip"></div></div>
-  <div class="legend" id="legend"></div>
-  <div class="hint"><kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> ±1 s (<kbd>Shift</kbd> ±5 s) · <kbd>↑</kbd><kbd>↓</kbd> scroll speed · <kbd>[</kbd><kbd>]</kbd> mistakes · <kbd>H</kbd> hardest · drag the timeline to scrub anywhere in the replay. Bars are the engine's demand reading (taller is harder), coloured by the skill carrying it; red ticks below are where accuracy was lost.</div>
-</div>
-
 <audio id="audio" preload="auto"></audio>
 
 <script>
@@ -145,7 +152,24 @@ const JN = P.judgments;                        // ["MAX","300","200","100","50",
 const JCOL = ["#9fe3ff", "#5bb4f5", "#86e072", "#f2c94c", "#f2994a", "#ff5d5d"];
 const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
 const SKILL_NAME = P.skills.map(s => s.replace("_", " "));
-const LANE_COL = ["#d7dde8", "#6fa8e8", "#6fa8e8", "#f5c451", "#6fa8e8", "#6fa8e8", "#d7dde8"];
+// the classic 7K layout: white blue white yellow white blue white
+const LANE_KIND = [0, 1, 0, 2, 0, 1, 0];
+// a keystroke as the input field paints it: a good hit in its lane's colour, anything worse in a colour of its own
+const PRESS_BAD = { 2: "#7bdc6a", 3: "#ff9f43", 4: "#ff6b3d" };
+const GHOST_COL = "#c084fc";
+// lazer's scroll speed: a note takes this many ms / speed to fall the full height of the column
+const LAZER_TIME_RANGE = 11485;
+const SKINS = {
+  classic: { label: "Classic", col: 0.054, gap: 1, note: 0.40, key: 1.35, radius: 2, ln: 0.80, shine: true,
+             lane: ["#eef2f8", "#4aa6ff", "#ffcc33"], tint: ["rgba(255,255,255,0.02)", "rgba(74,166,255,0.035)", "rgba(255,204,51,0.025)"] },
+  bars:    { label: "Bars", col: 0.050, gap: 2, note: 0.30, key: 1.15, radius: 0, ln: 0.86, shine: false,
+             lane: ["#e8edf4", "#5aa9ff", "#f7c948"], tint: ["rgba(255,255,255,0.02)", "rgba(90,169,255,0.03)", "rgba(247,201,72,0.022)"] },
+  thick:   { label: "Thick", col: 0.062, gap: 0, note: 0.52, key: 1.5, radius: 3, ln: 0.76, shine: true,
+             lane: ["#f4f6fa", "#3d8bff", "#ffc61a"], tint: ["rgba(255,255,255,0.025)", "rgba(61,139,255,0.04)", "rgba(255,198,26,0.03)"] },
+  compact: { label: "Compact", col: 0.044, gap: 1, note: 0.34, key: 1.25, radius: 1, ln: 0.80, shine: false,
+             lane: ["#eef2f8", "#56acff", "#ffd23f"], tint: ["rgba(255,255,255,0.02)", "rgba(86,172,255,0.035)", "rgba(255,210,63,0.025)"] },
+};
+const DEFAULT_SKIN = "bars";                  // the most legible of the four on dense, fast charts
 const RATE = P.meta.rate || 1;
 const WIN = P.windows;
 const N = P.notes;
@@ -156,6 +180,9 @@ const $ = id => document.getElementById(id);
 const fmt = ms => { ms = Math.max(0, ms); const s = ms / 1000; return Math.floor(s / 60) + ":" + (s % 60).toFixed(1).padStart(4, "0"); };
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lowerBound = (arr, x, f) => { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (f(arr[m]) < x) lo = m + 1; else hi = m; } return lo; };
+const store = { get(k) { try { return localStorage.getItem("proj7k.replay." + k); } catch (e) { return null; } },
+                set(k, v) { try { localStorage.setItem("proj7k.replay." + k, v); } catch (e) {} } };
+const FONT = getComputedStyle(document.body).fontFamily;
 
 // ---------- header and static panels ----------
 $("title").textContent = P.meta.artist + " – " + P.meta.title;
@@ -179,10 +206,11 @@ if (!P.meta.hash_matched) chip("beatmap", "hash mismatch");
       '<span class="val">' + (r && r.tested ? '<b>' + r.stars.toFixed(2) + '★</b> ' + r.dan + (r.broke_down ? '<span class="bd">broke down</span>' : '') : 'not tested') + '</span>';
     box.appendChild(d);
   });
-  const lg = $("legend");
-  P.skills.forEach((k, i) => { const s = document.createElement("span"); s.innerHTML = '<i style="background:' + SKILL_COL[i] + '"></i>' + SKILL_NAME[i]; lg.appendChild(s); });
-  const e = document.createElement("span"); e.innerHTML = '<i style="background:#ff5d5d"></i>accuracy lost'; lg.appendChild(e);
-  const g = document.createElement("span"); g.innerHTML = '<i style="background:#c084fc"></i>ghost taps'; lg.appendChild(g);
+  const lg = $("legend"), keys = lg.firstElementChild;
+  const add = (col, label) => { const s = document.createElement("span"); s.innerHTML = '<i style="background:' + col + '"></i>' + label; lg.insertBefore(s, keys); };
+  P.skills.forEach((k, i) => add(SKILL_COL[i], SKILL_NAME[i]));
+  add("#ff5d5d", "accuracy lost");
+  add(GHOST_COL, "ghost taps");
 })();
 
 // ---------- derived data ----------
@@ -206,15 +234,31 @@ const pre = [];
   }
 }
 const evTimes = events.map(e => e.t);
+const headEvents = events.filter(e => !e.tail), headTimes = headEvents.map(e => e.t);
 let maxLN = 0; N.forEach(n => { if (n.e != null) maxLN = Math.max(maxLN, n.e - n.t); });
 const isBad = n => n.j >= 3 || (n.tj != null && n.tj >= 4);
 const mistakes = N.map((n, i) => ({ n, i })).filter(x => isBad(x.n));
 const hotSpots = TL.hot;
+const ghosts = P.ghosts.slice().sort((a, b) => a.t - b.t);
 
-function stateAt(t) {
-  const k = lowerBound(evTimes, t + 1e-9, x => x) - 1;
-  return k >= 0 ? pre[k] : { c: [0, 0, 0, 0, 0, 0], combo: 0, best: 0 };
-}
+// which note each keystroke hit, so the input field can colour it by its judgment (-1: it hit nothing)
+const pressJ = P.keys.map(iv => new Int8Array(iv.length).fill(-1));
+const pressTail = P.keys.map(iv => new Int8Array(iv.length).fill(-1));
+let maxHold = 0;
+P.keys.forEach(iv => iv.forEach(([d, u]) => { if (u != null) maxHold = Math.max(maxHold, u - d); }));
+N.forEach(n => {
+  if (n.o == null) return;
+  const iv = P.keys[n.c], at = n.t + n.o;
+  let k = lowerBound(iv, at, a => a[0]);
+  if (k > 0 && (k === iv.length || Math.abs(iv[k - 1][0] - at) <= Math.abs(iv[k][0] - at))) k--;
+  if (k < iv.length && Math.abs(iv[k][0] - at) < 2) { pressJ[n.c][k] = n.j; if (n.tj != null) pressTail[n.c][k] = n.tj; }
+});
+// the chart's notes per column, for the input field's outline of what was asked
+const byCol = [[], [], [], [], [], [], []];
+N.forEach(n => byCol[n.c].push(n));
+
+function stateIndex(t) { return lowerBound(evTimes, t + 1e-9, x => x) - 1; }
+function stateAt(t) { const k = stateIndex(t); return k >= 0 ? pre[k] : { c: [0, 0, 0, 0, 0, 0], combo: 0, best: 0 }; }
 function keyDown(col, t) {
   const iv = P.keys[col];
   let lo = 0, hi = iv.length;
@@ -223,9 +267,21 @@ function keyDown(col, t) {
   const up = iv[lo - 1][1];
   return up == null || up > t;
 }
+// whether the chart asks for the key at t: a head at the line, or an LN still to be held
+function chartDown(col, t) {
+  const ns = byCol[col];
+  const k = lowerBound(ns, t + 40, n => n.t) - 1;
+  for (let i = k; i >= 0 && i > k - 3; i--) {
+    const n = ns[i];
+    if (n.e != null ? (n.t <= t + 40 && n.e >= t) : Math.abs(n.t - t) <= 40) return true;
+  }
+  return false;
+}
 function binAt(t) { return clamp(Math.floor(t / TL.bin_ms), 0, TL.load.length - 1); }
 
 // ---------- clock ----------
+// The playhead runs on the frame clock and follows the audio loosely: the media clock ticks coarsely and
+// jitters, which at a high scroll speed shows as notes stuttering, so it only steers, it never sets `now` directly.
 const audio = $("audio");
 let audioOK = false;
 if (P.audio) {
@@ -233,143 +289,245 @@ if (P.audio) {
   audio.addEventListener("canplay", () => { audioOK = true; });
   audio.addEventListener("error", () => { audioOK = false; $("offLabel").style.display = "none"; });
 } else { $("offLabel").style.display = "none"; }
-let now = 0, playing = false, userRate = 1, lastTs = 0, audioOffset = 0, dragging = false, resumeAfterDrag = false;
+let now = 0, playing = false, userRate = 1, audioOffset = 0, dragging = false, resumeAfterDrag = false;
+let baseTs = 0, baseT = 0;                                  // while playing: now = baseT + (ts - baseTs) * speed
+const speed = () => userRate * RATE;
 
 function setRate() { audio.playbackRate = userRate * RATE; audio.preservesPitch = false; }
+function rebase(t) { baseT = t; baseTs = performance.now(); }
 function seek(t) {
   now = clamp(t, 0, DUR);
+  rebase(now);
   if (audioOK) { try { audio.currentTime = Math.max(0, (now - audioOffset) / 1000); } catch (e) {} }
-  lastTs = performance.now();
   needDraw = true;
 }
 function play() {
   if (now >= DUR - 50) seek(0);
-  playing = true; lastTs = performance.now(); $("play").textContent = "Pause";
+  playing = true; rebase(now); $("play").textContent = "Pause";
   if (audioOK) { setRate(); audio.currentTime = Math.max(0, (now - audioOffset) / 1000); audio.play().catch(() => { audioOK = false; }); }
 }
 function pause() { playing = false; $("play").textContent = "Play"; if (audioOK) audio.pause(); }
 const toggle = () => playing ? pause() : play();
 
 // ---------- stage ----------
-const stage = $("stage"), sctx = stage.getContext("2d");
-let scroll = 0.55, needDraw = true, dpr = 1;
-function fitCanvas(cv) {
+const stage = $("stage"), sctx = stage.getContext("2d", { alpha: false });
+let scrollSpeed = clamp(parseFloat(store.get("scroll")) || 24, 5, 40);
+let skinName = SKINS[store.get("skin")] ? store.get("skin") : DEFAULT_SKIN;
+let overlay = store.get("overlay") !== "0";
+let needDraw = true, dpr = 1;
+const sizes = new Map();
+function measure(cv) {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   const r = cv.getBoundingClientRect();
   const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
-  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; needDraw = true; }
-  return { w: r.width, h: r.height };
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  sizes.set(cv, { w: r.width, h: r.height });
+  needDraw = true; tlDirty = true;
+}
+const sizeOf = cv => sizes.get(cv) || (measure(cv), sizes.get(cv));
+const timeRange = () => LAZER_TIME_RANGE / scrollSpeed;
+const lead = () => timeRange() * 0.45;                    // a moment we jump to sits a little under halfway up the field
+
+function rrect(ctx, x, y, w, h, r) {
+  if (r <= 0 || h < 2 * r || w < 2 * r) { ctx.rect(x, y, w, h); return; }
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+// the geometry of both playfields at the current size and skin
+function layout(W, H) {
+  const sk = SKINS[skinName];
+  const bottom = 40;
+  let colW = Math.round(clamp(H * sk.col, 20, 70));
+  const fit = c => 2 * (7 * c + 6 * sk.gap) + Math.max(30, c * 1.1);
+  while (colW > 14 && fit(colW) > W - 24) colW--;
+  const fieldW = 7 * colW + 6 * sk.gap, between = Math.max(30, Math.round(colW * 1.1));
+  const xL = Math.round((W - (2 * fieldW + between)) / 2), xR = xL + fieldW + between;
+  const keyH = Math.round(colW * sk.key);
+  const lineY = Math.round(H - bottom - keyH);
+  const noteH = Math.max(4, Math.round(colW * sk.note));
+  return { sk, colW, fieldW, between, xL, xR, keyH, lineY, noteH, bottom, ppm: lineY / timeRange() };
+}
+
+function drawField(ctx, g, x0, H, isInput) {
+  const { sk, colW, fieldW, keyH, lineY } = g;
+  const colX = c => x0 + c * (colW + sk.gap);
+  ctx.fillStyle = "#000"; ctx.fillRect(x0 - 1, 0, fieldW + 2, H - g.bottom + 4);
+  for (let c = 0; c < 7; c++) {
+    ctx.fillStyle = "#0a0d14"; ctx.fillRect(colX(c), 0, colW, lineY);
+    ctx.fillStyle = sk.tint[LANE_KIND[c]]; ctx.fillRect(colX(c), 0, colW, lineY);
+  }
+  if (sk.gap === 0) {                                      // no gap to separate the columns: a hairline does
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    for (let c = 1; c < 7; c++) ctx.fillRect(Math.round(colX(c)), 0, 1, lineY);
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(x0 - 1, 0, 1, H - g.bottom); ctx.fillRect(x0 + fieldW, 0, 1, H - g.bottom);
+}
+
+function noteRect(ctx, g, x, y, w, color, alpha) {
+  const { sk, noteH } = g;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color; ctx.beginPath(); rrect(ctx, x, y - noteH, w, noteH, sk.radius); ctx.fill();
+  if (sk.shine && noteH >= 8) {                            // a lit top edge and a darker foot, as skins draw them
+    ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.fillRect(x + 1, y - noteH + 1, w - 2, Math.max(1, noteH * 0.16));
+    ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fillRect(x + 1, y - noteH * 0.3, w - 2, noteH * 0.3 - 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawKeys(ctx, g, x0, isDown) {
+  const { sk, colW, keyH, lineY } = g;
+  for (let c = 0; c < 7; c++) {
+    const x = x0 + c * (colW + sk.gap), col = sk.lane[LANE_KIND[c]], down = isDown(c);
+    if (down) {                                           // the column lights up above a pressed key
+      const gr = ctx.createLinearGradient(0, lineY - colW * 4, 0, lineY);
+      gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, col);
+      ctx.globalAlpha = 0.28; ctx.fillStyle = gr; ctx.fillRect(x, lineY - colW * 4, colW, colW * 4); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = "#0b0f18"; ctx.fillRect(x, lineY, colW, keyH);
+    const pad = Math.max(2, Math.round(colW * 0.1));
+    ctx.beginPath(); rrect(ctx, x + pad, lineY + pad + 2, colW - 2 * pad, keyH - 2 * pad - 2, Math.min(6, colW * 0.15));
+    if (down) { ctx.fillStyle = col; ctx.fill(); }
+    else { ctx.fillStyle = "#151b28"; ctx.fill(); ctx.strokeStyle = col; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5; ctx.stroke(); ctx.globalAlpha = 1; }
+  }
+  // the judgment line
+  ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(x0, lineY - 1, g.fieldW, 2);
 }
 
 function drawStage() {
-  const { w: W, h: H } = fitCanvas(stage);
+  const { w: W, h: H } = sizeOf(stage);
   const ctx = sctx;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  const laneW = clamp(Math.min(W / 8.2, 74), 28, 74);
-  const sw = laneW * 7, x0 = (W - sw) / 2;
-  const lineY = Math.round(H * 0.7);
-  const ppm = scroll;                                    // px per ms
+  ctx.fillStyle = "#05070c"; ctx.fillRect(0, 0, W, H);
+  const g = layout(W, H);
+  const { sk, colW, noteH, lineY, ppm } = g;
   const Y = t => lineY - (t - now) * ppm;
-  const noteH = Math.max(8, laneW * 0.26);
+  const t0 = now - (H - lineY) / ppm, t1 = now + lineY / ppm + noteH / ppm;
+  const lnW = Math.round(colW * sk.ln), lnOff = (colW - lnW) / 2;
 
-  // playfield: the chart above the line, the player's own play below it
-  ctx.fillStyle = "#0b111d"; ctx.fillRect(x0, 0, sw, lineY);
-  ctx.fillStyle = "#0f1626"; ctx.fillRect(x0, lineY, sw, H - lineY);
-  ctx.strokeStyle = "#1d2740"; ctx.lineWidth = 1;
-  for (let c = 0; c <= 7; c++) { const x = Math.round(x0 + c * laneW) + 0.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  // beat-free time grid: every second, to give the eye something to measure with
-  ctx.strokeStyle = "rgba(255,255,255,0.045)";
-  const t0 = now - (H - lineY) / ppm, t1 = now + lineY / ppm;
-  for (let s = Math.ceil(t0 / 1000) * 1000; s <= t1; s += 1000) { const y = Math.round(Y(s)) + 0.5; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + sw, y); ctx.stroke(); }
-
-  ctx.fillStyle = "rgba(148,163,184,0.55)"; ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
-  ctx.textAlign = "left"; ctx.fillText("CHART", x0 + sw + 8, lineY - 8); ctx.fillText("YOUR PLAY", x0 + sw + 8, lineY + 16);
-
-  // notes
+  // ---- left: the chart, as the game would show it ----
+  drawField(ctx, g, g.xL, H, false);
+  ctx.save(); ctx.beginPath(); ctx.rect(g.xL, 0, g.fieldW, lineY + g.keyH); ctx.clip();
+  const cx = c => g.xL + c * (colW + sk.gap);
   const lo = lowerBound(N, t0 - maxLN, n => n.t), hi = lowerBound(N, t1, n => n.t);
   for (let i = lo; i < hi; i++) {
-    const n = N[i];
-    const cx = x0 + n.c * laneW + laneW / 2, nw = laneW * 0.84;
-    const past = n.t <= now;
-    const yh = Y(n.t);
-    const col = past ? JCOL[n.j] : LANE_COL[n.c];
-    const faded = past && n.j <= 1 && (n.tj == null || n.tj <= 1);
-    ctx.globalAlpha = faded ? 0.38 : 1;
+    const n = N[i], x = cx(n.c), col = sk.lane[LANE_KIND[n.c]];
+    const hitAt = n.o != null ? n.t + n.o : null;
+    const hit = hitAt != null && hitAt <= now;              // a hit note is gone from the field the moment it was pressed
+    const missed = n.j === 5 && n.t <= now;
     if (n.e != null) {
-      const yt = Y(n.e);
-      const held = past && n.e > now && keyDown(n.c, now);
-      const body = past ? (n.tj != null && n.tj >= 4 ? "rgba(255,93,93,0.35)" : "rgba(111,168,232,0.35)") : "rgba(111,168,232,0.28)";
-      ctx.fillStyle = held ? "rgba(159,227,255,0.55)" : body;
-      ctx.fillRect(cx - nw * 0.36, yt, nw * 0.72, yh - yt);
-      // tail cap, marked with how the release was judged once it is past
-      ctx.fillStyle = n.e <= now && n.tj != null ? JCOL[n.tj] : LANE_COL[n.c];
-      ctx.fillRect(cx - nw / 2, yt - noteH * 0.35, nw, noteH * 0.7);
-      if (n.e <= now && n.tj != null && n.tj >= 4) { ctx.strokeStyle = "#ff5d5d"; ctx.lineWidth = 2; ctx.strokeRect(cx - nw / 2, yt - noteH * 0.35, nw, noteH * 0.7); }
+      const releasedAt = n.to != null ? n.e + n.to : null;
+      if (hit && releasedAt != null && releasedAt <= now) continue;
+      const held = hit && keyDown(n.c, now);
+      const yh = hit ? (held ? lineY : Math.min(lineY, Y(n.t))) : Y(n.t), yt = Y(n.e);
+      if (yt > H) continue;
+      const dropped = missed || (hit && !held && n.e > now);
+      ctx.globalAlpha = dropped ? 0.35 : held ? 0.9 : 0.7;
+      ctx.fillStyle = dropped ? "#6b7280" : col;
+      ctx.fillRect(x + lnOff, yt, lnW, Math.max(0, yh - yt));
+      ctx.globalAlpha = 1;
+      noteRect(ctx, g, x, yt + noteH * 0.5, colW, dropped ? "#6b7280" : col, dropped ? 0.5 : 0.95);   // tail cap
+      if (!hit || !held) noteRect(ctx, g, x, yh, colW, missed ? "#ff5d5d" : col, missed ? 0.55 : 1);
+      continue;
     }
-    ctx.fillStyle = col;
-    ctx.fillRect(cx - nw / 2, yh - noteH / 2, nw, noteH);
-    if (past && n.j === 5) {                           // a miss: an X where the note was
-      ctx.globalAlpha = 1; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(cx - 7, yh - 7); ctx.lineTo(cx + 7, yh + 7); ctx.moveTo(cx + 7, yh - 7); ctx.lineTo(cx - 7, yh + 7); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    if (hit) continue;
+    const y = Y(n.t);
+    if (y - noteH > H) continue;
+    noteRect(ctx, g, x, y, colW, missed ? "#ff5d5d" : col, missed ? 0.55 : 1);
   }
+  ctx.restore();
+  drawKeys(ctx, g, g.xL, c => chartDown(c, now));
 
-  // the player's keystrokes: a bar from press to release, only what has happened by `now`
+  // ---- right: the player's keystrokes, falling on the same clock ----
+  drawField(ctx, g, g.xR, H, true);
+  ctx.save(); ctx.beginPath(); ctx.rect(g.xR, 0, g.fieldW, lineY + g.keyH); ctx.clip();
+  const ix = c => g.xR + c * (colW + sk.gap);
+  if (overlay) {                                          // what the chart asked for, outlined behind the keystrokes
+    ctx.lineWidth = 1;
+    for (let i = lo; i < hi; i++) {
+      const n = N[i], y = Y(n.t);
+      if (n.t + Math.max(0, n.o || 0) < now - 40) { if (n.e == null || n.e < now) continue; }
+      const x = ix(n.c) + 0.5;
+      ctx.strokeStyle = n.j === 5 ? "rgba(255,93,93,0.85)" : "rgba(255,255,255,0.13)";
+      if (n.e != null) { const yt = Y(n.e); ctx.strokeRect(x + lnOff, yt, lnW - 1, Math.max(0, Math.min(y, lineY) - yt)); }
+      if (y <= lineY + noteH) ctx.strokeRect(x, y - noteH + 0.5, colW - 1, noteH - 1);
+    }
+  }
   for (let c = 0; c < 7; c++) {
-    const iv = P.keys[c];
-    const cx = x0 + c * laneW + laneW / 2;
-    for (let k = lowerBound(iv, t0 - 4000, a => a[0]); k < iv.length; k++) {
-      const [d, u] = iv[k];
-      if (d > now) break;
-      const up = u == null || u > now ? now : u;
-      if (up < t0) continue;
-      const yd = Y(d), yu = Y(up);
-      ctx.fillStyle = "rgba(255,255,255,0.82)";
-      ctx.fillRect(cx - 3, yu, 6, Math.max(3, yd - yu));
-      ctx.fillStyle = "#fff"; ctx.fillRect(cx - 9, yd - 1.5, 18, 3);      // the press itself
+    const iv = P.keys[c], x = ix(c), col = sk.lane[LANE_KIND[c]];
+    for (let k = lowerBound(iv, t0 - maxHold - 1, a => a[0]); k < iv.length; k++) {
+      const [d, u0] = iv[k];
+      if (d > t1) break;
+      const u = u0 == null ? DUR : u0;
+      if (u < now) continue;                              // released before the line: gone, like a hit note
+      const j = pressJ[c][k];
+      const pc = j < 0 ? GHOST_COL : (PRESS_BAD[j] || col);
+      const yd = d <= now ? lineY : Y(d), yu = Y(u);
+      // the hold: how long the key stayed down
+      if (yd - yu > 2) {
+        const tj = pressTail[c][k];
+        if (tj >= 0) {                                    // holding an LN: drawn like the chart's LN body
+          ctx.globalAlpha = 0.6; ctx.fillStyle = tj >= 4 ? "#ff6b3d" : pc;
+          ctx.fillRect(x + lnOff, yu, lnW, yd - yu);
+        } else {                                          // how long a tap stayed down: a faint stem
+          ctx.globalAlpha = 0.32; ctx.fillStyle = pc;
+          ctx.fillRect(x + colW * 0.36, yu, colW * 0.28, yd - yu);
+        }
+        ctx.globalAlpha = 1;
+      }
+      // the press itself, shaped like a note so the two fields read alike
+      if (d > now) noteRect(ctx, g, x, yd, colW, pc, 1);
+      else { ctx.fillStyle = pc; ctx.fillRect(x, lineY - 3, colW, 3); }
     }
   }
-  // the hit error of each note, drawn as a short bar from where the note was to where it was pressed
-  for (let i = lo; i < hi; i++) {
-    const n = N[i];
-    if (n.o == null || n.t + n.o > now || Math.abs(n.o) < 12) continue;
-    const cx = x0 + n.c * laneW + laneW / 2 + laneW * 0.42;
-    ctx.strokeStyle = JCOL[n.j]; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(cx, Y(n.t)); ctx.lineTo(cx, Y(n.t + n.o)); ctx.stroke();
-  }
-  // ghost taps: presses that hit nothing
-  for (const g of P.ghosts) {
-    if (g.t > now || g.t < t0) continue;
-    const cx = x0 + g.c * laneW + laneW / 2, y = Y(g.t);
-    ctx.fillStyle = "#c084fc"; ctx.beginPath(); ctx.moveTo(cx, y - 7); ctx.lineTo(cx + 7, y); ctx.lineTo(cx, y + 7); ctx.lineTo(cx - 7, y); ctx.closePath(); ctx.fill();
-  }
+  ctx.restore();
+  drawKeys(ctx, g, g.xR, c => keyDown(c, now));
 
-  // the line and the receptors
-  ctx.fillStyle = "rgba(245,158,11,0.9)"; ctx.fillRect(x0, lineY - 1.5, sw, 3);
-  for (let c = 0; c < 7; c++) {
-    const down = keyDown(c, now);
-    ctx.fillStyle = down ? "rgba(159,227,255,0.85)" : "rgba(255,255,255,0.08)";
-    ctx.fillRect(x0 + c * laneW + 3, lineY + 3, laneW - 6, 8);
-  }
-
-  // hit-error meter: where the last few seconds of hits landed against the windows
-  const mw = Math.min(sw, 280), mx = (W - mw) / 2, my = H - 16, half = WIN.miss;
-  ctx.fillStyle = "#0a0f1a"; ctx.fillRect(mx - 12, my - 24, mw + 24, 34);
-  const px = ms => mx + mw / 2 + (ms / half) * (mw / 2);
-  [[WIN.miss, JCOL[4]], [WIN["100"], JCOL[3]], [WIN["200"], JCOL[2]], [WIN["300"], JCOL[1]], [WIN.max, JCOL[0]]].forEach(([wd, col]) => {
-    ctx.fillStyle = col; ctx.globalAlpha = 0.22; ctx.fillRect(px(-wd), my - 4, px(wd) - px(-wd), 8);
-  });
-  ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.fillRect(mx + mw / 2 - 1, my - 7, 2, 14);
-  for (let k = lowerBound(evTimes, now - 4000, x => x); k < events.length && evTimes[k] <= now; k++) {
-    const e = events[k]; if (e.tail) continue;
-    const n = N[e.i]; if (n.o == null) continue;
-    ctx.globalAlpha = clamp(1 - (now - e.t) / 4000, 0.1, 1);
-    ctx.fillStyle = JCOL[n.j]; ctx.fillRect(px(clamp(n.o, -half, half)) - 1, my - 7, 2, 14);
+  // judgment flashes on the chart's line, and the last judgment over it
+  const lastK = lowerBound(headTimes, now + 1e-9, x => x) - 1;
+  for (let k = lastK; k >= 0 && headTimes[k] > now - 160; k--) {
+    const e = headEvents[k], n = N[e.i], a = 1 - (now - e.t) / 160;
+    const x = cx(n.c);
+    const gh = colW * 1.6, gr = ctx.createLinearGradient(0, lineY - gh, 0, lineY);
+    gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, JCOL[e.j]);
+    ctx.globalAlpha = 0.5 * a; ctx.fillStyle = gr; ctx.fillRect(x, lineY - gh, colW, gh);
   }
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "rgba(148,163,184,0.7)"; ctx.textAlign = "center"; ctx.fillText("early", mx + 14, my - 11); ctx.fillText("late", mx + mw - 12, my - 11);
+  if (lastK >= 0 && now - headTimes[lastK] < 450) {
+    const e = headEvents[lastK], a = 1 - (now - headTimes[lastK]) / 450;
+    ctx.globalAlpha = clamp(a * 1.6, 0, 1); ctx.fillStyle = JCOL[e.j]; ctx.textAlign = "center";
+    ctx.font = "700 " + Math.round(colW * 0.55) + "px " + FONT;
+    ctx.fillText(JN[e.j], g.xL + g.fieldW / 2, lineY * 0.62);
+    ctx.globalAlpha = 1;
+  }
+  // ghost taps: a small diamond on the input line
+  for (let k = lowerBound(ghosts, now - 250, x => x.t); k < ghosts.length && ghosts[k].t <= now; k++) {
+    const gt = ghosts[k], x = ix(gt.c) + colW / 2, y = lineY - noteH, a = 1 - (now - gt.t) / 250;
+    ctx.globalAlpha = a; ctx.fillStyle = GHOST_COL; ctx.beginPath();
+    ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // field names, and under the keystrokes a hit-error meter of the last few seconds
+  const by = H - g.bottom;
+  ctx.font = "600 11px " + FONT; ctx.textAlign = "center"; ctx.fillStyle = "rgba(148,163,184,0.75)";
+  ctx.fillText("CHART", g.xL + g.fieldW / 2, by + 26);
+  const mw = g.fieldW, mx = g.xR, my = by + 14, half = WIN.miss;
+  const px = ms => mx + mw / 2 + (ms / half) * (mw / 2);
+  ctx.fillStyle = "#0a0f1a"; ctx.fillRect(mx, my - 6, mw, 12);
+  [[WIN.miss, JCOL[4]], [WIN["100"], JCOL[3]], [WIN["200"], JCOL[2]], [WIN["300"], JCOL[1]], [WIN.max, JCOL[0]]].forEach(([wd, col]) => {
+    ctx.fillStyle = col; ctx.globalAlpha = 0.22; ctx.fillRect(px(-wd), my - 3, px(wd) - px(-wd), 6);
+  });
+  ctx.globalAlpha = 1; ctx.fillStyle = "#fff"; ctx.fillRect(mx + mw / 2 - 1, my - 6, 2, 12);
+  for (let k = lowerBound(headTimes, now - 4000, x => x); k < headEvents.length && headTimes[k] <= now; k++) {
+    const n = N[headEvents[k].i]; if (n.o == null) continue;
+    ctx.globalAlpha = clamp(1 - (now - headTimes[k]) / 4000, 0.1, 1);
+    ctx.fillStyle = JCOL[n.j]; ctx.fillRect(px(clamp(n.o, -half, half)) - 1, my - 6, 2, 12);
+  }
+  ctx.globalAlpha = 1; ctx.fillStyle = "rgba(148,163,184,0.75)";
+  ctx.textAlign = "left"; ctx.fillText("early", mx, by + 34);
+  ctx.textAlign = "center"; ctx.fillText("INPUT", mx + mw / 2, by + 34);
+  ctx.textAlign = "right"; ctx.fillText("late", mx + mw, by + 34);
 }
 
 // ---------- practice command ----------
@@ -378,7 +536,7 @@ if (SRC.replay && SRC.beatmap) {
   $("practice").style.display = "";
   const q = x => "'" + x.replace(/'/g, "'\\''") + "'";
   const refresh = () => {
-    $("cmd").value = "python3 -m proj7k.profiler -r " + q(SRC.replay) + " -b " + q(SRC.beatmap) + " --no-save --bundle --fatal-time " + Math.round(now + 1500);
+    $("cmd").value = "python3 -m proj7k.profiler -r " + q(SRC.replay) + " -b " + q(SRC.beatmap) + " --no-save --bundle --fatal-time " + Math.round(now + lead());
   };
   window.__refreshCmd = refresh;
   $("copyCmd").onclick = () => {
@@ -386,56 +544,64 @@ if (SRC.replay && SRC.beatmap) {
     try { (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText($("cmd").value) : document.execCommand("copy"); } catch (e) { try { document.execCommand("copy"); } catch (e2) {} }
     $("copyCmd").textContent = "Copied"; setTimeout(() => { $("copyCmd").textContent = "Copy command"; }, 1200);
   };
-  $("cmdHard").onclick = () => { if (hotSpots.length) { jump(hotSpots[0].start - 1500); refresh(); } };
+  $("cmdHard").onclick = () => { if (hotSpots.length) { jump(hotSpots[0].start - lead()); refresh(); } };
 }
 
+// the HUD is DOM, so it is only touched when what it shows has changed
+const hudLast = {};
+function setText(id, v) { if (hudLast[id] !== v) { hudLast[id] = v; $(id).textContent = v; } }
 function updateHud() {
+  const k = stateIndex(now);
+  if (hudLast.k !== k) {
+    hudLast.k = k;
+    const st = k >= 0 ? pre[k] : { c: [0, 0, 0, 0, 0, 0], combo: 0 };
+    const c = st.c, tot = c.reduce((a, b) => a + b, 0);
+    const pts = 300 * (c[0] + c[1]) + 200 * c[2] + 100 * c[3] + 50 * c[4];
+    setText("hudCombo", st.combo + "x");
+    setText("hudAcc", (tot ? pts / (300 * tot) * 100 : 100).toFixed(2) + "%");
+    $("hudCounts").innerHTML = JN.map((n, i) => '<span class="j" style="color:' + JCOL[i] + '">' + n + '</span> ' + c[i]).join('<br>');
+  }
+  setText("hudTime", fmt(now));
+  setText("clock", fmt(now) + " / " + fmt(DUR));
+  const b = binAt(now);
+  if (hudLast.b !== b) {
+    hudLast.b = b;
+    const load = TL.load[b], sk = TL.skill[b];
+    $("hudLoad").textContent = load.toFixed(2) + "×";
+    $("hudGauge").style.width = clamp(load / loadMax * 100, 0, 100) + "%";
+    $("hudGauge").style.background = sk >= 0 ? SKILL_COL[sk] : "#475569";
+    $("hudSkill").textContent = sk >= 0 ? SKILL_NAME[sk] : "";
+  }
   if (window.__refreshCmd && !playing) window.__refreshCmd();
-  const st = stateAt(now);
-  const c = st.c, tot = c.reduce((a, b) => a + b, 0);
-  const pts = 300 * (c[0] + c[1]) + 200 * c[2] + 100 * c[3] + 50 * c[4];
-  $("hudCombo").textContent = st.combo + "x";
-  $("hudAcc").textContent = (tot ? pts / (300 * tot) * 100 : 100).toFixed(2) + "%";
-  $("hudCounts").innerHTML = JN.map((n, i) => '<span class="j" style="color:' + JCOL[i] + '">' + n + '</span> ' + c[i]).join('<br>');
-  $("hudTime").textContent = fmt(now);
-  const b = binAt(now), load = TL.load[b];
-  $("hudLoad").textContent = load.toFixed(2) + "×";
-  const sk = TL.skill[b];
-  $("hudGauge").style.width = clamp(load / loadMax * 100, 0, 100) + "%";
-  $("hudGauge").style.background = sk >= 0 ? SKILL_COL[sk] : "#475569";
-  $("hudSkill").textContent = sk >= 0 ? SKILL_NAME[sk] : "";
-  $("clock").textContent = fmt(now) + " / " + fmt(DUR);
 }
 
 // ---------- timeline ----------
+// Everything but the playhead is drawn once per size into a cached canvas; a frame only blits it.
 const tl = $("tl"), tctx = tl.getContext("2d");
 const loadMax = Math.max(1.15, ...TL.load);
 const riskMax = Math.max(1e-6, ...TL.risk);
 const errMax = Math.max(1, ...TL.errors);
-const TOP = 6, ERR_H = 30, RULER_H = 16;
+const TOP = 6, ERR_H = 22, RULER_H = 14;
+const tlCache = document.createElement("canvas");
+let tlDirty = true, tlLastPx = -1;
 
-function drawTimeline() {
-  const { w: W, h: H } = fitCanvas(tl);
-  const ctx = tctx;
+function paintTimeline(W, H) {
+  tlCache.width = tl.width; tlCache.height = tl.height;
+  const ctx = tlCache.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
   const ph = H - TOP - ERR_H - RULER_H;                 // height of the demand area
   const X = t => (t / DUR) * W;
   const bw = Math.max(1, TL.bin_ms / DUR * W);
-
-  // what has been played is a little brighter than what is to come
   for (let b = 0; b < TL.load.length; b++) {
     const x = X(b * TL.bin_ms), v = clamp(TL.load[b] / loadMax, 0, 1), h = v * ph;
     const sk = TL.skill[b];
-    ctx.globalAlpha = (b + 1) * TL.bin_ms <= now ? 1 : 0.6;
     ctx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#475569";
     ctx.fillRect(x, TOP + ph - h, Math.ceil(bw) - (bw > 3 ? 1 : 0), h);
   }
-  ctx.globalAlpha = 1;
   // the level the chart is rated at: demand 1.0
   const y1 = TOP + ph - (1 / loadMax) * ph;
   ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(0, y1); ctx.lineTo(W, y1); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.font = "10px " + getComputedStyle(document.body).fontFamily; ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.font = "10px " + FONT; ctx.textAlign = "left";
   ctx.fillText("chart level", 4, y1 - 3);
   // expected losses at the chart's own level: where a player at that level would be dropping notes
   ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.2; ctx.beginPath();
@@ -444,14 +610,12 @@ function drawTimeline() {
     if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.stroke(); ctx.lineWidth = 1;
-
   // hardest sections
   hotSpots.forEach((h, k) => {
     ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(X(h.start), TOP, X(h.end) - X(h.start), ph);
     ctx.strokeStyle = SKILL_COL[h.skill]; ctx.lineWidth = 1.5; ctx.strokeRect(X(h.start) + 0.5, TOP + 0.5, X(h.end) - X(h.start) - 1, ph - 1); ctx.lineWidth = 1;
     ctx.fillStyle = "#fff"; ctx.textAlign = "left"; ctx.fillText("#" + (k + 1), X(h.start) + 3, TOP + 11);
   });
-
   // where accuracy was lost, and ghost taps
   const ey = TOP + ph + 2;
   for (let b = 0; b < TL.errors.length; b++) {
@@ -459,21 +623,33 @@ function drawTimeline() {
     const h = Math.max(3, (v / errMax) * (ERR_H - 4));
     ctx.fillStyle = "#ff5d5d"; ctx.fillRect(X(b * TL.bin_ms), ey + (ERR_H - 4) - h, Math.ceil(bw) - (bw > 3 ? 1 : 0), h);
   }
-  for (let b = 0; b < TL.ghosts.length; b++) if (TL.ghosts[b] > 0) { ctx.fillStyle = "#c084fc"; ctx.fillRect(X((b + 0.5) * TL.bin_ms) - 1.5, ey, 3, 3); }
-
+  for (let b = 0; b < TL.ghosts.length; b++) if (TL.ghosts[b] > 0) { ctx.fillStyle = GHOST_COL; ctx.fillRect(X((b + 0.5) * TL.bin_ms) - 1.5, ey, 3, 3); }
   if (S.fatal_ms != null) {
     const x = X(S.fatal_ms);
     ctx.strokeStyle = "#ef4444"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, TOP + ph + ERR_H); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = "#ef4444"; ctx.textAlign = x > W - 60 ? "right" : "left"; ctx.fillText("fatal", x + (x > W - 60 ? -3 : 3), TOP + ph + ERR_H - 4);
   }
-
   // ruler
   const step = DUR > 360000 ? 60000 : DUR > 120000 ? 30000 : 10000;
   ctx.fillStyle = "rgba(148,163,184,0.8)"; ctx.textAlign = "center";
-  for (let t = 0; t <= DUR; t += step) { const x = clamp(X(t), 14, W - 14); ctx.fillText(fmt(t).replace(/\.\d$/, ""), x, H - 4); ctx.fillRect(X(t), TOP + ph + ERR_H, 1, 4); }
+  for (let t = 0; t <= DUR; t += step) { const x = clamp(X(t), 14, W - 14); ctx.fillText(fmt(t).replace(/\.\d$/, ""), x, H - 3); ctx.fillRect(X(t), TOP + ph + ERR_H, 1, 4); }
+  tlDirty = false;
+}
 
-  // playhead
-  const px = X(now);
+function drawTimeline() {
+  const { w: W, h: H } = sizeOf(tl);
+  const pxDev = Math.round((now / DUR) * W * dpr);
+  if (!tlDirty && pxDev === tlLastPx) return;
+  if (tlDirty) paintTimeline(W, H);
+  tlLastPx = pxDev;
+  const ctx = tctx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, tl.width, tl.height);
+  ctx.drawImage(tlCache, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const ph = H - TOP - ERR_H - RULER_H, px = (now / DUR) * W;
+  // what is still to come is a little dimmer than what has been played
+  ctx.fillStyle = "rgba(14,20,32,0.42)"; ctx.fillRect(px, TOP, W - px, ph);
   ctx.fillStyle = "#fff"; ctx.fillRect(px - 1, 0, 2, TOP + ph + ERR_H);
   ctx.beginPath(); ctx.moveTo(px - 6, 0); ctx.lineTo(px + 6, 0); ctx.lineTo(px, 8); ctx.closePath(); ctx.fill();
 }
@@ -503,6 +679,8 @@ tl.addEventListener("pointerleave", () => { $("tip").style.display = "none"; });
 const endDrag = () => { if (dragging) { dragging = false; if (resumeAfterDrag) play(); } };
 tl.addEventListener("pointerup", endDrag);
 tl.addEventListener("pointercancel", endDrag);
+// the wheel over the playfield scrubs: a notch moves the chart by an eighth of the field
+stage.addEventListener("wheel", ev => { ev.preventDefault(); jump(now + Math.sign(ev.deltaY) * timeRange() / 8); }, { passive: false });
 
 // ---------- sidebar lists and navigation ----------
 function jump(t) { seek(t); updateHud(); }
@@ -512,7 +690,7 @@ function jump(t) { seek(t); updateHud(); }
   hotSpots.forEach((h, k) => {
     const r = document.createElement("div"); r.className = "row"; r.tabIndex = 0;
     r.innerHTML = '<span class="t">' + fmt(h.start) + '</span><span style="color:' + SKILL_COL[h.skill] + '">' + SKILL_NAME[h.skill] + '</span><span class="tag">' + (h.share * 100).toFixed(0) + '% of risk</span>';
-    r.onclick = () => jump(h.start - 1500);
+    r.onclick = () => jump(h.start - lead());
     r.onkeydown = e => { if (e.key === "Enter") r.onclick(); };
     box.appendChild(r);
   });
@@ -527,7 +705,7 @@ function renderMistakes() {
     const tag = n.j >= 3 ? JN[n.j] : "tail " + JN[n.tj];
     const col = n.j >= 3 ? JCOL[n.j] : JCOL[n.tj];
     r.innerHTML = '<span class="t">' + fmt(n.t) + '</span><span>lane ' + (n.c + 1) + (n.e != null ? " LN" : "") + '</span><span class="tag" style="color:' + col + '">' + tag + (n.o != null && n.j >= 3 && n.j < 5 ? " " + (n.o > 0 ? "+" : "") + Math.round(n.o) + "ms" : "") + '</span>';
-    r.onclick = () => jump(n.t - 1500);
+    r.onclick = () => jump(n.t - lead());
     r.onkeydown = e => { if (e.key === "Enter") r.onclick(); };
     box.appendChild(r);
   });
@@ -539,24 +717,35 @@ renderMistakes();
 function stepMistake(dir) {
   const ts = mistakes.map(x => x.n.t);
   if (!ts.length) return;
-  const cur = now + 1500;                                // the mistake is shown 1.5 s ahead of the line
+  const cur = now + lead();                              // a mistake we jumped to sits `lead` ahead of the line
   let t;
   if (dir > 0) t = ts.find(x => x > cur + 50); else { const before = ts.filter(x => x < cur - 50); t = before.length ? before[before.length - 1] : undefined; }
-  if (t !== undefined) jump(t - 1500);
+  if (t !== undefined) jump(t - lead());
 }
 function hardest() {
   if (!hotSpots.length) return;
-  const nextHot = hotSpots.map(h => h.start).sort((a, b) => a - b).find(t => t - 1500 > now + 100);
-  jump((nextHot !== undefined ? nextHot : hotSpots[0].start) - 1500);
+  const nextHot = hotSpots.map(h => h.start).sort((a, b) => a - b).find(t => t - lead() > now + 100);
+  jump((nextHot !== undefined ? nextHot : hotSpots[0].start) - lead());
 }
 
 // ---------- controls ----------
+function setScroll(v) {
+  scrollSpeed = clamp(Math.round(v), 5, 40);
+  $("scroll").value = scrollSpeed; $("scrollOut").textContent = scrollSpeed;
+  store.set("scroll", String(scrollSpeed)); needDraw = true;
+}
+Object.keys(SKINS).forEach(k => { const o = document.createElement("option"); o.value = k; o.textContent = SKINS[k].label; $("skin").appendChild(o); });
+$("skin").value = skinName;
+$("skin").onchange = e => { skinName = e.target.value; store.set("skin", skinName); needDraw = true; };
+$("overlay").checked = overlay;
+$("overlay").onchange = e => { overlay = e.target.checked; store.set("overlay", overlay ? "1" : "0"); needDraw = true; };
+setScroll(scrollSpeed);
 $("play").onclick = toggle;
 $("prevErr").onclick = () => stepMistake(-1);
 $("nextErr").onclick = () => stepMistake(1);
 $("hardest").onclick = hardest;
-$("rate").onchange = e => { userRate = parseFloat(e.target.value); if (audioOK) setRate(); };
-$("scroll").oninput = e => { scroll = parseFloat(e.target.value); needDraw = true; };
+$("rate").onchange = e => { userRate = parseFloat(e.target.value); rebase(now); if (audioOK) setRate(); };
+$("scroll").oninput = e => setScroll(parseFloat(e.target.value));
 $("offset").onchange = e => { audioOffset = parseFloat(e.target.value) || 0; seek(now); };
 window.addEventListener("keydown", e => {
   if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT")) return;
@@ -564,26 +753,30 @@ window.addEventListener("keydown", e => {
   if (k === " ") { e.preventDefault(); toggle(); }
   else if (k === "ArrowLeft") { e.preventDefault(); jump(now - (e.shiftKey ? 5000 : 1000)); }
   else if (k === "ArrowRight") { e.preventDefault(); jump(now + (e.shiftKey ? 5000 : 1000)); }
-  else if (k === "ArrowUp") { e.preventDefault(); scroll = clamp(scroll + 0.05, 0.2, 1.3); $("scroll").value = scroll; needDraw = true; }
-  else if (k === "ArrowDown") { e.preventDefault(); scroll = clamp(scroll - 0.05, 0.2, 1.3); $("scroll").value = scroll; needDraw = true; }
+  else if (k === "ArrowUp") { e.preventDefault(); setScroll(scrollSpeed + 1); }
+  else if (k === "ArrowDown") { e.preventDefault(); setScroll(scrollSpeed - 1); }
   else if (k === "[") stepMistake(-1);
   else if (k === "]") stepMistake(1);
   else if (k === "h" || k === "H") hardest();
   else if (k === "Home") jump(0);
   else if (k === "End") jump(DUR);
 });
-window.addEventListener("resize", () => { needDraw = true; });
+if (window.ResizeObserver) { const ro = new ResizeObserver(entries => entries.forEach(en => measure(en.target))); ro.observe(stage); ro.observe(tl); }
+window.addEventListener("resize", () => { measure(stage); measure(tl); });
 
 // ---------- main loop ----------
 let lastDrawn = -1;
 function frame(ts) {
   if (playing && !dragging) {
-    if (audioOK && !audio.paused) now = audio.currentTime * 1000 + audioOffset;
-    else { now += (ts - lastTs) * userRate * RATE; }
+    let t = baseT + (ts - baseTs) * speed();
+    if (audioOK && !audio.paused) {
+      const a = audio.currentTime * 1000 + audioOffset, drift = a - t;
+      if (Math.abs(drift) > 80) { baseT = a; baseTs = ts; t = a; }    // a real jump (a stall, a seek): follow it
+      else baseT += drift * 0.03;                                    // jitter: steer gently toward the audio
+    }
+    now = t;
     if (now >= DUR) { now = DUR; pause(); }
-    needDraw = true;
   }
-  lastTs = ts;
   if (needDraw || now !== lastDrawn) { drawStage(); drawTimeline(); updateHud(); lastDrawn = now; needDraw = false; }
   requestAnimationFrame(frame);
 }
@@ -591,7 +784,7 @@ function frame(ts) {
 now = Math.max(0, (N.length ? N[0].t : 0) - 1500);
 { const m = /[#&]t=(\d+(?:\.\d+)?)/.exec(location.hash); if (m) now = clamp(parseFloat(m[1]), 0, DUR); }   // #t=<ms> opens at a moment
 requestAnimationFrame(frame);
-window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }) };   // for scripted checks
+window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }), setSkin: k => { skinName = k; $("skin").value = k; needDraw = true; }, setScroll, setOverlay: v => { overlay = v; $("overlay").checked = v; needDraw = true; } };   // for scripted checks
 </script>
 </body>
 </html>
