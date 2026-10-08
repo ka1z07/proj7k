@@ -8,7 +8,7 @@ from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
 from proj7k.engine.scale import stars_of
 from proj7k.field import trace_beatmap
 from proj7k.profiler.response import analyze_strain_response
-from proj7k.radar import TECHNIQUE_NAMES
+from proj7k.field import TECH_KEYS
 
 
 def create_synthetic_chart(tmp_path: Path, bpm: float = 150.0, num_notes: int = 40) -> Path:
@@ -76,7 +76,7 @@ def test_every_hit_is_laid_on_the_fields_demand_readings(tmp_path: Path):
     analyze_strain_response(alignment, beatmap, field=field)
 
     for hit in alignment.aligned_hits:
-        assert set(hit.strains) == set(TECHNIQUE_NAMES)
+        assert set(hit.strains) == set(TECH_KEYS)
     assert max(sum(h.strains.values()) for h in alignment.aligned_hits) > 0.0
     assert max(h.strains["jack"] for h in alignment.aligned_hits) == pytest.approx(
         max(field.d[i] * field.w[i, 0] for i in range(field.events.n))
@@ -209,7 +209,7 @@ def test_end_to_end_profiler_cli_radar_output(tmp_path: Path, capsys):
     # Point-to-point alignment with the engine's demand readings, in aligned_hits dict
     assert len(report_dict["aligned_hits"]) > 0
     assert "strains" in report_dict["aligned_hits"][0]
-    assert set(report_dict["aligned_hits"][0]["strains"].keys()) == set(TECHNIQUE_NAMES)
+    assert set(report_dict["aligned_hits"][0]["strains"].keys()) == set(TECH_KEYS)
     assert report.field is not None and report.field.total_D > 0
 
     # 2. Test CLI stdout formatting

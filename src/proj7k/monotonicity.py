@@ -28,18 +28,10 @@ DEFAULT_GUARD_METRICS: Tuple[str, ...] = ("star_rating", "own_skill")
 #: Metrics evaluated for diagnosis by default, in addition to `DEFAULT_GUARD_METRICS`.
 DIAGNOSTIC_METRICS: Tuple[str, ...] = ("avg_nps", "peak_4m_nps")
 
-#: Prefix of the raw driver metrics: `driver_jack`, `driver_ln_inverse`, ... reads the named
-#: technique's raw driver off the result's driver vector. The drivers are what the per-technique
-#: ladder gates are stated on (see `guard.CALIBRATED_METRIC_GATES`): the star rating is a
-#: monotone per-chart rescaling of them, so a ladder that is collapsing shows up here before it
-#: moves a single star.
-DRIVER_METRIC_PREFIX: str = "driver_"
-
 #: The metric that reads, off a result, the stars of the skill its own pool is the ladder of
 #: (`engine.skills.BENCHMARK_POOL_SKILL`): Regular Jack's ladder reads `rc_jack`, LN Release's reads
 #: `ln_release`. It is one metric name rather than eight so that every pool is gated on its own
-#: skill and none on a skill it is not about (ADR-0018 decision 3). The `driver_` metrics above belong
-#: to the legacy engine and stay for the consumers that still read it.
+#: skill and none on a skill it is not about (ADR-0018 decision 3).
 OWN_SKILL_METRIC: str = "own_skill"
 
 
@@ -185,8 +177,7 @@ def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
     Reads one ladder metric off a batch result.
 
     Physical quantities live on the feature tensor; the engine's star rating is carried by the
-    result itself, the legacy engine's raw technique drivers by the result's `drivers` vector under the
-    `driver_` prefix, and a pool's own skill by `own_skill`. Consulting the features first and the result second lets a single metric
+    result itself, and a pool's own skill by `own_skill`. Consulting the features first and the result second lets a single metric
     name work regardless of which of the two owns it, without either side knowing the other.
     """
     if metric == OWN_SKILL_METRIC:
@@ -194,14 +185,6 @@ def read_ladder_metric(result: Any, metric: str) -> Optional[float]:
         skill = BENCHMARK_POOL_SKILL.get(getattr(result, "technique", None))
         if isinstance(skills, dict) and skill is not None:
             value = skills.get(skill)
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                return float(value)
-        return None
-
-    if metric.startswith(DRIVER_METRIC_PREFIX):
-        drivers = getattr(result, "drivers", None)
-        if isinstance(drivers, dict):
-            value = drivers.get(metric[len(DRIVER_METRIC_PREFIX):])
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 return float(value)
         return None

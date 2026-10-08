@@ -56,19 +56,21 @@ PYTHONPATH=src python3 -m proj7k.difficulty "/path/to/your/beatmap.osu"
 ============================================================
  PROJ7K INTRINSIC DIFFICULTY REPORT
 ============================================================
- Song       : Artist - Song Title [7K Difficulty]
+ Song       : proj7k Benchmark Team - Cyber Stream & Chordjack Demonstration [7K Regular Benchmark (Sample)]
+ Creator    : ka1z07
  Notes      : 43 (LN: 4.7%) | NPS: 10.42
 ------------------------------------------------------------
- ★ Star Rating: 3.61★ (Uncompressed: 3.61★)
- Dominance   : stream (3.58★, Synergy: +0.03★)
+ ★ Star Rating: 1.68★ (0th Dan)
+ Dominance   : speed (1.38★)
 ------------------------------------------------------------
- 8-Dimension Technique Radar:
-   Jack       :  2.55★    LN General :  0.00★
-   Tech       :  0.00★    LN Tech    :  0.00★
-   Speed      :  0.00★    LN Inverse :  0.00★
-   Stream     :  3.58★    LN Release :  0.00★
+ 8-Skill Technique Radar:
+   Jack       :  0.00★    LN General :  0.00★
+   Tech       :  1.41★    LN Tech    :  0.00★
+   Speed      :  1.38★    LN Inverse :  0.00★
+   Stream     :  1.08★    LN Release :  0.00★
 ------------------------------------------------------------
- Strain Profile: P90=50.56 | Peak=57.79
+ Hardest stretches:
+   0:00.00 - 0:08.00  100.0% of the risk, carried by speed
 ============================================================
 ```
 

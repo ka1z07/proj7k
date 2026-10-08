@@ -7,7 +7,6 @@ from proj7k.parser import Beatmap7K, HitObject, NoteType
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, parse_osr, serialize_osr
 from proj7k.profiler.matcher import align_replay_hits, HitJudgment
 from proj7k.profiler.cli import run_ingestion
-from proj7k.strain import compute_8d_strain_timeseries
 from proj7k.profiler.response import analyze_strain_response
 
 
@@ -58,25 +57,3 @@ def test_alignment_with_leadin_retains_perfect_judgment():
     assert alignment.miss_count == 0
     assert alignment.judgment_counts[HitJudgment.MAX] == 1
     assert alignment.total_ghost_taps == 0
-
-
-def test_sparse_technique_strain_does_not_explode():
-    """Asserts that sparse techniques do not produce astronomical strain due to p90 sparsity."""
-    # Chart with 100 notes, only 2 quick notes on col 0 (a single short jack)
-    hos = []
-    # Stream flow across other lanes
-    for t in range(1000, 30000, 200):
-        c = (t // 200) % 6 + 1
-        hos.append(HitObject(column=c, time=float(t), note_type=NoteType.RICE))
-    # Two quick jack notes on col 0 at t=10000 and t=10100
-    hos.append(HitObject(column=0, time=10000.0, note_type=NoteType.RICE))
-    hos.append(HitObject(column=0, time=10100.0, note_type=NoteType.RICE))
-
-    bm = Beatmap7K(
-        circle_size=7,
-        overall_difficulty=8.0,
-        hit_objects=hos,
-    )
-    ts = compute_8d_strain_timeseries(bm)
-    # Peak jack strain should be bounded (not thousands or millions)
-    assert max(ts.jack) < 200.0

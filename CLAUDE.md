@@ -31,9 +31,9 @@ PYTHONPATH=src python3 -m proj7k.batch \
 - 护栏查 15 级段位阶梯的单调性（Kendall τ / Spearman ρ / 倒挂数）：总星级按池 + 阶梯级门槛；八个池各自的「自有技能」阶梯（`own_skill`）按池棘轮（`guard.OWN_SKILL_RATCHET`），上限是当前实测值、记为已知缺陷而非验收。另查 0th、5th、10th、Stellium 四档的八池中位数区间（`dan.CANONICAL_DAN_SR_BANDS`）。
 - 测试套件在此之上钉死 120 首的全部星级指纹（`EXPECTED_STAR_RATING_CHECKSUM`），并钉死金标准（`tests/fixtures/engine_golden_v02.json`）、段位表与 19 张外部留出谱（`tests/engine/test_external_holdout.py`，只做检验、不参与拟合）。
 - 原始密度特征（`avg_nps`、`peak_4m_nps`）降级为诊断指标，需要时用 `--guard-metric` 显式请求。
-- 当前基线：测试 2 失败，均为旧引擎的预先存在项（`tests/test_tech_alignment_diagnosis.py` 的两个用例，随旧引擎删除而消失）；失败数多于这 2 个，或失败的不是它们，才是回归。
+- 当前基线：测试全绿；任何失败都是回归。
 
-旧引擎（`radar`、`strain`、`difficulty`、`rating` 及其上的 profiler / downscaler 链）原地保留，段位表用 `dan.LEGACY_*`。
+旧引擎（`radar`、`strain`、`rating`、`calibration`）已删除（ADR-0023）；`python3 -m proj7k.difficulty` 是新引擎的单曲命令行。
 
 改标定是「两步提交」：先改，确认新阶梯正是想要的，再重基线化。改的东西决定重基线化哪些：
 

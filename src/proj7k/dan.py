@@ -5,8 +5,6 @@ Implements Canonical Dan Progression Hierarchy (0th to Stellium) as single sourc
 - CANONICAL_DAN_TIERS: 15 strictly ordered progression tiers.
 - CANONICAL_DAN_SR: each tier's star rating on the spec v0.2 engine, read from `dan_table.json`.
 - estimate_canonical_dan: star rating of that engine to the nearest tier.
-- LEGACY_DAN_SR / legacy_estimate_canonical_dan: the same for the legacy driver/strain engine, for the
-  consumers still on its stars (ADR-0018 decision 4); they go when that engine does.
 - parse_dan_tier: Robust user input string normalizer.
 """
 
@@ -27,25 +25,6 @@ DAN_TABLE_PATH = Path(__file__).with_name("dan_table.json")
 #: increasing (ADR-0018 decision 2). The file is the authority; `tests/engine/test_dan_table.py` keeps it
 #: equal to what the engine reads off the benchmark.
 CANONICAL_DAN_SR: Dict[str, float] = json.loads(DAN_TABLE_PATH.read_text(encoding="utf-8"))["stars"]
-
-# Legacy-engine dan benchmark star ratings (ADR-0011, CONTEXT.md)
-LEGACY_DAN_SR: Dict[str, float] = {
-    "0th": 3.2,
-    "1st": 3.7,
-    "2nd": 4.1,
-    "3rd": 4.5,
-    "4th": 4.9,
-    "5th": 5.3,
-    "6th": 5.7,
-    "7th": 6.1,
-    "8th": 6.5,
-    "9th": 6.9,
-    "10th": 7.4,
-    "Gamma": 8.0,
-    "Azimuth": 8.8,
-    "Zenith": 9.7,
-    "Stellium": 10.5,
-}
 
 #: Acceptance windows, in star rating, for the engine's output on the benchmark ladder: the
 #: median star rating of the benchmark charts sitting at a tier (all eight pools) must land inside its band.
@@ -115,40 +94,3 @@ def estimate_canonical_dan(star_rating: float) -> str:
     if star_rating <= 0.0:
         return CANONICAL_DAN_TIERS[0]
     return min(CANONICAL_DAN_TIERS, key=lambda tier: abs(math.log(CANONICAL_DAN_SR[tier] / star_rating)))
-
-
-def legacy_estimate_canonical_dan(star_rating: float) -> str:
-    """
-    Estimates canonical Jinjin 7K Dan benchmark tier from the legacy engine's intrinsic star rating.
-    Anchored to the legacy table (0th ~ 3.2★, 5th ~ 5.3★, 10th ~ 7.4★, Stellium >= 10.5★).
-    Sub-0th star ratings (< 3.5★) are floored to '0th' to maintain monotonic whole-sequence coverage.
-    """
-    if star_rating < 3.5:
-        return "0th"
-    if star_rating < 4.0:
-        return "1st"
-    if star_rating < 4.4:
-        return "2nd"
-    if star_rating < 4.8:
-        return "3rd"
-    if star_rating < 5.2:
-        return "4th"
-    if star_rating < 5.6:
-        return "5th"
-    if star_rating < 6.0:
-        return "6th"
-    if star_rating < 6.5:
-        return "7th"
-    if star_rating < 7.0:
-        return "8th"
-    if star_rating < 7.5:
-        return "9th"
-    if star_rating < 8.2:
-        return "10th"
-    if star_rating < 9.0:
-        return "Gamma"
-    if star_rating < 9.8:
-        return "Azimuth"
-    if star_rating < 10.6:
-        return "Zenith"
-    return "Stellium"
