@@ -537,25 +537,59 @@ def process_beatmap_file(
     return result, dest_path
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+@dataclass
+class DownscaleRun:
+    """What one downscaler invocation produced: per chart (result, written .osu, source .osu), the packages, the sync."""
+    results: List[Tuple[DownscaleResult, Optional[Path], Path]] = field(default_factory=list)
+    failed_count: int = 0
+    osz_map: Dict[Path, Path] = field(default_factory=dict)
+    sync_result: Optional[LazerPracticeSyncResult] = None
+    error: Optional[str] = None
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    def to_dict(self) -> Dict[str, Any]:
+        sync_result = self.sync_result
+        return {
+            "total_processed": len(self.results),
+            "failed_count": self.failed_count,
+            "results": [
+                {
+                    "report": res.to_dict(),
+                    "output_file": str(out_p) if out_p else None,
+                    "osz_file": str(self.osz_map.get(out_p)) if (out_p and out_p in self.osz_map) else None,
+                }
+                for res, out_p, _ in self.results
+            ],
+            "sync": (
+                {
+                    "success": sync_result.success,
+                    "collection": sync_result.collection_name,
+                    "synced_hashes": sync_result.synced_hashes,
+                    "updated_in_realm": sync_result.updated_in_realm,
+                }
+                if sync_result
+                else None
+            ),
+        }
 
-    if not args.target_dan and args.target_sr is None and args.target_d is None:
-        print(
-            "Error: At least one of --target-dan, --target-sr, or --target-d must be specified.",
-            file=sys.stderr,
-        )
-        return 1
 
-    input_str = str(args.input).strip()
+def run_downscale(
+    input_ref: str,
+    options: DownscaleOptions,
+    output_dir: Optional[Path] = None,
+    output: Optional[Path] = None,
+    osz_output: Optional[Path] = None,
+    package: bool = True,
+    dry_run: bool = False,
+    sync_lazer: bool = False,
+    realm_path: Path = DEFAULT_REALM_PATH,
+    lock_path: Optional[Path] = None,
+) -> DownscaleRun:
+    """
+    Downscale `input_ref` (an .osu file, a directory of them, or an osu! URL / beatmap ID), write the practice
+    charts, package them as .osz unless told not to, and optionally sync them into osu!lazer. The CLI and the
+    dashboard both run this; a failure that stops the run comes back as `error`.
+    """
+    input_str = str(input_ref).strip()
     input_path = Path(input_str)
 
     resolved_asset: Optional[ResolvedBeatmapAsset] = None
@@ -570,42 +604,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if is_url_or_id:
         logger.info(f"Resolving beatmap asset from URL or ID: {input_str}")
-        resolved_asset = locate_beatmap_in_lazer(input_str, realm_path=args.realm)
+        resolved_asset = locate_beatmap_in_lazer(input_str, realm_path=realm_path)
         if resolved_asset and resolved_asset.osu_path and resolved_asset.osu_path.exists():
             beatmap_files = [resolved_asset.osu_path]
         else:
             url_info = parse_osu_url_or_id(input_str)
             if url_info.beatmap_id:
-                fallback_dir = args.output_dir or Path("practice_maps")
+                fallback_dir = output_dir or Path("practice_maps")
                 web_path = fetch_beatmap_from_web(url_info, output_dir=fallback_dir)
                 if web_path and web_path.exists():
                     beatmap_files = [web_path]
             if not beatmap_files:
-                print(f"Error: Could not locate beatmap for '{input_str}' in osu!lazer database or web.", file=sys.stderr)
-                return 1
+                return DownscaleRun(error=f"Could not locate beatmap for '{input_str}' in osu!lazer database or web.")
     else:
         if not input_path.exists():
-            print(f"Error: Input path does not exist: '{input_path}'", file=sys.stderr)
-            return 1
+            return DownscaleRun(error=f"Input path does not exist: '{input_path}'")
         beatmap_files = discover_beatmap_files(input_path)
         if not beatmap_files:
-            print(f"Error: No 7K .osu beatmap files found at '{input_path}'", file=sys.stderr)
-            return 1
+            return DownscaleRun(error=f"No 7K .osu beatmap files found at '{input_path}'")
 
-    effective_output_dir = args.output_dir
+    effective_output_dir = output_dir
     if effective_output_dir is None:
         effective_output_dir = Path("practice_maps")
-
-    downscale_opts = DownscaleOptions(
-        target_dan=args.target_dan,
-        target_sr=args.target_sr,
-        target_D=args.target_d,
-        dominant_skill=args.dominant_skill,
-        prune_ratio=args.prune_ratio,
-        max_iterations=args.max_iterations,
-        tolerance=args.tolerance,
-        min_cosine_similarity=args.min_cosine_similarity,
-    )
 
     results: List[Tuple[DownscaleResult, Optional[Path], Path]] = []
     failed_count = 0
@@ -614,10 +634,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             res, out_path = process_beatmap_file(
                 path,
-                options=downscale_opts,
+                options=options,
                 output_dir=effective_output_dir,
-                explicit_output=args.output if len(beatmap_files) == 1 else None,
-                dry_run=args.dry_run,
+                explicit_output=output if len(beatmap_files) == 1 else None,
+                dry_run=dry_run,
             )
             results.append((res, out_path, path))
         except Exception as e:
@@ -625,18 +645,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             failed_count += 1
 
     if not results:
-        print("Error: No beatmaps were successfully downscaled.", file=sys.stderr)
-        return 1
+        return DownscaleRun(error="No beatmaps were successfully downscaled.")
 
-    # Standalone practice .osz packaging is enabled by default unless --no-package or --dry-run
-    should_package_osz = (not args.no_package) and not args.dry_run
+    # Standalone practice .osz packaging is on unless turned off (--no-package) or a dry run
+    should_package_osz = package and not dry_run
 
     osz_map: Dict[Path, Path] = {}
     if should_package_osz:
         for res, out_p, src_p in results:
             if not out_p or not out_p.exists():
                 continue
-            osz_target = args.osz_output if (args.osz_output and len(results) == 1) else out_p.with_suffix(".osz")
+            osz_target = osz_output if (osz_output and len(results) == 1) else out_p.with_suffix(".osz")
 
             # 1. Start with resolved assets if available (from URL / lazer DB lookup)
             audio_path = resolved_asset.audio_path if resolved_asset else None
@@ -714,7 +733,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # Synchronization with osu!lazer if requested
     sync_result: Optional[LazerPracticeSyncResult] = None
-    if args.sync_lazer and not args.dry_run:
+    if sync_lazer and not dry_run:
         # Trigger native OS import through the .osz file association (Q3 - A)
         for osz_file in osz_map.values():
             if osz_file.exists():
@@ -726,37 +745,63 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         sync_result = sync_practice_beatmaps_to_lazer(
             results=[r for r, _, _ in results],
-            realm_path=args.realm,
-            lock_path=args.lock_path,
+            realm_path=realm_path,
+            lock_path=lock_path,
         )
         if not sync_result.success:
-            print(f"Error during osu!lazer synchronization: {sync_result.error}", file=sys.stderr)
-            return 1
+            return DownscaleRun(results=results, failed_count=failed_count, osz_map=osz_map, sync_result=sync_result, error=f"osu!lazer synchronization failed: {sync_result.error}")
+
+    return DownscaleRun(results=results, failed_count=failed_count, osz_map=osz_map, sync_result=sync_result)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    if not args.target_dan and args.target_sr is None and args.target_d is None:
+        print(
+            "Error: At least one of --target-dan, --target-sr, or --target-d must be specified.",
+            file=sys.stderr,
+        )
+        return 1
+
+    downscale_opts = DownscaleOptions(
+        target_dan=args.target_dan,
+        target_sr=args.target_sr,
+        target_D=args.target_d,
+        dominant_skill=args.dominant_skill,
+        prune_ratio=args.prune_ratio,
+        max_iterations=args.max_iterations,
+        tolerance=args.tolerance,
+        min_cosine_similarity=args.min_cosine_similarity,
+    )
+    run = run_downscale(
+        args.input,
+        downscale_opts,
+        output_dir=args.output_dir,
+        output=args.output,
+        osz_output=args.osz_output,
+        package=not args.no_package,
+        dry_run=args.dry_run,
+        sync_lazer=args.sync_lazer,
+        realm_path=args.realm,
+        lock_path=args.lock_path,
+    )
+    if run.error:
+        print(f"Error: {run.error}", file=sys.stderr)
+        return 1
+    results, osz_map, sync_result = run.results, run.osz_map, run.sync_result
 
     # Output formatting
     if args.json:
-        output_data = {
-            "total_processed": len(results),
-            "failed_count": failed_count,
-            "results": [
-                {
-                    "report": res.to_dict(),
-                    "output_file": str(out_p) if out_p else None,
-                    "osz_file": str(osz_map.get(out_p)) if (out_p and out_p in osz_map) else None,
-                }
-                for res, out_p, _ in results
-            ],
-            "sync": (
-                {
-                    "success": sync_result.success,
-                    "collection": sync_result.collection_name,
-                    "synced_hashes": sync_result.synced_hashes,
-                    "updated_in_realm": sync_result.updated_in_realm,
-                }
-                if sync_result
-                else None
-            ),
-        }
+        output_data = run.to_dict()
         print(json.dumps(output_data, indent=2, ensure_ascii=False))
     else:
         for res, out_path, _ in results:
@@ -764,7 +809,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(format_downscale_report(res, output_path=out_path, sync_result=sync_result, osz_path=osz_p))
 
     return 0
-
 
 
 if __name__ == "__main__":

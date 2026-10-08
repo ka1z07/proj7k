@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 回放与画像</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">回放与画像</div>
+        <div class="page-sub">诊断一局回放、查看玩家八项技法画像、从 osu!lazer 导入历史回放。</div>
+      </div>
+      <a class="standalone-only" href="/#profiler">← 返回控制台</a>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-tab="replay" class="active">回放诊断</button>
+      <button data-tab="player">玩家画像</button>
+      <button data-tab="import">导入 lazer 回放</button>
+    </div>
+
+    <datalist id="players"></datalist>
+
+    <!-- 回放诊断 -->
+    <div class="card" data-pane="replay">
+      <h2>回放诊断</h2>
+      <div class="row" style="margin-bottom:8px">
+        <label class="check"><input type="radio" name="src" value="lazer" checked> osu!lazer 里的最近回放</label>
+        <label class="check"><input type="radio" name="src" value="files"> 回放文件 + 谱面文件</label>
+      </div>
+      <div class="row" id="lazerSrc">
+        <div class="field"><label for="rpPlayer">玩家名</label><input type="text" id="rpPlayer" list="players"></div>
+        <div class="field"><label for="rpIndex">第几新（0 = 最新）</label><input type="number" id="rpIndex" min="0" value="0"></div>
+      </div>
+      <div id="fileSrc" class="hidden">
+        <div class="row">
+          <div class="field"><label for="rpReplay">回放 .osr 路径</label><input type="text" id="rpReplay"></div>
+          <div class="field"><label for="rpBeatmap">谱面 .osu 路径</label><input type="text" id="rpBeatmap"></div>
+        </div>
+        <div class="row">
+          <div class="field"><div class="drop" id="dropReplay">或拖入 .osr</div></div>
+          <div class="field"><div class="drop" id="dropBeatmap">或拖入 .osu</div></div>
+        </div>
+        <p class="hint">拖入的谱面不带音频；用路径时，回放查看器会自动带上谱面文件夹里的音乐。</p>
+      </div>
+      <div class="row" style="margin:8px 0">
+        <label class="check"><input type="checkbox" id="rpView" checked> 生成回放查看器</label>
+        <label class="check"><input type="checkbox" id="rpSave" checked> 存入画像档案库</label>
+        <label class="check"><input type="checkbox" id="rpBundle"> 在崩盘点切三阶练习包</label>
+      </div>
+      <div class="row">
+        <div class="field"><label for="rpRecommend">练习推荐</label>
+          <select id="rpRecommend">
+            <option value="">不推荐</option>
+            <option value="both">短板突破 + 长板专精</option>
+            <option value="bottleneck">只看短板</option>
+            <option value="specialty">只看长板</option>
+          </select></div>
+        <div class="field"><label for="rpFatal">练习包切片时间（毫秒，留空自动找崩盘点）</label><input type="number" id="rpFatal" min="0"></div>
+      </div>
+      <button class="primary" id="rpRun">开始诊断</button>
+    </div>
+
+    <!-- 玩家画像 -->
+    <div class="card hidden" data-pane="player">
+      <h2>玩家画像</h2>
+      <div class="row">
+        <div class="field"><label for="pfPlayer">玩家名</label><input type="text" id="pfPlayer" list="players"></div>
+        <div class="field"><label for="pfDays">近多少天</label><input type="number" id="pfDays" min="1" value="30"></div>
+        <div class="field"><label for="pfRecommend">练习推荐</label>
+          <select id="pfRecommend">
+            <option value="">不推荐</option>
+            <option value="both">短板突破 + 长板专精</option>
+            <option value="bottleneck">只看短板</option>
+            <option value="specialty">只看长板</option>
+          </select></div>
+      </div>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pfAll"> 全历史巅峰（忽略天数）</label>
+      <div><button class="primary" id="pfRun">查看画像</button></div>
+    </div>
+
+    <!-- 导入 -->
+    <div class="card hidden" data-pane="import">
+      <h2>从 osu!lazer 导入历史回放</h2>
+      <div class="row">
+        <div class="field"><label for="imPlayer">玩家名</label><input type="text" id="imPlayer" list="players"></div>
+        <div class="field"><label for="imLimit">最多导入几局（留空为全部）</label><input type="number" id="imLimit" min="1"></div>
+      </div>
+      <p class="hint" style="margin-bottom:10px">按回放指纹去重，重复导入是安全的；过短或完成度过低的局会被过滤。</p>
+      <button class="primary" id="imRun">开始导入</button>
+    </div>
+
+    <div id="results"></div>
+    <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const panel = P7.jobPanel($("#job"));
+    const dropReplay = P7.dropZone($("#dropReplay"), ".osr", (f) => { $("#rpReplay").disabled = !!f; });
+    const dropBeatmap = P7.dropZone($("#dropBeatmap"), ".osu", (f) => { $("#rpBeatmap").disabled = !!f; });
+    const runButtons = ["#rpRun", "#pfRun", "#imRun"].map((s) => $(s));
+
+    document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === b));
+      document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== b.dataset.tab));
+    }));
+    document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => {
+      const lazer = document.querySelector("input[name=src]:checked").value === "lazer";
+      $("#lazerSrc").classList.toggle("hidden", !lazer);
+      $("#fileSrc").classList.toggle("hidden", lazer);
+    }));
+
+    async function loadPlayers() {
+      const data = await P7.getJSON("/api/players");
+      $("#players").replaceChildren(...(data.players || []).map((p) => el("option", { value: p })));
+      const first = (data.players || [])[0];
+      if (first) ["#rpPlayer", "#pfPlayer", "#imPlayer"].forEach((s) => { if (!$(s).value) $(s).value = first; });
+    }
+    loadPlayers();
+
+    async function run(kind, params, uploads) {
+      runButtons.forEach((b) => (b.disabled = true));
+      $("#jobCard").classList.remove("hidden");
+      $("#results").replaceChildren();
+      panel.reset();
+      const job = await P7.startJob(kind, params, { uploads, onUpdate: panel.update, onLog: panel.log });
+      panel.update(job);
+      runButtons.forEach((b) => (b.disabled = false));
+      if (job.status !== "done") { panel.showLog(); return null; }
+      return job;
+    }
+
+    // --- 渲染 -------------------------------------------------------------------------------------------
+    function dimsTable(dims, extraCols) {
+      return el("table", {},
+        el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "星级" }), el("th", { text: "段位" }),
+          ...extraCols.map(([h]) => el("th", { class: "num", text: h }))),
+        Object.entries(dims).map(([k, d]) => el("tr", {},
+          el("td", { text: P7.skillName(k) }), el("td", { class: "num", text: `${d.star_rating.toFixed(2)}★` }), el("td", { text: d.dan_tier }),
+          ...extraCols.map(([, f]) => el("td", { class: "num", text: f(d) })))));
+    }
+
+    function recommendations(recs) {
+      if (!recs || !recs.length) return null;
+      return el("div", { class: "card" }, el("h2", { text: "练习推荐" }), recs.map((r) => el("div", { style: "margin-bottom:12px" },
+        el("h3", { text: `${r.strategy === "bottleneck" ? "短板突破" : "长板专精"}：${P7.skillName(r.target_technique)}（${r.current_dan_tier} ${r.current_star_rating.toFixed(2)}★ → ${r.target_dan_tier} ${r.target_star_rating.toFixed(2)}★）` }),
+        el("p", { class: "hint", text: r.rationale }),
+        r.candidates.length ? el("table", {},
+          el("tr", {}, el("th", { text: "谱面" }), el("th", { class: "num", text: "星级" }), el("th", { text: "段位" })),
+          r.candidates.map((c) => el("tr", {}, el("td", { text: `${c.artist} - ${c.title} [${c.difficulty_name}]` }),
+            el("td", { class: "num", text: `${c.star_rating.toFixed(2)}★` }), el("td", { text: c.dan_tier }))))
+          : el("div", { class: "hint", text: "曲库里没有找到合适的谱面（需要 osu!lazer 曲库）。" }))));
+    }
+
+    function replayResult(r) {
+      const rep = r.report;
+      const j = rep.judgment_counts || {};
+      const radar = rep.skill_radar;
+      const path = rep.pathology || {};
+      const cascade = path.cascade_precursor;
+      const nodes = [el("div", { class: "card" },
+        el("h2", { text: r.title || "回放" }),
+        el("div", { class: "row" }, el("span", { class: "big", text: radar ? radar.overall_dan : "—" }),
+          el("span", { class: "hint", text: `玩家 ${rep.player_name} · ${rep.clock_rate !== 1 ? `${rep.clock_rate}x · ` : ""}${rep.is_valid_play ? "有效对局" : "无效对局（过短或完成度过低）"}${r.saved ? " · 已存档" : ""}` })),
+        rep.hash_matched ? null : el("div", { class: "warn", text: "回放记录的谱面与给的谱面文件不一致（MD5 不匹配），结果可能不可信。" }),
+        el("div", { class: "stats" },
+          P7.stat("完成度", P7.pct(rep.completion_rate)), P7.stat("时长", `${rep.play_duration_s.toFixed(0)}s`),
+          P7.stat("物件", `${rep.total_hits}/${rep.total_notes}`), P7.stat("Miss", rep.miss_count), P7.stat("空敲", rep.ghost_tap_count),
+          ...Object.entries(j).map(([k, v]) => P7.stat(k, v))),
+        radar ? [el("h3", { text: `八项技法承压（主技法 ${P7.skillName(radar.dominant_technique)}，短板 ${P7.skillName(radar.bottleneck_technique)}）` }),
+          dimsTable(radar.dimensions, [["谱面要求", (d) => d.chart_level.toFixed(2)], ["崩了", (d) => (d.broke_down ? "是" : "")]])] : null,
+        el("h3", { text: "手法诊断" }),
+        P7.kv([
+          path.bimanual ? ["左 / 右手 UR", `${path.bimanual.left_ur} / ${path.bimanual.right_ur}（负荷不对称 ${path.bimanual.load_asymmetry_ratio}）`] : null,
+          path.jack_drift ? ["Jack 漂移", `${path.jack_drift.slope_ms_per_s} ms/s${path.jack_drift.fatigue_alert ? "（疲劳预警）" : ""}`] : null,
+          path.ln_release && path.ln_release.total_lns ? ["LN 尾判", `粘手 ${P7.pct(path.ln_release.sticky_rate)} · 慌松 ${P7.pct(path.ln_release.panic_release_rate)}`] : null,
+          cascade && cascade.fatal_time_ms !== null ? ["崩盘点", `${(cascade.fatal_time_ms / 1000).toFixed(2)}s · ${cascade.fatal_lane || ""} · ${P7.skillName(cascade.skill)}`] : null,
+        ]))];
+      const rec = recommendations(r.recommendations);
+      if (rec) nodes.push(rec);
+      if (r.bundle) {
+        nodes.push(el("div", { class: "card" }, el("h2", { text: "三阶练习包" }),
+          el("table", {}, el("tr", {}, el("th", { text: "阶" }), el("th", { class: "num", text: "星级" })),
+            Object.entries(r.bundle.tiers).map(([k, t]) => el("tr", {}, el("td", { text: k }),
+              el("td", { class: "num", text: t.star_rating !== undefined ? `${Number(t.star_rating).toFixed(2)}★` : "" })))),
+          el("p", { class: "hint", text: "文件在下方任务输出里，可直接导入 osu!。" })));
+      }
+      if (r.bundle_notice) nodes.push(el("div", { class: "warn", text: r.bundle_notice }));
+      return nodes;
+    }
+
+    function profileResult(r) {
+      const p = r.profile;
+      const tc = p.trend_comparison;
+      const nodes = [el("div", { class: "card" },
+        el("h2", { text: `${p.player_name} · ${p.window_mode === "all_time" ? "全历史巅峰" : `近 ${p.horizon_days} 天`}` }),
+        el("div", { class: "row" }, el("span", { class: "big", text: p.total_matches ? `${p.overall_dan} ${p.overall_star_rating.toFixed(2)}★` : "暂无数据" }),
+          p.total_matches ? el("span", { class: "hint", text: `主技法 ${P7.skillName(p.dominant_technique)} · 短板 ${P7.skillName(p.bottleneck_technique)}` }) : null),
+        el("div", { class: "stats" },
+          P7.stat("对局", p.total_matches), P7.stat("通关", p.cleared_matches), P7.stat("失败（保留）", p.failed_matches),
+          P7.stat("稳定 UR", p.average_ur === null ? "—" : p.average_ur.toFixed(1))),
+        p.total_matches ? P7.skillBars(Object.fromEntries(Object.entries(p.dimensions).map(([k, d]) => [k, d.star_rating]))) : el("div", { class: "hint", text: "这个时间窗里没有对局。先导入回放或诊断几局。" }),
+        p.total_matches ? dimsTable(p.dimensions, [["对局", (d) => d.match_count]]) : null,
+        tc ? [el("h3", { text: `与全历史巅峰对比（巅峰 ${tc.all_time_overall_dan} ${tc.all_time_overall_sr.toFixed(2)}★）` }),
+          el("table", {}, el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "近期" }), el("th", { class: "num", text: "巅峰" }), el("th", { class: "num", text: "差值" }), el("th", { text: "状态" })),
+            Object.entries(tc.dimension_deltas || {}).map(([k, d]) => el("tr", {}, el("td", { text: P7.skillName(k) }),
+              el("td", { class: "num", text: d.recent_sr.toFixed(2) }), el("td", { class: "num", text: d.all_time_sr.toFixed(2) }),
+              el("td", { class: "num", text: `${d.delta_sr >= 0 ? "+" : ""}${d.delta_sr.toFixed(2)}` }), el("td", { text: d.status }))))] : null,
+        p.legacy_excluded ? el("p", { class: "hint", text: `${p.legacy_excluded} 条旧引擎写入的快照未计入。` }) : null)];
+      const rec = recommendations(r.recommendations);
+      if (rec) nodes.push(rec);
+      return nodes;
+    }
+
+    // --- 按钮 -------------------------------------------------------------------------------------------
+    $("#rpRun").onclick = async () => {
+      const lazer = document.querySelector("input[name=src]:checked").value === "lazer";
+      const params = {
+        source: lazer ? "lazer" : "files",
+        player: $("#rpPlayer").value, index: $("#rpIndex").value,
+        replay: $("#rpReplay").value, beatmap: $("#rpBeatmap").value,
+        view: $("#rpView").checked, save: $("#rpSave").checked, bundle: $("#rpBundle").checked,
+        recommend: $("#rpRecommend").value, fatal_time: $("#rpFatal").value,
+      };
+      const uploads = lazer ? {} : { replay: dropReplay.file, beatmap: dropBeatmap.file };
+      const job = await run("profile_replay", params, uploads);
+      if (!job) return;
+      $("#results").replaceChildren(...replayResult(job.result));
+      if (params.save) loadPlayers();
+    };
+
+    $("#pfRun").onclick = async () => {
+      const job = await run("profile_player", {
+        player: $("#pfPlayer").value, horizon_days: $("#pfDays").value, all_time: $("#pfAll").checked, recommend: $("#pfRecommend").value,
+      });
+      if (job) $("#results").replaceChildren(...profileResult(job.result));
+    };
+
+    $("#imRun").onclick = async () => {
+      const job = await run("import_replays", { player: $("#imPlayer").value, limit: $("#imLimit").value });
+      if (!job) return;
+      const s = job.result;
+      $("#results").replaceChildren(el("div", { class: "card" }, el("h2", { text: "导入完成" }), el("div", { class: "stats" },
+        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("已在库中", s.already_exists),
+        P7.stat("过滤（过短 / 完成度低）", s.noise_filtered), P7.stat("失败局（保留）", s.failed_preserved),
+        P7.stat("缺文件", s.missing_files), P7.stat("出错", s.errors))));
+      loadPlayers();
+    };
+  </script>
+</body>
+</html>
