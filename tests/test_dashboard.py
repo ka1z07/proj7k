@@ -325,6 +325,16 @@ def test_downscale_action_on_an_uploaded_chart(tmp_path):
                 status, _, body = await s.get([a for a in job["artifacts"] if a["kind"] == "osu"][0]["url"])
                 assert status == 200 and b"[HitObjects]" in body
 
+                assert chart["mode"] == "technique" and chart["suggest_free_mode"] is False
+
+                job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU), "target_sr": "1.2", "mode": "free",
+                                                          "package": False})
+                assert job["status"] == "done", job["error"]
+                chart = job["result"]["charts"][0]
+                assert chart["mode"] == "free" and chart["downscaled_stars"] < chart["original_stars"]
+                job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU), "target_sr": "1.2", "mode": "fast"})
+                assert job["status"] == "failed" and "降阶方式" in job["error"]
+
                 job, _ = await _run_job(ws, "downscale", {"input": str(tmp_path / "missing.osu"), "target_dan": "3rd"})
                 assert job["status"] == "failed" and "does not exist" in job["error"]
                 job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU)})

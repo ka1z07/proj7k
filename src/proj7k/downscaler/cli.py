@@ -110,6 +110,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override dominant skill dimension (e.g. 'jack', 'tech', 'stream', 'ln_inverse').",
     )
+    req_group.add_argument(
+        "--mode",
+        choices=("technique", "free"),
+        default="technique",
+        help=(
+            "'technique' (default) keeps the chart's dominant technique; 'free' lets it go and only chases the "
+            "target, still keeping the chart playable (rhythm skeleton, hand balance, no long new silences)."
+        ),
+    )
 
     out_group = parser.add_argument_group("Output Options")
     out_group.add_argument(
@@ -292,7 +301,13 @@ def format_downscale_report(
 
     cos_sim = result.validation.cosine_similarity
     val_status = f"{GREEN}PASSED{RESET}" if result.validation.passed else f"{RED}FAILED{RESET}"
-    dom_status = f"{GREEN}Preserved (Rank 1){RESET}" if result.validation.dominant_conserved else f"{RED}Shifted{RESET}"
+    if result.preserve_technique:
+        dom_status = f"{GREEN}Preserved (Rank 1){RESET}" if result.validation.dominant_conserved else f"{RED}Shifted{RESET}"
+        cos_status = "Passed (>= 0.80)" if result.validation.gate1_passed else "Failed (< 0.80)"
+    else:
+        dom_status = "Preserved (Rank 1)" if result.validation.dominant_conserved else f"{DIM}Shifted (free mode){RESET}"
+        cos_status = f"{DIM}Not enforced (free mode){RESET}"
+    mode_str = "Keep dominant technique" if result.preserve_technique else "Free (target difficulty only)"
 
     out_file_str = str(output_path.name) if output_path else "InMemory / DryRun"
 
@@ -310,6 +325,7 @@ def format_downscale_report(
         header_lines.append(f" OSZ Package: {CYAN}{osz_path.name}{RESET} ({osz_path})")
     header_lines.extend([
         f" Target Dan : {YELLOW}{target.target_dan}{RESET} (Star Target: {target.target_sr:.2f}★ | Level D*: {target.target_D:.2f})",
+        f" Mode       : {mode_str}",
         "-" * 80,
     ])
     lines = list(header_lines)
@@ -321,7 +337,7 @@ def format_downscale_report(
         f" Level D (Hz)                 {p_orig.total_D:5.2f}           {GREEN}{p_down.total_D:5.2f}{RESET}           {p_down.total_D - p_orig.total_D:+5.2f}",
         f" Bimanual Flux (L:R)          {orig_flux_str:<16} {GREEN}{down_flux_str:<16}{RESET} Balanced",
         f" Dominant Technique           {MAGENTA}{dom_orig.capitalize()} ({dom_score_orig:.2f}★){RESET}    {MAGENTA}{dom_down.capitalize()} ({dom_score_down:.2f}★){RESET}    {dom_status}",
-        f" Skill-star Cosine Similarity     -                {GREEN}{cos_sim:.3f}{RESET}            {'Passed (>= 0.80)' if result.validation.gate1_passed else 'Failed (< 0.80)'}",
+        f" Skill-star Cosine Similarity     -                {GREEN}{cos_sim:.3f}{RESET}            {cos_status}",
         f" Validation Outcome           -                {val_status}",
         "-" * 80,
         f" {BOLD}8-SKILL COMPARISON (difficulty engine stars){RESET}",
@@ -342,6 +358,14 @@ def format_downscale_report(
         bar = _make_ascii_bar(v_down, max_val=max_val, width=16)
         color = GREEN if v_down <= v_orig else RED
         lines.append(f" {name:<18} {v_orig:5.2f}★       {color}{v_down:5.2f}★{RESET}       {bar}")
+
+    if result.suggest_free_mode:
+        lines.append("-" * 80)
+        lines.append(
+            f" {YELLOW}Target not reached while keeping the dominant technique "
+            f"(stopped at {down_sr:.2f}★, target {target.target_sr:.2f}★).{RESET}"
+        )
+        lines.append(f" {YELLOW}Re-run with --mode free to drop that constraint and chase the target only.{RESET}")
 
     if sync_result:
         lines.append("-" * 80)
@@ -785,6 +809,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         max_iterations=args.max_iterations,
         tolerance=args.tolerance,
         min_cosine_similarity=args.min_cosine_similarity,
+        preserve_technique=args.mode == "technique",
     )
     run = run_downscale(
         args.input,

@@ -10,17 +10,24 @@ between original and downscaled beatmaps. The technique signature is the difficu
 - Gate 2: Microscopic Centroid Confidence Band:
   Protects core physiological metrics (e.g. hold_pct, density ratios)
   against degeneration into an unrelated chart category or drift outside target bounds.
+
+With `preserve_technique=False` (the downscaler's free mode) the technique gates are reported but not enforced:
+the chart only has to stay playable (Gate 2's note floor, and no deletion opening a silence more than a measure
+longer than any the original had there).
 """
 
 from dataclasses import dataclass, field
 import math
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import numpy as np
+
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.engine.events import notes_from_beatmap
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K
 from proj7k.downscaler.mapper import DanTarget
+from proj7k.downscaler.skeleton import MetricSkeletonDetector
 
 
 def compute_skill_cosine_similarity(profile1: DifficultyProfile, profile2: DifficultyProfile) -> float:
@@ -45,6 +52,31 @@ def _cosine(v1: Any, v2: Any) -> float:
 
     sim = dot / (norm1 * norm2)
     return max(-1.0, min(1.0, sim))
+
+
+def longest_new_silence(original: Beatmap7K, downscaled: Beatmap7K) -> Tuple[float, float]:
+    """
+    (time, excess ms) of the downscaled chart's worst new silence: the gap between two of its consecutive note
+    times by which it outlasts the longest gap the original had inside it plus one measure there. `(0, 0)` if none.
+    """
+    orig_times = np.unique(np.round([ho.time for ho in original.hit_objects], 1))
+    down_times = np.unique(np.round([ho.time for ho in downscaled.hit_objects], 1))
+    if len(orig_times) < 2 or len(down_times) < 2:
+        return 0.0, 0.0
+    orig_gaps = np.diff(orig_times)
+    down_gaps = np.diff(down_times)
+    detector = MetricSkeletonDetector(original)
+    shortest_measure = min(tp.beat_length * (tp.meter if tp.meter > 0 else 4) for tp in detector.uninherited_tps)
+    # Downscaled times are original times, so each gap's ends index the original's; the gaps it spans lie between.
+    lo = np.searchsorted(orig_times, down_times[:-1])
+    hi = np.searchsorted(orig_times, down_times[1:])
+    worst = (0.0, 0.0)
+    for k in np.flatnonzero((down_gaps > shortest_measure) & (hi - lo > 1)):
+        inner = float(orig_gaps[lo[k]:hi[k]].max())
+        excess = float(down_gaps[k]) - inner - detector.measure_length_at(float(down_times[k]))
+        if excess > worst[1]:
+            worst = (float(down_times[k]), excess)
+    return worst
 
 
 @dataclass(frozen=True)
@@ -87,13 +119,16 @@ class DualGateValidator:
     2. Gate 2: Microscopic centroid confidence bounds (e.g. hold_pct bounds,
        jack/stream relative ordering, not collapsing into degenerate silence,
        and aligning within confidence bounds of target Dan).
+    With `preserve_technique=False` only playability is enforced (see the module docstring).
     """
 
     def __init__(
         self,
         min_cosine_similarity: float = 0.80,
+        preserve_technique: bool = True,
     ):
         self.min_cosine_similarity = min_cosine_similarity
+        self.preserve_technique = preserve_technique
         # The closed loop validates many candidates against one original; the original is solved once.
         # The beatmap is held with its profile so that its id cannot be reused while the entry lives.
         self._profiles: Dict[int, Tuple[Beatmap7K, int, DifficultyProfile]] = {}
@@ -163,6 +198,36 @@ class DualGateValidator:
         gate2_passed = True
         gate2_violations: List[str] = []
 
+        # Free mode: the chart's category may change with its technique; what it may not do is fall apart.
+        if not self.preserve_technique:
+            if feat_downscaled.total_notes < 5:
+                gate2_passed = False
+                gate2_violations.append("Total notes wiped out (< 5 notes remaining).")
+            if not isinstance(orig_beatmap_or_profile, DifficultyProfile):
+                at, excess = longest_new_silence(orig_beatmap_or_profile, downscaled_beatmap)
+                if excess > 0:
+                    gate2_passed = False
+                    gate2_violations.append(
+                        f"Deletion opened a silence at {at / 1000.0:.1f}s, {excess:.0f} ms over one measure."
+                    )
+            return ValidationResult(
+                passed=gate2_passed,
+                cosine_similarity=cosine_sim,
+                dominant_conserved=dominant_conserved,
+                dominant_technique_orig=dominant_orig,
+                dominant_technique_downscaled=dominant_downscaled,
+                gate1_passed=gate1_passed,
+                gate2_passed=gate2_passed,
+                details={
+                    "min_cosine_similarity": self.min_cosine_similarity,
+                    "preserve_technique": False,
+                    "gate1_violations": [],
+                    "gate2_violations": gate2_violations,
+                    "profile_orig": profile_orig.to_dict(),
+                    "profile_downscaled": profile_downscaled.to_dict(),
+                },
+            )
+
         # 2a. Rice vs LN mode collapse check (hold_pct in percentage [0.0, 100.0]%):
         if feat_orig and feat_orig.hold_pct < 15.0:
             if feat_downscaled.hold_pct > 25.0:
@@ -208,6 +273,7 @@ class DualGateValidator:
 
         details = {
             "min_cosine_similarity": self.min_cosine_similarity,
+            "preserve_technique": True,
             "gate1_violations": [] if gate1_passed else (
                 [f"Cosine similarity {cosine_sim:.4f} < {self.min_cosine_similarity}"] if cosine_sim < self.min_cosine_similarity else []
             ) + ([f"Dominant skill shifted from '{dominant_orig}' to '{dominant_downscaled}'"] if not dominant_conserved else []),

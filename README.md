@@ -150,6 +150,7 @@ PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsernam
 | **还原 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync --revert` | 彻底还原为官方原始星级 |
 | **降级练习** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "7th" -o ./out` | 降级到指定 Jinjin 段位 |
 | **指定星级降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -s 6.5 -o ./out` | 降级到指定连续星级（新引擎的星级，直接对着它收敛） |
+| **只追难度降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "3rd" --mode free` | 不要求保留主技法，只把难度降到目标附近（仍保持节奏骨架与左右手平衡，[ADR-0025](docs/adr/0025-downscaler-free-mode.md)） |
 | **回放微观诊断** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu"` | 诊断离散度、双手偏载、Jack漂移与8维承压段位 |
 | **双教练智能推荐** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --recommend` | 推荐本地曲库练习谱（短板突破/长板专精，严格排除考题） |
 | **回放查看器** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --view --open` | 下落式同步回放按键 + 可拖动的难度时间线（失误、难点、技法一目了然） |

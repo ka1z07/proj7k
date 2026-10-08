@@ -17,7 +17,8 @@ scale), and what is left to the pruner is choosing *what* to delete:
    lands on the target rather than under it.
 
 Pure deletion, skeleton protection, flux balance, and the dual-gate validation are the ADR-0011 invariants
-and are unchanged.
+and are unchanged. In free mode (a validator with `preserve_technique=False`) the dominant skill's notes are not
+damped and the validation only asks that the chart stay playable; the other invariants hold as before.
 """
 
 from dataclasses import dataclass, field
@@ -95,6 +96,8 @@ class PruningResult:
     total_notes_removed: int
     warnings: List[str] = field(default_factory=list)
     history: List[PruneIterationRecord] = field(default_factory=list)
+    #: The loop stopped because no deletion left passed validation (rather than running out of candidates).
+    stopped_by_validation: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -106,6 +109,7 @@ class PruningResult:
             "initial_D": round(self.initial_D, 3),
             "final_D": round(self.final_D, 3),
             "total_notes_removed": self.total_notes_removed,
+            "stopped_by_validation": self.stopped_by_validation,
             "warnings": self.warnings,
             "history": [rec.to_dict() for rec in self.history],
         }
@@ -146,6 +150,7 @@ class ExcessLossPruner:
         D_star = d_of_stars(target_sr)
         benefit = removal_benefit(field, D_star)
         k_dom = SKILLS.index(dominant) if dominant in SKILLS else None
+        bias = DOMINANCE_BIAS if self.validator.preserve_technique else 0.0
         window_ms = max(100.0, self.window_s * 1000.0)
 
         # Peak windows: where the expected loss at the target level runs above the rate the total's tolerance
@@ -189,7 +194,7 @@ class ExcessLossPruner:
                 pen = penalty_r
             else:
                 pen = (penalty_l + penalty_r) / 2.0
-            scored.append((b * (1.0 - DOMINANCE_BIAS * share) / max(0.01, pen), ho))
+            scored.append((b * (1.0 - bias * share) / max(0.01, pen), ho))
         return scored, refused
 
     def _batch(self, scored: List[Tuple[float, HitObject]]) -> List[HitObject]:
@@ -239,6 +244,7 @@ class ExcessLossPruner:
         current = beatmap
         history: List[PruneIterationRecord] = []
         converged = False
+        stopped_by_validation = False
 
         for it in range(1, self.max_iterations + 1):
             star = field.profile.total_stars
@@ -275,7 +281,9 @@ class ExcessLossPruner:
                 break
 
             if committed is None:
-                warnings.append(f"Pruning stopped at iteration {it} to preserve technique invariants.")
+                kept = "preserve technique invariants" if self.validator.preserve_technique else "keep the chart playable"
+                warnings.append(f"Pruning stopped at iteration {it} to {kept}.")
+                stopped_by_validation = True
                 break
 
             cand, cand_field, size = committed
@@ -300,6 +308,7 @@ class ExcessLossPruner:
             total_notes_removed=len(beatmap.hit_objects) - len(current.hit_objects),
             warnings=warnings,
             history=history,
+            stopped_by_validation=stopped_by_validation,
         )
 
 

@@ -48,11 +48,7 @@ class MetricSkeletonDetector:
             t_key = round(ho.time, 1)
             self._time_groups.setdefault(t_key, []).append(ho)
 
-    def is_downbeat(self, time_ms: float) -> bool:
-        """
-        Determines whether a given time in milliseconds falls on a 1/1 measure downbeat.
-        """
-        # Find active timing point segment
+    def _active_timing_point(self, time_ms: float) -> TimingPoint:
         active_tp: Optional[TimingPoint] = None
         for i, tp in enumerate(self.uninherited_tps):
             has_next = i + 1 < len(self.uninherited_tps)
@@ -66,7 +62,18 @@ class MetricSkeletonDetector:
                 break
         if active_tp is None:
             active_tp = self.uninherited_tps[-1]
+        return active_tp
 
+    def measure_length_at(self, time_ms: float) -> float:
+        """The length in ms of the measure the timing at `time_ms` sets (beat length times meter)."""
+        tp = self._active_timing_point(time_ms)
+        return tp.beat_length * (tp.meter if tp.meter > 0 else 4)
+
+    def is_downbeat(self, time_ms: float) -> bool:
+        """
+        Determines whether a given time in milliseconds falls on a 1/1 measure downbeat.
+        """
+        active_tp = self._active_timing_point(time_ms)
         meter = active_tp.meter if active_tp.meter > 0 else 4
         measure_len = active_tp.beat_length * meter
         if measure_len <= 0:
