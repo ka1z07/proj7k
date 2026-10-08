@@ -167,7 +167,7 @@ const P7 = (() => {
       el("span", { class: "badge", text: a.label }), el("span", { class: "name", title: a.path, text: a.name }), ...buttons);
   }
 
-  // A drop zone that also opens a file picker. Returns {get file(), clear()}.
+  // A drop zone that also opens a file picker. Returns {get file(), set(file), clear()}.
   function dropZone(node, accept, onChange) {
     const idle = node.textContent.trim();
     const label = el("span", { text: idle });
@@ -188,7 +188,7 @@ const P7 = (() => {
     node.addEventListener("dragover", (e) => { e.preventDefault(); node.classList.add("over"); });
     node.addEventListener("dragleave", () => node.classList.remove("over"));
     node.addEventListener("drop", (e) => { e.preventDefault(); node.classList.remove("over"); if (e.dataTransfer.files[0]) set(e.dataTransfer.files[0]); });
-    return { get file() { return file; }, clear() { input.value = ""; set(null); } };
+    return { get file() { return file; }, set, clear() { input.value = ""; set(null); } };
   }
 
   const SKILL_LABELS = {
@@ -220,6 +220,45 @@ const P7 = (() => {
   function skillName(k) { return SKILL_LABELS[k] || k || "—"; }
   const pct = (x) => `${(x * 100).toFixed(1)}%`;
 
+  // --- the game's current chart -----------------------------------------------------------------------------
+  // The chart osu!lazer has selected, as the server last saw it ({chart, unresolved}); `fn` runs now and on every
+  // change. Read again on each reconnect, so a page opened before the game or the server still catches up.
+  let gameState = { chart: null, unresolved: null };
+  const gameFollowers = [];
+  function onGameChart(fn) { gameFollowers.push(fn); fn(gameState); }
+  function setGameChart(msg) {
+    gameState = { chart: msg.chart || null, unresolved: msg.unresolved || null };
+    gameFollowers.forEach((fn) => { try { fn(gameState); } catch (e) { console.error(e); } });
+  }
+  on("game_chart", setGameChart);
+  on("connection", (up) => { if (up) getJSON("/api/current").then(setGameChart).catch(() => {}); });
+
+  const chartName = (c) => `${c.artist} - ${c.title} [${c.version}]`;
+
+  // One line naming the game's current chart, for a card or the top bar.
+  function gameChartLine(state) {
+    if (state.chart) {
+      const c = state.chart;
+      return el("div", { class: "now-playing" },
+        el("span", { class: "badge done", text: "游戏当前谱面" }),
+        el("span", { class: "np-title", title: c.osu_path || "", text: chartName(c) }),
+        el("span", { class: "np-meta", text: `${Number(c.star_rating).toFixed(2)}★ · ${c.dan_tier || "—"} · 主技法 ${skillName(c.dominant_technique)}` }));
+    }
+    if (state.unresolved) {
+      const u = state.unresolved;
+      return el("div", { class: "now-playing" },
+        el("span", { class: "badge failed", text: "不是 7K / 未入库" }),
+        el("span", { class: "np-title", text: `${u.artist} - ${u.title} [${u.difficulty}]` }),
+        el("span", { class: "np-meta", text: "游戏里选中的这张不在 7K 曲库索引里；换一张 7K 谱，或先在「曲库同步」里同步。" }));
+    }
+    return el("div", { class: "now-playing" },
+      el("span", { class: "badge queued", text: "未检测到" }),
+      el("span", { class: "np-meta", text: "打开 osu!lazer 并选一张 7K 谱，这里会自动跟上。" }));
+  }
+
   connect();
-  return { el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS };
+  return {
+    el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS,
+    onGameChart, gameChartLine, chartName,
+  };
 })();

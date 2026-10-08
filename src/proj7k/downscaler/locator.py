@@ -18,6 +18,8 @@ from proj7k.parser import Beatmap7K, parse_osu_7k
 
 logger = logging.getLogger("proj7k.downscaler.locator")
 
+MD5_PATTERN = re.compile(r"^[0-9a-fA-F]{32}$")
+
 
 @dataclass(frozen=True)
 class BeatmapUrlInfo:
@@ -26,10 +28,12 @@ class BeatmapUrlInfo:
     beatmap_id: Optional[int] = None
     beatmapset_id: Optional[int] = None
     ruleset_mode: Optional[str] = None
+    #: The .osu file's MD5, as osu!lazer keys a difficulty (the dashboard hands over the game's current chart this way).
+    md5_hash: Optional[str] = None
 
     @property
     def is_valid(self) -> bool:
-        return self.beatmap_id is not None or self.beatmapset_id is not None
+        return self.beatmap_id is not None or self.beatmapset_id is not None or self.md5_hash is not None
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,7 @@ def parse_osu_url_or_id(input_str: Union[str, int]) -> BeatmapUrlInfo:
     - https://osu.ppy.sh/b/5271675
     - https://osu.ppy.sh/beatmaps/5271675
     - Plain numeric ID: '5271675'
+    - An .osu file's MD5 (32 hex digits), the key osu!lazer gives a difficulty
     """
     clean = str(input_str).strip()
 
@@ -89,6 +94,10 @@ def parse_osu_url_or_id(input_str: Union[str, int]) -> BeatmapUrlInfo:
             original_input=clean,
             beatmap_id=int(clean),
         )
+
+    # Pattern 4: the .osu file's MD5
+    if MD5_PATTERN.match(clean):
+        return BeatmapUrlInfo(original_input=clean, md5_hash=clean.lower())
 
     return BeatmapUrlInfo(original_input=clean)
 
@@ -125,8 +134,19 @@ def locate_beatmap_in_lazer(
 
     record: Optional[Dict[str, Any]] = None
 
+    # Try 0: the exact difficulty, by its .osu file's MD5
+    if info.md5_hash is not None:
+        try:
+            res_bm = client.locate_beatmap(file_hash=info.md5_hash, realm_path=target_realm)
+            if res_bm and isinstance(res_bm, dict) and "beatmap" in res_bm:
+                record = res_bm["beatmap"]
+            elif res_bm and res_bm.get("found", True) is not False:
+                record = res_bm
+        except Exception as e:
+            logger.debug(f"locate_beatmap by md5 failed: {e}")
+
     # Try 1: Search by beatmap_id
-    if info.beatmap_id is not None:
+    if not record and info.beatmap_id is not None:
         try:
             res_bm = client.locate_beatmap(online_id=info.beatmap_id, realm_path=target_realm)
             if res_bm and isinstance(res_bm, dict) and "beatmap" in res_bm:
@@ -191,7 +211,8 @@ def locate_beatmap_in_lazer(
                         pass
             if not found_by_id and cand_osu_files:
                 matched_osu_hash = cand_osu_files[0].get("hash", matched_osu_hash)
-        elif cand_osu_files:
+        elif cand_osu_files and not (info.md5_hash is not None and osu_hash):
+            # A lookup by MD5 already names the difficulty; only a set lookup has to pick one.
             matched_osu_hash = cand_osu_files[0].get("hash", matched_osu_hash)
 
     osu_path = _resolve_lazer_hashed_file(target_files_dir, matched_osu_hash)

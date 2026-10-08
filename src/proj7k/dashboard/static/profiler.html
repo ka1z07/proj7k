@@ -27,12 +27,14 @@
     <!-- 回放诊断 -->
     <div class="card" data-pane="replay">
       <h2>回放诊断</h2>
-      <div class="row" style="margin-bottom:8px">
-        <label class="check"><input type="radio" name="src" value="lazer" checked> osu!lazer 里的最近回放</label>
-        <label class="check"><input type="radio" name="src" value="files"> 回放文件 + 谱面文件</label>
+      <div class="choice">
+        <label><input type="radio" name="src" value="current" checked> 当前谱面的最近一局</label>
+        <label><input type="radio" name="src" value="lazer"> 最近回放（任意谱面）</label>
+        <label><input type="radio" name="src" value="files"> 回放文件 + 谱面文件</label>
       </div>
+      <div id="gameSrc" class="field"><div id="gameLine"></div></div>
       <div class="row" id="lazerSrc">
-        <div class="field"><label for="rpPlayer">玩家名</label><input type="text" id="rpPlayer" list="players"></div>
+        <div class="field"><label for="rpPlayer">玩家名（留空自动识别）</label><input type="text" id="rpPlayer" list="players" placeholder="自动：曲库里回放最多的玩家"></div>
         <div class="field"><label for="rpIndex">第几新（0 = 最新）</label><input type="number" id="rpIndex" min="0" value="0"></div>
       </div>
       <div id="fileSrc" class="hidden">
@@ -110,11 +112,30 @@
       document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === b));
       document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== b.dataset.tab));
     }));
-    document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => {
-      const lazer = document.querySelector("input[name=src]:checked").value === "lazer";
-      $("#lazerSrc").classList.toggle("hidden", !lazer);
-      $("#fileSrc").classList.toggle("hidden", lazer);
-    }));
+    const source = () => document.querySelector("input[name=src]:checked").value;
+    let gameChart = null;
+    let sourceTouched = false;
+    let running = false;
+    function showSource() {
+      const src = source();
+      $("#gameSrc").classList.toggle("hidden", src !== "current");
+      $("#lazerSrc").classList.toggle("hidden", src === "files");
+      $("#fileSrc").classList.toggle("hidden", src !== "files");
+      refreshRunButtons();
+    }
+    function refreshRunButtons() {
+      runButtons.forEach((b) => (b.disabled = running));
+      if (source() === "current" && !gameChart) $("#rpRun").disabled = true;
+    }
+    document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => { sourceTouched = true; showSource(); }));
+
+    // Until the player picks a source, it follows the game: the chart it has selected, else the latest replay.
+    P7.onGameChart((state) => {
+      gameChart = state.chart;
+      $("#gameLine").replaceChildren(P7.gameChartLine(state));
+      if (!sourceTouched) document.querySelector(`input[name=src][value=${gameChart ? "current" : "lazer"}]`).checked = true;
+      showSource();
+    });
 
     async function loadPlayers() {
       const data = await P7.getJSON("/api/players");
@@ -125,13 +146,15 @@
     loadPlayers();
 
     async function run(kind, params, uploads) {
-      runButtons.forEach((b) => (b.disabled = true));
+      running = true;
+      refreshRunButtons();
       $("#jobCard").classList.remove("hidden");
       $("#results").replaceChildren();
       panel.reset();
       const job = await P7.startJob(kind, params, { uploads, onUpdate: panel.update, onLog: panel.log });
       panel.update(job);
-      runButtons.forEach((b) => (b.disabled = false));
+      running = false;
+      refreshRunButtons();
       if (job.status !== "done") { panel.showLog(); return null; }
       return job;
     }
@@ -220,15 +243,16 @@
 
     // --- 按钮 -------------------------------------------------------------------------------------------
     $("#rpRun").onclick = async () => {
-      const lazer = document.querySelector("input[name=src]:checked").value === "lazer";
+      const src = source();
       const params = {
-        source: lazer ? "lazer" : "files",
+        source: src,
+        beatmap_hash: src === "current" && gameChart ? gameChart.file_hash : "",
         player: $("#rpPlayer").value, index: $("#rpIndex").value,
         replay: $("#rpReplay").value, beatmap: $("#rpBeatmap").value,
         view: $("#rpView").checked, save: $("#rpSave").checked, bundle: $("#rpBundle").checked,
         recommend: $("#rpRecommend").value, fatal_time: $("#rpFatal").value,
       };
-      const uploads = lazer ? {} : { replay: dropReplay.file, beatmap: dropBeatmap.file };
+      const uploads = src === "files" ? { replay: dropReplay.file, beatmap: dropBeatmap.file } : {};
       const job = await run("profile_replay", params, uploads);
       if (!job) return;
       $("#results").replaceChildren(...replayResult(job.result));

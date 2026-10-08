@@ -204,3 +204,52 @@ def test_cli_with_url_and_package_osz(tmp_path, capsys):
         names = z.namelist()
         assert osu_outputs[0].name in names
         assert "audio.mp3" in names
+
+
+def test_an_osu_md5_is_a_lazer_chart_reference():
+    info = parse_osu_url_or_id("0123456789abcdef0123456789ABCDEF")
+    assert info.md5_hash == "0123456789abcdef0123456789abcdef"
+    assert info.beatmap_id is None and info.is_valid
+    assert parse_osu_url_or_id("0123456789abcdef").md5_hash is None  # too short: not an MD5
+
+
+def test_locate_by_md5_keeps_the_difficulty_it_names(tmp_path):
+    files_dir = tmp_path / "files"
+    first, chosen = "a1" * 32, "b2" * 32
+    for h in (first, chosen):
+        path = files_dir / h[0] / h[:2] / h
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _create_synthetic_osu_file(path, title=h[:2])
+    md5 = "c3" * 16
+    client = MagicMock()
+    client.locate_beatmap.return_value = {
+        "title": "Set", "artist": "A", "creator": "M", "difficulty_name": "Second",
+        "osu_file_hash": chosen,
+        "files": [{"filename": "a [First].osu", "hash": first}, {"filename": "b [Second].osu", "hash": chosen}],
+    }
+
+    asset = locate_beatmap_in_lazer(md5, files_dir=files_dir, bridge_client=client)
+
+    assert client.locate_beatmap.call_args.kwargs["file_hash"] == md5
+    assert asset is not None and asset.file_hash == chosen
+    assert asset.osu_path == files_dir / chosen[0] / chosen[:2] / chosen
+
+
+def test_cli_downscales_a_chart_named_by_its_md5(tmp_path, capsys):
+    files_dir = tmp_path / "files"
+    osu_hash = "d4" * 32
+    osu_path = files_dir / osu_hash[0] / osu_hash[:2] / osu_hash
+    osu_path.parent.mkdir(parents=True, exist_ok=True)
+    _create_synthetic_osu_file(osu_path, title="Game Chart")
+    asset = ResolvedBeatmapAsset(
+        osu_path=osu_path, title="Game Chart", artist="Test Artist", creator="Mapper", difficulty_name="Extra",
+        file_hash=osu_hash,
+    )
+    out_dir = tmp_path / "out"
+
+    with patch("proj7k.downscaler.cli.locate_beatmap_in_lazer", return_value=asset) as locate:
+        code = main(["--input", "e5" * 16, "--target-dan", "3rd", "--output-dir", str(out_dir), "--no-package"])
+
+    assert code == 0
+    assert locate.call_args.args[0] == "e5" * 16
+    assert len(list(out_dir.glob("*.osu"))) == 1

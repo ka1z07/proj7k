@@ -124,6 +124,11 @@ def test_coordinator_on_beatmap_changed_broadcasts_radar(tmp_path: Path):
                 client_frame = json.loads(raw_client_frame)
                 assert client_frame["type"] == "beatmap_update"
                 assert client_frame["metadata"]["title"] == "Live Chart"
+                # where the chart is in the library, for the dashboard's downscaler and profiler
+                assert client_frame["metadata"]["lazer"] == {
+                    "md5_hash": "abcdef1234567890", "file_hash": "abcdef1234567890",
+                    "osu_path": str(files_dir / "a" / "ab" / "abcdef1234567890"),
+                }
                 assert client_frame["star_rating"] > 0.0
                 assert "radar" in client_frame
                 assert "jack" in client_frame["radar"]
