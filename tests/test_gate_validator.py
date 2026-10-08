@@ -1,10 +1,12 @@
 import math
-import pytest
+from types import SimpleNamespace
 from typing import List
 
+import pytest
+
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
-from proj7k.radar import TechniqueRadar
-from proj7k.downscaler.validator import DualGateValidator, ValidationResult, compute_radar_cosine_similarity
+from proj7k.engine.skills import SKILLS
+from proj7k.downscaler.validator import DualGateValidator, ValidationResult, compute_skill_cosine_similarity
 from proj7k.downscaler.mapper import DanTarget
 
 
@@ -19,29 +21,20 @@ def _make_dummy_beatmap(hit_objects: List[HitObject]) -> Beatmap7K:
     )
 
 
-def test_compute_radar_cosine_similarity():
-    r1 = TechniqueRadar(
-        jack=5.0, tech=1.0, speed=1.0, stream=0.5,
-        ln_general=0.0, ln_tech=0.0, ln_inverse=0.0, ln_release=0.0,
-        dominant_technique="jack", dominant_score=5.0,
-    )
-    # Scaled version (pure magnitude change, same direction)
-    r2 = TechniqueRadar(
-        jack=3.5, tech=0.7, speed=0.7, stream=0.35,
-        ln_general=0.0, ln_tech=0.0, ln_inverse=0.0, ln_release=0.0,
-        dominant_technique="jack", dominant_score=3.5,
-    )
-    sim = compute_radar_cosine_similarity(r1, r2)
-    assert pytest.approx(1.0, abs=1e-5) == sim
+def _profile(**stars: float) -> SimpleNamespace:
+    """A stand-in carrying only what the cosine reads: the eight skills' stars, in the engine's order."""
+    return SimpleNamespace(skills={name: SimpleNamespace(stars=stars.get(name, 0.0)) for name in SKILLS})
 
-    # Orthogonal radar (jack vs ln_inverse)
-    r3 = TechniqueRadar(
-        jack=0.0, tech=0.0, speed=0.0, stream=0.0,
-        ln_general=0.0, ln_tech=0.0, ln_inverse=5.0, ln_release=0.0,
-        dominant_technique="ln_inverse", dominant_score=5.0,
-    )
-    sim_ortho = compute_radar_cosine_similarity(r1, r3)
-    assert pytest.approx(0.0, abs=1e-5) == sim_ortho
+
+def test_compute_skill_cosine_similarity():
+    p1 = _profile(rc_jack=5.0, rc_tech=1.0, rc_speed=1.0, rc_stamina=0.5)
+    # Scaled version (pure magnitude change, same direction)
+    p2 = _profile(rc_jack=3.5, rc_tech=0.7, rc_speed=0.7, rc_stamina=0.35)
+    assert pytest.approx(1.0, abs=1e-5) == compute_skill_cosine_similarity(p1, p2)
+
+    # Orthogonal profile (jack vs ln_inverse)
+    p3 = _profile(ln_inverse=5.0)
+    assert pytest.approx(0.0, abs=1e-5) == compute_skill_cosine_similarity(p1, p3)
 
 
 def test_validator_passes_when_conserved():

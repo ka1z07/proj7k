@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional, Union
 from proj7k.parser import Beatmap7K
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.field import trace_beatmap
-from proj7k.radar import TECHNIQUE_NAMES
 
 
 logger = logging.getLogger("proj7k.profiler.storage")

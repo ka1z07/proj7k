@@ -53,7 +53,6 @@
 
     body.overlay-mode header,
     body.overlay-mode .drop-zone,
-    body.overlay-mode #techDrawer,
     body.overlay-mode .no-overlay {
       display: none !important;
     }
@@ -353,7 +352,7 @@
       aspect-ratio: 1 / 1;
     }
 
-    /* Column 3: Strain Timeseries */
+    /* Column 3: Difficulty Timeline */
     .strain-wrapper {
       display: flex;
       flex-direction: column;
@@ -369,8 +368,9 @@
 
     .strain-legend {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 14px;
+      gap: 6px 14px;
       font-size: 0.78rem;
     }
 
@@ -386,10 +386,8 @@
       border-radius: 2px;
     }
 
-    .legend-lh { background-color: var(--accent-blue); box-shadow: 0 0 6px var(--accent-blue); }
-    .legend-rh { background-color: var(--accent-purple); box-shadow: 0 0 6px var(--accent-purple); }
-    .legend-p90 { background-color: var(--accent-gold); }
-    .legend-top5 { background-color: var(--accent-red); }
+    .legend-level { background: none; border-top: 2px dashed rgba(255, 255, 255, 0.45); height: 0; }
+    .legend-risk { background: none; border-top: 2px solid rgba(255, 255, 255, 0.85); height: 0; }
 
     .playhead-time {
       font-family: monospace;
@@ -406,121 +404,6 @@
       border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    /* Bottom: Collapsible 4D Tech Drawer */
-    #techDrawer {
-      width: 100%;
-      max-width: 1400px;
-      margin-top: 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-
-    .drawer-header {
-      padding: 14px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      cursor: pointer;
-      user-select: none;
-      background: rgba(255, 255, 255, 0.02);
-      transition: background 0.2s;
-    }
-
-    .drawer-header:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .drawer-title {
-      font-size: 0.95rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .drawer-icon {
-      font-size: 0.8rem;
-      transition: transform 0.3s ease;
-    }
-
-    .drawer-icon.open {
-      transform: rotate(180deg);
-    }
-
-    .drawer-content {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 16px;
-      padding: 20px;
-      border-top: 1px solid var(--border-color);
-      transition: all 0.3s ease;
-    }
-
-    @media (max-width: 1100px) {
-      .drawer-content {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-
-    @media (max-width: 768px) {
-      .drawer-content {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-
-    .tech-metric-card {
-      padding: 14px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .metric-name {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .metric-val {
-      font-size: 1.4rem;
-      font-weight: 800;
-      color: #ffffff;
-      font-family: monospace;
-    }
-
-    .metric-bar-bg {
-      width: 100%;
-      height: 6px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 3px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-
-    .metric-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
-      border-radius: 3px;
-      width: 0%;
-      transition: width 0.4s ease;
-    }
-
-    .metric-desc {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
   </style>
 </head>
 <body>
@@ -611,25 +494,17 @@
     <!-- Column 3: Dual-Hand Strain Profile & Playhead Cursor -->
     <div class="card col-strain" id="cardStrain">
       <div class="strain-header">
-        <div class="card-title" style="margin-bottom: 0;">Dual-Hand Strain Timeseries <span style="opacity:.6;font-weight:400">(legacy engine)</span></div>
+        <div class="card-title" style="margin-bottom: 0;">Difficulty Timeline</div>
         <div class="playhead-time" id="playheadTime">00:00.00</div>
       </div>
-      <div class="strain-legend" style="margin-bottom: 10px;">
+      <div class="strain-legend" id="timelineLegend" style="margin-bottom: 10px;">
         <div class="legend-item">
-          <span class="legend-color legend-lh"></span>
-          <span>Left Hand</span>
+          <span class="legend-color legend-level"></span>
+          <span>Chart level</span>
         </div>
         <div class="legend-item">
-          <span class="legend-color legend-rh"></span>
-          <span>Right Hand</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-p90"></span>
-          <span>P90 (<span id="p90Val">0.0</span>)</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-top5"></span>
-          <span>Top 5% (<span id="top5Val">0.0</span>)</span>
+          <span class="legend-color legend-risk"></span>
+          <span>Expected misses</span>
         </div>
       </div>
       <div class="strain-wrapper">
@@ -637,77 +512,6 @@
       </div>
     </div>
 
-  </div>
-
-  <!-- Bottom: Collapsible 4D Tech Breakdown Drawer -->
-  <div id="techDrawer" class="no-overlay">
-    <div class="drawer-header" id="drawerToggle">
-      <div class="drawer-title">
-        <span>4D Tech 细分指标 (Unorthodox Permutation, legacy engine)</span>
-      </div>
-      <div class="drawer-icon" id="drawerArrow">▼</div>
-    </div>
-    <div class="drawer-content" id="drawerBody">
-      <div class="tech-metric-card">
-        <div class="metric-name">
-          <span>流向紊乱度</span>
-          <span>Flow Tortuosity</span>
-        </div>
-        <div class="metric-val" id="valTortuosity">0.0000</div>
-        <div class="metric-bar-bg">
-          <div class="metric-bar-fill" id="barTortuosity"></div>
-        </div>
-        <div class="metric-desc">流式切键折返与急转弯频率 (Reversals)</div>
-      </div>
-
-      <div class="tech-metric-card">
-        <div class="metric-name">
-          <span>括号/手内剪切度</span>
-          <span>Bracket & Shear</span>
-        </div>
-        <div class="metric-val" id="valBracketShear">0.0000</div>
-        <div class="metric-bar-bg">
-          <div class="metric-bar-fill" id="barBracketShear"></div>
-        </div>
-        <div class="metric-desc">括号相变与抠空手内横向拉扯剪切</div>
-      </div>
-
-      <div class="tech-metric-card">
-        <div class="metric-name">
-          <span>轨位转移熵</span>
-          <span>Spatial Transition Entropy</span>
-        </div>
-        <div class="metric-val" id="valSpatialEntropy">0.0000</div>
-        <div class="metric-bar-bg">
-          <div class="metric-bar-fill" id="barSpatialEntropy"></div>
-        </div>
-        <div class="metric-desc">击键轨位一阶转移香农信息熵</div>
-      </div>
-
-      <div class="tech-metric-card">
-        <div class="metric-name">
-          <span>节奏混乱度</span>
-          <span>Rhythmic Irregularity</span>
-        </div>
-        <div class="metric-val" id="valRhythmIrreg">0.0000</div>
-        <div class="metric-bar-bg">
-          <div class="metric-bar-fill" id="barRhythmIrreg"></div>
-        </div>
-        <div class="metric-desc">拍点变异熵与微观时钟抖动度</div>
-      </div>
-
-      <div class="tech-metric-card">
-        <div class="metric-name">
-          <span>微观极速爆发</span>
-          <span>Micro-Speed Burst</span>
-        </div>
-        <div class="metric-val" id="valSpeedBurst">0.0000</div>
-        <div class="metric-bar-bg">
-          <div class="metric-bar-fill" id="barSpeedBurst"></div>
-        </div>
-        <div class="metric-desc">极小击键时钟 (Δt &lt; 110ms) 神经应变</div>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -752,41 +556,15 @@
     const statDuration = document.getElementById("statDuration");
     const statNps = document.getElementById("statNps");
     const playheadTime = document.getElementById("playheadTime");
-    const p90Val = document.getElementById("p90Val");
-    const top5Val = document.getElementById("top5Val");
-
-    const valTortuosity = document.getElementById("valTortuosity");
-    const barTortuosity = document.getElementById("barTortuosity");
-    const valBracketShear = document.getElementById("valBracketShear");
-    const barBracketShear = document.getElementById("barBracketShear");
-    const valSpatialEntropy = document.getElementById("valSpatialEntropy");
-    const barSpatialEntropy = document.getElementById("barSpatialEntropy");
-    const valRhythmIrreg = document.getElementById("valRhythmIrreg");
-    const barRhythmIrreg = document.getElementById("barRhythmIrreg");
-    const valSpeedBurst = document.getElementById("valSpeedBurst");
-    const barSpeedBurst = document.getElementById("barSpeedBurst");
 
     const radarCanvas = document.getElementById("radarCanvas");
     const radarCtx = radarCanvas.getContext("2d");
     const strainCanvas = document.getElementById("strainCanvas");
     const strainCtx = strainCanvas.getContext("2d");
 
-    // Drawer collapse
-    const drawerToggle = document.getElementById("drawerToggle");
-    const drawerBody = document.getElementById("drawerBody");
-    const drawerArrow = document.getElementById("drawerArrow");
-    let drawerOpen = true;
-    if (drawerToggle) {
-      drawerToggle.addEventListener("click", () => {
-        drawerOpen = !drawerOpen;
-        drawerBody.style.display = drawerOpen ? "grid" : "none";
-        drawerArrow.classList.toggle("open", drawerOpen);
-      });
-    }
-
     // 3. State
     let currentBeatmapData = null;
-    let currentStrainProfile = null;
+    let currentTimeline = null;
     let currentDurationMs = 0;
     let currentClock = {
       status: "idle",
@@ -878,41 +656,12 @@
       statDuration.textContent = formatDuration(meta.duration_seconds || 0);
       statNps.textContent = (meta.avg_nps || 0).toFixed(2);
 
-      // 4D Tech breakdown
-      const legacy = data.legacy || {};
-      const tech = legacy.tech_breakdown || {};
-      const tort = tech.tortuosity || 0;
-      const shear = tech.bracket_shear || 0;
-      const entropy = tech.spatial_entropy || 0;
-      const rhythm = tech.rhythm_irreg || 0;
-
-      valTortuosity.textContent = tort.toFixed(4);
-      barTortuosity.style.width = `${Math.min(100, (tort / 0.8) * 100)}%`;
-
-      valBracketShear.textContent = shear.toFixed(4);
-      barBracketShear.style.width = `${Math.min(100, (shear / 1.0) * 100)}%`;
-
-      valSpatialEntropy.textContent = entropy.toFixed(4);
-      barSpatialEntropy.style.width = `${Math.min(100, (entropy / 1.0) * 100)}%`;
-
-      valRhythmIrreg.textContent = rhythm.toFixed(4);
-      barRhythmIrreg.style.width = `${Math.min(100, (rhythm / 0.8) * 100)}%`;
-
-      const speedBurst = tech.speed_burst || (data.radar && data.radar.speed) || 0;
-      valSpeedBurst.textContent = speedBurst.toFixed(4);
-      barSpeedBurst.style.width = `${Math.min(100, (speedBurst / 12.5) * 100)}%`;
-
-      // Strain profile
-      currentStrainProfile = legacy.strain_profile || null;
-      if (currentStrainProfile && currentStrainProfile.sample_times_ms && currentStrainProfile.sample_times_ms.length > 0) {
-        const times = currentStrainProfile.sample_times_ms;
-        currentDurationMs = times[times.length - 1];
-        p90Val.textContent = (currentStrainProfile.p90_strain || 0).toFixed(1);
-        top5Val.textContent = (currentStrainProfile.top5_percent_strain || 0).toFixed(1);
+      // Difficulty timeline
+      currentTimeline = data.timeline || null;
+      if (currentTimeline && currentTimeline.load && currentTimeline.load.length > 0) {
+        currentDurationMs = (currentTimeline.start_s + currentTimeline.load.length * currentTimeline.bin_s) * 1000;
       } else {
         currentDurationMs = (meta.duration_seconds || 0) * 1000;
-        p90Val.textContent = "0.0";
-        top5Val.textContent = "0.0";
       }
 
       // Reset playhead clock on new beatmap
@@ -1062,8 +811,21 @@
       }
     }
 
-    // 6. Canvas Drawing: Dual-Hand Strain Timeseries & 1.0x Playhead Cursor
-    function drawStrain(profile, currentMs) {
+    // 6. Canvas Drawing: Difficulty Timeline & 1.0x Playhead Cursor
+    // One bar per bin: the hardest reading in it against the chart's own level (1.0 = as hard as
+    // the chart), coloured by the skill that carries the bin's risk; the white line is the misses a
+    // player at the chart's level is expected to take there.
+    const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
+    // the bars' colour key, in the frame's skill order (`timeline.skills`, the same order as TECHS)
+    const timelineLegend = document.getElementById("timelineLegend");
+    TECHS.forEach((t, i) => {
+      const item = document.createElement("div");
+      item.className = "legend-item";
+      item.innerHTML = `<span class="legend-color" style="background-color:${SKILL_COL[i]}"></span><span>${t.label}</span>`;
+      timelineLegend.appendChild(item);
+    });
+
+    function drawStrain(tl, currentMs) {
       const w = strainCanvas.width;
       const h = strainCanvas.height;
       strainCtx.clearRect(0, 0, w, h);
@@ -1086,102 +848,59 @@
         strainCtx.stroke();
       }
 
-      if (!profile || !profile.sample_times_ms || profile.sample_times_ms.length === 0) {
+      if (!tl || !tl.load || tl.load.length === 0) {
         strainCtx.fillStyle = "rgba(148, 163, 184, 0.4)";
         strainCtx.font = "12px sans-serif";
         strainCtx.textAlign = "center";
-        strainCtx.fillText("Waiting for chart strain data...", padL + plotW / 2, padT + plotH / 2);
+        strainCtx.fillText("Waiting for chart difficulty data...", padL + plotW / 2, padT + plotH / 2);
         return;
       }
 
-      const times = profile.sample_times_ms;
-      const lh = profile.left_strains;
-      const rh = profile.right_strains;
-      const len = times.length;
-      const tEnd = Math.max(1, times[len - 1]);
+      const bins = tl.load.length;
+      const binMs = tl.bin_s * 1000;
+      const t0 = tl.start_s * 1000;
+      const tEnd = Math.max(1, t0 + bins * binMs);
+      const X = (ms) => padL + (ms / tEnd) * plotW;
+      const loadMax = Math.max(1.15, ...tl.load);
+      const riskMax = Math.max(1e-6, ...tl.risk);
+      const bw = Math.max(1, (binMs / tEnd) * plotW);
 
-      // Max strain scale
-      const p90 = profile.p90_strain || 0;
-      const top5 = profile.top5_percent_strain || 0;
-      let maxS = Math.max(10.0, p90 * 1.35, top5 * 1.15);
-      for (let i = 0; i < len; i++) {
-        if (lh[i] > maxS) maxS = lh[i];
-        if (rh[i] > maxS) maxS = rh[i];
+      // Demand bars: what has been played is a little brighter than what is to come
+      for (let b = 0; b < bins; b++) {
+        const start = t0 + b * binMs;
+        const barH = Math.min(1, tl.load[b] / loadMax) * plotH;
+        const sk = tl.skill[b];
+        strainCtx.globalAlpha = start + binMs <= currentMs ? 1 : 0.6;
+        strainCtx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#475569";
+        strainCtx.fillRect(X(start), padT + plotH - barH, Math.ceil(bw) - (bw > 3 ? 1 : 0), barH);
       }
+      strainCtx.globalAlpha = 1;
 
-      // Draw P90 reference line (dashed gold)
-      if (p90 > 0) {
-        const yP90 = padT + plotH - (p90 / maxS) * plotH;
-        strainCtx.setLineDash([5, 4]);
-        strainCtx.strokeStyle = "#f59e0b";
-        strainCtx.lineWidth = 1.2;
-        strainCtx.beginPath();
-        strainCtx.moveTo(padL, yP90);
-        strainCtx.lineTo(padL + plotW, yP90);
-        strainCtx.stroke();
-        strainCtx.setLineDash([]);
+      // The chart's own level: demand 1.0
+      const yLevel = padT + plotH - (1 / loadMax) * plotH;
+      strainCtx.setLineDash([5, 4]);
+      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+      strainCtx.lineWidth = 1.2;
+      strainCtx.beginPath();
+      strainCtx.moveTo(padL, yLevel);
+      strainCtx.lineTo(padL + plotW, yLevel);
+      strainCtx.stroke();
+      strainCtx.setLineDash([]);
+      strainCtx.fillStyle = "rgba(255, 255, 255, 0.6)";
+      strainCtx.font = "9px monospace";
+      strainCtx.textAlign = "right";
+      strainCtx.fillText("1.0×", padL - 4, yLevel + 3);
 
-        strainCtx.fillStyle = "#f59e0b";
-        strainCtx.font = "9px monospace";
-        strainCtx.textAlign = "right";
-        strainCtx.fillText(`P90`, padL - 4, yP90 + 3);
+      // Expected misses at the chart's level
+      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      strainCtx.lineWidth = 1.2;
+      strainCtx.beginPath();
+      for (let b = 0; b < bins; b++) {
+        const x = X(t0 + (b + 0.5) * binMs);
+        const y = padT + plotH - (tl.risk[b] / riskMax) * plotH * 0.9;
+        if (b === 0) strainCtx.moveTo(x, y); else strainCtx.lineTo(x, y);
       }
-
-      // Draw Top 5% lethality line (dashed red)
-      if (top5 > 0) {
-        const yTop5 = padT + plotH - (top5 / maxS) * plotH;
-        strainCtx.setLineDash([4, 4]);
-        strainCtx.strokeStyle = "#ef4444";
-        strainCtx.lineWidth = 1.2;
-        strainCtx.beginPath();
-        strainCtx.moveTo(padL, yTop5);
-        strainCtx.lineTo(padL + plotW, yTop5);
-        strainCtx.stroke();
-        strainCtx.setLineDash([]);
-
-        strainCtx.fillStyle = "#ef4444";
-        strainCtx.font = "9px monospace";
-        strainCtx.textAlign = "right";
-        strainCtx.fillText(`Top5%`, padL - 4, yTop5 + 3);
-      }
-
-      function drawSmoothCurve(values, strokeColor) {
-        if (len === 0) return;
-        if (len === 1) {
-          strainCtx.beginPath();
-          strainCtx.arc(padL, padT + plotH - (values[0] / maxS) * plotH, 2, 0, Math.PI * 2);
-          strainCtx.fillStyle = strokeColor;
-          strainCtx.fill();
-          return;
-        }
-
-        strainCtx.beginPath();
-        const p0x = padL + (times[0] / tEnd) * plotW;
-        const p0y = padT + plotH - (values[0] / maxS) * plotH;
-        strainCtx.moveTo(p0x, p0y);
-
-        for (let i = 0; i < len - 1; i++) {
-          const x0 = padL + (times[i] / tEnd) * plotW;
-          const y0 = padT + plotH - (values[i] / maxS) * plotH;
-          const x1 = padL + (times[i + 1] / tEnd) * plotW;
-          const y1 = padT + plotH - (values[i + 1] / maxS) * plotH;
-          const mx = (x0 + x1) / 2;
-          const my = (y0 + y1) / 2;
-          strainCtx.quadraticCurveTo(x0, y0, mx, my);
-        }
-        const lastX = padL + (times[len - 1] / tEnd) * plotW;
-        const lastY = padT + plotH - (values[len - 1] / maxS) * plotH;
-        strainCtx.lineTo(lastX, lastY);
-        strainCtx.strokeStyle = strokeColor;
-        strainCtx.lineWidth = 1.8;
-        strainCtx.stroke();
-      }
-
-      // Draw Left Hand curve (Cyan)
-      drawSmoothCurve(lh, "#38bdf8");
-
-      // Draw Right Hand curve (Purple)
-      drawSmoothCurve(rh, "#c084fc");
+      strainCtx.stroke();
 
       // Bottom time ticks
       strainCtx.fillStyle = "rgba(148, 163, 184, 0.6)";
@@ -1238,8 +957,8 @@
       const dominantKey = radar ? radar.dominant_technique : "None";
       drawRadar(radar, dominantKey, time);
 
-      // Draw strain timeseries
-      drawStrain(currentStrainProfile, playheadMs);
+      // Draw difficulty timeline
+      drawStrain(currentTimeline, playheadMs);
 
       requestAnimationFrame(renderLoop);
     }

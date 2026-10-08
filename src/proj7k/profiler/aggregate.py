@@ -9,30 +9,41 @@ comparisons.
 
 from dataclasses import dataclass, field
 import json
+import math
 import time
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
 from proj7k.engine.scale import stars_of
 from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage
-from proj7k.radar import TECHNIQUE_NAMES
-from proj7k.rating import aggregate_p_norm
+from proj7k.field import TECH_KEYS
 
 
-#: The player-side aggregate's constants (see `rating.aggregate_p_norm`): a player's overall
-#: level across the dimensions they have been tested in. They are not `RatingOptions` fields,
-#: because they move no chart's rating — the chart's own composition is a plain maximum over its
-#: absolute technique stars (issue #50) — and the engine version exists to mark *chart* ratings
-#: stale.
+#: The player-side aggregate's constants: a player's overall level across the dimensions they have
+#: been tested in. They move no chart's rating (a chart's total is the engine's own), so they are
+#: the profiler's and not engine parameters.
 PLAYER_AGGREGATION_P_NORM: float = 4.0
 PLAYER_AGGREGATION_DAMPING: float = 0.08
 
 
 def player_overall_star(scores: Dict[str, float]) -> float:
-    """A player's overall level across the dimensions they have been tested in."""
-    return aggregate_p_norm(
-        scores, p=PLAYER_AGGREGATION_P_NORM, damping_coeff=PLAYER_AGGREGATION_DAMPING
-    )
+    """
+    A player's overall level across the dimensions they have been tested in, an extremum-dominant p-norm:
+
+        max(R) * (sum((r_k / max(R))^p))^(1/p) * (1 + damping * sum((r_k / max(R))^p))^(-1/2)
+
+    The damping term expresses that being strong in several dimensions is worth more than being strong in one.
+    """
+    vals = list(scores.values())
+    if not vals:
+        return 0.0
+    max_v = max(vals)
+    if max_v <= 1e-9:
+        return 0.0
+    power_sum = sum(math.pow(max(0.0, v) / max_v, PLAYER_AGGREGATION_P_NORM) for v in vals)
+    norm_factor = math.pow(power_sum, 1.0 / PLAYER_AGGREGATION_P_NORM)
+    damping = math.pow(1.0 + PLAYER_AGGREGATION_DAMPING * power_sum, -0.5)
+    return max_v * norm_factor * damping
 
 
 @dataclass(frozen=True)
@@ -137,7 +148,7 @@ def aggregate_macro_profile(
                 match_count=0,
                 broke_down=False,
             )
-            for dim in TECHNIQUE_NAMES
+            for dim in TECH_KEYS
         }
         return MacroProfile(
             player_name=player_name,
@@ -187,11 +198,11 @@ def aggregate_macro_profile(
     # 3. 8-Dimension Capacities Aggregation
     dimensions: Dict[str, DimensionMacroMetric] = {}
 
-    observed_dims = set(TECHNIQUE_NAMES)
+    observed_dims = set(TECH_KEYS)
     for s in snapshots:
         observed_dims.update(s.capacities.keys())
         observed_dims.update(s.fatal_peak_strains.keys())
-    all_dims = list(TECHNIQUE_NAMES) + [d for d in sorted(observed_dims) if d not in TECHNIQUE_NAMES]
+    all_dims = list(TECH_KEYS) + [d for d in sorted(observed_dims) if d not in TECH_KEYS]
 
     for dim in all_dims:
         dim_capacities: List[float] = []

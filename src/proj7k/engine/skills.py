@@ -14,7 +14,7 @@ SKILLS: Tuple[str, ...] = (
 RC_COUNT = 4
 
 #: The engine's skill names against the short technique keys the consumers of the legacy radar speak
-#: (`radar.TECHNIQUE_NAMES`: the live radar canvas, the downscaler's pruner and mapper).
+#: (`field.TECH_KEYS`: the live radar canvas, the downscaler's pruner and mapper, the profiler).
 SKILL_TECH_KEY = {
     "rc_jack": "jack",
     "rc_tech": "tech",

@@ -2,24 +2,24 @@
 LiveEngine: Analysis orchestrator and caching seam for real-time live radar.
 
 SPEC-P2.4-01 / ADR-0010. Stars, dan tier and the radar come from the spec v0.2 difficulty engine
-(ADR-0017/0018); the dual-hand strain canvas, the 4D tech breakdown and the legacy synthesis are
-the driver/strain engine's and ride in the frame under `legacy`, labelled, until they are redesigned.
+(ADR-0017/0018); the timeline the playhead runs along is the engine's difficulty field (ADR-0020):
+per second, the hardest reading against the chart's level, the expected losses, and the skill that carries them.
 """
 
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from proj7k.cache import TwoLayerCache
-from proj7k.engine import evaluate_osu
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import extract_beatmap_features
+from proj7k.field import TECH_KEYS, trace_osu
 from proj7k.parser import parse_osu_7k
-from proj7k.radar import compute_tech_4d_components, compute_technique_radar
-from proj7k.rating import synthesize_star_rating
-from proj7k.strain import compute_dual_hand_strain
 
 
 from proj7k.dan import estimate_canonical_dan
+
+#: The width of one bar of the live timeline, in seconds of chart time.
+TIMELINE_BIN_S: float = 1.0
 
 
 def estimate_dan_tier(star_rating: float) -> str:
@@ -34,7 +34,7 @@ class LiveEngine:
     """
     Evaluates 7K charts for real-time visualization with TwoLayerCache integration.
     Produces canonical JSON state frames: the engine's profile, the radar the canvas draws, and the
-    labelled `legacy` readings.
+    difficulty timeline.
     """
 
     def __init__(
@@ -71,18 +71,15 @@ class LiveEngine:
             features = extract_beatmap_features(beatmap)
             self.cache.put_features(content_hash, None, features)
 
-        profile = evaluate_osu(content_str)
+        field = trace_osu(content_str)
+        profile = field.profile
         dan_tier = estimate_dan_tier(profile.total_stars)
         dominant_key = SKILL_TECH_KEY[profile.dominant_skill]
         radar: Dict[str, Any] = {SKILL_TECH_KEY[name]: reading.stars for name, reading in profile.skills.items()}
         radar["dominant_technique"] = dominant_key
         radar["dominant_score"] = radar[dominant_key]
 
-        strain_profile = compute_dual_hand_strain(beatmap)
-        legacy_radar = compute_technique_radar(beatmap, features=features)
-        synthesis = synthesize_star_rating(legacy_radar, p90_strain=strain_profile.p90_strain)
-        tech_breakdown = legacy_radar.tech_4d.to_dict() if legacy_radar.tech_4d else {}
-        tech_breakdown["speed_burst"] = round(legacy_radar.speed, 4)
+        curve = field.curve(bin_s=TIMELINE_BIN_S, start_s=0.0)
 
         metadata: Dict[str, Any] = {
             "title": beatmap.title,
@@ -105,13 +102,7 @@ class LiveEngine:
             "dan_tier": dan_tier,
             "radar": radar,
             "profile": profile.to_dict(),
-            "legacy": {
-                "engine": "legacy driver/strain engine (to be redesigned, ADR-0018)",
-                "star_rating": synthesis.star_rating,
-                "synthesis": synthesis.to_dict(),
-                "strain_profile": strain_profile.to_dict(),
-                "tech_breakdown": tech_breakdown,
-            },
+            "timeline": {**curve.to_dict(), "skills": list(TECH_KEYS)},
             "metadata": metadata,
         }
 
