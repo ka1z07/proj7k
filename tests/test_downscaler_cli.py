@@ -313,9 +313,10 @@ def test_cli_subprocess_invocation(tmp_path):
     proc = subprocess.run(
         cmd,
         cwd=str(Path(__file__).resolve().parents[1]),
-        env={"PYTHONPATH": "src", "PATH": os.environ.get("PATH", "")},
+        env={**os.environ, "PYTHONPATH": "src", "PYTHONIOENCODING": "utf-8"},
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert proc.returncode == 0
     assert "PROJ7K PRACTICE GENERATOR & DOWNSCALER REPORT" in proc.stdout

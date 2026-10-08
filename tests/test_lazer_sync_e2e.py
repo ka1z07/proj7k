@@ -147,7 +147,7 @@ def test_sync_manager_sync_once_success(tmp_path: Path):
 
 
 def test_sync_manager_game_running_blocks(tmp_path: Path):
-    import fcntl
+    from proj7k.lazer.lock import _try_exclusive_lock, _unlock
     realm_file = tmp_path / "client.realm"
     realm_file.write_text("realm dummy")
     lock_file = tmp_path / "client.realm.lock"
@@ -157,7 +157,7 @@ def test_sync_manager_game_running_blocks(tmp_path: Path):
 
     # Simulate game running holding lock
     with open(lock_file, "r+") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _try_exclusive_lock(f.fileno())
         try:
             options = SyncOptions(
                 realm_path=realm_file,
@@ -173,7 +173,7 @@ def test_sync_manager_game_running_blocks(tmp_path: Path):
             assert summary.success is False
             assert "lock" in summary.error.lower() or "safe flush" in summary.error.lower()
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _unlock(f.fileno())
 
 
 def test_sync_manager_revert_all(tmp_path: Path):
@@ -541,14 +541,14 @@ def test_sync_manager_apply_batch_failure(tmp_path: Path):
 
 
 def test_sync_manager_revert_all_lock_busy(tmp_path: Path):
-    import fcntl
+    from proj7k.lazer.lock import _try_exclusive_lock, _unlock
     realm_file = tmp_path / "client.realm"
     realm_file.touch()
     lock_file = tmp_path / "client.realm.lock"
     lock_file.touch()
 
     with open(lock_file, "r+") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _try_exclusive_lock(f.fileno())
         try:
             mgr = LazerSyncManager(
                 options=SyncOptions(
@@ -562,7 +562,7 @@ def test_sync_manager_revert_all_lock_busy(tmp_path: Path):
             assert result.success is False
             assert "Safe flush window is closed" in result.error
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _unlock(f.fileno())
 
 
 def test_daemon_loop_logging_branches():
@@ -672,7 +672,7 @@ def test_sync_manager_preheats_when_locked(tmp_path: Path):
     sync_once with preheat_on_locked=True should still read beatmaps in read-only mode
     and preheat evaluation into cache, returning success=False (window closed) but evaluated_count > 0.
     """
-    import fcntl
+    from proj7k.lazer.lock import _try_exclusive_lock, _unlock
     realm_file = tmp_path / "client.realm"
     realm_file.touch()
     lock_file = tmp_path / "client.realm.lock"
@@ -706,7 +706,7 @@ def test_sync_manager_preheats_when_locked(tmp_path: Path):
 
     # Hold the lock
     with open(lock_file, "r+") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _try_exclusive_lock(f.fileno())
         try:
             opts = SyncOptions(
                 realm_path=realm_file,
@@ -724,7 +724,7 @@ def test_sync_manager_preheats_when_locked(tmp_path: Path):
             # Batch update was NOT called because window was closed
             mock_bridge.apply_batch_update.assert_not_called()
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _unlock(f.fileno())
 
 
 def _jack_chart_content() -> str:

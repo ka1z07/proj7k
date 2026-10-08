@@ -47,7 +47,7 @@ def test_cli_argument_custom():
     assert args.host == "0.0.0.0"
     assert args.no_watch is True
     assert args.open is True
-    assert str(args.cache_dir) == "/tmp/cache"
+    assert args.cache_dir == Path("/tmp/cache")
 
 
 def test_cli_run_no_watch():
