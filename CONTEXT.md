@@ -210,7 +210,7 @@ _Avoid_: 随尾判密度提升的难度、尾点孤立度、把释放时距或�
 ### 规格 v0.2 引擎（取代旧难度引擎，ADR-0017）
 
 **旧引擎 (Legacy Engine)**:
-驱动层加应变层的双系统（`features`、`strain`、`radar`、`rating`、`difficulty`），被规格 v0.2 取代；在 profiler 与 downscaler 重新设计之前继续存在，仅服务于它们。
+驱动层加应变层的双系统（`strain`、`radar`、`rating`、`difficulty`、`calibration`），被规格 v0.2 取代。profiler、downscaler 与实时面板都已迁到新引擎（ADR-0020/0021/0022），旧模块只剩批量工具的旧指标与它们自己的测试在用，待删。原始特征 `features` 不属旧引擎，留作诊断指标。
 _Avoid_: 当前引擎、主引擎
 
 **技法 (Skill)**:
@@ -279,7 +279,7 @@ _Avoid_: 把驱动数值直接当星级读、8 个技法共用一套系数
 
 **时序应变剖面 (Strain Timeseries Profile)**:
 基于连续应变衰减累积模型沿时间轴生成的微观键力与认知阻抗负荷时序曲线，显式标注左手与右手应变分量及 P90 / Top5% 权威难点阈值。
-_旧引擎术语：新引擎不输出时间序列，其消费者（profiler、pruner、仪表盘应变画布）暂留旧引擎，重新设计见 ADR-0018。_
+_旧引擎术语：它的消费者（profiler、pruner、仪表盘时间线）都改读新引擎的难度场 `field.curve`（ADR-0020/0022）。_
 _Avoid_: 离散柱状图、全局平均密度线
 
 **实时铺面监听器 (Real-time Beatmap Watcher)**:
@@ -287,7 +287,7 @@ _Avoid_: 离散柱状图、全局平均密度线
 _Avoid_: 侵入式内存注入、阻塞式长轮询
 
 **实时雷达仪表盘 (Live Radar Dashboard / Overlay)**:
-基于 WebSocket 双工管道向前端实时流式推送当前铺面 8 维技法雷达与时序应变剖面的轻量 Web 观察面板，天然兼容第二屏交互与 OBS 透明图层推流。星数、段位与雷达来自规格 v0.2 引擎；应变画布与 4D 拆解属旧引擎，放在帧的 `legacy` 键下（ADR-0019）。
+基于 WebSocket 双工管道向前端实时流式推送当前铺面 8 维技法雷达与难度时间线的轻量 Web 观察面板，天然兼容第二屏交互与 OBS 透明图层推流。星数、段位、雷达与时间线（帧的 `timeline` 键，即难度场的 `curve`）都来自规格 v0.2 引擎（ADR-0022）。
 _Avoid_: 重量级原生窗体依赖、不可缩放固定视图
 
 ### 铺面降阶与自适应训练

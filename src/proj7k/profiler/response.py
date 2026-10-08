@@ -18,11 +18,10 @@ from proj7k.engine.params import DEFAULT, Params
 from proj7k.engine.scale import stars_of
 from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
-from proj7k.field import ChartField, level_for_loss, trace_beatmap
+from proj7k.field import TECH_KEYS, ChartField, level_for_loss, trace_beatmap
 from proj7k.parser import Beatmap7K, NoteType
 from proj7k.profiler.aggregate import player_overall_star
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment
-from proj7k.radar import TECHNIQUE_NAMES
 
 #: What an osu!mania judgment costs in accuracy, as a share of a perfect hit (the score's 300/200/100/50/0 of 300).
 JUDGMENT_LOSS: Dict[HitJudgment, float] = {
@@ -34,7 +33,7 @@ JUDGMENT_LOSS: Dict[HitJudgment, float] = {
     HitJudgment.MISS: 1.0,
 }
 
-#: The engine name of a skill against the short key the profiler stores and reports (`radar.TECHNIQUE_NAMES`).
+#: The engine name of a skill against the short key the profiler stores and reports (`field.TECH_KEYS`).
 KEY_OF = SKILL_TECH_KEY
 
 
@@ -215,7 +214,7 @@ def analyze_strain_response(
         )
 
     # keep the radar in the profiler's key order
-    results = {k: results[k] for k in TECHNIQUE_NAMES}
+    results = {k: results[k] for k in TECH_KEYS}
     tested = [r for r in results.values() if r.tested]
     if tested:
         dominant = max(tested, key=lambda r: r.star_rating).dimension

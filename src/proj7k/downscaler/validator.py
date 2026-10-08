@@ -20,19 +20,7 @@ from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.engine.events import notes_from_beatmap
 from proj7k.features import BeatmapFeatures, extract_beatmap_features
 from proj7k.parser import Beatmap7K
-from proj7k.radar import TECHNIQUE_NAMES, TechniqueRadar
 from proj7k.downscaler.mapper import DanTarget
-
-
-def compute_radar_cosine_similarity(
-    radar1: TechniqueRadar,
-    radar2: TechniqueRadar,
-) -> float:
-    """
-    Computes cosine similarity between two 8D legacy technique radar score vectors:
-    cos(R1, R2) = (R1 . R2) / (||R1|| * ||R2||).
-    """
-    return _cosine(radar1.to_vector(), radar2.to_vector())
 
 
 def compute_skill_cosine_similarity(profile1: DifficultyProfile, profile2: DifficultyProfile) -> float:

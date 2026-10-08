@@ -43,8 +43,7 @@ def test_target_level_is_the_inverse_of_the_star_scale():
 
 
 def test_legacy_strain_law_inverse_still_round_trips():
-    from proj7k.downscaler.mapper import star_rating_to_strain
-    from proj7k.strain import compute_raw_strain_star_rating
+    from proj7k.strain import compute_raw_strain_star_rating, star_rating_to_strain
 
     for sr in [3.5, 6.1, 10.5]:
         assert compute_raw_strain_star_rating(star_rating_to_strain(sr)) == pytest.approx(sr, rel=1e-3)

@@ -72,23 +72,21 @@ def test_static_assets_in_repo_are_100_percent_offline_safe():
 
 def test_index_html_contains_required_dashboard_components():
     """
-    Verify index.html contains required canvas components,
-    4D tech drawer, and OBS overlay logic.
+    Verify index.html contains required canvas components, the difficulty timeline drawn from the
+    frame's `timeline`, and OBS overlay logic.
     """
     index_file = DEFAULT_STATIC_DIR / "index.html"
     assert index_file.exists()
     content = index_file.read_text(encoding="utf-8")
 
-    # 1. Canvas elements for Radar and Dual-Hand Strain Profile
+    # 1. Canvas elements for the Radar and the Difficulty Timeline
     assert 'id="radarCanvas"' in content, "Missing #radarCanvas"
     assert 'id="strainCanvas"' in content, "Missing #strainCanvas"
 
-    # 2. 4D Tech breakdown components
-    assert "techDrawer" in content or "tech-drawer" in content
-    assert "tortuosity" in content.lower() or "紊乱" in content
-    assert "bracket" in content.lower() or "shear" in content.lower() or "剪切" in content
-    assert "entropy" in content.lower() or "熵" in content
-    assert "rhythm" in content.lower() or "时基" in content or "变异" in content
+    # 2. The timeline reads the engine's field, nothing from the legacy engine (ADR-0022)
+    assert "data.timeline" in content
+    assert "legacy" not in content.lower()
+    assert "techDrawer" not in content
 
     # 3. OBS Overlay parameter handling
     assert "mode" in content and "overlay" in content

@@ -404,6 +404,18 @@ def _calculate_percentile(values: List[float], q: float) -> float:
     return float((1.0 - weight) * sorted_v[low] + weight * sorted_v[high])
 
 
+def star_rating_to_strain(
+    sr: float,
+    a: float = DEFAULT_CALIBRATION.strain_a,
+    b: float = DEFAULT_CALIBRATION.strain_b,
+    exp: float = DEFAULT_CALIBRATION.strain_exp,
+) -> float:
+    """Inverts the strain star law `SR = a * S**exp + b` (`compute_raw_strain_star_rating`)."""
+    if sr <= b:
+        return 0.0
+    return math.pow((sr - b) / a, 1.0 / exp)
+
+
 def compute_raw_strain_star_rating(
     s_base: float,
     a: float = DEFAULT_CALIBRATION.strain_a,
@@ -632,7 +644,6 @@ def compute_8d_strain_timeseries(
     calibrated against the physical strain scale and Canonical Dan Progression Hierarchy (ADR-0012).
     """
     from proj7k.radar import TECHNIQUE_NAMES, compute_technique_radar
-    from proj7k.downscaler.mapper import star_rating_to_strain
 
     opts = options or StrainOptions()
     hit_objects = sorted(beatmap.hit_objects, key=lambda x: (x.time, x.column))

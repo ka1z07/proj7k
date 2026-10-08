@@ -11,7 +11,6 @@ technique radar target profile, and benchmark feature centroids:
 
 from dataclasses import dataclass, field
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -21,9 +20,7 @@ from proj7k.parser import Beatmap7K
 from proj7k.engine import evaluate_notes
 from proj7k.engine.events import notes_from_beatmap
 from proj7k.engine.skills import SKILL_TECH_KEY
-from proj7k.calibration import DEFAULT_CALIBRATION
-from proj7k.field import d_of_stars
-from proj7k.radar import TECHNIQUE_NAMES
+from proj7k.field import TECH_KEYS, d_of_stars
 
 from proj7k.dan import (
     CANONICAL_DAN_SR,
@@ -78,21 +75,6 @@ def normalize_technique_name(tech: str) -> str:
     return tech
 
 
-
-
-def star_rating_to_strain(
-    sr: float,
-    a: float = DEFAULT_CALIBRATION.strain_a,
-    b: float = DEFAULT_CALIBRATION.strain_b,
-    exp: float = DEFAULT_CALIBRATION.strain_exp,
-) -> float:
-    """
-    Inverts the legacy physical strain star law `SR = a * S**exp + b`. Not used by the downscaler any more (it steers
-    by the engine's star, ADR-0021); it stays here because the legacy dimension curves of `proj7k.strain` import it.
-    """
-    if sr <= b:
-        return 0.0
-    return math.pow((sr - b) / a, 1.0 / exp)
 
 
 @dataclass(frozen=True)
@@ -196,7 +178,7 @@ class TwoTierDanMapper:
 
         # 3. Build radar profile from ground truth or technique orientation
         gt_radar = fingerprint.get("radar_profile", {})
-        for t in TECHNIQUE_NAMES:
+        for t in TECH_KEYS:
             if t == short_tech_name:
                 radar_profile[t] = effective_sr
             else:

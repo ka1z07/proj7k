@@ -10,7 +10,8 @@ import pytest
 
 from proj7k.cache import TwoLayerCache
 from proj7k.dan import estimate_canonical_dan
-from proj7k.live.engine import LiveEngine
+from proj7k.field import trace_osu
+from proj7k.live.engine import TIMELINE_BIN_S, LiveEngine
 
 
 def _make_dummy_osu_content(title: str = "Test Song") -> str:
@@ -69,8 +70,7 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert "dominant_technique" in radar
     assert "dominant_score" in radar
 
-    # Stars, tier and radar come from the difficulty engine; the old strain/synthesis readings ride along
-    # under `legacy`, labelled (ADR-0018 decision 4).
+    # Stars, tier, radar and timeline all come from the difficulty engine; nothing in the frame is the legacy engine's.
     profile = frame["profile"]
     assert profile["total"]["stars"] == frame["star_rating"]
     assert set(profile["skills"]) == {
@@ -79,9 +79,7 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert frame["dan_tier"] == estimate_canonical_dan(frame["star_rating"])
     assert radar["dominant_technique"] in {"jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release"}
     assert radar["dominant_score"] == radar[radar["dominant_technique"]]
-    legacy = frame["legacy"]
-    assert "legacy" in legacy["engine"].lower()
-    assert "synthesis" in legacy and "star_rating" in legacy["synthesis"]
+    assert "legacy" not in frame
 
     # Verify TwoLayerCache Layer 1 AST and Layer 2 Features were cached
     h = TwoLayerCache.compute_content_hash(content)
@@ -89,42 +87,30 @@ def test_live_engine_analyze_content_returns_contract(tmp_path: Path):
     assert cache.get_features(h) is not None
 
 
-def test_live_engine_strain_profile_contract(tmp_path: Path):
+def test_live_engine_timeline_contract(tmp_path: Path):
     cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
     engine = LiveEngine(cache=cache)
 
-    content = _make_dummy_osu_content("Strain Test")
+    content = _make_dummy_osu_content("Timeline Test")
     frame = engine.analyze_content(content)
 
-    assert "strain_profile" not in frame
-    assert "strain_profile" in frame["legacy"]
-    strain = frame["legacy"]["strain_profile"]
+    tl = frame["timeline"]
+    # the difficulty field's curve in chart time from 0, one bin per TIMELINE_BIN_S
+    assert tl["start_s"] == 0.0
+    assert tl["bin_s"] == TIMELINE_BIN_S
+    bins = len(tl["load"])
+    assert bins > 0
+    assert len(tl["risk"]) == len(tl["skill"]) == len(tl["events"]) == bins
+    assert tl["skills"] == ["jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release"]
+    assert all(-1 <= k < len(tl["skills"]) for k in tl["skill"])
+    assert all(x >= 0.0 for x in tl["load"]) and all(x >= 0.0 for x in tl["risk"])
+    # the bins hold every event
+    assert sum(tl["events"]) > 0
 
-    # Verify dual hand strain arrays
-    assert "left_strains" in strain
-    assert "right_strains" in strain
-    assert "sample_times_ms" in strain
-    assert len(strain["left_strains"]) == len(strain["sample_times_ms"])
-    assert len(strain["right_strains"]) == len(strain["sample_times_ms"])
-    assert len(strain["sample_times_ms"]) > 0
-
-    # All sample times must be non-negative and monotonically increasing in ms
-    assert strain["sample_times_ms"][0] >= 0.0
-    for i in range(len(strain["sample_times_ms"]) - 1):
-        assert strain["sample_times_ms"][i + 1] > strain["sample_times_ms"][i]
-
-    # Verify P90 baseline and Top 5% threshold
-    assert "p90_strain" in strain
-    assert "top5_percent_strain" in strain
-    assert strain["p90_strain"] >= 0.0
-    assert strain["top5_percent_strain"] >= strain["p90_strain"]
-
-    # Verify backward compatibility aliases
-    assert "left_hand_strain" in strain
-    assert "right_hand_strain" in strain
-    assert "combined_strain" in strain
-    assert "p95_strain" in strain
-
+    # it is the field's own curve, with the same profile the frame reports
+    field = trace_osu(content)
+    assert field.profile.total_stars == frame["star_rating"]
+    assert tl["load"] == field.curve(bin_s=TIMELINE_BIN_S, start_s=0.0).to_dict()["load"]
 
 
 def test_live_engine_cache_hit_on_second_call(tmp_path: Path):
@@ -177,19 +163,3 @@ def test_live_engine_analyze_file(tmp_path: Path):
     # Second call on same file
     frame2 = engine.analyze_file(osu_file)
     assert frame2["cached"] is True
-
-
-def test_live_engine_includes_tech_breakdown(tmp_path: Path):
-    cache = TwoLayerCache(cache_dir=tmp_path / "cache", enabled=False)
-    engine = LiveEngine(cache=cache)
-
-    content = _make_dummy_osu_content("4D Tech Song")
-    frame = engine.analyze_content(content)
-
-    assert "tech_breakdown" not in frame
-    assert "tech_breakdown" in frame["legacy"]
-    tech = frame["legacy"]["tech_breakdown"]
-    for key in ("tortuosity", "bracket_shear", "spatial_entropy", "rhythm_irreg"):
-        assert key in tech
-        assert isinstance(tech[key], (int, float))
-

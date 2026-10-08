@@ -31,9 +31,13 @@ from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_beatmap, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
 from proj7k.engine.scale import STAR_A, STAR_B, stars_of
-from proj7k.engine.skills import SKILLS
+from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.parser import Beatmap7K
+
+#: The short key each skill is stored and reported under by the profiler, the downscaler and the live
+#: frame (`jack`, `tech`, ..., `ln_release`), in the engine's skill order.
+TECH_KEYS: Tuple[str, ...] = tuple(SKILL_TECH_KEY[name] for name in SKILLS)
 
 
 def d_of_stars(stars: float) -> float:

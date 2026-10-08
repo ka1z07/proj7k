@@ -17,7 +17,28 @@ from proj7k.profiler.matcher import (
     HitJudgment,
     column_to_canonical_lane,
 )
-from proj7k.radar import _partition_chord_steps
+
+#: Notes closer in time than this are one chord step.
+CHORD_EPS_MS: float = 8.0
+
+
+def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = CHORD_EPS_MS) -> List[List[HitObject]]:
+    """Partitions a chart's notes into its chord steps S_0, S_1, ..., S_M, in time order."""
+    hos = sorted(beatmap.hit_objects, key=lambda x: (x.time, x.column))
+    if not hos:
+        return []
+    steps: List[List[HitObject]] = []
+    curr = [hos[0]]
+    curr_t = hos[0].time
+    for ho in hos[1:]:
+        if abs(ho.time - curr_t) <= chord_eps_ms:
+            curr.append(ho)
+        else:
+            steps.append(curr)
+            curr = [ho]
+            curr_t = ho.time
+    steps.append(curr)
+    return steps
 
 
 class PrecursorMotif(str, Enum):

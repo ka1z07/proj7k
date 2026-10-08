@@ -19,7 +19,6 @@ from proj7k.downscaler.marginal import removal_benefit
 from proj7k.downscaler.validator import (
     DualGateValidator,
     ValidationResult,
-    compute_radar_cosine_similarity,
 )
 from proj7k.downscaler.pruner import (
     ExcessLossPruner,
@@ -54,7 +53,6 @@ __all__ = [
     "removal_benefit",
     "DualGateValidator",
     "ValidationResult",
-    "compute_radar_cosine_similarity",
     "ExcessLossPruner",
     "PruningResult",
     "PruneIterationRecord",

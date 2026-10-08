@@ -287,6 +287,13 @@ _RADAR = [
 _STRAIN = [
     ("_build_locked_finger_counts", {0: 4, 1: 4}, "Difference-array indices and step increments.", {}),
     (
+        "star_rating_to_strain",
+        {0.0: 1, 1.0: 1},
+        "The zero floor below the law's intercept and the reciprocal of the exponent; a, b and exp are "
+        "the calibration's.",
+        {},
+    ),
+    (
         "_calculate_percentile",
         {0.0: 1, 1.0: 2, 100.0: 1},
         "The percentile fraction (q/100), the interpolation weights, and the empty-list guard.",
