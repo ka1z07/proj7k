@@ -652,7 +652,7 @@
       dominantBadge.textContent = dom.replace("_", " ").toUpperCase();
 
       statNotes.textContent = (meta.total_notes || 0).toLocaleString();
-      statHold.textContent = `${((meta.hold_pct || 0) * 100).toFixed(1)}%`;
+      statHold.textContent = `${(meta.hold_pct || 0).toFixed(1)}%`;
       statDuration.textContent = formatDuration(meta.duration_seconds || 0);
       statNps.textContent = (meta.avg_nps || 0).toFixed(2);
 

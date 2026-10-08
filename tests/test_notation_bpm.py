@@ -16,7 +16,6 @@ import pytest
 from proj7k.assets import load_corpus_fixture
 from proj7k.features import extract_beatmap_features
 from proj7k.parser import dominant_bpm, notation_normalized_bpm, observed_note_value, parse_osu_7k
-from proj7k.strain import compute_dual_hand_strain
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPO_ROOT / "docs" / "research" / "structured_index.json"
@@ -78,7 +77,7 @@ def test_two_notations_of_one_chart_drive_the_engine_to_the_same_place():
     assert notation_normalized_bpm(bm_eighth) == pytest.approx(60.0)
 
 
-def test_two_notations_agree_on_the_action_clock_the_inverse_score_and_the_strain():
+def test_two_notations_agree_on_the_action_clock_and_the_inverse_score():
     sixteenth = _chart_with_beat_length(1000.0)
     eighth = _chart_with_beat_length(500.0)
 
@@ -87,12 +86,6 @@ def test_two_notations_agree_on_the_action_clock_the_inverse_score_and_the_strai
 
     assert feat_sixteenth.delta_t_action == feat_eighth.delta_t_action
     assert feat_sixteenth.inverse_score == feat_eighth.inverse_score
-
-    strain_sixteenth = compute_dual_hand_strain(parse_osu_7k(sixteenth))
-    strain_eighth = compute_dual_hand_strain(parse_osu_7k(eighth))
-
-    assert strain_sixteenth.p90_strain == strain_eighth.p90_strain
-    assert strain_sixteenth.peak_strain == strain_eighth.peak_strain
 
 
 def test_action_clock_is_the_charts_own_note_spacing_across_the_benchmark_ladder():

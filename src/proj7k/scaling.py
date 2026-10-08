@@ -1,10 +1,7 @@
 """
 Inverse BPM scaling law: the tempo-dependent factor applied to raw physical metrics.
 
-Every calibration constant of the law is named here and listed in `CALIBRATION_CONSTANTS`,
-so the engine fingerprint covers it (`difficulty.engine_fingerprint`) and the
-literal-coverage guard can tell a named constant apart from a literal baked into an
-operator (issue #48).
+Every calibration constant of the law is named here rather than baked into an operator.
 """
 
 import math
@@ -227,21 +224,3 @@ class ClockWindowRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-
-
-#: Names of every calibration constant above, for the methodology fingerprint — see
-#: `calibration.block_fingerprint_constants`. The coverage guard keeps this list complete.
-CALIBRATION_CONSTANTS: Tuple[str, ...] = (
-    "DEFAULT_DIVISOR",
-    "LOW_SPEED_BPM_THRESHOLD",
-    "HIGH_SPEED_BPM_THRESHOLD",
-    "LOW_SPEED_CAP",
-    "REFERENCE_BPM",
-    "REFERENCE_EXPONENT",
-    "LOW_SPEED_EXPONENT",
-    "PENALTY_RAMP_BPM",
-    "PENALTY_EXP_GAIN",
-    "PENALTY_EXP_CEILING",
-    "LOCK_AMPLIFICATION_GAIN",
-    "INVERSE_NPS_GAIN",
-)

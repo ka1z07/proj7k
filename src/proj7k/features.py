@@ -21,10 +21,9 @@ class FeatureOptions:
 
     The feature tensor is not a neutral summary of a chart: which inter-note gaps count as a
     snap, how irregular a rhythm has to be before it reads as unorthodox, and how finely the
-    locked-finger step function is sampled are all calibration decisions, and every one of them
-    reaches a star rating through the radar's drivers. They live here, next to the stage that
-    applies them, for the same reason `RadarOptions` and `StrainOptions` do — so a change moves
-    the engine version (ADR-0014) instead of silently leaving stale ratings in the game.
+    locked-finger step function is sampled are all calibration decisions. The tensor no longer
+    reaches a star rating (the spec v0.2 engine reads the notes itself); it is the diagnostic
+    layer the batch report and the downscaler's centroid gate read.
 
     The three rhythm weights are a convex combination: they are read as a weighted mean of the
     three irregularity signals, so `snap_variance_weight + jerk_weight + snap_mix_weight = 1`.

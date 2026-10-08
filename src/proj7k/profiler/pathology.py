@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from proj7k.parser import Beatmap7K, HitObject, NoteType
-from proj7k.physics import BRACKET_PHASE_INVERSION_WINDOW_MS, CHORDJACK_STEP_INTERVAL_MS
 from proj7k.profiler.matcher import (
     AlignedHit,
     HitAlignmentResult,
@@ -20,6 +19,14 @@ from proj7k.profiler.matcher import (
 
 #: Notes closer in time than this are one chord step.
 CHORD_EPS_MS: float = 8.0
+
+#: Chordjack criterion (ADR-0007): a same-lane note struck one chord step later (Δk = 1) and within
+#: this window is a stagnation (jack) note.
+CHORDJACK_STEP_INTERVAL_MS: float = 220.0
+
+#: Bracket phase inversion window: the largest gap between two consecutive chord steps for an
+#: outer/inner to middle finger grip inversion to count (CONTEXT.md 括号拓扑相变).
+BRACKET_PHASE_INVERSION_WINDOW_MS: float = 120.0
 
 
 def _partition_chord_steps(beatmap: Beatmap7K, chord_eps_ms: float = CHORD_EPS_MS) -> List[List[HitObject]]:

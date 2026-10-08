@@ -210,7 +210,7 @@ _Avoid_: 随尾判密度提升的难度、尾点孤立度、把释放时距或�
 ### 规格 v0.2 引擎（取代旧难度引擎，ADR-0017）
 
 **旧引擎 (Legacy Engine)**:
-驱动层加应变层的双系统（`strain`、`radar`、`rating`、`difficulty`、`calibration`），被规格 v0.2 取代。profiler、downscaler 与实时面板都已迁到新引擎（ADR-0020/0021/0022），旧模块只剩批量工具的旧指标与它们自己的测试在用，待删。原始特征 `features` 不属旧引擎，留作诊断指标。
+驱动层加应变层的双系统（`strain`、`radar`、`rating`、`difficulty`、`calibration`），被规格 v0.2 取代，已删除（ADR-0023）。本文件里标「旧引擎术语」的词条只作历史对照。原始特征 `features` 不属旧引擎，留作诊断指标；`proj7k.difficulty` 现在是新引擎的单曲命令行。
 _Avoid_: 当前引擎、主引擎
 
 **技法 (Skill)**:

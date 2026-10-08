@@ -22,7 +22,7 @@ from proj7k.profiler.aggregate import (
     aggregate_macro_profile,
 )
 from proj7k.profiler.cli import build_parser, main, run_ingestion
-from proj7k.radar import TECHNIQUE_NAMES
+from proj7k.field import TECH_KEYS
 
 
 def create_sample_chart(tmp_path: Path, bpm: float = 140.0, num_notes: int = 50) -> Path:

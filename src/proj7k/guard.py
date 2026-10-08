@@ -43,43 +43,9 @@ PLAIN_LADDER_GATE = MetricGate(min_kendall_tau=0.88, min_spearman_rho=0.95, max_
 CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
     # Measured worst over the benchmark corpus: tau 0.905 / rho 0.964 / 3 inversions.
     "star_rating": PLAIN_LADDER_GATE,
-    # --- The raw technique drivers (issue #52) -------------------------------------------------
-    #
-    # One gate per technique, on the technique's *own* ladder (`monotonicity.DRIVER_METRIC_
-    # PREFIX` reads them). Without these entries a driver ladder fell back to
-    # `DEFAULT_METRIC_GATE`, which is how issue #52's starting evidence could be read as "5 of 8
-    # fail" or "3 of 8 fail" depending on which gate the reader assumed — the same table, two
-    # answers.
-    #
-    # The thresholds are the ticket's **red line**, not a fitted floor: they are the bar a
-    # driver has to clear to count as ordering its own ladder at all, and the ticket's bullseye
-    # (tau >= 0.93 / rho >= 0.98) sits above them deliberately — `docs/adr/0015` records that
-    # the official Jinjin ladder's own ratings order at tau 0.886 on Regular Tech, so the
-    # bullseye is a target rather than a property of the ground truth.
-    #
-    # Measured when issue #52 opened the driver layer (its starting evidence): ln_general
-    # 0.905/0.971, ln_tech 0.886/0.961, ln_release 0.943/0.986 cleared the line; jack
-    # 0.829/0.943, stream 0.790/0.904, ln_inverse 0.790/0.900, speed 0.714/0.875 and tech
-    # 0.581/0.729 did not. Stage 2 gave the four rice axes their peak-density carrier and
-    # closed three of those five: jack 0.886/0.971, speed 0.886/0.957, stream 0.924/0.982
-    # (stream also clears the bullseye). `ln_inverse` 0.790/0.900 stays where it was and `tech`
-    # rose to 0.790/0.921 without clearing the line; both remain issue #50's — ADR-0015 assigns
-    # them to Ω_irreg's resolution, with the tech axis' kinetic term wired and its gain
-    # calibrated off pending that. A caller that evaluates a driver ladder gets the shortfall
-    # reported, which is the point: the line is where the driver layer has to arrive, not where
-    # it is. `tests/test_driver_ladder_gates.py` pins which two are below it, so the handoff
-    # cannot outlive the defect.
     # The new engine's own-skill ladder (ADR-0018 decision 3): each pool's own skill climbs the 15 tiers. The
     # default is the per-technique star bar; `OWN_SKILL_RATCHET` overrides it per pool.
     OWN_SKILL_METRIC: PLAIN_LADDER_GATE,
-    "driver_jack": PLAIN_LADDER_GATE,
-    "driver_tech": PLAIN_LADDER_GATE,
-    "driver_speed": PLAIN_LADDER_GATE,
-    "driver_stream": PLAIN_LADDER_GATE,
-    "driver_ln_general": PLAIN_LADDER_GATE,
-    "driver_ln_tech": PLAIN_LADDER_GATE,
-    "driver_ln_inverse": PLAIN_LADDER_GATE,
-    "driver_ln_release": PLAIN_LADDER_GATE,
 }
 #: Per-pool ratchet for the `own_skill` ladder, keyed by the pool's manifest name: the thresholds are the
 #: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an
@@ -113,8 +79,7 @@ DEFAULT_MIN_ANCHOR_SAMPLES: int = 4
 #: The Phase 2 specification's bar for the 120-chart ladder *as a whole*, on top of the
 #: per-technique gates above: no single technique collapsing is a different claim from the
 #: ladder being well ordered. Asserted end-to-end by `tests/test_120_benchmark_guard.py` and
-#: readable by the calibration tools (`tools/technique_star_fit.py` weighs it when it selects
-#: an anchor table), so the bar has exactly one definition. The line was written against the
+#: so the bar has exactly one definition. The line was written against the
 #: **pre-#47** engine; re-measured at `96a236f` (the last commit before #47 split the drivers
 #: out of the radar) it is mean rho 0.983 / mean tau 0.9405 / 16 inversions, which is what this
 #: comment records.
@@ -136,19 +101,6 @@ DEFAULT_MIN_ANCHOR_SAMPLES: int = 4
 LADDER_MIN_MEAN_SPEARMAN_RHO = 0.98
 LADDER_MIN_MEAN_KENDALL_TAU = 0.92
 LADDER_MAX_TOTAL_INVERSIONS = 24
-
-# --- The absolute technique-star band (issue #50, ADR-0016) -----------------------------------
-#: The tolerance the calibration is judged by: a technique's score for a tier-T chart has to sit
-#: within this fraction of `dan.LEGACY_DAN_SR[T]`, on at least `TECHNIQUE_BAND_MIN_IN_BAND`
-#: of that ladder's 15 charts. Read by the calibration tool (`tools/technique_star_fit.py`)
-#: and asserted by `tests/test_technique_star_ladder.py`, so the band has one definition.
-#:
-#: The bar is a *layer*, deliberately: it is hard for an axis whose own driver orders its ladder
-#: (its `driver_<axis>` gate), and a recorded boundary for one whose driver does not. The two
-#: axes in the second group are ADR-0015's, and the recorded counts in that test say what the
-#: boundary currently costs rather than leaving it to prose.
-TECHNIQUE_BAND = 0.08
-TECHNIQUE_BAND_MIN_IN_BAND = 13
 
 
 @dataclass

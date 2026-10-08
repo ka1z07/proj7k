@@ -10,19 +10,7 @@ from proj7k.parser import (
 )
 from proj7k.features import BeatmapFeatures, FeatureOptions, extract_beatmap_features
 from proj7k.parser import dominant_bpm, dominant_timing_point
-from proj7k.calibration import (
-    DEFAULT_CALIBRATION,
-    StrainStarCalibration,
-    TechniqueStarAnchor,
-    compute_methodology_fingerprint,
-)
-from proj7k.physics import (
-    ANTIPHASE_ONSET_WINDOW_S,
-    BRACKET_PHASE_INVERSION_WINDOW_MS,
-    CHORDJACK_STEP_INTERVAL_MS,
-    JACK_INTERVAL_PENALTY_MS,
-    SPEED_BURST_INTERVAL_MS,
-)
+from proj7k.physics import DEFAULT_BPM
 
 from proj7k.batch import (
     BenchmarkItem,
@@ -88,47 +76,11 @@ from proj7k.guard import (
     evaluate_monotonicity_guard,
     run_monotonicity_guard,
 )
-from proj7k.strain import (
-    StrainTimeseriesProfile,
-    StrainOptions,
-    compute_dual_hand_strain,
-    compute_judgment_overlap_buffer,
-    compute_high_speed_scaling_factor,
-    compute_micro_speed_burst,
-)
-from proj7k.radar import (
-    TechniqueRadar,
-    RawTechniqueDrivers,
-    RadarOptions,
-    compute_raw_technique_drivers,
-    compute_technique_radar,
-    technique_radar_from_drivers,
-    technique_star_scores,
-)
-from proj7k.rating import (
-    RatingOptions,
-    StarRatingSynthesis,
-    aggregate_p_norm,
-    apply_tanh_soft_cap,
-    compute_raw_strain_star_rating,
-    synthesize_star_rating,
-)
-
 __version__ = "0.1.0"
 
 
-def __getattr__(name: str):
-    if name in (
-        "DifficultyOptions",
-        "IntrinsicDifficultyResult",
-        "evaluate_intrinsic_difficulty",
-        "current_engine_version",
-    ):
-        import proj7k.difficulty as _diff
-        return getattr(_diff, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 __all__ = [
+    "DEFAULT_BPM",
     "Beatmap7K",
     "HitObject",
     "NoteType",
@@ -140,15 +92,6 @@ __all__ = [
     "extract_beatmap_features",
     "dominant_bpm",
     "dominant_timing_point",
-    "DEFAULT_CALIBRATION",
-    "StrainStarCalibration",
-    "TechniqueStarAnchor",
-    "compute_methodology_fingerprint",
-    "ANTIPHASE_ONSET_WINDOW_S",
-    "BRACKET_PHASE_INVERSION_WINDOW_MS",
-    "CHORDJACK_STEP_INTERVAL_MS",
-    "JACK_INTERVAL_PENALTY_MS",
-    "SPEED_BURST_INTERVAL_MS",
 
     "BenchmarkItem",
     "BatchSummary",
@@ -201,28 +144,5 @@ __all__ = [
     "MonotonicityGuardResult",
     "evaluate_monotonicity_guard",
     "run_monotonicity_guard",
-    "StrainTimeseriesProfile",
-    "StrainOptions",
-    "compute_dual_hand_strain",
-    "compute_judgment_overlap_buffer",
-    "compute_high_speed_scaling_factor",
-    "compute_micro_speed_burst",
-    "TechniqueRadar",
-    "RawTechniqueDrivers",
-    "RadarOptions",
-    "compute_raw_technique_drivers",
-    "compute_technique_radar",
-    "technique_radar_from_drivers",
-    "technique_star_scores",
-    "RatingOptions",
-    "StarRatingSynthesis",
-    "aggregate_p_norm",
-    "apply_tanh_soft_cap",
-    "compute_raw_strain_star_rating",
-    "current_engine_version",
-    "synthesize_star_rating",
-    "DifficultyOptions",
-    "IntrinsicDifficultyResult",
-    "evaluate_intrinsic_difficulty",
 ]
 
