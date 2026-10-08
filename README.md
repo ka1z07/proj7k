@@ -41,6 +41,13 @@ cd proj7k
 pip install -r requirements.txt
 ```
 
+### 🖥️ 推荐：一站式控制台
+实时雷达、曲库同步、降阶练习、回放诊断与玩家画像都在同一个网页里，点按钮即可，不用记命令：
+```bash
+PYTHONPATH=src python3 -m proj7k.dashboard
+```
+Windows 上直接双击仓库根目录的 `dashboard.cmd`（有 `.venv` 就用它）。浏览器会自动打开 `http://127.0.0.1:7770/`；谱面、回放可以填本机路径，也可以直接拖进页面。降阶生成的 `.osz` 点「导入 osu!」即交给 osu! 导入。下面各条命令行照常可用，与控制台走的是同一套代码（[ADR-0024](docs/adr/0024-unified-web-dashboard.md)）。
+
 ### 2. 体验单曲客观评级与 8 维雷达 (10秒)
 直接测试仓库内置的示范谱面：
 ```bash
@@ -137,6 +144,7 @@ PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsernam
 | :--- | :--- | :--- |
 | **评测单曲** | `PYTHONPATH=src python3 -m proj7k.difficulty <谱面.osu>` | 打印 8 维技法与星级简报 |
 | **输出 JSON** | `PYTHONPATH=src python3 -m proj7k.difficulty <谱面.osu> --json` | 导出结构化数据供程序调用 |
+| **一站式控制台** | `PYTHONPATH=src python3 -m proj7k.dashboard`（Windows：双击 `dashboard.cmd`） | 实时雷达 + 曲库同步 + 降阶练习 + 回放与画像，同一网页 |
 | **实时大屏** | `PYTHONPATH=src python3 -m proj7k.live --open` | 启动 Web 实时雷达监控 |
 | **同步 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync` | 批量将客观星级写入 lazer 数据库 |
 | **还原 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync --revert` | 彻底还原为官方原始星级 |

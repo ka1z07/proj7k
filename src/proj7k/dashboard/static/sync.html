@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 曲库同步</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">曲库同步</div>
+        <div class="page-sub">把新引擎的星级与技法标签写进 osu!lazer 曲库；写入前自动备份，随时可一键还原。</div>
+      </div>
+      <a class="standalone-only" href="/#sync">← 返回控制台</a>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>osu!lazer 曲库</h2>
+        <div id="libInfo" class="hint">读取中…</div>
+        <div class="row" style="margin-top:10px">
+          <button class="small" id="refreshBtn">刷新状态</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>操作</h2>
+        <div class="row" style="margin-bottom:10px">
+          <button id="dryBtn" title="评估全部 7K 谱面，报告会改写多少张、主技法标签如何变化；不写入，osu! 开着也能跑">预演（不写入）</button>
+          <button id="syncBtn" class="primary" title="增量同步：只重算有变化的谱面，写入前自动快照">立即同步</button>
+        </div>
+        <label class="check"><input type="checkbox" id="waitChk"> osu!lazer 正在运行时，最多等它释放数据库 60 秒</label>
+        <p class="hint" style="margin:8px 0 12px">写入需要 osu!lazer 关闭（它运行时会锁住数据库）；预演不需要。</p>
+        <div class="row">
+          <button id="setupBtn" class="small" title="安装 / 检查读写 Realm 数据库用的 Node.js 组件（首次同步前需要 Node.js 与 npm）">安装 / 检查 bridge</button>
+          <button id="revertBtn" class="small danger" title="撤销 proj7k 对曲库的全部改动，恢复官方星级与标签">还原为官方星级</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>结果</h2>
+      <div id="result" class="hint">还没有运行过。</div>
+      <div id="job" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const panel = P7.jobPanel($("#job"));
+    const buttons = ["#dryBtn", "#syncBtn", "#setupBtn", "#revertBtn"].map((s) => $(s));
+
+    async function loadInfo() {
+      const cfg = await P7.getJSON("/api/config");
+      const state = !cfg.realm_exists ? el("span", { class: "warn", text: "未找到（检查 osu!lazer 是否装在默认位置，或用 --lazer-dir 指定）" })
+        : cfg.lazer_running ? el("span", { class: "warn", text: "osu!lazer 正在运行，数据库已锁定" })
+        : el("span", { class: "good", text: "可写入（osu!lazer 未运行）" });
+      $("#libInfo").replaceChildren(P7.kv([["数据库", cfg.realm_path], ["文件目录", cfg.files_dir], ["系统", cfg.platform]]),
+        el("div", { style: "margin-top:8px" }, "状态：", state));
+    }
+
+    function renderSummary(kind, r) {
+      if (kind === "sync_setup") return el("div", { class: "good", text: "Bridge 已就绪。" });
+      if (kind === "sync_revert") return el("div", { class: "good", text: `已还原 ${r.restored} 张谱面为官方星级。` });
+      if (r.dry_run) {
+        const changes = Object.entries(r.dominant_changes || {}).sort((a, b) => b[1] - a[1]);
+        return el("div", {},
+          el("div", { class: "stats" },
+            P7.stat("7K 谱面", r.total_7k), P7.stat("将改写", r.would_update),
+            P7.stat("其中旧引擎重算", r.refreshed_count), P7.stat("不变", r.skipped_count), P7.stat("失败", r.failed_count),
+            P7.stat("已注入谱面平均星级变化", r.star_change_mean === null ? "—" : `${r.star_change_mean >= 0 ? "+" : ""}${r.star_change_mean.toFixed(2)}★`)),
+          el("h3", { text: "主技法标签变化（旧 → 新）" }),
+          changes.length ? el("table", {}, el("tr", {}, el("th", { text: "变化" }), el("th", { class: "num", text: "谱面数" })),
+            changes.map(([k, v]) => el("tr", {}, el("td", { text: k }), el("td", { class: "num", text: v }))))
+            : el("div", { class: "hint", text: "没有变化。" }),
+          el("p", { class: "hint", style: "margin-top:8px", text: "预演没有写入任何东西。" }));
+      }
+      return el("div", {},
+        el("div", { class: "stats" },
+          P7.stat("7K 谱面", r.total_7k), P7.stat("已评估", r.evaluated_count), P7.stat("已写入", r.updated_count),
+          P7.stat("其中旧引擎重算", r.refreshed_count), P7.stat("跳过", r.skipped_count), P7.stat("失败", r.failed_count)),
+        r.snapshot_path ? P7.kv([["备份快照", r.snapshot_path]]) : null);
+    }
+
+    async function run(kind, params) {
+      buttons.forEach((b) => (b.disabled = true));
+      panel.reset();
+      $("#result").replaceChildren(el("span", { class: "hint", text: "运行中…（全曲库评估可能需要几分钟）" }));
+      const job = await P7.startJob(kind, params, { onUpdate: panel.update, onLog: panel.log });
+      panel.update(job);
+      $("#result").replaceChildren(job.status === "done" ? renderSummary(kind, job.result) : el("span", { class: "hint", text: "没有完成，原因见下方。" }));
+      buttons.forEach((b) => (b.disabled = false));
+      loadInfo();
+    }
+
+    $("#refreshBtn").onclick = loadInfo;
+    $("#dryBtn").onclick = () => run("sync_once", { dry_run: true });
+    $("#syncBtn").onclick = () => run("sync_once", { wait: $("#waitChk").checked });
+    $("#setupBtn").onclick = () => run("sync_setup", {});
+    $("#revertBtn").onclick = () => {
+      if (confirm("撤销 proj7k 对 osu!lazer 曲库的全部改动，恢复官方星级与标签？")) run("sync_revert", {});
+    };
+    loadInfo();
+  </script>
+</body>
+</html>

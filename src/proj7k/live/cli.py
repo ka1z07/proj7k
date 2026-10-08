@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 import signal
 import sys
-from typing import Optional, Sequence
+from typing import Callable, Optional, Sequence
 import webbrowser
 
 from proj7k.cache import DEFAULT_CACHE_DIR, TwoLayerCache
@@ -79,21 +79,26 @@ def build_parser() -> argparse.ArgumentParser:
 async def run_live_service(
     args: argparse.Namespace,
     stop_event: Optional[asyncio.Event] = None,
+    server_factory: Optional[Callable[[LiveEngine], LiveServer]] = None,
+    banner: str = "proj7k live dashboard",
 ) -> None:
-    """Runs the live service until stop_event is set."""
+    """Runs the live service until stop_event is set. `server_factory` builds the server (the dashboard's) on the engine."""
     cache = TwoLayerCache(cache_dir=args.cache_dir, enabled=True)
     engine = LiveEngine(cache=cache)
-    server = LiveServer(
-        host=args.host,
-        port=args.port,
-        engine=engine,
-        no_watch=args.no_watch,
-    )
+    if server_factory is not None:
+        server = server_factory(engine)
+    else:
+        server = LiveServer(
+            host=args.host,
+            port=args.port,
+            engine=engine,
+            no_watch=args.no_watch,
+        )
 
     await server.start()
     url = f"http://{args.host}:{args.port}/"
     logger.info(f"Dashboard available at {url}")
-    print(f"proj7k live dashboard running at {url}")
+    print(f"{banner} running at {url}")
 
     coordinator: Optional[LiveSessionCoordinator] = None
     if not args.no_watch:

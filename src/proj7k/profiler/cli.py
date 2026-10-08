@@ -654,6 +654,72 @@ def run_replay_import(
     return stats
 
 
+def build_practice_bundle(
+    report: ProfilerIngestionReport,
+    beatmap_path: Path | str,
+    fatal_time_ms: Optional[float] = None,
+    bundle_dir: Optional[Path | str] = None,
+) -> Optional[PracticeBundleResult]:
+    """
+    The three-tier practice bundle cut around where the play broke: `fatal_time_ms` if given, else the cascade
+    precursor's fatal time, else the first miss. None when the replay has no failure point to cut around.
+    """
+    fatal_t = fatal_time_ms
+    if fatal_t is None and report.pathology and report.pathology.cascade_precursor:
+        fatal_t = report.pathology.cascade_precursor.fatal_time_ms
+    if fatal_t is None and report.miss_count > 0:
+        for h in report.alignment_result.aligned_hits:
+            if h.judgment == HitJudgment.MISS:
+                fatal_t = h.target_time
+                break
+    if fatal_t is None:
+        return None
+
+    beatmap_obj = parse_osu_7k(str(beatmap_path))
+    bm_dir = Path(beatmap_path).parent
+
+    cand_audio = None
+    expected_audio = beatmap_obj.audio_filename or "audio.mp3"
+    if (bm_dir / expected_audio).is_file():
+        cand_audio = bm_dir / expected_audio
+    else:
+        for f in bm_dir.iterdir():
+            if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
+                cand_audio = f
+                break
+
+    cand_bg = None
+    for ev in beatmap_obj.raw_events:
+        ev_str = ev.strip()
+        if (ev_str.startswith("0,0,") or ev_str.startswith("Video,")) and '"' in ev_str:
+            toks = ev_str.split('"')
+            if len(toks) >= 2 and (bm_dir / toks[1].strip()).is_file():
+                cand_bg = bm_dir / toks[1].strip()
+                break
+
+    bundle_out = Path(bundle_dir or "./practice_bundles")
+
+    player_cap = None
+    dom_tech = None
+    if report.pathology and report.pathology.cascade_precursor:
+        dom_tech = report.pathology.cascade_precursor.skill
+    if report.skill_radar:
+        if dom_tech and dom_tech in report.skill_radar.dimensions:
+            player_cap = report.skill_radar.dimensions[dom_tech].effective_capacity
+        elif report.skill_radar.dominant_technique in report.skill_radar.dimensions:
+            player_cap = report.skill_radar.dimensions[report.skill_radar.dominant_technique].effective_capacity
+
+    return generate_targeted_practice_bundle(
+        beatmap=beatmap_obj,
+        fatal_time_ms=fatal_t,
+        player_capacity=player_cap,
+        dominant_technique=dom_tech,
+        output_dir=bundle_out,
+        audio_path=cand_audio,
+        bg_path=cand_bg,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m proj7k.profiler",
@@ -983,60 +1049,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         bundle_result: Optional[PracticeBundleResult] = None
         if args.bundle:
-            fatal_t = args.fatal_time
-            if fatal_t is None and report.pathology and report.pathology.cascade_precursor:
-                fatal_t = report.pathology.cascade_precursor.fatal_time_ms
-            if fatal_t is None and report.miss_count > 0:
-                for h in report.alignment_result.aligned_hits:
-                    if h.judgment == HitJudgment.MISS:
-                        fatal_t = h.target_time
-                        break
-
-            if fatal_t is not None:
-                beatmap_obj = parse_osu_7k(str(args.beatmap))
-                bm_dir = Path(args.beatmap).parent
-
-                cand_audio = None
-                expected_audio = beatmap_obj.audio_filename or "audio.mp3"
-                if (bm_dir / expected_audio).is_file():
-                    cand_audio = bm_dir / expected_audio
-                else:
-                    for f in bm_dir.iterdir():
-                        if f.suffix.lower() in [".mp3", ".ogg", ".wav"]:
-                            cand_audio = f
-                            break
-
-                cand_bg = None
-                for ev in beatmap_obj.raw_events:
-                    ev_str = ev.strip()
-                    if (ev_str.startswith("0,0,") or ev_str.startswith("Video,")) and '"' in ev_str:
-                        toks = ev_str.split('"')
-                        if len(toks) >= 2 and (bm_dir / toks[1].strip()).is_file():
-                            cand_bg = bm_dir / toks[1].strip()
-                            break
-
-                bundle_out = Path(args.bundle_dir or "./practice_bundles")
-
-                player_cap = None
-                dom_tech = None
-                if report.pathology and report.pathology.cascade_precursor:
-                    dom_tech = report.pathology.cascade_precursor.skill
-                if report.skill_radar:
-                    if dom_tech and dom_tech in report.skill_radar.dimensions:
-                        player_cap = report.skill_radar.dimensions[dom_tech].effective_capacity
-                    elif report.skill_radar.dominant_technique in report.skill_radar.dimensions:
-                        player_cap = report.skill_radar.dimensions[report.skill_radar.dominant_technique].effective_capacity
-
-                bundle_result = generate_targeted_practice_bundle(
-                    beatmap=beatmap_obj,
-                    fatal_time_ms=fatal_t,
-                    player_capacity=player_cap,
-                    dominant_technique=dom_tech,
-                    output_dir=bundle_out,
-                    audio_path=cand_audio,
-                    bg_path=cand_bg,
-                )
-            elif not args.json:
+            bundle_result = build_practice_bundle(report, args.beatmap, fatal_time_ms=args.fatal_time, bundle_dir=args.bundle_dir)
+            if bundle_result is None and not args.json:
                 print("Notice: No fatal failure point detected in replay. Use --fatal-time <ms> to generate a practice bundle for an explicit section.", file=sys.stderr)
 
         if args.json:

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 降阶练习</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">降阶练习</div>
+        <div class="page-sub">把一张谱降到目标段位或星级，保留它的主技法；输出练习谱与 .osz，可一键导入 osu!。</div>
+      </div>
+      <a class="standalone-only" href="/#downscaler">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <h2>输入</h2>
+      <div class="field">
+        <label for="input">谱面：.osu 文件路径、文件夹（批量）、谱面 ID 或 osu! 谱面链接</label>
+        <input type="text" id="input" placeholder="例如 C:\Songs\xxx\map [Hard].osu，或 4061023">
+      </div>
+      <div class="field">
+        <div class="drop" id="drop">或把 .osu 文件拖到这里 / 点击选择</div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <span class="label">目标</span>
+          <div class="row">
+            <label class="check"><input type="radio" name="mode" value="dan" checked> 段位</label>
+            <label class="check"><input type="radio" name="mode" value="sr"> 星级</label>
+          </div>
+        </div>
+        <div class="field" id="danField">
+          <label for="dan">目标段位</label>
+          <select id="dan"></select>
+        </div>
+        <div class="field hidden" id="srField">
+          <label for="sr">目标星级（新引擎标尺）</label>
+          <input type="number" id="sr" step="0.1" min="0.5" value="6.5">
+        </div>
+        <div class="field">
+          <label for="skill">保留的主技法</label>
+          <select id="skill"><option value="">自动（谱面自身主技法）</option></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="outDir">输出文件夹</label>
+        <input type="text" id="outDir" placeholder="">
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
+        <label class="check"><input type="checkbox" id="syncLazer"> 导入 osu!lazer 并加入「7K Practice」收藏夹</label>
+      </div>
+      <button class="primary" id="runBtn">开始降阶</button>
+      <span class="hint" style="margin-left:10px">导入收藏夹需要 osu!lazer 先导入 .osz 再关闭；也可以稍后点结果里的「导入 osu!」。</span>
+    </div>
+
+    <div id="results"></div>
+    <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const panel = P7.jobPanel($("#job"));
+    const drop = P7.dropZone($("#drop"), ".osu", (f) => { $("#input").disabled = !!f; });
+
+    document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener("change", () => {
+      const sr = document.querySelector('input[name=mode]:checked').value === "sr";
+      $("#srField").classList.toggle("hidden", !sr);
+      $("#danField").classList.toggle("hidden", sr);
+    }));
+
+    P7.getJSON("/api/config").then((cfg) => {
+      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: `${t.name}（${t.stars.toFixed(2)}★）` })));
+      $("#dan").value = "7th";
+      cfg.skills.forEach((k) => $("#skill").appendChild(el("option", { value: k, text: P7.skillName(k) })));
+      $("#outDir").placeholder = `默认：${cfg.practice_dir}`;
+    });
+
+    function chartCard(c) {
+      const v = c.validation || {};
+      return el("div", { class: "card" },
+        el("h2", { text: c.title }),
+        el("div", { class: "row" },
+          el("span", { class: "big", text: `${c.original_stars.toFixed(2)}★ → ${c.downscaled_stars.toFixed(2)}★` }),
+          el("span", { class: `badge ${v.passed ? "done" : "failed"}`, text: v.passed ? "技法保留校验通过" : "技法保留校验未通过" })),
+        el("div", { class: "stats" },
+          P7.stat("目标", `${c.target.target_dan || ""} ${Number(c.target.target_sr).toFixed(2)}★`.trim()),
+          P7.stat("物件数", `${c.original_notes} → ${c.downscaled_notes}`),
+          P7.stat("删除比例", P7.pct(c.removal_ratio)),
+          P7.stat("左右手负荷", `${P7.pct(c.bimanual_flux_ratio[0])} : ${P7.pct(c.bimanual_flux_ratio[1])}`),
+          P7.stat("技法向量相似度", Number(v.cosine_similarity).toFixed(3)),
+          P7.stat("主技法", `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`)),
+        el("h3", { text: "八项技法星级（灰：原谱，彩：练习谱）" }),
+        P7.skillBars(c.skills_original, c.skills_downscaled),
+        (c.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, c.warnings.join("；")) : null);
+    }
+
+    $("#runBtn").onclick = async () => {
+      const mode = document.querySelector('input[name=mode]:checked').value;
+      const params = {
+        input: $("#input").value,
+        target_dan: mode === "dan" ? $("#dan").value : "",
+        target_sr: mode === "sr" ? $("#sr").value : "",
+        dominant_skill: $("#skill").value,
+        output_dir: $("#outDir").value,
+        package: $("#pkg").checked,
+        sync_lazer: $("#syncLazer").checked,
+      };
+      $("#runBtn").disabled = true;
+      $("#jobCard").classList.remove("hidden");
+      $("#results").replaceChildren();
+      panel.reset();
+      const job = await P7.startJob("downscale", params, {
+        uploads: drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
+      });
+      panel.update(job);
+      $("#runBtn").disabled = false;
+      if (job.status !== "done") { panel.showLog(); return; }
+      const r = job.result;
+      const nodes = r.charts.map(chartCard);
+      if (r.failed_count) nodes.push(el("div", { class: "warn", text: `${r.failed_count} 张谱面降阶失败，详见日志。` }));
+      if (r.sync) nodes.push(el("div", { class: r.sync.success ? "good" : "bad",
+        text: r.sync.success ? `已加入 osu!lazer「${r.sync.collection}」收藏夹（${r.sync.synced_hashes.length} 张）。` : "osu!lazer 同步失败。" }));
+      $("#results").replaceChildren(...nodes);
+    };
+  </script>
+</body>
+</html>

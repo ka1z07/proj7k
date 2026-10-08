@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 控制台</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    html, body { height: 100%; }
+    body { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+      padding: 10px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border-color);
+    }
+    .brand {
+      font-size: 1.15rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    .nav a {
+      text-decoration: none; color: var(--text-muted); font-weight: 600; padding: 6px 14px; border-radius: 8px;
+      border: 1px solid transparent;
+    }
+    .nav a:hover { color: var(--text-main); }
+    .nav a.active { color: var(--text-main); border-color: var(--accent-blue); background: rgba(56, 189, 248, 0.12); }
+    .status { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: var(--text-muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); display: inline-block; margin-right: 6px; }
+    .dot.on { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .frames { flex: 1; position: relative; }
+    .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-dark); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">proj7k // 控制台</div>
+    <nav class="nav" id="nav">
+      <a href="#live" data-page="live">实时雷达</a>
+      <a href="#sync" data-page="sync">曲库同步</a>
+      <a href="#downscaler" data-page="downscaler">降阶练习</a>
+      <a href="#profiler" data-page="profiler">回放与画像</a>
+    </nav>
+    <div class="status">
+      <span id="lazerState" title="osu!lazer 数据库状态"></span>
+      <span id="jobState"></span>
+      <span><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
+    </div>
+  </div>
+  <div class="frames" id="frames"></div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    // Each tool is its own page, loaded once and kept alive while hidden: the live radar keeps following the
+    // game and a running job keeps streaming while another tab is open.
+    const PAGES = { live: "/live", sync: "/sync", downscaler: "/downscaler", profiler: "/profiler" };
+    const frames = {};
+
+    function show(name) {
+      if (!(name in PAGES)) name = "live";
+      if (!frames[name]) {
+        frames[name] = P7.el("iframe", { src: PAGES[name], title: name });
+        document.getElementById("frames").appendChild(frames[name]);
+      }
+      for (const [k, f] of Object.entries(frames)) f.style.visibility = k === name ? "visible" : "hidden";
+      document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === name));
+      document.title = `proj7k 控制台 · ${document.querySelector(`#nav a[data-page="${name}"]`).textContent}`;
+    }
+    window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+    show(location.hash.slice(1));
+
+    P7.on("connection", (up) => {
+      document.getElementById("connDot").classList.toggle("on", up);
+      document.getElementById("connText").textContent = up ? "已连接" : "未连接";
+      if (up) P7.send({ type: "jobs_list" });
+    });
+
+    const active = new Map();
+    function renderJobs() {
+      const running = [...active.values()].filter((j) => j.status === "running").length;
+      const queued = [...active.values()].filter((j) => j.status === "queued").length;
+      document.getElementById("jobState").textContent =
+        running || queued ? `任务：${running} 运行中${queued ? `，${queued} 排队` : ""}` : "";
+    }
+    P7.on("jobs", (msg) => { active.clear(); msg.jobs.forEach((j) => { if (j.status === "queued" || j.status === "running") active.set(j.id, j); }); renderJobs(); });
+    P7.on("job_update", (msg) => {
+      const j = msg.job;
+      if (j.status === "queued" || j.status === "running") active.set(j.id, j); else active.delete(j.id);
+      renderJobs();
+      if (!["queued", "running"].includes(j.status) && j.kind.startsWith("sync")) refreshLazer();
+    });
+
+    async function refreshLazer() {
+      const node = document.getElementById("lazerState");
+      try {
+        const cfg = await P7.getJSON("/api/config");
+        node.textContent = !cfg.realm_exists ? "未找到 osu!lazer 数据库"
+          : cfg.lazer_running ? "osu!lazer 运行中（数据库锁定）" : "osu!lazer 未运行";
+        node.className = !cfg.realm_exists ? "warn" : "";
+      } catch (e) { node.textContent = ""; }
+    }
+    // Probed on load and after each sync job only: the probe takes osu!lazer's lock for an instant.
+    refreshLazer();
+  </script>
+</body>
+</html>
