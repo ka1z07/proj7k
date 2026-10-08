@@ -27,7 +27,8 @@ OverallDifficulty: 8
 182,192,1500,128,0,2500:0:0:0:0:
 """
     osu_path = tmp_path / "test_map.osu"
-    osu_path.write_text(osu_content, encoding="utf-8")
+    # write_bytes: write_text would translate \n to \r\n on Windows and break the MD5.
+    osu_path.write_bytes(osu_content.encode("utf-8"))
     md5_hash = hashlib.md5(osu_content.encode("utf-8")).hexdigest()
 
     # Replay:

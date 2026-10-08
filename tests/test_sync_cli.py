@@ -211,7 +211,7 @@ def test_cli_positional_actions():
 
 def test_daemon_reports_lock_status_at_info_level(tmp_path: Path):
     """When osu! is running and holds the lock, LazerDaemon logs an informative INFO message."""
-    import fcntl
+    from proj7k.lazer.lock import _try_exclusive_lock, _unlock
     import io
     import logging
     realm_file = tmp_path / "client.realm"
@@ -222,7 +222,7 @@ def test_daemon_reports_lock_status_at_info_level(tmp_path: Path):
     files_dir.mkdir(parents=True)
 
     with open(lock_file, "r+") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _try_exclusive_lock(f.fileno())
         try:
             log_capture = io.StringIO()
             handler = logging.StreamHandler(log_capture)
@@ -257,7 +257,7 @@ def test_daemon_reports_lock_status_at_info_level(tmp_path: Path):
                 f"Expected lock status to be visible in INFO logs, got:\n{output}"
             )
         finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            _unlock(f.fileno())
 
 
 def test_cli_dry_run_prints_the_report_and_passes_the_flag(capsys):
