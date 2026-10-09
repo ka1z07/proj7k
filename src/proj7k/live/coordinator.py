@@ -89,7 +89,14 @@ class LiveSessionCoordinator:
             self._watcher_task = asyncio.create_task(
                 self.watcher.run(callback=self.handle_log_event)
             )
+            self._watcher_task.add_done_callback(self._watcher_ended)
             logger.info("LiveSessionCoordinator: log watcher started.")
+
+    @staticmethod
+    def _watcher_ended(task: "asyncio.Task") -> None:
+        """A watcher that ends on its own leaves the dashboard on a stale chart; say so instead of ending silently."""
+        if not task.cancelled() and task.exception() is not None:
+            logger.error("LiveSessionCoordinator: log watcher stopped", exc_info=task.exception())
 
     async def handle_log_event(self, event: Any) -> Optional[Dict[str, Any]]:
         """

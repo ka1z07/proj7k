@@ -10,7 +10,8 @@ import logging
 import os
 from pathlib import Path
 import re
-from typing import Any, Awaitable, Callable, List, Optional
+import stat
+from typing import Any, Awaitable, Callable, List, Optional, Tuple
 
 from proj7k.lazer.paths import LAZER_DIR
 
@@ -140,17 +141,26 @@ def find_latest_runtime_log(logs_dir: Path) -> Optional[Path]:
     """
     Finds the latest runtime log file in logs_dir by modification time.
     Matches *runtime.log (e.g. runtime.log, 20260917.runtime.log).
+    Files that vanish while it looks are skipped: osu!lazer deletes week-old logs when it starts.
     """
-    if not logs_dir.exists() or not logs_dir.is_dir():
+    candidates: List[Tuple[float, Path]] = []
+    try:
+        entries = list(logs_dir.iterdir())
+    except OSError:
         return None
-
-    candidates: List[Path] = [
-        p for p in logs_dir.iterdir() if p.is_file() and p.name.endswith("runtime.log")
-    ]
+    for p in entries:
+        if not p.name.endswith("runtime.log"):
+            continue
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        if stat.S_ISREG(st.st_mode):
+            candidates.append((st.st_mtime, p))
     if not candidates:
         return None
 
-    return max(candidates, key=lambda p: p.stat().st_mtime)
+    return max(candidates)[1]
 
 
 class LazerLogWatcher:
@@ -229,75 +239,87 @@ class LazerLogWatcher:
 
         try:
             while self._running and not self._stop_event.is_set():
-                latest = find_latest_runtime_log(self.logs_dir)
+                try:
+                    latest = find_latest_runtime_log(self.logs_dir)
 
-                # Check for log rotation: new or changed runtime log file or inode change
-                file_changed = False
-                if latest is not None:
+                    # Check for log rotation: new or changed runtime log file or inode change
+                    file_changed = False
+                    if latest is not None:
+                        try:
+                            latest_stat = latest.stat()
+                            if current_file is None or latest != current_file or current_ino != latest_stat.st_ino:
+                                file_changed = True
+                        except OSError:
+                            pass
+
+                    if file_changed and latest is not None:
+                        if file_obj is not None:
+                            file_obj.close()
+                            file_obj = None
+
+                        current_file = latest
+                        try:
+                            latest_stat = current_file.stat()
+                            current_ino = latest_stat.st_ino
+                            file_obj = open(current_file, "r", encoding="utf-8", errors="replace")
+                            if self.start_at_end and is_first_open:
+                                file_obj.seek(0, os.SEEK_END)
+                            else:
+                                file_obj.seek(0, os.SEEK_SET)
+                            is_first_open = False
+                            offset = file_obj.tell()
+                            logger.info(f"LazerLogWatcher started tailing {current_file}")
+                        except OSError as e:
+                            logger.warning(f"Failed to open log file {current_file}: {e}")
+                            file_obj = None
+
+                    if file_obj is None:
+                        await self._sleep_poll()
+                        continue
+
+                    # Check for file truncation
                     try:
-                        latest_stat = latest.stat()
-                        if current_file is None or latest != current_file or current_ino != latest_stat.st_ino:
-                            file_changed = True
+                        file_size = current_file.stat().st_size
+                        if file_size < offset:
+                            logger.info(f"Log file truncated: {current_file}. Resetting offset to 0.")
+                            file_obj.seek(0, os.SEEK_SET)
+                            offset = 0
                     except OSError:
                         pass
 
-                if file_changed and latest is not None:
-                    if file_obj is not None:
-                        file_obj.close()
-                        file_obj = None
+                    # Read available lines
+                    lines_read = 0
+                    while True:
+                        cur_pos = file_obj.tell()
+                        line = file_obj.readline()
+                        if not line:
+                            break
+                        if not line.endswith("\n"):
+                            # Line is incomplete, revert offset and wait for flush
+                            file_obj.seek(cur_pos)
+                            break
 
-                    current_file = latest
-                    try:
-                        latest_stat = current_file.stat()
-                        current_ino = latest_stat.st_ino
-                        file_obj = open(current_file, "r", encoding="utf-8", errors="replace")
-                        if self.start_at_end and is_first_open:
-                            file_obj.seek(0, os.SEEK_END)
-                        else:
-                            file_obj.seek(0, os.SEEK_SET)
-                        is_first_open = False
-                        offset = file_obj.tell()
-                        logger.info(f"LazerLogWatcher started tailing {current_file}")
-                    except OSError as e:
-                        logger.warning(f"Failed to open log file {current_file}: {e}")
-                        file_obj = None
+                        lines_read += 1
+                        event = parse_log_line(line)
+                        if event is not None:
+                            try:
+                                await callback(event)
+                            except Exception as e:
+                                logger.error(f"Error in watcher callback: {e}", exc_info=True)
 
-                if file_obj is None:
+                    offset = file_obj.tell()
                     await self._sleep_poll()
-                    continue
-
-                # Check for file truncation
-                try:
-                    file_size = current_file.stat().st_size
-                    if file_size < offset:
-                        logger.info(f"Log file truncated: {current_file}. Resetting offset to 0.")
-                        file_obj.seek(0, os.SEEK_SET)
-                        offset = 0
-                except OSError:
-                    pass
-
-                # Read available lines
-                lines_read = 0
-                while True:
-                    cur_pos = file_obj.tell()
-                    line = file_obj.readline()
-                    if not line:
-                        break
-                    if not line.endswith("\n"):
-                        # Line is incomplete, revert offset and wait for flush
-                        file_obj.seek(cur_pos)
-                        break
-
-                    lines_read += 1
-                    event = parse_log_line(line)
-                    if event is not None:
+                except Exception as e:
+                    # One bad poll (a log deleted or locked under it) must not end the watch: the live radar and the
+                    # dashboard would keep serving the last chart forever. Start over on the newest log, at its end.
+                    logger.warning(f"LazerLogWatcher: {e!r}; reopening the newest log.", exc_info=True)
+                    if file_obj is not None:
                         try:
-                            await callback(event)
-                        except Exception as e:
-                            logger.error(f"Error in watcher callback: {e}", exc_info=True)
-
-                offset = file_obj.tell()
-                await self._sleep_poll()
+                            file_obj.close()
+                        except OSError:
+                            pass
+                    file_obj, current_file, current_ino, is_first_open = None, None, None, True
+                    await self._sleep_poll()
 
         finally:
             if file_obj is not None:
