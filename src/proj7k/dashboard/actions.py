@@ -215,6 +215,7 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
             "suggest_free_mode": report["suggest_free_mode"],
             "validation": validation,
             "warnings": report["warnings"],
+            "bursts": report["pruning"]["final_burst"],
             "skills_original": _profile_skills(res.original_profile),
             "skills_downscaled": _profile_skills(res.downscaled_profile),
             "output_file": str(out_path) if out_path else None,

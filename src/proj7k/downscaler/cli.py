@@ -257,6 +257,16 @@ def generate_practice_filename(
     return f"{original_stem} [{clean_version}].osu"
 
 
+def _burst_line(pr) -> str:
+    """Short-burst and busiest-column peaks over the caps for real charts at the target (<= 1.00 is within)."""
+    fb, ib = pr.final_burst, pr.initial_burst
+    if not fb:
+        return " Burst / Column vs cap         -"
+    color = GREEN if pr.bursts_within else RED
+    orig = f"{ib.get('hand', 0):.2f} / {ib.get('column', 0):.2f}"
+    return f" Burst / Column vs cap        {orig:<16} {color}{fb['hand']:.2f} / {fb['column']:.2f}{RESET}      <= 1.00 at target"
+
+
 def _make_ascii_bar(val: float, max_val: float = 12.0, width: int = 16) -> str:
     """Creates a normalized ASCII progress bar for radar comparisons."""
     fraction = min(1.0, max(0.0, val / max(1.0, max_val)))
@@ -339,6 +349,7 @@ def format_downscale_report(
         f" Dominant Technique           {MAGENTA}{dom_orig.capitalize()} ({dom_score_orig:.2f}★){RESET}    {MAGENTA}{dom_down.capitalize()} ({dom_score_down:.2f}★){RESET}    {dom_status}",
         f" Skill-star Cosine Similarity     -                {GREEN}{cos_sim:.3f}{RESET}            {cos_status}",
         f" Validation Outcome           -                {val_status}",
+        _burst_line(result.pruning_result),
         "-" * 80,
         f" {BOLD}8-SKILL COMPARISON (difficulty engine stars){RESET}",
         f" {'Dimension':<18} {'Original':<12} {'Practice':<12} {'Practice Visual Gauge':<20}",
