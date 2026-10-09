@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>谱面 · proj7k 7K 谱面库</title>
+<link rel="stylesheet" href="/static/catalog.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="logo" href="/beatmapsets">proj<b>7k</b> 谱面库</a>
+  <div class="links"><a class="active" href="/beatmapsets">谱面</a></div>
+  <div class="meta" id="meta"></div>
+</nav>
+<div class="container" style="padding-top:20px" id="main">
+  <div class="set-header none" id="header">
+    <div class="inner">
+      <div class="picker" id="picker"></div>
+      <div class="diff-name" id="diff-name"></div>
+      <div class="t" id="t"></div>
+      <div class="a" id="a"></div>
+      <div class="m" id="m"></div>
+      <div class="actions" id="actions"></div>
+    </div>
+  </div>
+  <div class="set-body">
+    <div class="main">
+      <div class="panel"><h3>星级</h3><div id="sr"></div></div>
+      <div class="panel"><h3>技能（引擎各技能星级 · 主导度）</h3><div class="bars" id="skills"></div></div>
+      <div class="panel density"><h3>物件密度</h3><div id="density"></div></div>
+      <div class="panel"><h3>本组全部难度</h3><table class="table" id="all"></table></div>
+    </div>
+    <div class="side">
+      <div class="panel"><h3>谱面信息</h3><div class="kv" id="info"></div></div>
+      <div class="panel"><h3>关于两个星级</h3>
+        <div class="note" style="margin:0">官方 SR 来自 osu!（API、osu!lazer 曲库或标杆清单）。引擎 SR 是 proj7k 的固有难度引擎按 Jinjin 7K 段位标定的星级，与官方 SR 不是同一把尺子；段位是引擎 SR 最接近的段位。</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/static/catalog.js"></script>
+<script>Catalog.setPage();</script>
+</body>
+</html>

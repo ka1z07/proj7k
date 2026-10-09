@@ -1,0 +1,34 @@
+# 0026. 线上 7K 谱面库：仿 osu! 官网的检索与展示，官方 SR 与引擎 SR 并列
+
+- **状态**：proposed（2026-10-09；落实 ADR-0003 的「Web 云端平台」那一半）。
+- **背景**：ADR-0003 定下「云端曲库检索 + 本地回放分析」的分层形态，本地那一半（sync、downscaler、profiler、控制台）已经齐了，云端曲库一直没有。玩家要的是：像在 osu! 官网那样搜图、看图，但每张图同时看到官方星级和 proj7k 引擎（规格 v0.2，按 Jinjin 7K 段位标定）的星级，并能按引擎的段位与技能检索。
+
+## 决策内容
+
+1. **新包 `proj7k.catalog`，引擎直接在服务端跑。** 一个 `.osu` 进来，`charts.chart_row` 用 `engine.evaluate_osu` 算出总星级、八技能星级与主导度、主技能、段位（`dan.estimate_canonical_dan`），再加上 osu! 列表页需要的统计（BPM、长度、物件与长条数、OD/HP、100 段物件密度轮廓）。结果盖上 `engine_version`。
+2. **官方 SR 从不自己算，只从来源带进来。** 来源有四个：
+   - `build`：仓库里冻结的 120 张标杆谱（`tests/fixtures/benchmark_corpus.json.gz`），官方 SR 取自标杆清单；不依赖任何外部服务，是演示与测试数据。
+   - `add`：任意 `.osu` 文件或文件夹（osu!stable 的 `Songs` 也行），没有官方 SR。
+   - `lazer`：经 Realm 桥只读导出本机 osu!lazer 曲库。注意 `proj7k.sync` 会把 lazer 里的 `StarRating` 改写成引擎星级，所以官方 SR 优先取 sync 备份里的原值；被改写过又没有备份的难度，官方 SR 留空，不把引擎值冒充成官方值。
+   - `crawl`：osu! API v2（client credentials，`public` 权限）。`beatmapsets/search?m=3&q=keys=7&s=ranked|loved` 翻页拿到每组的状态、上架日期和每个 7K 难度的 `difficulty_rating`，`.osu` 从 `osu.ppy.sh/osu/<id>` 下载；库里已有同 MD5 的难度不再下载，只刷新官方 SR 与状态。
+   某来源没给官方 SR（或状态）时不覆盖已知值，多个来源可以叠加。没有官方 SR 的难度在页面上显示「—」，按官方 SR 或偏差排序时排在最后。
+3. **存储是单个 SQLite 文件。** 两张表 `beatmapsets`、`beatmaps`，键用 osu! 的 id；没有 osu! id 的本地谱用 MD5 派生的负数 id。每个难度保存压缩后的 `.osu` 原文：引擎一改（版本号变），`refresh` 只凭数据库就能全部重算（`reevaluate_stale`），不必重新抓取。服务启动时若发现有旧版本的结果会提示。`.osu` 只用于重算，网站不提供下载，下载走 osu! 官网与 osu!direct。
+4. **检索语义照搬 osu! 官网。** 结果按谱面组列出；一组里只要有一个难度满足全部条件就列出，满足的难度高亮。搜索框是自由词加 `key<op>value` 过滤：osu! 原有的 `stars`、`bpm`、`length`、`od`、`hp`、`status`、`creator`/`artist`/`title`/`source`/`tag`，加上引擎的 `engine`（引擎 SR）、`delta`（引擎减官方）、`dan`（按段位阶梯比较）、`skill`（主技能）、`ln`（长条占比 %）、`notes`。数值等号按书写精度匹配（`stars=5` 即 [5, 6)），认不出的条件当普通词搜，与官网一致。按某个难度级数值排序时，降序取该组匹配难度的最大值、升序取最小值。
+5. **页面**：
+   - 列表页 `/beatmapsets`：搜索框、状态与主技能按钮、排序（最新、官方 SR、引擎 SR、偏差、标题、艺术家、BPM、长度、上架日期，再点一次换方向），两列卡片。每张卡片除封面、标题、艺术家、谱师、状态外，列出难度（匹配的优先，最多 5 个），**每行同时有官方 SR 和引擎 SR 两个星级标签**，以及引擎段位与主技能。星级标签的底色用 osu! 官网的难度色谱，两种星级用同一套色，但标「官」「引」区分。状态与查询写进地址栏，可分享、可后退。
+   - 详情页 `/beatmapsets/<id>#<难度 id>`：仿官网的封面头图与难度选择圆点；两个星级并排大字显示，附段位与偏差；长度、BPM、物件、长条、OD、HP；八技能星级条与主导度；物件密度轮廓；本组全部难度的对照表；跳 osu! 官网和 osu!direct 的按钮。`/beatmaps/<id>` 跳到所属组。
+   - JSON 接口与页面同源：`/api/beatmapsets/search`、`/api/beatmapsets/<id>`、`/api/stats`。
+6. **服务端只用标准库**（`ThreadingHTTPServer`），只读：客户端的输入只以 SQL 绑定参数进数据库，只提供 `static/` 下登记过的文件。页面不加载外部脚本与样式；唯一的外部资源是 osu! CDN（`assets.ppy.sh`）上的封面图，加载不到就用按 id 着色的渐变代替。上线时放在反向代理后面（TLS、缓存、限流）。
+
+## 方案取舍
+
+- **不复用控制台（ADR-0024）的服务**：控制台只绑本机、能写 lazer 库、跑任务；谱面库要面向公网、只读、无状态，两者的安全模型相反，所以分开。
+- **不用 FTS 全文索引**：全部 7K 谱面是万级的量，`instr` 扫一遍是毫秒级；以后量大了再换 FTS5 的 trigram 分词（中日文子串也能搜）。
+- **不自己实现官方星级算法**：官方算法会随 osu! 更新而变，自己复刻只会出现第三个数；官方 SR 永远以 osu! 给的为准。
+
+## 后果与待定
+
+- 上公网需要 Kai 决定：部署在哪（一台小 VPS 或任何能跑 Python 的托管即可，数据库是单文件），以及用谁的 osu! OAuth 应用跑 `crawl`（凭据经环境变量 `OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 传入，不进仓库）。osu! API 有速率限制，爬虫默认每秒一个请求。
+- 封面图直接引用 osu! CDN；页面上的谱面信息与官方 SR 来自 osu!，网站应注明来源。
+- 引擎每次重标定后，线上库要跑一次 `refresh`；页面上显示引擎版本号，旧结果一目了然。
+- 后续可加：玩家登录（osu! OAuth）后把 profiler 的画像与谱面库对接，按个人短板推荐谱面（ADR-0012）。
