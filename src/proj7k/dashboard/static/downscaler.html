@@ -190,7 +190,10 @@
           P7.stat("删除比例", P7.pct(c.removal_ratio)),
           P7.stat("左右手负荷", `${P7.pct(c.bimanual_flux_ratio[0])} : ${P7.pct(c.bimanual_flux_ratio[1])}`),
           P7.stat("技法向量相似度", Number(v.cosine_similarity).toFixed(3)),
-          P7.stat("主技法", `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`)),
+          P7.stat("主技法", `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`),
+          c.bursts && c.bursts.hand !== undefined
+            ? P7.stat("爆发 / 单轨负荷", `${Number(c.bursts.hand).toFixed(2)} / ${Number(c.bursts.column).toFixed(2)}（≤1 为同级正常）`)
+            : null),
         el("h3", { text: "八项技法星级（灰：原谱，彩：练习谱）" }),
         P7.skillBars(c.skills_original, c.skills_downscaled),
         c.suggest_free_mode ? freeModeOffer(c) : null,
