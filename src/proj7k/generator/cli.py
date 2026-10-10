@@ -62,6 +62,7 @@ class GenerateRun:
             "rows": len({o.time for o in r.beatmap.hit_objects}),
             "intensity": round(r.intensity, 3),
             "timing_source": r.timing_source,
+            "onset_shift_ms": r.onset_shift_ms,
             "bpm": round(60000.0 / r.beatmap.timing_points[0].beat_length, 3) if r.beatmap.timing_points else None,
             "offset_ms": r.beatmap.timing_points[0].time if r.beatmap.timing_points else None,
             "tempo": None if tempo is None else {

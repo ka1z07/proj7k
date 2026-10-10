@@ -49,6 +49,8 @@ class ChartScore:
     estimated_bpm: Optional[float]
     bpm_match: str          # "exact", "octave" or "wrong"
     phase_error_ms: Optional[float]
+    onset_shift_ms: float = 0.0   # music onsets vs the chart's beats (positive: onsets later)
+    audio: str = ""               # the audio's extension and the decoder that read it
     error: Optional[str] = None
 
 
@@ -93,9 +95,10 @@ def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, see
             phase = float((est.offset_ms - main_tp.time + beat / 2) % beat - beat / 2)
     except ValueError:
         pass
+    ext = Path(chart.audio_filename).suffix.lower() or audio_path.suffix.lower()
     return ChartScore(name, round(human_stars, 3), round(result.stars, 3), len(human_rows), len(gen_rows),
                       round(precision, 3), round(recall, 3), round(true_bpm, 2), est_bpm, match,
-                      None if phase is None else round(phase, 1))
+                      None if phase is None else round(phase, 1), result.onset_shift_ms, f"{ext} {audio.source}")
 
 
 def songs_folder_charts(root: Path) -> Iterator[Tuple[str, Path, Path]]:
@@ -148,6 +151,11 @@ def summarize(scores: List[ChartScore]) -> dict:
         "bpm_exact": sum(s.bpm_match == "exact" for s in ok) / len(ok),
         "bpm_octave": sum(s.bpm_match == "octave" for s in ok) / len(ok),
         "phase_within_10ms": (sum(p <= 10.0 for p in phases) / len(phases)) if phases else None,
+        "onset_shift_median_ms": float(np.median([s.onset_shift_ms for s in ok])),
+        "onset_shift_by_audio": {
+            kind: float(np.median([s.onset_shift_ms for s in ok if s.audio == kind]))
+            for kind in sorted({s.audio for s in ok})
+        },
     }
 
 
@@ -181,7 +189,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         line = f"[{len(scores):3d}] {name[:60]:60s} "
         print(line + (f"失败：{s.error}" if s.error else
                       f"{s.human_stars:5.2f}★→{s.generated_stars:5.2f}★  准 {s.precision:.2f} 全 {s.recall:.2f}  "
-                      f"BPM {s.true_bpm:g}/{s.estimated_bpm} {s.bpm_match}"), flush=True)
+                      f"BPM {s.true_bpm:g}/{s.estimated_bpm} {s.bpm_match}  偏移 {s.onset_shift_ms:+.0f} ms {s.audio}"), flush=True)
     summary = summarize(scores)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if args.output:

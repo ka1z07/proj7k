@@ -19,7 +19,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
 from proj7k.generator.columns import Row, assign_columns
-from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, GridPoint, build_grid
+from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
@@ -58,6 +58,7 @@ class GenerationResult:
     target_stars: float
     intensity: float
     timing_source: str                        # "reference", "manual" or "auto"
+    onset_shift_ms: float                     # how much later the music's onsets sit than the timing's beats
     tempo: Optional[TempoEstimate]
     iterations: int
     warnings: List[str] = field(default_factory=list)
@@ -98,7 +99,10 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                 "节奏不对时请用 --timing-from 借用已有谱面的 timing，或用 --bpm/--offset 指定。"
             )
 
-    grid = build_grid(env, timing)
+    # A borrowed or typed-in timing was set by ear against osu!'s playback; read the music through the
+    # offset that lines its onsets up with those beats. An estimated timing is already the music's own.
+    shift = onset_shift_ms(env, timing) if source != "auto" else 0.0
+    grid = build_grid(env, timing, shift_ms=shift)
     lo, hi = X_MIN, X_MAX
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
@@ -139,7 +143,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
 
     beatmap = _beatmap(objs, timing, options, prof.total_stars)
     return GenerationResult(beatmap=beatmap, profile=prof, target_stars=options.target_stars, intensity=x,
-                            timing_source=source, tempo=tempo, iterations=iterations, warnings=warnings)
+                            timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings)
 
 
 def select_rows(grid: Sequence[GridPoint], x: float) -> List[Tuple[GridPoint, int]]:

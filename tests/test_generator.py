@@ -157,7 +157,17 @@ def test_reference_timing_is_used_as_is(song):
     timing = [TimingPoint(time=500.0, beat_length=beat), TimingPoint(time=500.0 + 48 * beat, beat_length=beat)]
     result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing))
     assert result.timing_source == "reference" and result.tempo is None
+    assert abs(result.onset_shift_ms) <= 5.0  # the timing is the song's own: nothing to shift
     assert [tp.time for tp in result.beatmap.timing_points] == [500.0, 500.0 + 48 * beat]
+
+
+def test_a_late_timing_is_read_through_the_shift(song):
+    audio, attacks = song
+    beat = 60000.0 / 170.0
+    # Timing 30 ms early against the music, as a chart timed against a decoder with a different delay.
+    result = generate(audio, GeneratorOptions(target_stars=2.0, timing=[TimingPoint(time=470.0, beat_length=beat)]))
+    assert result.onset_shift_ms == pytest.approx(30.0, abs=4.0)
+    assert result.stars == pytest.approx(2.0, abs=0.1)
 
 
 # --- command line ---------------------------------------------------------------------------------------------

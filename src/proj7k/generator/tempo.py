@@ -3,11 +3,12 @@ A constant tempo and the first downbeat, from the onset envelope.
 
 1. **Period.** The envelope's autocorrelation, with a comb over the lag's 2nd and 4th multiples (a
    real pulse repeats), weighted by a prior centred on 170 BPM (7K songs mostly run 140-220).
-2. **Refinement.** Around the winning lag, every tempo within ±2 % is tried at 0.01 BPM: the envelope
-   is folded at that period into 128 phase bins, and the tempo whose fold is sharpest wins. A wrong
-   tempo smears the fold over a three-minute song; the right one stacks every beat in one bin.
-3. **Phase and downbeat.** The sharpest bin is the beat; of the four beats in a 4/4 measure, the one
-   with the most low-band (kick) onset is the downbeat.
+2. **Refinement.** Around the winning lag, tempos within ±2.5 % are scored by the strength of the
+   envelope's Fourier components at the beat frequency and its 2nd and 4th harmonics (0.05 BPM steps,
+   then 0.005 around the best). Over a three-minute song a tempo off by 0.1 % already loses most of it.
+3. **Phase and downbeat.** The sharpest bin is the beat, unless the point half a beat away carries clearly
+   more low-band (kick) onset, in which case the sharpest bin was the off-beat; of the four beats in a
+   4/4 measure, the one with the most low-band onset is the downbeat.
 4. **Confidence.** The song is cut into four parts and each is phased on its own; if their beats
    disagree by more than 25 ms, the tempo probably changes (or there is none), and the estimate says so.
 
@@ -49,12 +50,13 @@ def estimate_tempo(env: OnsetEnvelope) -> TempoEstimate:
     lag = _coarse_lag(x)
     bpm = _refine_bpm(env.total, 60.0 / (lag * FRAME_S))
     beat_s = 60.0 / bpm
-    phase_s, sharp = _phase(env.total, beat_s)
+    pulse_s, sharp = _phase(env.total, beat_s)
+    phase_s = _on_beat(env, beat_s, pulse_s)
     downbeat_s = _downbeat(env, beat_s, phase_s)
-    drift = _drift(env.total, beat_s, phase_s)
+    drift = _drift(env.total, beat_s, pulse_s)
     offset_ms = (downbeat_s % (4 * beat_s)) * 1000.0
     confidence = float(np.clip((sharp - 1.0) / 3.0, 0.0, 1.0))
-    return TempoEstimate(bpm=round(float(bpm), 2), offset_ms=float(round(offset_ms)), confidence=confidence,
+    return TempoEstimate(bpm=round(float(bpm), 3), offset_ms=float(round(offset_ms)), confidence=confidence,
                          steady=bool(drift <= DRIFT_LIMIT_S), drift_ms=round(float(drift) * 1000.0, 1))
 
 
@@ -90,10 +92,24 @@ def _sharpness(hist: np.ndarray) -> float:
     return float(smooth.max() / max(smooth.mean(), 1e-12))
 
 
+def _pulse_strength(env_total: np.ndarray, t: np.ndarray, period_s: float) -> float:
+    """How strongly the envelope repeats at `period_s`: the magnitude of its Fourier components at the
+    beat frequency and its 2nd and 4th harmonics. Unlike a phase histogram this does not favour periods
+    that are a whole number of 10 ms frames (a histogram of such a period only fills a few bins and looks
+    sharp for that reason alone)."""
+    score = 0.0
+    for h, w in ((1, 1.0), (2, 0.5), (4, 0.25)):
+        score += w * abs(np.dot(env_total, np.exp(-2j * np.pi * h * t / period_s)))
+    return score
+
+
 def _refine_bpm(env_total: np.ndarray, bpm0: float) -> float:
-    candidates = np.arange(bpm0 * 0.98, bpm0 * 1.02, 0.01)
-    scores = [_sharpness(_fold(env_total, 60.0 / b)) for b in candidates]
-    return float(candidates[int(np.argmax(scores))])
+    t = frame_time(np.arange(len(env_total)))
+    env = env_total.astype(np.float64)
+    coarse = np.arange(bpm0 * 0.975, bpm0 * 1.025, 0.05)
+    best = coarse[int(np.argmax([_pulse_strength(env, t, 60.0 / b) for b in coarse]))]
+    fine = np.arange(best - 0.06, best + 0.06, 0.005)
+    return float(fine[int(np.argmax([_pulse_strength(env, t, 60.0 / b) for b in fine]))])
 
 
 def _phase(env_total: np.ndarray, beat_s: float) -> Tuple[float, float]:
@@ -106,6 +122,19 @@ def _phase(env_total: np.ndarray, beat_s: float) -> Tuple[float, float]:
     frac = 0.5 * (a - c) / denom if denom != 0 else 0.0
     phase = ((k + 0.5 + frac) / PHASE_BINS) % 1.0
     return phase * beat_s, _sharpness(hist)
+
+
+def _band_sum(env: OnsetEnvelope, band: int, start_s: float, step_s: float) -> float:
+    times = np.arange(start_s, env.duration_s, step_s)
+    frames = np.clip(np.array([env.frame_of(t) for t in times], dtype=int), 0, env.n - 1)
+    return float(sum(env.bands[band][max(0, f - 2):f + 3].max() for f in frames)) if len(frames) else 0.0
+
+
+def _on_beat(env: OnsetEnvelope, beat_s: float, phase_s: float) -> float:
+    """The strongest pulse is sometimes the off-beat (hats on the "and"); kicks and snares mark the beat,
+    so of the phase and the phase half a beat away, the one with more low-band onset wins."""
+    other = (phase_s + beat_s / 2) % beat_s
+    return other if _band_sum(env, 0, other, beat_s) > 1.15 * _band_sum(env, 0, phase_s, beat_s) else phase_s
 
 
 def _downbeat(env: OnsetEnvelope, beat_s: float, phase_s: float) -> float:
