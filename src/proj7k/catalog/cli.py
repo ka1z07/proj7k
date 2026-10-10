@@ -43,11 +43,13 @@ def build_parser() -> argparse.ArgumentParser:
     lazer.add_argument("--cache-dir", type=Path, default=None, help="proj7k sync's cache (its backup holds the "
                                                                     "official ratings sync rewrote)")
 
-    crawl = sub.add_parser("crawl", help="crawl osu!'s ranked and loved 7K sets through the API v2")
-    crawl.add_argument("--status", nargs="+", default=["ranked", "loved"])
+    crawl = sub.add_parser("crawl", help="crawl osu!'s 7K sets through the API v2")
+    crawl.add_argument("--status", nargs="+", default=["ranked", "loved"],
+                       help="listing statuses to crawl: ranked loved qualified pending wip graveyard, or all")
     crawl.add_argument("--max-pages", type=int, default=None, help="stop after this many search pages per status")
 
-    sub.add_parser("refresh", help="re-evaluate every difficulty the running engine version has not evaluated")
+    sub.add_parser("refresh", help="re-evaluate every difficulty the running engine version has not evaluated "
+                                   "(and fill in pattern features a database from before them lacks)")
 
     serve = sub.add_parser("serve", help="run the website")
     serve.add_argument("--host", default="127.0.0.1")
@@ -80,7 +82,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print("set OSU_CLIENT_ID and OSU_CLIENT_SECRET (an OAuth application at "
                   "https://osu.ppy.sh/home/account/edit#oauth)", file=sys.stderr)
             return 2
-        summary = ingest.ingest_osu_api(store, ingest.OsuApiClient(client_id, secret), args.status, args.max_pages)
+        statuses = ingest.ALL_STATUSES if args.status == ["all"] else args.status
+        summary = ingest.ingest_osu_api(store, ingest.OsuApiClient(client_id, secret), statuses, args.max_pages)
         print(summary)
     elif args.command == "refresh":
         print(f"re-evaluated {store.reevaluate_stale()}")

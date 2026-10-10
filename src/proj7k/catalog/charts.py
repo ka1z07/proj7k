@@ -9,11 +9,11 @@ a chart without one is listed without one.
 
 import hashlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from proj7k.dan import estimate_canonical_dan
 from proj7k.engine import SKILLS, engine_version, evaluate_osu
-from proj7k.parser import NoteType, dominant_bpm, parse_osu_7k
+from proj7k.parser import Beatmap7K, NoteType, dominant_bpm, parse_osu_7k
 
 #: Bins of the note-density outline drawn on a chart's page.
 DENSITY_BINS = 100
@@ -51,11 +51,45 @@ class ChartRow:
     tags: str
     status: str = "unknown"
     ranked_date: Optional[str] = None
+    submitted_date: Optional[str] = None
+    creator_id: Optional[int] = None
+    # Who wrote this difficulty: osu!'s owner for a guest difficulty, else the set's creator.
+    mapper_id: Optional[int] = None
+    mapper_name: str = ""
+    patterns: Dict[str, Any] = field(default_factory=dict)
     osu_content: str = field(default="", repr=False)
 
     @property
     def ln_ratio(self) -> float:
         return self.ln_count / self.note_count if self.note_count else 0.0
+
+
+def pattern_features(beatmap: Beatmap7K) -> Dict[str, Any]:
+    """How a chart is written, independent of how hard it is: what a mapper's style is made of.
+
+    - `chord`: mean notes per row (a row is the notes whose heads share a millisecond)
+    - `jack`: share of notes on a column that the previous row also hit
+    - `nps`: notes per second between the first head and the last release
+    - `columns`: share of notes on each of the seven columns (left to right)
+    """
+    rows: Dict[int, set] = {}
+    for h in beatmap.hit_objects:
+        rows.setdefault(int(round(h.time)), set()).add(h.column)
+    times = sorted(rows)
+    jacks = sum(len(rows[t] & rows[p]) for p, t in zip(times, times[1:]))
+    n = len(beatmap.hit_objects)
+    columns = [0] * 7
+    for h in beatmap.hit_objects:
+        if 0 <= h.column < 7:
+            columns[h.column] += 1
+    first = min(h.time for h in beatmap.hit_objects)
+    last = max(max(h.time, h.end_time or 0.0) for h in beatmap.hit_objects)
+    return {
+        "chord": round(n / len(times), 4),
+        "jack": round(jacks / n, 4),
+        "nps": round(n / max((last - first) / 1000.0, 1.0), 3),
+        "columns": [round(c / n, 4) for c in columns],
+    }
 
 
 def local_id(seed: str) -> int:
@@ -83,6 +117,10 @@ def chart_row(
     official_sr_source: Optional[str] = None,
     status: str = "unknown",
     ranked_date: Optional[str] = None,
+    submitted_date: Optional[str] = None,
+    creator_id: Optional[int] = None,
+    mapper_id: Optional[int] = None,
+    mapper_name: Optional[str] = None,
 ) -> ChartRow:
     """The catalog row of a 7K `.osu` file's content. Raises `ValueError` for anything but a 7K mania chart."""
     beatmap = parse_osu_7k(content)
@@ -147,5 +185,10 @@ def chart_row(
         tags=meta.get("Tags", beatmap.tags),
         status=status,
         ranked_date=ranked_date,
+        submitted_date=submitted_date,
+        creator_id=creator_id,
+        mapper_id=mapper_id,
+        mapper_name=mapper_name or creator,
+        patterns=pattern_features(beatmap),
         osu_content=content,
     )

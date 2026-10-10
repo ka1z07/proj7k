@@ -75,7 +75,22 @@ CREATE INDEX IF NOT EXISTS beatmaps_set ON beatmaps(beatmapset_id);
 CREATE UNIQUE INDEX IF NOT EXISTS beatmaps_checksum ON beatmaps(checksum);
 CREATE INDEX IF NOT EXISTS beatmaps_engine ON beatmaps(engine_sr);
 CREATE INDEX IF NOT EXISTS beatmaps_official ON beatmaps(official_sr);
+CREATE TABLE IF NOT EXISTS users (
+    id          INTEGER PRIMARY KEY,           -- osu! user id
+    username    TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
 """
+
+#: Columns added after the first release, added in place to an existing database (table, column, type).
+MIGRATIONS = (
+    ("beatmapsets", "creator_id", "INTEGER"),
+    ("beatmapsets", "submitted_date", "TEXT"),
+    ("beatmaps", "mapper_id", "INTEGER"),      # osu! user who owns the difficulty (guest difficulties)
+    ("beatmaps", "mapper_name", "TEXT"),
+    ("beatmaps", "mapper_search", "TEXT"),
+    ("beatmaps", "pattern_json", "TEXT"),      # `charts.pattern_features`; NULL until `refresh` fills it
+)
 
 #: Sort keys of the listing: the SQL value each difficulty contributes.
 SORTS: Dict[str, str] = {
@@ -93,9 +108,10 @@ DEFAULT_SORT = "newest_desc"
 PAGE_SIZE = 50
 
 _SET_FIELDS = ("id", "title", "title_unicode", "artist", "artist_unicode", "creator", "source", "tags",
-               "status", "ranked_date", "updated_at")
+               "status", "ranked_date", "updated_at", "creator_id", "submitted_date")
 _LIST_BEATMAP_FIELDS = ("id", "beatmapset_id", "version", "official_sr", "official_sr_source", "engine_sr",
-                        "dan", "dominant_skill", "bpm", "length_s", "note_count", "ln_count", "od", "hp")
+                        "dan", "dominant_skill", "bpm", "length_s", "note_count", "ln_count", "od", "hp",
+                        "mapper_id", "mapper_name")
 
 
 def _now() -> str:
@@ -140,6 +156,12 @@ class CatalogStore:
         if self.path != ":memory:":
             self._db.execute("PRAGMA journal_mode = WAL")
         self._db.executescript(SCHEMA)
+        for table, column, kind in MIGRATIONS:
+            have = {r[1] for r in self._db.execute(f"PRAGMA table_info({table})")}
+            if column not in have:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+        self._db.execute("CREATE INDEX IF NOT EXISTS beatmaps_mapper ON beatmaps(mapper_id)")
+        self._db.commit()
 
     def close(self) -> None:
         with self._lock:
@@ -161,8 +183,8 @@ class CatalogStore:
             self._db.execute(
                 """INSERT INTO beatmapsets (id, title, title_unicode, artist, artist_unicode, creator, source, tags,
                        status, ranked_date, updated_at, search_text, title_search, artist_search, creator_search,
-                       source_search, tags_search)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       source_search, tags_search, creator_id, submitted_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                        title=excluded.title, title_unicode=excluded.title_unicode, artist=excluded.artist,
                        artist_unicode=excluded.artist_unicode, creator=excluded.creator, source=excluded.source,
@@ -172,14 +194,16 @@ class CatalogStore:
                        updated_at=excluded.updated_at, search_text=excluded.search_text,
                        title_search=excluded.title_search, artist_search=excluded.artist_search,
                        creator_search=excluded.creator_search, source_search=excluded.source_search,
-                       tags_search=excluded.tags_search""",
+                       tags_search=excluded.tags_search,
+                       creator_id=COALESCE(excluded.creator_id, creator_id),
+                       submitted_date=COALESCE(excluded.submitted_date, submitted_date)""",
                 (
                     row.beatmapset_id, row.title, row.title_unicode, row.artist, row.artist_unicode, row.creator,
                     row.source, row.tags, row.status if row.status in STATUSES else "unknown", row.ranked_date, now,
                     _fold(" ".join((row.title, row.title_unicode, row.artist, row.artist_unicode, row.creator,
                                     row.source, row.tags))),
                     _fold(f"{row.title} {row.title_unicode}"), _fold(f"{row.artist} {row.artist_unicode}"),
-                    _fold(row.creator), _fold(row.source), _fold(row.tags),
+                    _fold(row.creator), _fold(row.source), _fold(row.tags), row.creator_id, row.submitted_date,
                 ),
             )
             # The same chart (same MD5) under another id is the same difficulty: keep the newest id.
@@ -188,8 +212,8 @@ class CatalogStore:
                 """INSERT INTO beatmaps (id, beatmapset_id, checksum, version, version_search, official_sr,
                        official_sr_source, engine_sr, engine_version, dan, dan_index, dominant_skill,
                        dominance_margin, skills_json, bpm, length_s, note_count, ln_count, od, hp, density_json,
-                       osu_blob, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       osu_blob, updated_at, mapper_id, mapper_name, mapper_search, pattern_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                    ON CONFLICT(id) DO UPDATE SET
                        beatmapset_id=excluded.beatmapset_id, checksum=excluded.checksum, version=excluded.version,
                        version_search=excluded.version_search,
@@ -202,14 +226,21 @@ class CatalogStore:
                        bpm=excluded.bpm, length_s=excluded.length_s, note_count=excluded.note_count,
                        ln_count=excluded.ln_count, od=excluded.od, hp=excluded.hp,
                        density_json=excluded.density_json, osu_blob=excluded.osu_blob,
-                       updated_at=excluded.updated_at""",
+                       updated_at=excluded.updated_at,
+                       mapper_id=COALESCE(excluded.mapper_id, mapper_id),
+                       mapper_name=CASE WHEN excluded.mapper_id IS NULL AND mapper_id IS NOT NULL THEN mapper_name
+                                        ELSE excluded.mapper_name END,
+                       mapper_search=CASE WHEN excluded.mapper_id IS NULL AND mapper_id IS NOT NULL THEN mapper_search
+                                          ELSE excluded.mapper_search END,
+                       pattern_json=excluded.pattern_json""",
                 (
                     row.beatmap_id, row.beatmapset_id, row.checksum, row.version, _fold(row.version),
                     row.official_sr, row.official_sr_source, row.engine_sr, row.engine_version, row.dan,
                     CANONICAL_DAN_TIERS.index(row.dan), row.dominant_skill, row.dominance_margin,
                     json.dumps(row.skills, separators=(",", ":")), row.bpm, row.length_s, row.note_count,
                     row.ln_count, row.od, row.hp, json.dumps(row.density, separators=(",", ":")),
-                    zlib.compress(row.osu_content.encode("utf-8"), 9), now,
+                    zlib.compress(row.osu_content.encode("utf-8"), 9), now, row.mapper_id, row.mapper_name,
+                    _fold(row.mapper_name), json.dumps(row.patterns, separators=(",", ":")) if row.patterns else None,
                 ),
             )
             self._db.execute(
@@ -232,15 +263,44 @@ class CatalogStore:
             self._db.execute("UPDATE beatmapsets SET status = ?, ranked_date = COALESCE(?, ranked_date) WHERE id = ?",
                              (status, ranked_date, set_id))
 
+    def set_mapper(self, beatmap_id: int, mapper_id: int, mapper_name: Optional[str] = None) -> None:
+        """Record who owns a difficulty; a known username of that id wins over `mapper_name`."""
+        with self._lock, self._db:
+            known = self._db.execute("SELECT username FROM users WHERE id = ?", (mapper_id,)).fetchone()
+            name = known[0] if known else mapper_name
+            if name:
+                self._db.execute("UPDATE beatmaps SET mapper_id = ?, mapper_name = ?, mapper_search = ? WHERE id = ?",
+                                 (mapper_id, name, _fold(name), beatmap_id))
+            else:
+                self._db.execute("UPDATE beatmaps SET mapper_id = ? WHERE id = ?", (mapper_id, beatmap_id))
+
+    def set_users(self, users: Dict[int, str]) -> None:
+        """Usernames of osu! users; every difficulty they own takes the name."""
+        now = _now()
+        with self._lock, self._db:
+            for user_id, name in users.items():
+                self._db.execute("INSERT INTO users (id, username, updated_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE "
+                                 "SET username=excluded.username, updated_at=excluded.updated_at", (user_id, name, now))
+                self._db.execute("UPDATE beatmaps SET mapper_name = ?, mapper_search = ? WHERE mapper_id = ?",
+                                 (name, _fold(name), user_id))
+
+    def unnamed_mappers(self) -> List[int]:
+        """Mapper ids with no username on record (guest difficulty owners the set does not name)."""
+        with self._lock:
+            return [r[0] for r in self._db.execute(
+                "SELECT DISTINCT b.mapper_id FROM beatmaps b LEFT JOIN users u ON u.id = b.mapper_id "
+                "WHERE b.mapper_id IS NOT NULL AND u.id IS NULL")]
+
     def checksums(self) -> List[str]:
         with self._lock:
             return [r[0] for r in self._db.execute("SELECT checksum FROM beatmaps")]
 
     def stale(self) -> List[int]:
-        """Difficulties evaluated by another engine version than the running one."""
+        """Difficulties evaluated by another engine version than the running one (or not yet given their
+        pattern features)."""
         with self._lock:
             return [r[0] for r in self._db.execute(
-                "SELECT id FROM beatmaps WHERE engine_version != ?", (engine_version(),))]
+                "SELECT id FROM beatmaps WHERE engine_version != ? OR pattern_json IS NULL", (engine_version(),))]
 
     def reevaluate_stale(self, progress: Optional[Callable[[int, int], None]] = None) -> int:
         """Re-run the engine on every stale difficulty from its stored `.osu`. Returns how many."""
@@ -248,12 +308,14 @@ class CatalogStore:
         for n, beatmap_id in enumerate(ids, 1):
             with self._lock:
                 rec = self._db.execute(
-                    """SELECT b.osu_blob, b.official_sr, b.official_sr_source, s.status, s.ranked_date
+                    """SELECT b.osu_blob, b.official_sr, b.official_sr_source, s.status, s.ranked_date, b.mapper_id,
+                              b.mapper_name
                        FROM beatmaps b JOIN beatmapsets s ON s.id = b.beatmapset_id WHERE b.id = ?""",
                     (beatmap_id,),
                 ).fetchone()
             row = chart_row(zlib.decompress(rec["osu_blob"]).decode("utf-8"), rec["official_sr"],
-                            rec["official_sr_source"], rec["status"], rec["ranked_date"])
+                            rec["official_sr_source"], rec["status"], rec["ranked_date"],
+                            mapper_id=rec["mapper_id"], mapper_name=rec["mapper_name"])
             row.beatmap_id = beatmap_id
             self.upsert(row)
             if progress:
@@ -261,6 +323,20 @@ class CatalogStore:
         return len(ids)
 
     # ---- reading -------------------------------------------------------------------------------
+
+    def change_token(self) -> Tuple[int, int]:
+        """Moves whenever the catalog changes, through this connection or another process (a crawl)."""
+        with self._lock:
+            return self._db.total_changes, self._db.execute("PRAGMA data_version").fetchone()[0]
+
+    def mapper_rows(self) -> List[sqlite3.Row]:
+        """One light row per difficulty, for `mappers.build_profiles`."""
+        with self._lock:
+            return self._db.execute(
+                """SELECT b.mapper_id, b.mapper_name, s.creator, b.beatmapset_id, s.status, s.ranked_date,
+                          s.submitted_date, b.engine_sr, b.official_sr, b.dan_index, b.dominant_skill, b.skills_json,
+                          b.ln_count, b.note_count, b.bpm, b.length_s, b.pattern_json
+                   FROM beatmaps b JOIN beatmapsets s ON s.id = b.beatmapset_id""").fetchall()
 
     def osu_content(self, beatmap_id: int) -> Optional[str]:
         with self._lock:
@@ -337,7 +413,7 @@ class CatalogStore:
         matched = set(matched)
         marks = ",".join("?" * len(set_ids))
         fields = _LIST_BEATMAP_FIELDS + (("skills_json", "density_json", "dominance_margin", "engine_version",
-                                          "checksum") if full else ("skills_json",))
+                                          "checksum", "pattern_json") if full else ("skills_json",))
         with self._lock:
             sets = {r["id"]: {k: r[k] for k in _SET_FIELDS} for r in self._db.execute(
                 f"SELECT {','.join(_SET_FIELDS)} FROM beatmapsets WHERE id IN ({marks})", set_ids)}
@@ -350,6 +426,7 @@ class CatalogStore:
             b["skills"] = json.loads(r["skills_json"])
             if full:
                 b["density"] = json.loads(r["density_json"])
+                b["patterns"] = json.loads(r["pattern_json"]) if r["pattern_json"] else None
             else:
                 b["skills"] = {k: round(v["stars"], 2) for k, v in b["skills"].items()}
             b["matched"] = r["id"] in matched

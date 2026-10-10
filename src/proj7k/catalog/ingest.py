@@ -161,18 +161,40 @@ class OsuApiClient:
             self._token, self._token_expiry = data["access_token"], time.time() + float(data.get("expires_in", 0))
         return self._token
 
-    def get(self, path: str, params: Optional[Dict[str, str]] = None) -> Any:
-        self._throttle()
+    def _retrying(self, call: Callable[[], bytes], retries: int = 4) -> bytes:
+        """A long crawl must outlive a dropped connection or a rate-limit answer: back off and try again."""
+        for attempt in range(retries + 1):
+            self._throttle()
+            try:
+                return call()
+            except Exception as e:
+                if attempt == retries or getattr(e, "code", None) in (400, 401, 403, 404):
+                    raise
+                logger.warning("osu! request failed (%s); retrying", e)
+                time.sleep(self.min_interval_s * 5 * 2 ** attempt)
+        raise AssertionError("unreachable")
+
+    def get(self, path: str, params: Optional[Any] = None) -> Any:
         url = f"{self.base}/api/v2/{path}" + (f"?{urllib.parse.urlencode(params)}" if params else "")
-        return json.loads(self.fetch(url, {"Authorization": f"Bearer {self.token()}", "Accept": "application/json"},
-                                     None))
+        return json.loads(self._retrying(lambda: self.fetch(
+            url, {"Authorization": f"Bearer {self.token()}", "Accept": "application/json"}, None)))
+
+    def users(self, ids: List[int]) -> Dict[int, str]:
+        """Usernames of osu! users, 50 per request."""
+        names: Dict[int, str] = {}
+        for i in range(0, len(ids), 50):
+            data = self.get("users", [("ids[]", str(u)) for u in ids[i:i + 50]])
+            names.update({int(u["id"]): u["username"] for u in data.get("users", [])})
+        return names
 
     def search_7k(self, status: str = "ranked", max_pages: Optional[int] = None) -> Iterator[Dict[str, Any]]:
         """Every mania beatmapset of `status` that has a 7K difficulty (osu!'s own `keys=7` filter)."""
         cursor: Optional[str] = None
         pages = 0
         while True:
-            params = {"m": "3", "q": "keys=7", "s": status, "sort": "ranked_desc"}
+            # Unranked sets have no ranked date to sort by; any stable order works with the cursor.
+            sort = "ranked_desc" if status in ("ranked", "loved", "qualified", "approved") else "updated_desc"
+            params = {"m": "3", "q": "keys=7", "s": status, "sort": sort}
             if cursor:
                 params["cursor_string"] = cursor
             data = self.get("beatmapsets/search", params)
@@ -182,25 +204,48 @@ class OsuApiClient:
                 return
 
     def osu_file(self, beatmap_id: int) -> str:
-        self._throttle()
-        return self.fetch(f"{self.base}/osu/{beatmap_id}", {}, None).decode("utf-8", errors="replace")
+        return self._retrying(lambda: self.fetch(f"{self.base}/osu/{beatmap_id}", {}, None)) \
+            .decode("utf-8", errors="replace")
+
+
+#: Every listing status osu!'s search knows for a set that can carry a 7K difficulty.
+ALL_STATUSES = ("ranked", "loved", "qualified", "pending", "wip", "graveyard")
+
+
+def _owner(bm: Dict[str, Any], bms: Dict[str, Any]) -> Tuple[Optional[int], Optional[str]]:
+    """Who wrote a difficulty: its first owner (guest difficulties), else its `user_id`, else the set's creator."""
+    owners = bm.get("owners") or []
+    if owners and owners[0].get("id"):
+        return int(owners[0]["id"]), owners[0].get("username")
+    user_id = bm.get("user_id") or bms.get("user_id")
+    if not user_id:
+        return None, None
+    return int(user_id), bms.get("creator") if user_id == bms.get("user_id") else None
 
 
 def ingest_osu_api(store: CatalogStore, client: OsuApiClient, statuses: Iterable[str] = ("ranked", "loved"),
                    max_pages: Optional[int] = None) -> IngestSummary:
     """Crawl osu!'s 7K mania sets. A difficulty already in the catalog with the same MD5 is not downloaded
-    again; its official rating and status are refreshed from the API."""
+    again; its official rating, status and mapper are refreshed from the API. Guest mappers the listing
+    names only by id are looked up at the end."""
     summary = IngestSummary()
     known = set(store.checksums())
+    names: Dict[int, str] = {}
     for status in statuses:
         for bms in client.search_7k(status, max_pages=max_pages):
+            set_status = bms.get("status", status)
             for bm in bms.get("beatmaps", []):
                 if bm.get("mode") != "mania" or round(float(bm.get("cs", 0))) != 7:
                     continue
                 sr = float(bm["difficulty_rating"])
+                mapper_id, mapper_name = _owner(bm, bms)
+                if mapper_id and mapper_name:
+                    names[mapper_id] = mapper_name
                 if bm.get("checksum") in known:
                     store.set_official(int(bm["id"]), sr, "osu-api")
-                    store.set_status(int(bms["id"]), bms.get("status", status), bms.get("ranked_date"))
+                    store.set_status(int(bms["id"]), set_status, bms.get("ranked_date"))
+                    if mapper_id:
+                        store.set_mapper(int(bm["id"]), mapper_id, mapper_name)
                     summary.skipped += 1
                     continue
                 try:
@@ -209,5 +254,14 @@ def ingest_osu_api(store: CatalogStore, client: OsuApiClient, statuses: Iterable
                     summary.failed.append((str(bm["id"]), f"download: {e}"))
                     continue
                 _add(store, summary, str(bm["id"]), content, official_sr=sr, official_sr_source="osu-api",
-                     status=bms.get("status", status), ranked_date=bms.get("ranked_date"))
+                     status=set_status, ranked_date=bms.get("ranked_date"), submitted_date=bms.get("submitted_date"),
+                     creator_id=bms.get("user_id"), mapper_id=mapper_id, mapper_name=mapper_name)
+                known.add(bm.get("checksum"))
+    store.set_users(names)
+    unnamed = store.unnamed_mappers()
+    if unnamed:
+        try:
+            store.set_users(client.users(unnamed))
+        except Exception as e:
+            logger.warning("could not look up %d mapper names: %s", len(unnamed), e)
     return summary

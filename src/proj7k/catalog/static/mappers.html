@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>谱师 · proj7k 7K 谱面库</title>
+<link rel="stylesheet" href="/static/catalog.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="logo" href="/beatmapsets">proj<b>7k</b> 谱面库</a>
+  <div class="links"><a href="/beatmapsets">谱面</a><a class="active" href="/mappers">谱师</a></div>
+  <div class="meta" id="meta"></div>
+</nav>
+<div class="header-band">
+  <div class="container" style="padding-bottom:0">
+    <h1><b>谱师</b> · 写谱风格</h1>
+    <div class="search">
+      <div class="search-box">
+        <span class="icon">⌕</span>
+        <input id="q" type="search" autocomplete="off" placeholder="输入谱师名字" autofocus>
+      </div>
+      <div class="filters">
+        <span class="label">样本</span><div class="pills" id="min"></div>
+        <span class="label">排序</span><div class="pills" id="sort"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="container">
+  <div class="results-head">
+    <span id="count"></span>
+    <span>风格标签只比较至少有 3 个 7K 难度的谱师；鼠标停在标签上可看依据</span>
+  </div>
+  <div class="results">
+    <div class="mlist" id="list"></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+<script src="/static/catalog.js"></script>
+<script>Catalog.mappersPage();</script>
+</body>
+</html>

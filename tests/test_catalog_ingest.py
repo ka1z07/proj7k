@@ -90,12 +90,18 @@ class _FakeOsu:
             assert q["m"] == ["3"] and q["q"] == ["keys=7"]
             if "cursor_string" not in q:
                 return json.dumps({"beatmapsets": [{"id": 1877617, "status": "ranked", "ranked_date": "2023-01-01T00:00:00Z",
-                    "beatmaps": [{"id": 3864745, "mode": "mania", "cs": 7, "difficulty_rating": 3.83649, "checksum": "x"},
+                    "user_id": 7, "creator": "Host", "submitted_date": "2022-12-01T00:00:00Z",
+                    "beatmaps": [{"id": 3864745, "mode": "mania", "cs": 7, "difficulty_rating": 3.83649, "checksum": "x",
+                                  "user_id": 7},
                                  {"id": 999, "mode": "mania", "cs": 4, "difficulty_rating": 2.0, "checksum": "y"}]}],
                     "cursor_string": "next"}).encode()
-            return json.dumps({"beatmapsets": [{"id": 1877617, "status": "ranked",
-                "beatmaps": [{"id": 3864746, "mode": "mania", "cs": 7.0, "difficulty_rating": 7.04616, "checksum": "z"}]}],
+            return json.dumps({"beatmapsets": [{"id": 1877617, "status": "ranked", "user_id": 7, "creator": "Host",
+                "beatmaps": [{"id": 3864746, "mode": "mania", "cs": 7.0, "difficulty_rating": 7.04616, "checksum": "z",
+                              "user_id": 8}]}],
                 "cursor_string": None}).encode()
+        if parts.path == "/api/v2/users":
+            ids = parse_qs(parts.query)["ids[]"]
+            return json.dumps({"users": [{"id": int(i), "username": f"Guest{i}"} for i in ids]}).encode()
         if parts.path.startswith("/osu/"):
             return self.corpus[int(parts.path.rsplit("/", 1)[1])].encode()
         raise AssertionError(url)
@@ -111,6 +117,10 @@ def test_osu_api_crawl(benchmark_corpus):
     assert s["status"] == "ranked" and s["ranked_date"] == "2023-01-01T00:00:00Z"
     assert {b["id"]: b["official_sr"] for b in s["beatmaps"]} == {3864745: 3.83649, 3864746: 7.04616}
     assert all(b["official_sr_source"] == "osu-api" for b in s["beatmaps"])
+    # The host's difficulty and a guest difficulty whose owner the listing names only by id.
+    assert {b["id"]: (b["mapper_id"], b["mapper_name"]) for b in s["beatmaps"]} == {
+        3864745: (7, "Host"), 3864746: (8, "Guest8")}
+    assert s["creator_id"] == 7 and s["submitted_date"] == "2022-12-01T00:00:00Z"
     assert sum(1 for u in fake.calls if "/oauth/token" in u) == 1
     assert not any(u.endswith("/osu/999") for u in fake.calls)
 
@@ -137,6 +147,28 @@ def test_osu_api_refreshes_known_charts_without_downloading(benchmark_corpus):
     assert not any(u.endswith("/osu/3864745") for u in fake.calls)
     b = next(b for b in store.beatmapset(1877617)["beatmaps"] if b["id"] == 3864745)
     assert b["official_sr"] == 4.0
+
+
+def test_crawl_retries_a_dropped_connection(benchmark_corpus):
+    fake = _FakeOsu(benchmark_corpus)
+    failures = {"n": 0}
+
+    def flaky(url, headers, body):
+        if "/osu/" in url and failures["n"] < 1:
+            failures["n"] += 1
+            raise ConnectionResetError("reset")
+        return fake(url, headers, body)
+
+    store = CatalogStore()
+    summary = ingest_osu_api(store, OsuApiClient("id", "secret", fetch=flaky, min_interval_s=0), statuses=("ranked",))
+    assert summary.added == 2 and not summary.failed and failures["n"] == 1
+
+
+def test_unranked_statuses_sort_by_update(benchmark_corpus):
+    fake = _FakeOsu(benchmark_corpus)
+    client = OsuApiClient("id", "secret", fetch=fake, min_interval_s=0)
+    list(client.search_7k("graveyard", max_pages=1))
+    assert any("s=graveyard" in u and "sort=updated_desc" in u for u in fake.calls)
 
 
 def test_cli_build_and_refresh(tmp_path, benchmark_corpus_path, benchmark_manifest_path, capsys):

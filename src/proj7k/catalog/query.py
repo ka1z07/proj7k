@@ -11,7 +11,9 @@ Keys (aliases in brackets):
     stars [sr, official]  official star rating           engine [esr, proj7k]  engine star rating
     delta                 engine minus official           dan                   engine tier, compared on the ladder
     skill [dominant]      the dominant skill              bpm, length (s, or m:ss), notes, ln (% of notes), od, hp
-    status                ranked/loved/qualified/...      creator [mapper], artist, title, source, tag  (substring)
+    status                ranked/loved/qualified/...      creator, artist, title, source, tag  (substring)
+    mapper                who wrote the difficulty (guest difficulties included; substring)
+    mapperid              that mapper's osu! user id
 
 `=` on a number matches its written precision: `stars=5` is [5, 6), `engine=6.5` is [6.5, 6.6).
 """
@@ -35,7 +37,7 @@ NUMERIC = {
     "od": "b.od", "hp": "b.hp",
 }
 TEXT = {
-    "creator": "s.creator_search", "mapper": "s.creator_search",
+    "creator": "s.creator_search", "mapper": "b.mapper_search",
     "artist": "s.artist_search", "title": "s.title_search",
     "source": "s.source_search", "tag": "s.tags_search", "tags": "s.tags_search",
 }
@@ -115,6 +117,10 @@ def _filter(key: str, op: str, raw: str) -> Optional[Tuple[str, tuple]]:
         if skill is None or op not in ("=", ":", "==", "!="):
             return None
         return ("b.dominant_skill != ?" if op == "!=" else "b.dominant_skill = ?"), (skill,)
+    if key == "mapperid":
+        if op not in ("=", ":", "==") or not raw.lstrip("-").isdigit():
+            return None
+        return "b.mapper_id = ?", (int(raw),)
     if key == "dan":
         try:
             tier = CANONICAL_DAN_TIERS.index(parse_dan_tier(raw))

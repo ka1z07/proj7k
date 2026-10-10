@@ -7,6 +7,9 @@ The catalog website and its JSON API, on the standard library's threaded HTTP se
     GET /api/beatmapsets/search?q=&status=&skill=&sort=&page=
     GET /api/beatmapsets/<set id>
     GET /api/stats
+    GET /mappers                          mappers (the list), `/mappers/<user id or @name>` one mapper's style
+    GET /api/mappers?q=&sort=&min=&page=
+    GET /api/mappers/<user id or @name>
 
 Read-only: nothing a client sends reaches the database except as a bound SQL parameter, and only the
 files of `static/` are served. In production it sits behind a reverse proxy (TLS, caching, rate limits).
@@ -19,8 +22,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
+from proj7k.catalog.mappers import MapperIndex
 from proj7k.catalog.store import CatalogStore
 
 logger = logging.getLogger(__name__)
@@ -33,6 +37,8 @@ STATIC_FILES = {p.name for p in STATIC_DIR.iterdir() if p.suffix in STATIC_TYPES
 _SET_PAGE = re.compile(r"^/beatmapsets/(-?\d+)/?$")
 _BEATMAP_PAGE = re.compile(r"^/beatmaps/(-?\d+)/?$")
 _SET_API = re.compile(r"^/api/beatmapsets/(-?\d+)$")
+_MAPPER_PAGE = re.compile(r"^/mappers/([^/]+)/?$")
+_MAPPER_API = re.compile(r"^/api/mappers/([^/]+)$")
 
 
 def _int(value: Optional[str], default: int) -> int:
@@ -45,6 +51,7 @@ def _int(value: Optional[str], default: int) -> int:
 class CatalogHandler(BaseHTTPRequestHandler):
     server_version = "proj7k-catalog"
     store: CatalogStore   # set on the subclass `make_server` builds
+    mappers: MapperIndex
 
     def log_message(self, fmt: str, *args: Any) -> None:
         logger.info("%s %s", self.address_string(), fmt % args)
@@ -94,6 +101,18 @@ class CatalogHandler(BaseHTTPRequestHandler):
         if m:
             data = self.store.beatmapset(int(m.group(1)))
             return self._json(data) if data else self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        if path == "/mappers":
+            return self._static("mappers.html")
+        if _MAPPER_PAGE.match(path):
+            return self._static("mapper.html")
+        if path == "/api/mappers":
+            return self._json(self.mappers.listing(
+                q=query.get("q", ""), sort=query.get("sort", "diffs_desc"), min_diffs=_int(query.get("min"), 1),
+                page=_int(query.get("page"), 1), page_size=_int(query.get("size"), 50)))
+        m = _MAPPER_API.match(path)
+        if m:
+            data = self.mappers.get(unquote(m.group(1)))
+            return self._json(data) if data else self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         if path == "/api/stats":
             return self._json(self.store.stats())
         if path.startswith("/static/") and path[len("/static/"):] in STATIC_FILES:
@@ -122,7 +141,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
 
 def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780) -> ThreadingHTTPServer:
-    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store})
+    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": MapperIndex(store)})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server

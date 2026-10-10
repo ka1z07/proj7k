@@ -95,4 +95,4 @@ def test_pages_load_no_external_scripts_or_styles():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"<(script|link)[^>]+(src|href)=[\"'](https?:)?//", text), path.name
         assert "@import" not in text, path.name
-        assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/)", text), path.name
+        assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/)", text), path.name
