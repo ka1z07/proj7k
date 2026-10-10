@@ -39,6 +39,7 @@
       <a href="#live" data-page="live">实时雷达</a>
       <a href="#sync" data-page="sync">曲库同步</a>
       <a href="#downscaler" data-page="downscaler">降阶练习</a>
+      <a href="#generator" data-page="generator">谱面生成</a>
       <a href="#profiler" data-page="profiler">回放与画像</a>
     </nav>
     <div class="status">
@@ -55,7 +56,7 @@
     "use strict";
     // Each tool is its own page, loaded once and kept alive while hidden: the live radar keeps following the
     // game and a running job keeps streaming while another tab is open.
-    const PAGES = { live: "/live", sync: "/sync", downscaler: "/downscaler", profiler: "/profiler" };
+    const PAGES = { live: "/live", sync: "/sync", downscaler: "/downscaler", generator: "/generator", profiler: "/profiler" };
     const frames = {};
 
     function show(name) {
@@ -92,7 +93,7 @@
       if (!["queued", "running"].includes(j.status) && j.kind.startsWith("sync")) refreshLazer();
     });
 
-    // The game's current chart, which the downscaler and profiler pages preselect.
+    // The game's current chart, which the downscaler, generator and profiler pages preselect.
     P7.onGameChart((state) => {
       const node = document.getElementById("gameState");
       const c = state.chart;

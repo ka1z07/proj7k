@@ -3,8 +3,8 @@ The dashboard's actions: each runs one feature of the toolchain the way its CLI 
 
 An action takes the job's parameters (as the page sent them) and its `JobContext`, logs as it goes, registers the
 files it produced, and returns a JSON-able result for the page. A failure is an exception; its message is what the
-page shows. Every action here calls the same functions as `proj7k.sync`, `proj7k.downscaler` and
-`proj7k.profiler`, so the dashboard and the command line cannot drift apart.
+page shows. Every action here calls the same functions as `proj7k.sync`, `proj7k.downscaler`,
+`proj7k.generator` and `proj7k.profiler`, so the dashboard and the command line cannot drift apart.
 """
 
 from dataclasses import asdict, dataclass
@@ -50,6 +50,10 @@ class DashboardConfig:
     @property
     def practice_dir(self) -> Path:
         return self.output_dir / "practice_maps"
+
+    @property
+    def generated_dir(self) -> Path:
+        return self.output_dir / "generated_maps"
 
     @property
     def bundles_dir(self) -> Path:
@@ -222,6 +226,48 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
         })
     sync = run.to_dict()["sync"]
     return {"charts": charts, "failed_count": run.failed_count, "sync": sync, "output_dir": str(output_dir)}
+
+
+# --- generator -------------------------------------------------------------------------------------------------
+
+
+def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    """
+    A new chart from a song (ADR-0027). The song is the game's current chart (`reference` = its MD5: its audio, and its
+    timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timing then from the music).
+    """
+    from proj7k.generator.cli import resolve_reference, resolve_target, run_generate
+    from proj7k.generator.generate import GeneratorOptions
+
+    stars, label = resolve_target(_text(params, "target_dan") or None, _float(params, "target_sr"))
+    reference = None
+    ref_spec = _text(params, "reference").strip('"')
+    if ref_spec:
+        reference = resolve_reference(ref_spec, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
+    audio = _path(params, "audio", "音频文件") if _text(params, "audio") else None
+    if reference is None and audio is None:
+        raise ValueError("请选择游戏当前谱面、一张参考谱面，或一个音频文件")
+    options = GeneratorOptions(
+        target_stars=stars,
+        target_label=label,
+        bpm=_float(params, "bpm"),
+        offset_ms=_float(params, "offset"),
+        seed=_int(params, "seed") or 0,
+        title=_text(params, "title"),
+        artist=_text(params, "artist"),
+    )
+    output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.generated_dir
+    run = run_generate(options, output_dir, audio=audio, reference=reference,
+                       auto_timing=_flag(params, "auto_timing"), package=_flag(params, "package", True))
+    for w in run.result.warnings:
+        logger.info(w)
+    if run.osz_path is not None:
+        ctx.add_artifact(run.osz_path, "生成谱 .osz")
+    ctx.add_artifact(run.osu_path, "生成谱 .osu")
+    out = run.to_dict()
+    out["skills"] = _profile_skills(run.result.profile)
+    out["dominant_skill"] = _tech_key(run.result.profile.dominant_skill)
+    return out
 
 
 # --- profiler --------------------------------------------------------------------------------------------------
@@ -432,6 +478,7 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "sync_once": bind(sync_once),
         "sync_revert": bind(sync_revert),
         "downscale": bind(downscale),
+        "generate": bind(generate_chart),
         "profile_replay": bind(profile_replay),
         "profile_player": bind(profile_player),
         "import_replays": bind(import_replays),

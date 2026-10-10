@@ -3,6 +3,7 @@ numpy>=1.24.0
 scipy>=1.10.0
 websockets>=12.0
 pillow>=10.0.0  # proj7k.renderer (slice images); its tests are collected by the suite
+miniaudio>=1.59  # proj7k.generator: decodes mp3/ogg/flac (wav needs nothing; ffmpeg on PATH also works)
 
 # 可选测试依赖
 # pytest>=7.0.0

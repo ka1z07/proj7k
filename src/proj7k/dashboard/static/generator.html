@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 谱面生成</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">谱面生成</div>
+        <div class="page-sub">从一首歌的音频生成 7K 米键谱，按目标段位或星级自动调密度；输出 .osu 与 .osz，可一键导入 osu!。</div>
+      </div>
+      <a class="standalone-only" href="/#generator">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <h2>歌曲</h2>
+      <div class="choice">
+        <label><input type="radio" name="src" value="game" checked> 游戏当前谱面的歌</label>
+        <label><input type="radio" name="src" value="manual"> 指定音频</label>
+      </div>
+      <div id="gameSrc" class="field">
+        <div id="gameLine"></div>
+        <span class="hint">用这张谱的音频、标题与背景；默认也借用它的 timing（BPM 与 offset），节奏最准。</span>
+      </div>
+      <div id="manualSrc" class="hidden">
+        <div class="field">
+          <label for="audio">音频文件路径（mp3 / ogg / wav / flac）</label>
+          <input type="text" id="audio" placeholder="例如 C:\Music\song.mp3">
+        </div>
+        <div class="field">
+          <div class="drop" id="drop">或把音频文件拖到这里 / 点击选择</div>
+        </div>
+        <div class="field">
+          <label for="reference">参考谱面（可选）：同一首歌的 .osu 路径、谱面 ID 或链接，借用它的 timing 与背景</label>
+          <input type="text" id="reference" placeholder="留空则从音乐自动测 BPM">
+        </div>
+        <div class="row">
+          <div class="field"><label for="title">标题</label><input type="text" id="title" placeholder="默认取参考谱面"></div>
+          <div class="field"><label for="artist">艺术家</label><input type="text" id="artist" placeholder="默认取参考谱面"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <span class="label">目标</span>
+          <div class="row">
+            <label class="check"><input type="radio" name="mode" value="dan" checked> 段位</label>
+            <label class="check"><input type="radio" name="mode" value="sr"> 星级</label>
+          </div>
+        </div>
+        <div class="field" id="danField">
+          <label for="dan">目标段位</label>
+          <select id="dan"></select>
+        </div>
+        <div class="field hidden" id="srField">
+          <label for="sr">目标星级（新引擎标尺）</label>
+          <input type="number" id="sr" step="0.1" min="0.5" value="4.0">
+        </div>
+        <div class="field">
+          <span class="label">Timing</span>
+          <div class="row">
+            <label class="check"><input type="radio" name="timing" value="borrow" checked> 借用参考谱面</label>
+            <label class="check"><input type="radio" name="timing" value="auto"> 自动测</label>
+            <label class="check"><input type="radio" name="timing" value="manual"> 手动</label>
+          </div>
+        </div>
+        <div class="field hidden" id="bpmField">
+          <label for="bpm">BPM / 第一个强拍（毫秒）</label>
+          <div class="row">
+            <input type="number" id="bpm" step="0.01" min="30" placeholder="BPM" style="width:7em">
+            <input type="number" id="offset" step="1" placeholder="offset" style="width:7em">
+          </div>
+        </div>
+        <div class="field">
+          <label for="seed">配键种子</label>
+          <input type="number" id="seed" step="1" min="0" value="0" style="width:6em">
+        </div>
+      </div>
+      <div class="hint" id="timingHint" style="margin-bottom:10px"></div>
+
+      <div class="field">
+        <label for="outDir">输出文件夹</label>
+        <input type="text" id="outDir" placeholder="">
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
+      </div>
+      <button class="primary" id="runBtn">生成</button>
+      <span class="hint" style="margin-left:10px">第一版只出米键（不出长条）；同一设置换个种子就是另一种配键。</span>
+    </div>
+
+    <div id="results"></div>
+    <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const panel = P7.jobPanel($("#job"));
+    const drop = P7.dropZone($("#drop"), ".mp3,.ogg,.wav,.flac,audio/*", (f) => { $("#audio").disabled = !!f; });
+    const source = () => document.querySelector("input[name=src]:checked").value;
+    const timingMode = () => document.querySelector("input[name=timing]:checked").value;
+    const targetMode = () => document.querySelector("input[name=mode]:checked").value;
+    let gameChart = null;
+    let running = false;
+    let sourceTouched = false;
+
+    function hasReference() {
+      return source() === "game" ? !!gameChart : !!$("#reference").value.trim();
+    }
+    function refresh() {
+      const game = source() === "game";
+      $("#gameSrc").classList.toggle("hidden", !game);
+      $("#manualSrc").classList.toggle("hidden", game);
+      const borrow = document.querySelector("input[name=timing][value=borrow]");
+      borrow.disabled = !hasReference();
+      if (borrow.disabled && borrow.checked) document.querySelector("input[name=timing][value=auto]").checked = true;
+      $("#bpmField").classList.toggle("hidden", timingMode() !== "manual");
+      $("#timingHint").textContent = {
+        borrow: "借用参考谱面的全部 timing（包括变速），只重新放音符。",
+        auto: "从音乐自动测一个恒定 BPM 与第一个强拍。变速歌、或者节奏明显不对时，改用借用或手动。",
+        manual: "恒定 BPM；offset 填第一个强拍出现的时间（毫秒）。",
+      }[timingMode()];
+      $("#srField").classList.toggle("hidden", targetMode() !== "sr");
+      $("#danField").classList.toggle("hidden", targetMode() === "sr");
+      $("#runBtn").disabled = running || (game && !gameChart);
+    }
+    function setSource(value) {
+      document.querySelector(`input[name=src][value=${value}]`).checked = true;
+      refresh();
+    }
+    document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => { sourceTouched = true; refresh(); }));
+    document.querySelectorAll("input[name=timing], input[name=mode]").forEach((r) => r.addEventListener("change", refresh));
+    $("#reference").addEventListener("input", refresh);
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => {
+      if (e.target.closest && e.target.closest("#drop")) return;
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
+      if (f) { sourceTouched = true; setSource("manual"); drop.set(f); }
+    });
+
+    P7.onGameChart((state) => {
+      gameChart = state.chart;
+      $("#gameLine").replaceChildren(P7.gameChartLine(state));
+      if (!sourceTouched) setSource(gameChart ? "game" : "manual");
+      refresh();
+    });
+
+    P7.getJSON("/api/config").then((cfg) => {
+      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: `${t.name}（${t.stars.toFixed(2)}★）` })));
+      $("#dan").value = "2nd";
+      $("#outDir").placeholder = `默认：${cfg.generated_dir}`;
+    });
+
+    const TIMING_SOURCE = { reference: "借用参考谱面", manual: "手动指定", auto: "自动测得" };
+    function resultCard(r) {
+      return el("div", { class: "card" },
+        el("h2", { text: r.title }),
+        el("div", { class: "row" },
+          el("span", { class: "big", text: `${r.stars.toFixed(2)}★` }),
+          el("span", { class: "hint", text: `目标 ${r.target_stars.toFixed(2)}★` })),
+        el("div", { class: "stats" },
+          P7.stat("音符 / 行", `${r.notes} / ${r.rows}`),
+          P7.stat("主技能", P7.skillName(r.dominant_skill)),
+          P7.stat("BPM", Number(r.bpm).toFixed(2)),
+          P7.stat("Timing", TIMING_SOURCE[r.timing_source] || r.timing_source),
+          r.tempo ? P7.stat("测速置信度", `${r.tempo.confidence.toFixed(2)}（前后差 ${r.tempo.drift_ms} ms）`) : null),
+        el("h3", { text: "八项技法星级" }),
+        P7.skillBars(r.skills),
+        (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join("；")) : null,
+        el("button", { class: "small", style: "margin-top:8px", text: "换一种配键（种子 +1）", disabled: running,
+          onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
+    }
+
+    $("#runBtn").onclick = () => run();
+    async function run() {
+      if (running) return;
+      const fromGame = source() === "game";
+      const timing = timingMode();
+      const params = {
+        reference: fromGame ? (gameChart ? gameChart.md5_hash : "") : $("#reference").value,
+        audio: fromGame ? "" : $("#audio").value,
+        auto_timing: timing !== "borrow",
+        bpm: timing === "manual" ? $("#bpm").value : "",
+        offset: timing === "manual" ? $("#offset").value : "",
+        target_dan: targetMode() === "dan" ? $("#dan").value : "",
+        target_sr: targetMode() === "sr" ? $("#sr").value : "",
+        seed: $("#seed").value,
+        title: fromGame ? "" : $("#title").value,
+        artist: fromGame ? "" : $("#artist").value,
+        output_dir: $("#outDir").value,
+        package: $("#pkg").checked,
+      };
+      running = true;
+      refresh();
+      $("#jobCard").classList.remove("hidden");
+      $("#results").replaceChildren();
+      panel.reset();
+      const job = await P7.startJob("generate", params, {
+        uploads: !fromGame && drop.file ? { audio: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
+      });
+      panel.update(job);
+      running = false;
+      refresh();
+      if (job.status !== "done") { panel.showLog(); return; }
+      $("#results").replaceChildren(resultCard(job.result));
+    }
+  </script>
+</body>
+</html>
