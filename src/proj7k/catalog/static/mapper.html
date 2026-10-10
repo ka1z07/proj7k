@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>谱师 · proj7k 7K 谱面库</title>
+<link rel="stylesheet" href="/static/catalog.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="logo" href="/beatmapsets">proj<b>7k</b> 谱面库</a>
+  <div class="links"><a href="/beatmapsets">谱面</a><a class="active" href="/mappers">谱师</a></div>
+  <div class="meta" id="meta"></div>
+</nav>
+<div class="container" style="padding-top:20px" id="main">
+  <div class="mapper-head" id="head"></div>
+  <div class="set-body">
+    <div class="main">
+      <div class="panel"><h3>技能构成（引擎各技能的平均主导度 · 与谱师平均的比值，粉色是最突出的一项）</h3><div class="bars" id="mix"></div></div>
+      <div class="panel"><h3>写法特征 <small class="note">竖线是这位谱师在所有可分析谱师中的位置，越靠右越高</small></h3><div class="feats" id="features"></div></div>
+      <div class="panel"><h3>难度分布（引擎段位）</h3><div class="hist" id="dan"></div><div class="note" id="dan-note"></div></div>
+      <div class="panel"><h3>各列音符占比</h3><div class="hist cols" id="columns"></div></div>
+    </div>
+    <div class="side">
+      <div class="panel"><h3>风格标签的依据</h3><div class="why" id="why"></div></div>
+      <div class="panel"><h3>风格相近的谱师</h3><div id="similar"></div></div>
+    </div>
+  </div>
+  <div class="results-head" style="margin-top:20px;border-radius:10px 10px 0 0"><span>这位谱师写的谱 <span id="maps-count"></span></span><span>按引擎 SR 排序</span></div>
+  <div class="results"><div class="grid" id="grid"></div></div>
+</div>
+<script src="/static/catalog.js"></script>
+<script>Catalog.mapperPage();</script>
+</body>
+</html>
