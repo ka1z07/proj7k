@@ -6,8 +6,8 @@ A constant tempo and the first downbeat, from the onset envelope.
 2. **Refinement.** Around the winning lag, tempos within ±2.5 % are scored by the strength of the
    envelope's Fourier components at the beat frequency and its 2nd and 4th harmonics (0.05 BPM steps,
    then 0.005 around the best). Over a three-minute song a tempo off by 0.1 % already loses most of it.
-3. **Phase and downbeat.** The sharpest bin is the beat, unless the point half a beat away carries clearly
-   more low-band (kick) onset, in which case the sharpest bin was the off-beat; of the four beats in a
+3. **Phase and downbeat.** The sharpest bin is the beat, unless the point half a beat away carries more
+   mid-band (snare, vocal, chord) onset, in which case the sharpest bin was the off-beat; of the four beats in a
    4/4 measure, the one with the most low-band onset is the downbeat.
    The offset written to a chart is the downbeat moved `CHART_SYNC_MS` earlier (see there).
 4. **Confidence.** The song is cut into four parts and each is phased on its own; if their beats
@@ -137,10 +137,12 @@ def _band_sum(env: OnsetEnvelope, band: int, start_s: float, step_s: float) -> f
 
 
 def _on_beat(env: OnsetEnvelope, beat_s: float, phase_s: float) -> float:
-    """The strongest pulse is sometimes the off-beat (hats on the "and"); kicks and snares mark the beat,
-    so of the phase and the phase half a beat away, the one with more low-band onset wins."""
+    """The strongest pulse is sometimes the off-beat (hats, or an off-beat bass, on the "and"). Of the phase
+    and the phase half a beat away, the one with more mid-band onset (snare, vocals, chords) is the beat:
+    on 40 charts of Kai's library the mid band was stronger on the chart's beat than half a beat off in 39,
+    the low band in 31 (off-beat basslines), the total in 35."""
     other = (phase_s + beat_s / 2) % beat_s
-    return other if _band_sum(env, 0, other, beat_s) > 1.15 * _band_sum(env, 0, phase_s, beat_s) else phase_s
+    return other if _band_sum(env, 1, other, beat_s) > _band_sum(env, 1, phase_s, beat_s) else phase_s
 
 
 def _downbeat(env: OnsetEnvelope, beat_s: float, phase_s: float) -> float:
