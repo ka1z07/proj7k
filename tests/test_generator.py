@@ -68,7 +68,7 @@ def test_onset_peaks_land_on_the_attacks(song):
     assert np.percentile(np.abs(errors), 90) <= 1.5 * FRAME_S
 
 
-@pytest.mark.parametrize("bpm, offset_s", [(128.0, 1.234), (170.0, 0.5), (200.0, 0.31)])
+@pytest.mark.parametrize("bpm, offset_s", [(128.0, 1.234), (138.12, 0.77), (170.0, 0.5), (200.0, 0.31)])
 def test_tempo_and_beat_phase_are_found(bpm, offset_s):
     samples, _ = drum_song(bpm=bpm, offset_s=offset_s, measures=32, seed=int(bpm))
     est = estimate_tempo(onset_envelope(Audio(samples, SR, "synth")))
