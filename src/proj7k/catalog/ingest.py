@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from proj7k.catalog.charts import chart_row
 from proj7k.catalog.store import CatalogStore
@@ -188,24 +188,71 @@ class OsuApiClient:
         return names
 
     def search_7k(self, status: str = "ranked", max_pages: Optional[int] = None) -> Iterator[Dict[str, Any]]:
-        """Every mania beatmapset of `status` that has a 7K difficulty (osu!'s own `keys=7` filter)."""
-        cursor: Optional[str] = None
-        pages = 0
-        while True:
-            # Unranked sets have no ranked date to sort by; any stable order works with the cursor.
-            sort = "ranked_desc" if status in ("ranked", "loved", "qualified", "approved") else "updated_desc"
-            params = {"m": "3", "q": "keys=7", "s": status, "sort": sort}
-            if cursor:
-                params["cursor_string"] = cursor
-            data = self.get("beatmapsets/search", params)
-            yield from data.get("beatmapsets", [])
-            cursor, pages = data.get("cursor_string"), pages + 1
-            if not cursor or (max_pages is not None and pages >= max_pages):
-                return
+        """Every mania beatmapset of `status` that has a 7K difficulty (osu!'s own `keys=7` filter).
+
+        osu!'s search reports at most SEARCH_CAP results (graveyard has over three times that). Paging
+        past the cap works today, but nothing promises it, so a listing that reaches the cap is cut into
+        star-rating slices, halved until each one fits. A set with difficulties in several slices is
+        yielded once."""
+        budget = [max_pages]
+        earlier: Set[int] = set()   # sets an earlier slice listed
+        pending: List[Tuple[float, Optional[float]]] = [(0.0, None)]
+        while pending:
+            lo, hi = pending.pop(0)
+            first = self._search_page(status, lo, hi, None)
+            if first.get("total", 0) >= SEARCH_CAP and _can_split(lo, hi):
+                pending[:0] = _split(lo, hi)
+                logger.info("osu! search %s stars %s..%s reaches the cap; slicing", status, lo, hi)
+                continue
+            if first.get("total", 0) >= SEARCH_CAP:
+                logger.warning("osu! search %s stars %s..%s still reaches the cap", status, lo, hi)
+            data, listed = first, set()
+            while True:
+                for bms in data.get("beatmapsets", []):
+                    listed.add(bms["id"])
+                    if bms["id"] not in earlier:
+                        yield bms
+                if budget[0] is not None:
+                    budget[0] -= 1
+                    if budget[0] <= 0:
+                        return
+                cursor = data.get("cursor_string")
+                if not cursor:
+                    break
+                data = self._search_page(status, lo, hi, cursor)
+            earlier |= listed
+
+    def _search_page(self, status: str, lo: float, hi: Optional[float], cursor: Optional[str]) -> Any:
+        # Unranked sets have no ranked date to sort by; any stable order works with the cursor.
+        sort = "ranked_desc" if status in ("ranked", "loved", "qualified", "approved") else "updated_desc"
+        q = "keys=7" + (f" stars>={lo:g}" if lo > 0 else "") + (f" stars<{hi:g}" if hi is not None else "")
+        params = {"m": "3", "q": q, "s": status, "sort": sort}
+        if cursor:
+            params["cursor_string"] = cursor
+        return self.get("beatmapsets/search", params)
 
     def osu_file(self, beatmap_id: int) -> str:
         return self._retrying(lambda: self.fetch(f"{self.base}/osu/{beatmap_id}", {}, None)) \
             .decode("utf-8", errors="replace")
+
+
+#: The largest `total` osu!'s search reports for one query.
+SEARCH_CAP = 10000
+#: Star-rating slices are not cut narrower than this (osu! shows stars to two decimals).
+MIN_SLICE = 0.01
+
+
+def _can_split(lo: float, hi: Optional[float]) -> bool:
+    return hi is None or hi - lo > 2 * MIN_SLICE
+
+
+def _split(lo: float, hi: Optional[float]) -> List[Tuple[float, Optional[float]]]:
+    """Whole stars first (an open top slice keeps everything above 20); then halves, rounded to 0.01."""
+    if hi is None:
+        cuts = [float(x) for x in range(int(lo) + 1, max(int(lo) + 2, 21))]
+        return list(zip([lo] + cuts, cuts + [None]))
+    mid = round((lo + hi) / 2, 2)
+    return [(lo, mid), (mid, hi)]
 
 
 #: Every listing status osu!'s search knows for a set that can carry a 7K difficulty.

@@ -181,3 +181,35 @@ def test_cli_build_and_refresh(tmp_path, benchmark_corpus_path, benchmark_manife
     assert cli_main(["--db", str(db), "refresh"]) == 0
     assert "re-evaluated 0" in capsys.readouterr().out
     assert cli_main(["--db", str(tmp_path / "none.sqlite3"), "serve"]) == 2
+
+
+def test_a_listing_past_the_search_cap_is_sliced_by_stars(monkeypatch):
+    """osu!'s search stops at SEARCH_CAP results; a capped listing is cut into star slices that each fit."""
+    import re
+
+    from proj7k.catalog import ingest
+
+    monkeypatch.setattr(ingest, "SEARCH_CAP", 4)
+    # Twelve sets; set 11 has difficulties at two star ratings, so two slices list it.
+    sets = [{"id": i, "beatmaps": [{"difficulty_rating": 0.5 + i * 0.7}]} for i in range(11)]
+    sets.append({"id": 11, "beatmaps": [{"difficulty_rating": 1.2}, {"difficulty_rating": 25.0}]})
+    queries = []
+
+    def fake(url, headers, body):
+        if "/oauth/token" in url:
+            return json.dumps({"access_token": "tok", "expires_in": 86400}).encode()
+        q = parse_qs(urlsplit(url).query)
+        queries.append(q["q"][0])
+        lo = float((re.search(r"stars>=([\d.]+)", q["q"][0]) or [0, 0])[1])
+        hi = float((re.search(r"stars<([\d.]+)", q["q"][0]) or [0, "inf"])[1])
+        hits = [s for s in sets if any(lo <= b["difficulty_rating"] < hi for b in s["beatmaps"])]
+        page = int(q.get("cursor_string", ["0"])[0])
+        more = page * 2 + 2 < len(hits)
+        return json.dumps({"beatmapsets": hits[page * 2:page * 2 + 2], "total": min(len(hits), 4),
+                           "cursor_string": str(page + 1) if more else None}).encode()
+
+    client = OsuApiClient("id", "secret", fetch=fake, min_interval_s=0)
+    got = [s["id"] for s in client.search_7k("graveyard")]
+    assert sorted(got) == list(range(12))            # every set, each once
+    assert queries[0] == "keys=7"                     # the unsliced listing hit the cap
+    assert "keys=7 stars<1" in queries and "keys=7 stars>=20" in queries
