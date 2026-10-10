@@ -74,6 +74,10 @@ class Profile:
     features: Dict[str, float] = field(default_factory=dict)
     percentiles: Dict[str, float] = field(default_factory=dict)
     tags: List[Dict[str, str]] = field(default_factory=list)
+    # Each skill's share against the average mapper's: speed dominates most 7K charts, so what sets a mapper
+    # apart is the skill they lean on more than others do, not the skill that is largest.
+    skill_lift: Dict[str, float] = field(default_factory=dict)
+    signature: Optional[str] = None
     similar: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
@@ -90,13 +94,14 @@ class Profile:
             "key": self.key, "name": self.name, "user_id": self.user_id, "diffs": self.diffs, "sets": self.sets,
             "engine_median": self.features.get("engine"), "official_median": _median(self.official),
             "ln_ratio": self.features.get("ln_ratio"), "delta": self.features.get("delta"),
-            "top_skill": self.top_skill, "tags": self.tags[:3], "statuses": self.statuses,
+            "top_skill": self.signature, "tags": self.tags[:3], "statuses": self.statuses,
         }
 
     def detail(self) -> Dict[str, Any]:
         out = self.summary()
         out.update({
             "tags": self.tags, "years": list(self.years), "skill_mix": self.skill_mix, "dominant": self.dominant,
+            "skill_lift": self.skill_lift, "largest_skill": self.top_skill,
             "dan_hist": dict(zip(CANONICAL_DAN_TIERS, self.dan_hist)),
             "columns": [c / self.patterned for c in self.columns_sum] if self.patterned else None,
             "features": self.features, "percentiles": self.percentiles, "similar": self.similar,
@@ -176,7 +181,13 @@ def _compare(profiles: Dict[str, Profile]) -> None:
     pool = [p for p in profiles.values() if p.diffs >= MIN_DIFFS_FOR_STYLE]
     keys = [k for k, _, _ in FEATURES]
     sorted_vals = {k: sorted(p.features[k] for p in pool if k in p.features) for k in keys}
+    mean_mix = {k: statistics.fmean(p.skill_mix[k] for p in pool) for k in SKILLS} if pool else {}
     for p in profiles.values():
+        mix = p.skill_mix
+        if mean_mix and mix:
+            p.skill_lift = {k: mix[k] / mean_mix[k] if mean_mix[k] > 0 else 1.0 for k in SKILLS}
+            leaning = [k for k in SKILLS if mix[k] >= 0.08]
+            p.signature = max(leaning, key=p.skill_lift.get) if leaning else p.top_skill
         for k in keys:
             vals = sorted_vals[k]
             if k in p.features and len(vals) >= 5:
@@ -225,10 +236,11 @@ def _tags(p: Profile) -> List[Dict[str, str]]:
     def pct(x: float) -> str:
         return f"{100 * x:.0f}%"
 
-    mix = p.skill_mix
-    top = p.top_skill
-    if top and mix[top] >= 0.3:
-        tags.append((mix[top], f"{SKILL_ZH[top]}型", f"引擎认为这位谱师的谱平均 {pct(mix[top])} 的难度来自{SKILL_ZH[top]}"))
+    mix, sig = p.skill_mix, p.signature
+    if sig and p.skill_lift.get(sig, 0) >= 1.3:
+        lift = p.skill_lift[sig]
+        tags.append((min(1.0, 0.4 + lift / 4), f"{SKILL_ZH[sig]}型",
+                     f"{pct(mix[sig])} 的难度来自{SKILL_ZH[sig]}，是谱师平均的 {lift:.1f} 倍"))
     if "ln_ratio" in f:
         if f["ln_ratio"] >= 0.5:
             tags.append((f["ln_ratio"], "LN 为主", f"平均 {pct(f['ln_ratio'])} 的音符是长条"))

@@ -332,7 +332,7 @@ const Catalog = (() => {
     document.getElementById("mix").innerHTML = mix.map(([k, v]) => `
       <span class="n${k === m.top_skill ? " dom" : ""}">${esc(SKILL_ZH[k])}</span>
       <div class="track"><div class="fill" style="width:${(100 * v) / topMix}%;background:${k === m.top_skill ? "var(--accent)" : "var(--engine)"}"></div></div>
-      <span class="v">${pctText(v)}</span><span class="p" title="以它为主技能的难度数">${m.dominant[k] || 0} 张</span>`).join("");
+      <span class="v">${pctText(v)}</span><span class="p" title="与谱师平均的比值；以它为主技能的难度 ${m.dominant[k] || 0} 张">×${fmt(m.skill_lift[k] ?? 1, 1)}</span>`).join("");
 
     document.getElementById("features").innerHTML = FEATURE_ROWS.filter(([k]) => m.features[k] != null).map(([k, label, show]) => {
       const pc = m.percentiles[k];

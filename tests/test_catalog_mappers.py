@@ -112,3 +112,13 @@ def test_old_database_is_migrated_in_place(tmp_path):
     cols = {r[1] for r in s._db.execute("PRAGMA table_info(beatmapsets)")}
     assert {"creator_id", "submitted_date"} <= cols
     s.close()
+
+
+def test_the_signature_skill_is_the_one_leaned_on_more_than_other_mappers(store):
+    d = MapperIndex(store).get("100")
+    leaning = [k for k, v in d["skill_mix"].items() if v >= 0.08]
+    assert d["top_skill"] == max(leaning, key=d["skill_lift"].get)
+    assert d["largest_skill"] == max(d["skill_mix"], key=d["skill_mix"].get)
+    for tag in d["tags"]:
+        if tag["label"].endswith("型"):
+            assert "倍" in tag["why"]
