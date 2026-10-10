@@ -7,6 +7,7 @@
 2. [osu!lazer 实时联动与网页雷达大屏](#2-osulazer-实时联动与网页雷达大屏)
 3. [osu!lazer 数据库星级安全同步与一键还原](#3-osulazer-曲库星级同步与还原)
 4. [智能降级练习图生成器 (Downscaler)](#4-智能降级练习图生成器-downscaler)
+5. [从音频生成谱面 (Generator)](#5-从音频生成谱面-generator)
 
 ---
 
@@ -148,3 +149,30 @@ PYTHONPATH=src python3 -m proj7k.downscaler -i ./hard_maps/ -d "04th" -o ./dan4_
 ```
 
 生成后的 `.osu` 文件直接双击或拖入 osu! 即可开始畅快击打！
+
+---
+
+## 5. 从音频生成谱面 (Generator)
+
+给一首歌和一个目标段位（或星级），生成一张 7K 米键谱：音符放在音乐的起音上，密度和押数由引擎闭环调到目标星级附近（容差 0.1★）。第一版不出长条。
+
+### 控制台
+`python3 -m proj7k.dashboard` 打开控制台，点「谱面生成」。默认用游戏里当前选中那张谱的歌：借用它的音频、标题、背景与 timing（包括变速），只重新放音符。也可以拖一个音频文件进来，从音乐自动测 BPM。生成后点「导入 osu!」即可。
+
+### 命令行
+```bash
+# 只有音频：自动测 BPM 与第一个强拍
+PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --target-dan 2nd --title "Song" --artist "Artist"
+
+# 借用同一首歌已有谱面的 timing（.osu 路径，或 osu!lazer 曲库里的 MD5 / 谱面 ID / 链接）
+PYTHONPATH=src python3 -m proj7k.generator --timing-from "Songs/xxx/Artist - Song (Mapper) [Hard].osu" --target-sr 4.5
+
+# 节奏不对时手动给 BPM 与第一个强拍的时间（毫秒）
+PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --bpm 174 --offset 1234 --target-dan 5th
+```
+`--seed` 换一个数就是另一种配键；`--open` 生成后直接导入 osu!lazer。
+
+### 已知限制
+- 自动测速只认恒定 BPM；变速歌请借用已有谱面的 timing 或手动指定。BPM 偶尔会测成一半或两倍（极快或极慢的歌），节奏明显不对时同样手动指定。
+- 歌曲本身起音稀疏时到不了很高的目标，结果会提示最高能到多少星。
+- 评测生成谱与人写谱的差距：`python3 -m proj7k.generator.evaluate --lazer --limit 30`。
