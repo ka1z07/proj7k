@@ -27,7 +27,6 @@ MIN_BPM, MAX_BPM = 70.0, 300.0
 PRIOR_BPM, PRIOR_SIGMA_OCT = 170.0, 0.6
 PHASE_BINS = 128
 DRIFT_LIMIT_S = 0.025
-SNAP_TOLERANCE, SNAP_STRENGTH = 0.003, 0.95
 #: How much earlier a ranked chart's beat sits than the onset envelope's reading of the same beat. Measured
 #: on 40 charts of Kai's osu!lazer library with their own timing (`onset_shift_ms`, median 28.5 ms; mp3 29,
 #: ogg 28, so not a decoder delay): charts are timed to where an attack starts to be heard, the envelope
@@ -116,15 +115,7 @@ def _refine_bpm(env_total: np.ndarray, bpm0: float) -> float:
     coarse = np.arange(bpm0 * 0.975, bpm0 * 1.025, 0.05)
     best = coarse[int(np.argmax([_pulse_strength(env, t, 60.0 / b) for b in coarse]))]
     fine = np.arange(best - 0.06, best + 0.06, 0.005)
-    scores = [_pulse_strength(env, t, 60.0 / b) for b in fine]
-    best, best_score = float(fine[int(np.argmax(scores))]), max(scores)
-    # Songs are mostly produced at a whole (or half) BPM, and charts are timed at it. A few hundredths off
-    # add up over a song to a quarter beat at its ends, so a round tempo that repeats nearly as strongly wins.
-    for round_bpm in sorted({round(best), round(best * 2) / 2}, key=lambda b: abs(b - best)):
-        if abs(round_bpm / best - 1) <= SNAP_TOLERANCE and \
-                _pulse_strength(env, t, 60.0 / round_bpm) >= SNAP_STRENGTH * best_score:
-            return float(round_bpm)
-    return best
+    return float(fine[int(np.argmax([_pulse_strength(env, t, 60.0 / b) for b in fine]))])
 
 
 def _phase(env_total: np.ndarray, beat_s: float) -> Tuple[float, float]:
