@@ -19,6 +19,7 @@ from proj7k.generator.cli import main
 from proj7k.generator.columns import Row, assign_columns
 from proj7k.generator.grid import DOWNBEAT, build_grid
 from proj7k.generator.onset import FRAME_S, frame_time
+from proj7k.generator.tempo import CHART_SYNC_MS
 from proj7k.parser import TimingPoint, dump_osu_7k, parse_osu_7k
 
 
@@ -73,7 +74,8 @@ def test_tempo_and_beat_phase_are_found(bpm, offset_s):
     est = estimate_tempo(onset_envelope(Audio(samples, SR, "synth")))
     assert est.bpm == pytest.approx(bpm, abs=0.05)
     beat_ms = 60000.0 / bpm
-    phase_err = (est.offset_ms - offset_s * 1000.0 + beat_ms / 2) % beat_ms - beat_ms / 2
+    # A chart is timed CHART_SYNC_MS before the envelope's beat (where the attack starts to be heard).
+    phase_err = (est.offset_ms + CHART_SYNC_MS - offset_s * 1000.0 + beat_ms / 2) % beat_ms - beat_ms / 2
     assert abs(phase_err) <= 10.0
     assert est.steady and est.confidence > 0.5
 
@@ -127,7 +129,7 @@ def test_generated_chart_lands_on_the_target(song, target, on_attack):
     # The star the result reports is the engine's reading of the chart it wrote.
     assert evaluate_osu(dump_osu_7k(result.beatmap)).total_stars == pytest.approx(result.stars, abs=1e-9)
     # Notes sit on the song's attacks; a busy target also fills some quiet grid points (a stream).
-    attack_ms = np.array(attacks) * 1000.0
+    attack_ms = np.array(attacks) * 1000.0 - CHART_SYNC_MS
     times = sorted(_rows(result.beatmap))
     assert np.mean([np.min(np.abs(attack_ms - t)) <= 20.0 for t in times]) > on_attack
 
@@ -219,7 +221,7 @@ def test_evaluation_scores_a_songs_folder(tmp_path, capsys):
     folder.mkdir(parents=True)
     write_wav(folder / "song.wav", samples)
     # The "human" chart is a generated one at the same timing: the evaluation must find its own rows again.
-    human = generate(Audio(samples, SR, "synth"), GeneratorOptions(target_stars=3.0, bpm=170.0, offset_ms=500.0)).beatmap
+    human = generate(Audio(samples, SR, "synth"), GeneratorOptions(target_stars=3.0, bpm=170.0, offset_ms=500.0 - CHART_SYNC_MS)).beatmap
     human.audio_filename = "song.wav"
     (folder / "A - T [Human].osu").write_text(dump_osu_7k(human), encoding="utf-8")
     out = tmp_path / "eval.json"

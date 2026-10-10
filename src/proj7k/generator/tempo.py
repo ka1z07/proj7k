@@ -9,6 +9,7 @@ A constant tempo and the first downbeat, from the onset envelope.
 3. **Phase and downbeat.** The sharpest bin is the beat, unless the point half a beat away carries clearly
    more low-band (kick) onset, in which case the sharpest bin was the off-beat; of the four beats in a
    4/4 measure, the one with the most low-band onset is the downbeat.
+   The offset written to a chart is the downbeat moved `CHART_SYNC_MS` earlier (see there).
 4. **Confidence.** The song is cut into four parts and each is phased on its own; if their beats
    disagree by more than 25 ms, the tempo probably changes (or there is none), and the estimate says so.
 
@@ -26,12 +27,17 @@ MIN_BPM, MAX_BPM = 70.0, 300.0
 PRIOR_BPM, PRIOR_SIGMA_OCT = 170.0, 0.6
 PHASE_BINS = 128
 DRIFT_LIMIT_S = 0.025
+#: How much earlier a ranked chart's beat sits than the onset envelope's reading of the same beat. Measured
+#: on 40 charts of Kai's osu!lazer library with their own timing (`onset_shift_ms`, median 28.5 ms; mp3 29,
+#: ogg 28, so not a decoder delay): charts are timed to where an attack starts to be heard, the envelope
+#: peaks where the rise is steepest. An estimated offset is moved by it, so a generated chart plays in sync.
+CHART_SYNC_MS = 28.0
 
 
 @dataclass(frozen=True)
 class TempoEstimate:
     bpm: float
-    offset_ms: float        # a downbeat, at or after 0
+    offset_ms: float        # a downbeat as a chart times it (CHART_SYNC_MS before the envelope's beat), >= 0
     confidence: float       # 0..1: sharpness of the fold, scaled
     steady: bool            # the four parts of the song agree on the beat
     drift_ms: float         # largest disagreement between the parts' beat phases
@@ -54,7 +60,7 @@ def estimate_tempo(env: OnsetEnvelope) -> TempoEstimate:
     phase_s = _on_beat(env, beat_s, pulse_s)
     downbeat_s = _downbeat(env, beat_s, phase_s)
     drift = _drift(env.total, beat_s, pulse_s)
-    offset_ms = (downbeat_s % (4 * beat_s)) * 1000.0
+    offset_ms = (downbeat_s * 1000.0 - CHART_SYNC_MS) % (4 * beat_s * 1000.0)
     confidence = float(np.clip((sharp - 1.0) / 3.0, 0.0, 1.0))
     return TempoEstimate(bpm=round(float(bpm), 3), offset_ms=float(round(offset_ms)), confidence=confidence,
                          steady=bool(drift <= DRIFT_LIMIT_S), drift_ms=round(float(drift) * 1000.0, 1))

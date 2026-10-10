@@ -50,6 +50,7 @@ class ChartScore:
     bpm_match: str          # "exact", "octave" or "wrong"
     phase_error_ms: Optional[float]
     onset_shift_ms: float = 0.0   # music onsets vs the chart's beats (positive: onsets later)
+    onbeat_ratio: Optional[dict] = None  # per band: onset on the chart's beats / onset half a beat away
     audio: str = ""               # the audio's extension and the decoder that read it
     error: Optional[str] = None
 
@@ -95,10 +96,27 @@ def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, see
             phase = float((est.offset_ms - main_tp.time + beat / 2) % beat - beat / 2)
     except ValueError:
         pass
+    onbeat = None
+    if main_tp is not None:
+        env = onset_envelope(audio)
+        beat_s = main_tp.beat_length / 1000.0
+        on = (main_tp.time + result.onset_shift_ms) / 1000.0 % beat_s
+        off = (on + beat_s / 2) % beat_s
+        onbeat = {}
+        for band, name_ in ((0, "low"), (1, "mid"), (2, "high")):
+            a, b = _beat_sum(env.bands[band], env, on, beat_s), _beat_sum(env.bands[band], env, off, beat_s)
+            onbeat[name_] = round(a / b, 3) if b > 0 else None
+        a, b = _beat_sum(env.total, env, on, beat_s), _beat_sum(env.total, env, off, beat_s)
+        onbeat["total"] = round(a / b, 3) if b > 0 else None
     ext = Path(chart.audio_filename).suffix.lower() or audio_path.suffix.lower()
     return ChartScore(name, round(human_stars, 3), round(result.stars, 3), len(human_rows), len(gen_rows),
                       round(precision, 3), round(recall, 3), round(true_bpm, 2), est_bpm, match,
-                      None if phase is None else round(phase, 1), result.onset_shift_ms, f"{ext} {audio.source}")
+                      None if phase is None else round(phase, 1), result.onset_shift_ms, onbeat, f"{ext} {audio.source}")
+
+
+def _beat_sum(values: np.ndarray, env, start_s: float, step_s: float) -> float:
+    frames = [env.frame_of(t) for t in np.arange(start_s, env.duration_s, step_s)]
+    return float(sum(values[max(0, f - 2):f + 3].max() for f in frames if 0 <= f < env.n))
 
 
 def songs_folder_charts(root: Path) -> Iterator[Tuple[str, Path, Path]]:
@@ -152,6 +170,10 @@ def summarize(scores: List[ChartScore]) -> dict:
         "bpm_octave": sum(s.bpm_match == "octave" for s in ok) / len(ok),
         "phase_within_10ms": (sum(p <= 10.0 for p in phases) / len(phases)) if phases else None,
         "onset_shift_median_ms": float(np.median([s.onset_shift_ms for s in ok])),
+        "onbeat_band_wins": {
+            band: sum(1 for s in ok if s.onbeat_ratio and (s.onbeat_ratio.get(band) or 0) > 1.0) / len(ok)
+            for band in ("low", "mid", "high", "total")
+        },
         "onset_shift_by_audio": {
             kind: float(np.median([s.onset_shift_ms for s in ok if s.audio == kind]))
             for kind in sorted({s.audio for s in ok})

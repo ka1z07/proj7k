@@ -99,9 +99,10 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                 "节奏不对时请用 --timing-from 借用已有谱面的 timing，或用 --bpm/--offset 指定。"
             )
 
-    # A borrowed or typed-in timing was set by ear against osu!'s playback; read the music through the
-    # offset that lines its onsets up with those beats. An estimated timing is already the music's own.
-    shift = onset_shift_ms(env, timing) if source != "auto" else 0.0
+    # A chart's beats sit a little before the envelope's reading of them (tempo.CHART_SYNC_MS for an
+    # estimated timing; whatever it is for a borrowed or typed-in one): read the music through the shift
+    # that lines its onsets up with the beats, and keep writing notes on the beats themselves.
+    shift = onset_shift_ms(env, timing)
     grid = build_grid(env, timing, shift_ms=shift)
     lo, hi = X_MIN, X_MAX
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
