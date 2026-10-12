@@ -99,8 +99,12 @@ class CatalogHandler(BaseHTTPRequestHandler):
             result = self.store.search(
                 q=query.get("q", ""), status=query.get("status"), skill=query.get("skill"),
                 sort=query.get("sort"), page=_int(query.get("page"), 1), page_size=_int(query.get("size"), 50),
+                seed=_int(query.get("seed"), -1) if "seed" in query else None,
             )
-            return self._json(result.to_dict())
+            status, headers, body = self._json(result.to_dict())
+            if result.seed is not None and "seed" not in query:
+                headers["Cache-Control"] = "no-store"   # a fresh draw each time
+            return status, headers, body
         m = _SET_API.match(path)
         if m:
             data = self.store.beatmapset(int(m.group(1)))

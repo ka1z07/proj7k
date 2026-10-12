@@ -12,6 +12,7 @@ descending sort and their lowest for an ascending one; charts with no value for 
 
 import json
 import math
+import random
 import sqlite3
 import threading
 import zlib
@@ -105,6 +106,9 @@ SORTS: Dict[str, str] = {
     "length": "b.length_s",
 }
 DEFAULT_SORT = "newest_desc"
+#: Not a column: the matching sets in an order shuffled by `seed`, so every page of one draw is
+#: disjoint and a link with the seed shows the same draw.
+RANDOM_SORT = "random"
 PAGE_SIZE = 50
 
 _SET_FIELDS = ("id", "title", "title_unicode", "artist", "artist_unicode", "creator", "source", "tags",
@@ -124,6 +128,8 @@ def _fold(text: Optional[str]) -> str:
 
 def parse_sort(sort: Optional[str]) -> Tuple[str, bool]:
     """`engine_desc` -> ("engine", True). Unknown keys fall back to the default."""
+    if sort == RANDOM_SORT:
+        return RANDOM_SORT, False
     key, _, direction = (sort or DEFAULT_SORT).rpartition("_")
     if key not in SORTS or direction not in ("asc", "desc"):
         key, _, direction = DEFAULT_SORT.rpartition("_")
@@ -138,10 +144,14 @@ class SearchResult:
     sort: str
     filters: List[str]
     beatmapsets: List[Dict[str, Any]]
+    seed: Optional[int] = None   # the random sort's draw
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"total": self.total, "page": self.page, "pages": self.pages, "sort": self.sort,
-                "filters": self.filters, "beatmapsets": self.beatmapsets}
+        out = {"total": self.total, "page": self.page, "pages": self.pages, "sort": self.sort,
+               "filters": self.filters, "beatmapsets": self.beatmapsets}
+        if self.seed is not None:
+            out["seed"] = self.seed
+        return out
 
 
 class CatalogStore:
@@ -364,15 +374,17 @@ class CatalogStore:
         sort: Optional[str] = None,
         page: int = 1,
         page_size: int = PAGE_SIZE,
+        seed: Optional[int] = None,
     ) -> SearchResult:
-        """One page of beatmapsets matching `q` (the search box) plus the listing's own filter buttons."""
+        """One page of beatmapsets matching `q` (the search box) plus the listing's own filter buttons.
+        With the random sort, `seed` picks the draw (a new one when it is missing)."""
         query: SearchQuery = parse_query(q)
         if status and status != "any":
             query = _merge(query, parse_query(f"status={status}"))
         if skill and skill != "any":
             query = _merge(query, parse_query(f"skill={skill}"))
         key, desc = parse_sort(sort)
-        expr = SORTS[key]
+        expr = "NULL" if key == RANDOM_SORT else SORTS[key]
         where, params = query.where()
 
         with self._lock:
@@ -393,14 +405,21 @@ class CatalogStore:
 
         have = sorted((s for s in matched if s in keys), key=lambda s: (keys[s], s), reverse=desc)
         ordered = have + sorted((s for s in matched if s not in keys), reverse=True)
+        if key == RANDOM_SORT:
+            seed = random.randrange(2 ** 31) if seed is None else seed
+            ordered = sorted(matched)
+            random.Random(seed).shuffle(ordered)
+        else:
+            seed = None
 
         page_size = max(1, min(page_size, 200))
         pages = max(1, math.ceil(len(ordered) / page_size))
         page = max(1, min(page, pages))
         chosen = ordered[(page - 1) * page_size: page * page_size]
         sets = self._load_sets(chosen, {b for s in chosen for b in matched[s]})
-        return SearchResult(total=len(ordered), page=page, pages=pages, sort=f"{key}_{'desc' if desc else 'asc'}",
-                            filters=query.filters, beatmapsets=sets)
+        return SearchResult(total=len(ordered), page=page, pages=pages,
+                            sort=key if key == RANDOM_SORT else f"{key}_{'desc' if desc else 'asc'}",
+                            filters=query.filters, beatmapsets=sets, seed=seed)
 
     def beatmapset(self, set_id: int) -> Optional[Dict[str, Any]]:
         """A set with every difficulty in full (skills and density outline), for its own page."""
