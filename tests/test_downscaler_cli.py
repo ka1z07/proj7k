@@ -395,28 +395,16 @@ def test_lazer_practice_sync_stamps_the_difficulty_engines_stars_not_the_legacy_
     assert "dominant_stream" in update.tags and "dan_7th" in update.tags
 
 
-def _create_chordjack_osu_file(path: Path) -> Path:
-    """A 290 BPM chordjack the technique-keeping loop cannot take far down (see test_downscale_engine)."""
-    step_ms = 60000.0 / 290.0 / 2.0
-    patterns = ([0, 2, 4], [0, 3, 5], [1, 3, 6], [1, 4, 6])
-    hit_objects = [
-        HitObject(column=c, time=step * step_ms, note_type=NoteType.RICE)
-        for step in range(12 * 8) for c in patterns[step % 4]
-    ]
-    bm = Beatmap7K(
-        title="Chordjack", artist="Test Artist", creator="Tester", version="Extra", hit_objects=hit_objects,
-        timing_points=[TimingPoint(time=0.0, beat_length=step_ms * 2.0, meter=4, uninherited=True)],
-    )
-    path.write_text(dump_osu_7k(bm), encoding="utf-8")
-    return path
-
-
-def test_cli_suggests_free_mode_when_keeping_the_technique_falls_short_and_free_mode_reaches_the_target(tmp_path, capsys):
+def test_cli_suggests_free_mode_when_keeping_the_technique_falls_short_and_free_mode_reaches_the_target(
+    tmp_path, capsys, benchmark_manifest, benchmark_corpus,
+):
     import json
-    from proj7k.field import trace_beatmap
+    from proj7k.dan import CANONICAL_DAN_SR
 
-    osu_file = _create_chordjack_osu_file(tmp_path / "cj.osu")
-    target = trace_beatmap(parse_osu_7k(osu_file.read_text(encoding="utf-8"))).profile.total_stars * 0.6
+    # A stream chart taken to 0th, which the technique-keeping loop cannot reach (see test_downscale_engine).
+    osu_file = tmp_path / "stream.osu"
+    osu_file.write_text(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["7th"]["id"])], encoding="utf-8")
+    target = CANONICAL_DAN_SR["0th"]
 
     assert main(["--input", str(osu_file), "--target-sr", f"{target:.3f}", "--dry-run"]) == 0
     out = capsys.readouterr().out

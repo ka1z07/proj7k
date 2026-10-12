@@ -15,6 +15,10 @@ scale), and what is left to the pruner is choosing *what* to delete:
 5. The top 15-25% of each peak window is deleted as one batch, and the engine re-reads it. The batch is
    halved when it breaks technique preservation or overshoots the target below tolerance, so the star
    lands on the target rather than under it.
+6. The star is a reading of sustained load, and thinning around a burst lowers it as well as thinning the
+   burst does. So the result must also keep its short bursts and its busiest finger within what real charts
+   at the target level have (`downscaler.burst`): while it does not, the batch is taken from the notes that
+   carry the burst instead, hardest first, and the loop runs until both the star and the bursts are in.
 
 Pure deletion, skeleton protection, flux balance, and the dual-gate validation are the ADR-0011 invariants
 and are unchanged. In free mode (a validator with `preserve_technique=False`) the dominant skill's notes are not
@@ -31,6 +35,7 @@ from proj7k.engine.solver import loss
 from proj7k.field import ChartField, d_of_stars, trace_beatmap
 from proj7k.parser import Beatmap7K, HitObject
 from proj7k.downscaler.balancer import LEFT_LANES, RIGHT_LANES, BimanualFluxBalancer
+from proj7k.downscaler.burst import BurstReading, burst_reading, cap, excess
 from proj7k.downscaler.marginal import removal_benefit
 from proj7k.downscaler.mutation import apply_pure_deletion
 from proj7k.downscaler.skeleton import MetricSkeletonDetector
@@ -98,6 +103,13 @@ class PruningResult:
     history: List[PruneIterationRecord] = field(default_factory=list)
     #: The loop stopped because no deletion left passed validation (rather than running out of candidates).
     stopped_by_validation: bool = False
+    #: Burst peaks over their caps at the target level (`downscaler.burst.excess`), before and after; <= 1 is within.
+    initial_burst: Dict[str, float] = field(default_factory=dict)
+    final_burst: Dict[str, float] = field(default_factory=dict)
+
+    @property
+    def bursts_within(self) -> bool:
+        return all(v <= 1.0 for v in self.final_burst.values())
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -110,6 +122,8 @@ class PruningResult:
             "final_D": round(self.final_D, 3),
             "total_notes_removed": self.total_notes_removed,
             "stopped_by_validation": self.stopped_by_validation,
+            "initial_burst": {k: round(v, 3) for k, v in self.initial_burst.items()},
+            "final_burst": {k: round(v, 3) for k, v in self.final_burst.items()},
             "warnings": self.warnings,
             "history": [rec.to_dict() for rec in self.history],
         }
@@ -176,15 +190,56 @@ class ExcessLossPruner:
             r = field.release_index(i)
             b = float(benefit[i] + (benefit[r] if r is not None else 0.0))
             in_peak.append((ho, b, float(field.a[i, k_dom]) if k_dom is not None else 0.0))
+        return self._admit(beatmap, in_peak, bias)
+
+    def burst_scores(
+        self,
+        beatmap: Beatmap7K,
+        field: ChartField,
+        burst: BurstReading,
+        target_sr: float,
+        dominant: Optional[str],
+    ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
+        """
+        (scored removable notes that carry a burst over its cap at the target level, the ones the skeleton refused).
+
+        A note is a candidate when its press reads over a cap: its hand's short-memory reading or its column's
+        same-finger rate. It scores by how far over (the larger of the two ratios) times its own demand `v`
+        against the chart's mean, so within a burst the notes that drive it go first.
+        """
+        D_star = d_of_stars(target_sr)
+        cap_hand, cap_col = cap("hand", D_star), cap("column", D_star)
+        k_dom = SKILLS.index(dominant) if dominant in SKILLS else None
+        bias = DOMINANCE_BIAS if self.validator.preserve_technique else 0.0
+        v_mean = float(field.v.mean()) or 1.0
+
+        over: List[Tuple[HitObject, float, float]] = []
+        for ho in beatmap.hit_objects:
+            i = field.press_index(ho.column, ho.time / 1000.0)
+            if i is None:
+                continue
+            ratio = max(burst.hand[i] / cap_hand, burst.column[i] / cap_col)
+            r = field.release_index(i)
+            if r is not None:
+                ratio = max(ratio, burst.hand[r] / cap_hand)
+            if ratio <= 1.0:
+                continue
+            over.append((ho, float(ratio * field.v[i] / v_mean), float(field.a[i, k_dom]) if k_dom is not None else 0.0))
+        return self._admit(beatmap, over, bias)
+
+    def _admit(
+        self, beatmap: Beatmap7K, notes: List[Tuple[HitObject, float, float]], bias: float,
+    ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
+        """Skeleton filter, dominant-skill damping and the bimanual penalty over (note, score, dominant share)."""
         detector = MetricSkeletonDetector(beatmap)
-        allowed = {id(ho) for ho in detector.filter_candidate_removals([ho for ho, _, _ in in_peak])}
+        allowed = {id(ho) for ho in detector.filter_candidate_removals([ho for ho, _, _ in notes])}
 
         l_flux, r_flux = self.balancer.compute_hand_flux(beatmap.hit_objects)
         penalty_l, penalty_r = self.balancer.compute_asymmetry_penalty(l_flux, r_flux)
 
         scored: List[Tuple[float, HitObject]] = []
         refused: List[HitObject] = []
-        for ho, b, share in in_peak:
+        for ho, b, share in notes:
             if id(ho) not in allowed:
                 refused.append(ho)
                 continue
@@ -228,15 +283,19 @@ class ExcessLossPruner:
         initial_star, initial_D = field.profile.total_stars, field.total_D
         upper = target_sr * (1.0 + self.tolerance)
         lower = target_sr * (1.0 - self.tolerance)
+        D_star = d_of_stars(target_sr)
+        burst = burst_reading(field)
+        initial_burst = excess(burst, D_star)
 
         if initial_star <= upper:
+            # A chart already at the target is left as it is: its bursts are the original's, not the downscaler's.
             warnings.append(
                 f"Beatmap initial star rating ({initial_star:.3f}) is already <= target ({target_sr:.3f}); no downscaling required."
             )
             return PruningResult(
                 downscaled_beatmap=beatmap, iterations_run=0, converged=True, target_sr=target_sr,
                 initial_star=initial_star, final_star=initial_star, initial_D=initial_D, final_D=initial_D,
-                total_notes_removed=0, warnings=warnings,
+                total_notes_removed=0, warnings=warnings, initial_burst=initial_burst, final_burst=initial_burst,
             )
         if dominant is None:
             dominant = field.profile.dominant_skill
@@ -246,13 +305,24 @@ class ExcessLossPruner:
         converged = False
         stopped_by_validation = False
 
+        bursts_stuck = False
         for it in range(1, self.max_iterations + 1):
             star = field.profile.total_stars
-            if star <= upper:
+            bursting = not bursts_stuck and max(excess(burst, D_star).values()) > 1.0
+            if star <= upper and not bursting:
                 converged = True
                 break
 
-            scored, refused = self.candidate_scores(current, field, target_sr, dominant)
+            scored: List[Tuple[float, HitObject]] = []
+            if bursting:
+                scored, refused = self.burst_scores(current, field, burst, target_sr, dominant)
+                if not scored:
+                    bursts_stuck = True   # nothing over the caps can go: back to the star alone
+                    if star <= upper:
+                        converged = True
+                        break
+            if not scored:
+                scored, refused = self.candidate_scores(current, field, target_sr, dominant)
             if not scored:
                 warnings.append(
                     "Metric skeleton protected all peak candidates; cannot prune further safely."
@@ -280,6 +350,9 @@ class ExcessLossPruner:
                 committed, passed = (cand, cand_field, size), True
                 break
 
+            if committed is None and bursting:
+                bursts_stuck = True   # no burst note can go without breaking the chart: back to the star alone
+                continue
             if committed is None:
                 kept = "preserve technique invariants" if self.validator.preserve_technique else "keep the chart playable"
                 warnings.append(f"Pruning stopped at iteration {it} to {kept}.")
@@ -287,15 +360,22 @@ class ExcessLossPruner:
                 break
 
             cand, cand_field, size = committed
-            excess = _excess_loss(field, d_of_stars(target_sr))
             history.append(PruneIterationRecord(
                 iteration=it, surviving_notes=len(cand.hit_objects), removed_in_batch=size, star=star,
-                total_D=field.total_D, excess_loss=excess,
+                total_D=field.total_D, excess_loss=_excess_loss(field, D_star),
                 flux_ratio=self.balancer.compute_flux_ratio(cand.hit_objects), passed_validation=passed,
             ))
             current, field = cand, cand_field
+            burst = burst_reading(field)
 
         final_star = field.profile.total_stars
+        final_burst = excess(burst, D_star)
+        over = {k: v for k, v in final_burst.items() if v > 1.0}
+        if over:
+            what = {"hand": "short burst", "column": "single-column rate"}
+            warnings.append("Practice chart keeps a " + " and a ".join(
+                f"{what[k]} {v:.2f}x the cap for real charts at the target" for k, v in over.items()
+            ) + "; it plays harder than its star.")
         return PruningResult(
             downscaled_beatmap=current,
             iterations_run=len(history),
@@ -309,6 +389,8 @@ class ExcessLossPruner:
             warnings=warnings,
             history=history,
             stopped_by_validation=stopped_by_validation,
+            initial_burst=initial_burst,
+            final_burst=final_burst,
         )
 
 

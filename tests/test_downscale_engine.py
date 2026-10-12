@@ -14,6 +14,7 @@ from proj7k.downscaler.mapper import TwoTierDanMapper, DanTarget
 from proj7k.downscaler.validator import DualGateValidator, longest_new_silence
 from proj7k.downscaler.pruner import ExcessLossPruner, PruningResult
 from proj7k.downscaler.pipeline import downscale_beatmap, DownscaleOptions, DownscaleResult
+from proj7k.dan import CANONICAL_DAN_SR
 from proj7k.field import trace_beatmap
 
 
@@ -197,9 +198,10 @@ def test_downbeat_and_chord_invariants_preserved():
 # --- free mode: the target difficulty without the dominant technique ------------------------------------------
 
 
-def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_mode_reaches_it():
-    bm = _build_dense_chordjack_beatmap(bpm=290.0, measures=12)
-    target = _stars(bm) * 0.6
+def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_mode_reaches_it(benchmark_manifest, benchmark_corpus):
+    # A stream chart taken to 0th: its stream gives way to other skills long before the target.
+    bm = parse_osu_7k(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["7th"]["id"])])
+    target = CANONICAL_DAN_SR["0th"]
 
     kept = downscale_beatmap(bm, DownscaleOptions(target_sr=target, target_dan=None))
     # Keeping the chordjack, the loop runs out of deletions the dual gate allows well above the target...
@@ -214,7 +216,7 @@ def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_
     assert free.suggest_free_mode is False
     assert free.validation.passed is True and free.validation.details["preserve_technique"] is False
     # Free mode keeps no dominant skill, so the practice chart is not labelled with one.
-    assert free.downscaled_beatmap.version.startswith("[P-") and "jack" not in free.downscaled_beatmap.version
+    assert free.downscaled_beatmap.version.startswith("[P-") and "stream" not in free.downscaled_beatmap.version
     assert not any(t.startswith("dominant_") for t in free.downscaled_beatmap.tags.split())
 
 
