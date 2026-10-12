@@ -10,40 +10,58 @@ comparisons.
 from dataclasses import dataclass, field
 import json
 import math
+import statistics
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
+from scipy.optimize import minimize
+from scipy.special import expit
 
 from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
+from proj7k.engine.params import DEFAULT
 from proj7k.engine.scale import stars_of
+from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage, snapshot_is_current
 from proj7k.field import TECH_KEYS
 
 
-#: The player-side aggregate's constants: a player's overall level across the dimensions they have
-#: been tested in. They move no chart's rating (a chart's total is the engine's own), so they are
-#: the profiler's and not engine parameters.
-PLAYER_AGGREGATION_P_NORM: float = 4.0
-PLAYER_AGGREGATION_DAMPING: float = 0.08
+#: A skill's level is fitted across plays once this many plays in the window tested it; with fewer, it is the
+#: median of what each play read.
+MIN_FIT_PLAYS: int = 5
+
+_EPS_OF_KEY: Dict[str, float] = {
+    SKILL_TECH_KEY[name]: (DEFAULT.eps_rc if name.startswith("rc") else DEFAULT.eps_ln) for name in SKILLS
+}
 
 
-def player_overall_star(scores: Dict[str, float]) -> float:
+def level_across_plays(points: Sequence[Tuple[float, float, float]], eps: float) -> Optional[float]:
     """
-    A player's overall level across the dimensions they have been tested in, an extremum-dominant p-norm:
-
-        max(R) * (sum((r_k / max(R))^p))^(1/p) * (1 + damping * sum((r_k / max(R))^p))^(-1/2)
-
-    The damping term expresses that being strong in several dimensions is worth more than being strong in one.
+    The level of a player across plays, in the engine's unit (ADR-0028). `points` are `(chart level D, events
+    played, accuracy lost over them)`, one per play. The loss rate is fitted against ln D with a logistic
+    (each play weighted by the square root of its events); the level is the D at which the fit loses exactly
+    `eps`, the tolerance at which the engine says a chart's difficulty is the player's level (ADR-0020). It
+    is held to the range of charts played: nothing past the hardest or easiest chart is read off the fit.
+    None when the plays are too few, or harder charts did not cost more (the fit's slope is not positive).
     """
-    vals = list(scores.values())
-    if not vals:
-        return 0.0
-    max_v = max(vals)
-    if max_v <= 1e-9:
-        return 0.0
-    power_sum = sum(math.pow(max(0.0, v) / max_v, PLAYER_AGGREGATION_P_NORM) for v in vals)
-    norm_factor = math.pow(power_sum, 1.0 / PLAYER_AGGREGATION_P_NORM)
-    damping = math.pow(1.0 + PLAYER_AGGREGATION_DAMPING * power_sum, -0.5)
-    return max_v * norm_factor * damping
+    pts = [(math.log(D), lost / events, events) for D, events, lost in points if D > 0 and events > 0]
+    if len(pts) < MIN_FIT_PLAYS:
+        return None
+    x = np.array([p[0] for p in pts])
+    y = np.clip(np.array([p[1] for p in pts]), 0.0, 1.0)
+    w = np.sqrt(np.array([p[2] for p in pts]))
+    if np.ptp(x) <= 1e-9:
+        return None
+
+    def nll(ab: np.ndarray) -> float:
+        q = np.clip(expit(ab[0] + ab[1] * x), 1e-9, 1.0 - 1e-9)
+        return float(-np.sum(w * (y * np.log(q) + (1.0 - y) * np.log(1.0 - q))))
+
+    a, b = minimize(nll, np.array([-5.0, 1.0]), method="BFGS").x
+    if not b > 0:
+        return None
+    ln_level = (math.log(eps / (1.0 - eps)) - a) / b
+    return float(math.exp(min(max(ln_level, float(x.min())), float(x.max()))))
 
 
 @dataclass(frozen=True)
@@ -52,11 +70,13 @@ class DimensionMacroMetric:
     Macro skill summary for a single technique dimension within a time window.
     """
     dimension: str
-    effective_capacity: float  # Best level demonstrated in the window, in the engine's unit (ADR-0020)
+    effective_capacity: float  # Level across the window's plays, in the engine's unit (ADR-0020, ADR-0028)
     star_rating: float         # Star rating on the engine's scale
     dan_tier: str              # Canonical Jinjin Dan tier
     match_count: int           # Number of tested runs in window
     broke_down: bool           # Whether any run in the window lost more than the skill's tolerance
+    #: How the level was read: "fit" across plays, "median" of too few plays, or "none".
+    method: str = "none"
 
     @property
     def peak_capacity(self) -> float:
@@ -72,6 +92,7 @@ class DimensionMacroMetric:
             "dan_tier": self.dan_tier,
             "match_count": self.match_count,
             "broke_down": self.broke_down,
+            "method": self.method,
         }
 
 
@@ -136,7 +157,8 @@ def aggregate_macro_profile(
     - If horizon_days is set (e.g. 30), selects matches in [ref - horizon_days, ref].
     - If horizon_days is None, selects all historical matches.
     - Stability baseline UR is calculated strictly from Cleared matches (ADR-0012).
-    - Failed matches contribute fatal peak strains and capacities.
+    - A skill's level is fitted across the window's plays (`level_across_plays`, ADR-0028); so is the overall,
+      on each chart's total. Failed matches also contribute the demand they broke under, as a lower bound.
     """
     all_snapshots = storage.get_snapshots(player_name)
 
@@ -210,58 +232,70 @@ def aggregate_macro_profile(
     all_dims = list(TECH_KEYS) + [d for d in sorted(observed_dims) if d not in TECH_KEYS]
 
     for dim in all_dims:
-        dim_capacities: List[float] = []
-        dim_star_ratings: List[float] = []
+        per_play_caps: List[float] = []
+        per_play_stars: List[float] = []
+        fit_points: List[Tuple[float, float, float]] = []
+        fatal_floor = 0.0
         tested_count = 0
         has_any_breakdown = False
 
         for s in snapshots:
-            # Check capacities recorded from strain-error analysis
-            if dim in s.capacities:
-                d_info = s.capacities[dim]
-                if d_info.get("tested"):
-                    tested_count += 1
-                    cap = float(d_info.get("effective_capacity", 0.0))
-                    sr_val = float(d_info.get("star_rating", 0.0))
-                    if cap > 0:
-                        dim_capacities.append(cap)
-                    if sr_val > 0:
-                        dim_star_ratings.append(sr_val)
-                    if d_info.get("broke_down"):
-                        has_any_breakdown = True
+            d_info = s.capacities.get(dim)
+            if d_info and d_info.get("tested"):
+                tested_count += 1
+                if float(d_info.get("effective_capacity", 0.0)) > 0:
+                    per_play_caps.append(float(d_info["effective_capacity"]))
+                if float(d_info.get("star_rating", 0.0)) > 0:
+                    per_play_stars.append(float(d_info["star_rating"]))
+                if "events" in d_info and "lost" in d_info:
+                    fit_points.append((float(d_info.get("chart_level", 0.0)), float(d_info["events"]), float(d_info["lost"])))
+                if d_info.get("broke_down"):
+                    has_any_breakdown = True
 
-            # If failed run with fatal peak strain for this dimension, preserve it!
+            # A failed run's fatal demand is a lower bound on the level (ADR-0012, ADR-0020 decision 3)
             if s.is_failed and dim in s.fatal_peak_strains:
-                f_strain = float(s.fatal_peak_strains[dim])
-                if f_strain > 0:
-                    dim_capacities.append(f_strain)
-                    dim_star_ratings.append(stars_of(f_strain))
+                fatal_floor = max(fatal_floor, float(s.fatal_peak_strains[dim]))
 
-        if dim_star_ratings or dim_capacities:
-            peak_cap = max(dim_capacities) if dim_capacities else 0.0
-            sr = max(dim_star_ratings) if dim_star_ratings else stars_of(peak_cap)
-            dan = estimate_canonical_dan(sr)
+        level = level_across_plays(fit_points, _EPS_OF_KEY.get(dim, DEFAULT.eps_rc))
+        if level is not None:
+            cap, sr, method = level, stars_of(level), "fit"
+        elif per_play_stars or per_play_caps:
+            cap = statistics.median(per_play_caps) if per_play_caps else 0.0
+            sr = statistics.median(per_play_stars) if per_play_stars else stars_of(cap)
+            method = "median"
         else:
-            peak_cap = 0.0
-            sr = 0.0
-            dan = "0th Dan"
+            cap, sr, method = 0.0, 0.0, "none"
+        if fatal_floor > 0 and stars_of(fatal_floor) > sr:
+            cap, sr = fatal_floor, stars_of(fatal_floor)
+            method = method if method != "none" else "fatal"
 
         dimensions[dim] = DimensionMacroMetric(
             dimension=dim,
-            effective_capacity=peak_cap,
+            effective_capacity=cap,
             star_rating=sr,
-            dan_tier=dan,
+            dan_tier=estimate_canonical_dan(sr) if sr > 0 else "0th Dan",
             match_count=tested_count,
             broke_down=has_any_breakdown,
+            method=method,
         )
 
-    # 4. Overall Star Rating & Dan via extremum-dominant p-norm (p=4)
+    # 4. Overall: the same fit on each chart's total, as the engine reads a chart's total (ADR-0028). Not a blend
+    # of the skills: a chart's own skill stars blended that way read well above its total.
     tested_metrics = [m for m in dimensions.values() if m.star_rating > 0]
     if tested_metrics:
         dominant_tech = max(tested_metrics, key=lambda m: m.star_rating).dimension
         bottleneck_tech = min(tested_metrics, key=lambda m: m.star_rating).dimension
-        tested_sr_dict = {m.dimension: m.star_rating for m in tested_metrics}
-        overall_sr = player_overall_star(tested_sr_dict)
+        overall_infos = [s.summary["overall"] for s in snapshots if isinstance(s.summary.get("overall"), dict)]
+        overall_level = level_across_plays(
+            [(float(o["chart_level"]), float(o["events"]), float(o["lost"])) for o in overall_infos],
+            statistics.mean(float(o["eps"]) for o in overall_infos) if overall_infos else DEFAULT.eps_rc,
+        )
+        if overall_level is not None:
+            overall_sr = stars_of(overall_level)
+        elif overall_infos:
+            overall_sr = statistics.median(float(o["star_rating"]) for o in overall_infos)
+        else:  # snapshots without an overall reading: a chart's total reads about its strongest skill
+            overall_sr = max(m.star_rating for m in tested_metrics)
         overall_dan = estimate_canonical_dan(overall_sr)
     else:
         dominant_tech = "stream"

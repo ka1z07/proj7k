@@ -20,7 +20,6 @@ from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.field import TECH_KEYS, ChartField, level_for_loss, trace_beatmap
 from proj7k.parser import Beatmap7K, NoteType
-from proj7k.profiler.aggregate import player_overall_star
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment
 
 #: What an osu!mania judgment costs in accuracy, as a share of a perfect hit (the score's 300/200/100/50/0 of 300).
@@ -70,6 +69,7 @@ class DimensionCapacityResult:
     tested: bool                    # the chart has something to fail at in this skill, and some of it was played
     events: float                   # membership-weighted events played in this skill
     bins: List[DemandBin]
+    lost: float = 0.0               # membership-weighted accuracy loss over those events
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -81,7 +81,26 @@ class DimensionCapacityResult:
             "chart_level": round(self.chart_level, 2),
             "tested": self.tested,
             "events": round(self.events, 1),
+            "lost": round(self.lost, 3),
             "bins": [b.to_dict() for b in self.bins],
+        }
+
+
+@dataclass(frozen=True)
+class OverallResult:
+    """The play read the way the engine reads a chart's total: every played event, at the total's tolerance."""
+    level: float        # Theta, in the engine's unit
+    star_rating: float
+    chart_level: float  # the chart's total D
+    events: float       # events played
+    lost: float         # accuracy loss over them
+    eps: float          # the total's tolerance on this chart (§3.3)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "level": round(self.level, 2), "star_rating": round(self.star_rating, 2),
+            "chart_level": round(self.chart_level, 2), "events": round(self.events, 1),
+            "lost": round(self.lost, 3), "eps": round(self.eps, 4),
         }
 
 
@@ -92,10 +111,12 @@ class SkillRadarReport:
     overall_dan: str
     dominant_technique: str
     bottleneck_technique: str
+    overall: Optional[OverallResult] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "overall_dan": self.overall_dan,
+            "overall": self.overall.to_dict() if self.overall else None,
             "dominant_technique": self.dominant_technique,
             "bottleneck_technique": self.bottleneck_technique,
             "dimensions": {k: v.to_dict() for k, v in self.dimensions.items()},
@@ -211,18 +232,33 @@ def analyze_strain_response(
             tested=True,
             events=events,
             bins=_bins(field.d, w, outcome.loss, loss(field.d, level, params), opts.num_bins),
+            lost=observed,
         )
 
     # keep the radar in the profiler's key order
     results = {k: results[k] for k in TECH_KEYS}
+    # The overall level is the engine's total equation read the other way, as each skill's is (ADR-0028):
+    # not a blend of the eight, which would read a chart's own skills well above its total.
+    played = outcome.played.astype(float)
+    total_events = float(played.sum())
+    overall = None
+    if total_events >= opts.min_events and field.total_D > 0:
+        total_lost = float(np.dot(played, outcome.loss))
+        eps_total = field.eps_total
+        level = level_for_loss(field.d, played, total_lost, eps_total, params)
+        overall = OverallResult(
+            level=level, star_rating=stars_of(level), chart_level=field.total_D,
+            events=total_events, lost=total_lost, eps=eps_total,
+        )
+
     tested = [r for r in results.values() if r.tested]
     if tested:
         dominant = max(tested, key=lambda r: r.star_rating).dimension
         bottleneck = min(tested, key=lambda r: r.star_rating).dimension
-        overall_dan = estimate_canonical_dan(player_overall_star({r.dimension: r.star_rating for r in tested}))
     else:
         dominant = bottleneck = "None"
-        overall_dan = "0th"
+    overall_dan = estimate_canonical_dan(overall.star_rating) if overall else "0th"
     return SkillRadarReport(
         dimensions=results, overall_dan=overall_dan, dominant_technique=dominant, bottleneck_technique=bottleneck,
+        overall=overall,
     )

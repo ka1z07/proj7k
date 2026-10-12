@@ -391,7 +391,7 @@ def format_macro_profile(profile: MacroProfile) -> str:
     Formats the MacroProfile and historical trend comparison into a clean terminal report.
     """
     window_label = (
-        "All-Time Peak Profile"
+        "All-Time Profile"
         if profile.window_mode == "all_time"
         else f"Recent Rolling Form ({int(profile.horizon_days or 30)}d)"
     )
@@ -438,7 +438,7 @@ def format_macro_profile(profile: MacroProfile) -> str:
         tc = profile.trend_comparison
         lines.extend([
             "------------------------------------------------------------",
-            "Historical Trend Comparison vs All-Time Peak:",
+            "Historical Trend Comparison vs All-Time:",
             f"  Overall:     {profile.overall_dan} ({profile.overall_star_rating:.2f}★) vs All-Time: {tc['all_time_overall_dan']} ({tc['all_time_overall_sr']:.2f}★)",
             "  Dimension    | Recent  | All-Time | Delta   | Status",
             "  -------------+---------+----------+---------+---------------------",
@@ -646,7 +646,7 @@ def run_replay_import(
                 stats["missing_files"] += 1
                 continue
 
-            # A snapshot ingested before its mods were honoured is re-ingested in place (`is_current_replay`).
+            # A snapshot read by an older version of the profiler is re-ingested in place (`is_current_replay`).
             stale = storage.has_replay(r_hash)
             if stale and storage.is_current_replay(r_hash):
                 stats["already_exists"] += 1
@@ -968,7 +968,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"Replays Discovered:   {stats['replays_discovered']}")
             print(f"Newly Ingested:       {stats['saved']}")
             if stats["reingested"] > 0:
-                print(f"Re-ingested (mods):   {stats['reingested']}")
+                print(f"Re-ingested (older):  {stats['reingested']}")
             print(f"Already In DB:        {stats['already_exists']}")
             if stats["unsupported_mods"] > 0:
                 print(f"Unsupported Mods:     {stats['unsupported_mods']} (Random, key mods, Autoplay, ... not stored)")

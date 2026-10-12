@@ -427,14 +427,15 @@ def test_rolling_temporal_window_aggregation_and_historical_trend(tmp_path: Path
     # Stability baseline UR: only from cleared runs -> 70.0 (excludes failed 150.0)
     assert recent_profile.average_ur == pytest.approx(70.0, abs=0.1)
 
-    # Capacities: Stream peak 7.5★, Chordjack peak 8.2★ (from the failed run)
+    # Levels: fewer plays than a fit needs, so the median of what each play read (ADR-0028), not the best one:
+    # stream 7.5★ (one play), chordjack the median of 7.0★ and the failed run's 8.2★
     assert recent_profile.dimensions["stream"].star_rating == pytest.approx(7.5, abs=0.1)
-    assert recent_profile.dimensions["chordjack"].star_rating == pytest.approx(8.2, abs=0.1)
+    assert recent_profile.dimensions["chordjack"].star_rating == pytest.approx(7.6, abs=0.1)
+    assert recent_profile.dimensions["chordjack"].method == "median"
     assert recent_profile.dominant_technique == "chordjack"
 
     # Trend comparison against all-time
     assert recent_profile.trend_comparison is not None
-    # All-time chordjack peak is also 8.2 (since recent achieved new peak)
     assert recent_profile.trend_comparison["all_time_dominant"] == "chordjack"
 
     # 2. Query All-time Peak Profile (horizon_days=None)
@@ -451,8 +452,8 @@ def test_rolling_temporal_window_aggregation_and_historical_trend(tmp_path: Path
     assert all_time_profile.failed_matches == 1
     # Average UR from the two cleared matches: (80.0 + 70.0) / 2 = 75.0
     assert all_time_profile.average_ur == pytest.approx(75.0, abs=0.1)
-    assert all_time_profile.dimensions["chordjack"].star_rating == pytest.approx(8.2, abs=0.1)
-    assert all_time_profile.dimensions["stream"].star_rating == pytest.approx(7.5, abs=0.1)
+    assert all_time_profile.dimensions["chordjack"].star_rating == pytest.approx(7.0, abs=0.1)   # median of 5.5, 7.0, 8.2
+    assert all_time_profile.dimensions["stream"].star_rating == pytest.approx(6.75, abs=0.1)    # median of 6.0, 7.5
 
     storage.close()
 
