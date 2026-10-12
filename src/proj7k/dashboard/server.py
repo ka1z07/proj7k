@@ -15,7 +15,7 @@ could not find (not 7K, or not in the library yet). The pages preselect it as th
 replay source. `/api/current` answers the same.
 
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
-`/live`, `/sync`, `/downscaler`, `/profiler` are its pages, `/api/*` is read-only state, and
+`/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its pages, `/api/*` is read-only state, and
 `/files/<job>/<index>/<name>` serves a job's registered outputs.
 """
 
@@ -51,6 +51,7 @@ PAGES = {
     "/index.html": "shell.html",
     "/sync": "sync.html",
     "/downscaler": "downscaler.html",
+    "/generator": "generator.html",
     "/profiler": "profiler.html",
 }
 
@@ -152,6 +153,7 @@ class DashboardServer(LiveServer):
             "db_path": str(cfg.db_path) if cfg.db_path else None,
             "output_dir": str(cfg.output_dir),
             "practice_dir": str(cfg.practice_dir),
+            "generated_dir": str(cfg.generated_dir),
             "live_watch": not self.no_watch,
             "dan_tiers": [{"name": k, "stars": round(v, 2)} for k, v in CANONICAL_DAN_SR.items()],
             "skills": list(SKILL_TECH_KEY.values()),

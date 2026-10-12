@@ -183,7 +183,7 @@ def test_pages_apis_and_the_overlay_url(tmp_path):
         await s.server.start()
         try:
             for path, marker in (("/", "proj7k // 控制台"), ("/sync", "曲库同步"), ("/downscaler", "降阶练习"),
-                                 ("/profiler", "回放与画像"), ("/live", 'id="radarCanvas"')):
+                                 ("/generator", "谱面生成"), ("/profiler", "回放与画像"), ("/live", 'id="radarCanvas"')):
                 status, headers, body = await s.get(path)
                 assert status == 200, path
                 assert headers["Content-Type"].startswith("text/html")
@@ -339,6 +339,36 @@ def test_downscale_action_on_an_uploaded_chart(tmp_path):
                 assert job["status"] == "failed" and "does not exist" in job["error"]
                 job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU)})
                 assert job["status"] == "failed" and "目标" in job["error"]
+        finally:
+            await s.server.stop()
+
+    asyncio.run(_run())
+
+
+def test_generate_action_on_an_uploaded_song(tmp_path):
+    from generator_synth import drum_song, write_wav
+
+    samples, _ = drum_song(bpm=170.0, offset_s=0.5, measures=12, seed=2)
+    write_wav(tmp_path / "song.wav", samples)
+
+    async def _run():
+        s = _Server(tmp_path)
+        await s.server.start()
+        try:
+            async with s.ws() as ws:
+                await ws.recv()
+                upload = {"audio": {"name": "song.wav", "data": base64.b64encode((tmp_path / "song.wav").read_bytes()).decode()}}
+                job, _ = await _run_job(ws, "generate", {"target_sr": "2.0", "title": "T", "artist": "A", "auto_timing": True}, upload)
+                assert job["status"] == "done", job["error"]
+                r = job["result"]
+                assert abs(r["stars"] - 2.0) <= 0.1 and r["timing_source"] == "auto" and len(r["skills"]) == 8
+                assert sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
+                assert all(Path(a["path"]).parent == s.config.generated_dir for a in job["artifacts"])
+
+                job, _ = await _run_job(ws, "generate", {"target_dan": "1st"})
+                assert job["status"] == "failed" and "音频" in job["error"]
+                job, _ = await _run_job(ws, "generate", {"audio": str(tmp_path / "song.wav")})
+                assert job["status"] == "failed" and "target" in job["error"]
         finally:
             await s.server.stop()
 
