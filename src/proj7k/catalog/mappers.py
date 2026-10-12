@@ -15,15 +15,19 @@ and similarity is the cosine of their standardised feature vectors.
 """
 
 import json
+import logging
 import math
 import statistics
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from proj7k.catalog.store import CatalogStore
 from proj7k.dan import CANONICAL_DAN_TIERS
 from proj7k.engine import SKILLS
+
+logger = logging.getLogger(__name__)
 
 MIN_DIFFS_FOR_STYLE = 3
 SIMILAR = 6
@@ -282,21 +286,44 @@ def _tags(p: Profile) -> List[Dict[str, str]]:
 
 
 class MapperIndex:
-    """Profiles built once and rebuilt when the catalog changes."""
+    """Profiles built once and rebuilt when the catalog changes.
 
-    def __init__(self, store: CatalogStore):
-        self.store = store
+    With `stale_s` set (the website), a change does not hold up the request that notices it: the old
+    profiles keep being served while a background thread rebuilds, at most once per `stale_s` seconds,
+    so a crawl writing all day does not make every visitor wait for a rebuild."""
+
+    def __init__(self, store: CatalogStore, stale_s: Optional[float] = None):
+        self.store, self.stale_s = store, stale_s
         self._lock = threading.Lock()
         self._token: Any = None
         self._profiles: Dict[str, Profile] = {}
+        self._built_at = 0.0
+        self._rebuilding = False
 
     def profiles(self) -> Dict[str, Profile]:
         token = self.store.change_token()
         with self._lock:
-            if token != self._token:
-                self._profiles = build_profiles(self.store)
-                self._token = token
+            if token == self._token:
+                return self._profiles
+            if self.stale_s is None or self._token is None:
+                self._rebuild(token)
+            elif not self._rebuilding and time.monotonic() - self._built_at >= self.stale_s:
+                self._rebuilding = True
+                threading.Thread(target=self._rebuild_in_background, args=(token,), daemon=True).start()
             return self._profiles
+
+    def _rebuild(self, token: Any) -> None:
+        self._profiles, self._token, self._built_at = build_profiles(self.store), token, time.monotonic()
+
+    def _rebuild_in_background(self, token: Any) -> None:
+        try:
+            profiles = build_profiles(self.store)
+            with self._lock:
+                self._profiles, self._token = profiles, token
+        except Exception:
+            logger.exception("rebuilding mapper profiles failed")
+        finally:
+            self._built_at, self._rebuilding = time.monotonic(), False
 
     def listing(self, q: str = "", sort: str = "diffs_desc", min_diffs: int = 1, page: int = 1,
                 page_size: int = 50) -> Dict[str, Any]:

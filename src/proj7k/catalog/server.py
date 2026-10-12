@@ -37,6 +37,10 @@ STATIC_FILES = {p.name for p in STATIC_DIR.iterdir() if p.suffix in STATIC_TYPES
 _SET_PAGE = re.compile(r"^/beatmapsets/(-?\d+)/?$")
 _BEATMAP_PAGE = re.compile(r"^/beatmaps/(-?\d+)/?$")
 _SET_API = re.compile(r"^/api/beatmapsets/(-?\d+)$")
+#: How long a browser or a caching proxy may reuse an answer. The catalog changes once a day.
+API_MAX_AGE_S = 60
+STATIC_MAX_AGE_S = 300
+
 _MAPPER_PAGE = re.compile(r"^/mappers/([^/]+)/?$")
 _MAPPER_API = re.compile(r"^/api/mappers/([^/]+)$")
 
@@ -122,12 +126,14 @@ class CatalogHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _json(data: Any, status: int = HTTPStatus.OK) -> Tuple[int, Dict[str, str], bytes]:
         body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        return status, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache"}, body
+        cache = f"public, max-age={API_MAX_AGE_S}" if status == HTTPStatus.OK else "no-cache"
+        return status, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": cache}, body
 
     @staticmethod
     def _static(name: str) -> Tuple[int, Dict[str, str], bytes]:
         path = STATIC_DIR / name
-        return HTTPStatus.OK, {"Content-Type": STATIC_TYPES[path.suffix], "Cache-Control": "no-cache"}, \
+        return HTTPStatus.OK, {"Content-Type": STATIC_TYPES[path.suffix],
+                                 "Cache-Control": f"public, max-age={STATIC_MAX_AGE_S}"}, \
             path.read_bytes()
 
     @staticmethod
@@ -140,8 +146,12 @@ class CatalogHandler(BaseHTTPRequestHandler):
         return HTTPStatus.NOT_FOUND, {"Content-Type": "text/plain; charset=utf-8"}, b"not found"
 
 
-def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780) -> ThreadingHTTPServer:
-    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": MapperIndex(store)})
+def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780,
+                mapper_stale_s: Optional[float] = None) -> ThreadingHTTPServer:
+    """`mapper_stale_s`: see `MapperIndex`; the command line sets it so a crawl running beside the site
+    never makes a visitor wait for the mapper profiles."""
+    mappers = MapperIndex(store, stale_s=mapper_stale_s)
+    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": mappers})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server

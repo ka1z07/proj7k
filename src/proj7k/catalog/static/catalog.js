@@ -57,6 +57,11 @@ const Catalog = (() => {
   }
 
   async function navMeta() {
+    const foot = document.createElement("footer");
+    foot.className = "site-foot";
+    foot.innerHTML = `谱面信息、官方星级与封面来自 <a href="https://osu.ppy.sh/" rel="noopener">osu!</a>，`
+      + `引擎星级由 proj7k 计算。本站与 osu! 官方无关。`;
+    document.body.appendChild(foot);
     try {
       const s = await getJSON("/api/stats");
       document.getElementById("meta").textContent =

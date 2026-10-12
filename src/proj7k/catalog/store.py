@@ -167,6 +167,11 @@ class CatalogStore:
         with self._lock:
             self._db.close()
 
+    def export(self, output: Union[str, Path]) -> None:
+        """A compacted, self-contained copy (no WAL beside it) to copy to another machine."""
+        with self._lock:
+            self._db.execute("VACUUM INTO ?", (str(output),))
+
     def __enter__(self) -> "CatalogStore":
         return self
 
