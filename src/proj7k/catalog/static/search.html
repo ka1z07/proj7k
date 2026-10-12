@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7K 谱面库 · proj7k</title>
+<link rel="stylesheet" href="/static/catalog.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="logo" href="/beatmapsets">proj<b>7k</b> 谱面库</a>
+  <div class="links"><a class="active" href="/beatmapsets">谱面</a><a href="/mappers">谱师</a></div>
+  <div class="meta" id="meta"></div>
+</nav>
+<div class="header-band">
+  <div class="container" style="padding-bottom:0">
+    <h1><b>谱面</b>列表 · osu!mania 7K</h1>
+    <div class="search">
+      <div class="search-box">
+        <span class="icon">⌕</span>
+        <input id="q" type="search" autocomplete="off" placeholder="输入关键词或条件，例如 camellia engine&gt;=7 skill=ln_inverse" autofocus>
+        <button class="help-btn" id="help" type="button">搜索语法</button>
+      </div>
+      <div class="syntax" id="syntax">
+        <div><code>stars&gt;5</code> 官方 SR（别名 sr、official）</div>
+        <div><code>engine&gt;=7</code> 引擎 SR（别名 esr）</div>
+        <div><code>delta&gt;1</code> 引擎减官方的偏差</div>
+        <div><code>dan&lt;=10th</code> 引擎段位（0th…10th、Gamma、Azimuth、Zenith、Stellium）</div>
+        <div><code>skill=ln_inverse</code> 主技能（jack、tech、speed、stream、ln_general…，或 inverse、release）</div>
+        <div><code>bpm&gt;180</code> <code>length&lt;2:30</code> <code>notes&gt;2000</code> <code>ln&gt;50</code>（长条占比 %）<code>od</code> <code>hp</code></div>
+        <div><code>status=ranked</code> ranked / loved / qualified / pending / graveyard</div>
+        <div><code>creator=</code> <code>artist=</code> <code>title=</code> <code>source=</code> <code>tag=</code> 子串匹配，可加引号</div>
+        <div><code>stars=5</code> 按书写精度匹配：[5, 6)；<code>stars=5.2</code> 是 [5.2, 5.3)</div>
+        <div>一组谱面里只要有一个难度满足全部条件就会列出，满足的难度高亮。</div>
+      </div>
+      <div class="filters">
+        <span class="label">状态</span><div class="pills" id="status"></div>
+        <span class="label">主技能</span><div class="pills" id="skill"></div>
+        <span class="label">排序</span><div class="pills" id="sort"></div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+  </div>
+</div>
+<div class="container">
+  <div class="results-head">
+    <span id="count"></span>
+    <span class="legend"><span><b class="o">官</b> 官方 SR</span><span><b class="e">引</b> proj7k 引擎 SR</span></span>
+  </div>
+  <div class="results">
+    <div class="grid" id="grid"></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+<script src="/static/catalog.js"></script>
+<script>Catalog.searchPage();</script>
+</body>
+</html>
