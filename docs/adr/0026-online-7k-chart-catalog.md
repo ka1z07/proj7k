@@ -46,5 +46,5 @@
 
 13. **部署形态**：两种都支持，见 `deploy/catalog/`。Kai 选的是本机 + Cloudflare Tunnel（不用公网 IP、不开端口，电脑需常开；网站与隧道都装成开机自启）。另一种是一台海外或香港的小 VPS（服务器不在大陆，不需要备案），网站只监听本机，Caddy 反向代理并自动申请证书，systemd 管网站进程，定时器每天跑一次 `crawl --status all` 再 `refresh`。文件与步骤见 `deploy/catalog/`。数据库用 `export`（`VACUUM INTO`）导出单个文件上传。
 14. **抓取与网站并行**：谱师画像改成在后台重建，最多每 `--mapper-refresh` 秒一次，期间继续提供旧画像，访客不再等重建；启动时预先构建。接口答复可缓存 60 秒、静态文件 300 秒，出错的答复不缓存。页脚注明数据来自 osu!。
-15. **引擎版本号与换行符无关**：`engine_version` 逐字节哈希 `engine/*.json`，Windows 检出成 CRLF 时版本号会变，数据库搬到 Linux 就整库「过期」。`.gitattributes` 规定这些文件始终是 LF。
+15. **引擎版本号与换行符无关**：`engine_version` 逐字节哈希 `engine/*.json`，Windows 检出成 CRLF 时版本号会变，数据库搬到 Linux 就整库「过期」。`.gitattributes` 规定这些文件（以及 `dan_table.json`）始终是 LF。
 16. **随机推送**：排序里加「随机」（`sort=random&seed=<n>`）。随机作用于当前全部筛选（搜索框、状态、主技能）之后的谱面组：用 `seed` 打乱它们的顺序再分页，所以同一次抽取的各页互不重复，带 `seed` 的链接可以分享、可以后退。再点一次「随机」换一个 `seed`，就是换一批。不带 `seed` 的请求由服务端抽一个，并标记为不可缓存。
