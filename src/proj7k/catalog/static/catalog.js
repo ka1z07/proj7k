@@ -57,6 +57,11 @@ const Catalog = (() => {
   }
 
   async function navMeta() {
+    const foot = document.createElement("footer");
+    foot.className = "site-foot";
+    foot.innerHTML = `谱面信息、官方星级与封面来自 <a href="https://osu.ppy.sh/" rel="noopener">osu!</a>，`
+      + `引擎星级由 proj7k 计算。本站与 osu! 官方无关。`;
+    document.body.appendChild(foot);
     try {
       const s = await getJSON("/api/stats");
       document.getElementById("meta").textContent =
@@ -69,14 +74,17 @@ const Catalog = (() => {
   const SORTS = [
     ["newest", "最新"], ["official", "官方 SR"], ["engine", "引擎 SR"], ["delta", "偏差"],
     ["title", "标题"], ["artist", "艺术家"], ["bpm", "BPM"], ["length", "长度"], ["ranked", "上架日期"],
+    ["random", "随机"],
   ];
+  const newSeed = () => Math.floor(Math.random() * 2147483647);
   const STATUSES = ["any", "ranked", "loved", "qualified", "pending", "graveyard", "unknown"];
   const DIFF_ROWS = 5;
 
   function readState() {
     const p = new URLSearchParams(location.search);
     return { q: p.get("q") || "", status: p.get("status") || "any", skill: p.get("skill") || "any",
-             sort: p.get("sort") || "newest_desc", page: parseInt(p.get("page") || "1", 10) };
+             sort: p.get("sort") || "newest_desc", page: parseInt(p.get("page") || "1", 10),
+             seed: p.get("seed") || "" };
   }
   function writeState(st, push) {
     const p = new URLSearchParams();
@@ -84,6 +92,7 @@ const Catalog = (() => {
     if (st.status !== "any") p.set("status", st.status);
     if (st.skill !== "any") p.set("skill", st.skill);
     if (st.sort !== "newest_desc") p.set("sort", st.sort);
+    if (st.sort === "random") p.set("seed", st.seed);
     if (st.page > 1) p.set("page", st.page);
     const url = `${location.pathname}${p.toString() ? "?" + p : ""}`;
     (push ? history.pushState : history.replaceState).call(history, null, "", url);
@@ -140,21 +149,25 @@ const Catalog = (() => {
     let seq = 0;
 
     async function load(push) {
+      if (st.sort === "random" && !st.seed) st.seed = String(newSeed());
       writeState(st, push);
       input.value = st.q;
       pills(document.getElementById("status"), STATUSES.map((s) => [s, s === "any" ? "全部" : STATUS_ZH[s]]), st.status, (v) => { st.status = v; st.page = 1; load(true); });
       pills(document.getElementById("skill"), [["any", "全部"], ...Object.keys(SKILL_LABELS).map((k) => [k, `${SKILL_ZH[k]}`])], st.skill, (v) => { st.skill = v; st.page = 1; load(true); });
       const [sortKey, sortDir] = st.sort.split(/_(?=asc$|desc$)/);
       const sortNode = document.getElementById("sort");
-      sortNode.innerHTML = SORTS.map(([k, label]) => `<button class="pill${k === sortKey ? " active" : ""}" data-v="${k}">${label}${k === sortKey ? `<span class="dir">${sortDir === "desc" ? "▼" : "▲"}</span>` : ""}</button>`).join("");
+      const mark = (k) => k !== sortKey ? "" : k === "random" ? `<span class="dir">↻</span>` : `<span class="dir">${sortDir === "desc" ? "▼" : "▲"}</span>`;
+      sortNode.innerHTML = SORTS.map(([k, label]) => `<button class="pill${k === sortKey ? " active" : ""}" data-v="${k}"${k === "random" ? ` title="${k === sortKey ? "换一批" : "按当前筛选随机推一页"}"` : ""}>${label}${mark(k)}</button>`).join("");
       sortNode.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
         const k = b.dataset.v;
+        if (k === "random") { st.sort = "random"; st.seed = String(newSeed()); st.page = 1; load(true); return; }
         const dir = k === sortKey ? (sortDir === "desc" ? "asc" : "desc") : (["title", "artist"].includes(k) ? "asc" : "desc");
         st.sort = `${k}_${dir}`; st.page = 1; load(true);
       }));
 
       const mine = ++seq;
       const p = new URLSearchParams({ q: st.q, status: st.status, skill: st.skill, sort: st.sort, page: st.page });
+      if (st.sort === "random") p.set("seed", st.seed);
       let data;
       try { data = await getJSON(`/api/beatmapsets/search?${p}`); } catch (e) { grid.innerHTML = `<div class="empty">搜索失败（${esc(e.message)}）</div>`; return; }
       if (mine !== seq) return;

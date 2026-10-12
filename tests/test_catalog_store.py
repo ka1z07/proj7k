@@ -144,3 +144,27 @@ def test_reevaluate_stale_reruns_the_engine_from_the_stored_osu(store, rows, mon
     assert b["engine_version"] == "deadbeef"
     assert b["official_sr"] == pytest.approx(rows[0].official_sr)
     assert b["engine_sr"] == pytest.approx(rows[0].engine_sr)
+
+
+def test_random_sort_draws_a_page_from_the_filtered_sets(store):
+    """A seeded shuffle of the matching sets: filters apply, pages of one draw never overlap, the seed
+    reproduces the draw, and a missing seed makes a new one."""
+    sets = store.search(page_size=200).beatmapsets
+    hardest = max(sets, key=lambda s: min(b["engine_sr"] for b in s["beatmaps"]))
+    q = f"engine<{min(b['engine_sr'] for b in hardest['beatmaps']) - 1e-3:.3f}"   # leaves the hardest set out
+    filtered = {s["id"] for s in store.search(q=q, page_size=200).beatmapsets}
+    assert len(filtered) >= 2 and hardest["id"] not in filtered
+
+    first = store.search(q=q, sort="random", seed=7, page_size=1)
+    assert first.sort == "random" and first.seed == 7 and first.total == len(filtered)
+    pages = [first] + [store.search(q=q, sort="random", seed=7, page_size=1, page=n)
+                       for n in range(2, first.pages + 1)]
+    drawn = [s["id"] for r in pages for s in r.beatmapsets]
+    assert sorted(drawn) == sorted(filtered)                          # every filtered set exactly once
+    again = store.search(q=q, sort="random", seed=7, page_size=1)
+    assert [s["id"] for s in again.beatmapsets] == [s["id"] for s in first.beatmapsets]
+    draws = {tuple(s["id"] for s in store.search(sort="random", seed=n, page_size=1).beatmapsets)
+             for n in range(20)}
+    assert len(draws) > 1
+    assert store.search(sort="random").seed is not None
+    assert store.search(sort="engine_desc").to_dict().get("seed") is None

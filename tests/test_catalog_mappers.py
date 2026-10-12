@@ -122,3 +122,20 @@ def test_the_signature_skill_is_the_one_leaned_on_more_than_other_mappers(store)
     for tag in d["tags"]:
         if tag["label"].endswith("型"):
             assert "倍" in tag["why"]
+
+
+def test_the_website_keeps_serving_old_profiles_while_rebuilding(benchmark_corpus):
+    """With `stale_s`, a change starts a background rebuild instead of holding up the request."""
+    import time
+
+    store = CatalogStore()
+    ids = list(benchmark_corpus)[:4]
+    store.upsert(chart_row(benchmark_corpus[ids[0]], mapper_id=1, mapper_name="A"))
+    idx = MapperIndex(store, stale_s=0)
+    assert set(idx.profiles()) == {"1"}                      # the first build waits
+    store.upsert(chart_row(benchmark_corpus[ids[1]], mapper_id=2, mapper_name="B"))
+    assert set(idx.profiles()) == {"1"}                      # old profiles while it rebuilds
+    deadline = time.monotonic() + 30
+    while set(idx.profiles()) != {"1", "2"}:
+        assert time.monotonic() < deadline
+        time.sleep(0.05)

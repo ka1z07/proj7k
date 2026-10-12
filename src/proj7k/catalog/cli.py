@@ -8,12 +8,14 @@ Command line of the catalog.
     python3 -m proj7k.catalog crawl   --db catalog.sqlite3                  (osu! API; OSU_CLIENT_ID / OSU_CLIENT_SECRET)
     python3 -m proj7k.catalog refresh --db catalog.sqlite3                  (re-evaluate after an engine change)
     python3 -m proj7k.catalog serve   --db catalog.sqlite3 [--host 127.0.0.1 --port 7780]
+    python3 -m proj7k.catalog export  --db catalog.sqlite3 OUTPUT           (one compact file to copy to a server)
 """
 
 import argparse
 import logging
 import os
 import sys
+import threading
 import webbrowser
 from pathlib import Path
 from typing import Optional, Sequence
@@ -55,13 +57,19 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=7780)
     serve.add_argument("--open", action="store_true", help="open the browser")
+    serve.add_argument("--mapper-refresh", type=float, default=600.0, metavar="SECONDS",
+                       help="rebuild the mapper profiles in the background at most this often while the "
+                            "catalog changes (default 600)")
+
+    export = sub.add_parser("export", help="write a compacted copy of the catalog (to upload to a server)")
+    export.add_argument("output", type=Path)
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(message)s")
-    if args.command != "serve":
+    if args.command not in ("serve", "export"):
         args.db.parent.mkdir(parents=True, exist_ok=True)
     elif not args.db.exists():
         print(f"no catalog at {args.db}; run `python3 -m proj7k.catalog build` first", file=sys.stderr)
@@ -87,10 +95,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(summary)
     elif args.command == "refresh":
         print(f"re-evaluated {store.reevaluate_stale()}")
+    elif args.command == "export":
+        if args.output.exists():
+            print(f"{args.output} exists", file=sys.stderr)
+            return 2
+        store.export(args.output)
+        print(f"wrote {args.output} ({args.output.stat().st_size / 1e6:.0f} MB)")
     elif args.command == "serve":
         from proj7k.catalog.server import make_server
 
-        server = make_server(store, args.host, args.port)
+        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh)
+        # The mapper profiles take a while on a full catalog; build them before the first visitor asks.
+        threading.Thread(target=server.RequestHandlerClass.mappers.profiles, daemon=True).start()
         url = f"http://{args.host}:{args.port}/beatmapsets"
         stats = store.stats()
         print(f"{stats['beatmapsets']} sets, {stats['beatmaps']} difficulties; serving {url}")

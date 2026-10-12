@@ -213,3 +213,13 @@ def test_a_listing_past_the_search_cap_is_sliced_by_stars(monkeypatch):
     assert sorted(got) == list(range(12))            # every set, each once
     assert queries[0] == "keys=7"                     # the unsliced listing hit the cap
     assert "keys=7 stars<1" in queries and "keys=7 stars>=20" in queries
+
+
+def test_cli_export_writes_a_compact_copy(tmp_path, benchmark_corpus_path, benchmark_manifest_path, capsys):
+    db, out = tmp_path / "c.sqlite3", tmp_path / "upload.sqlite3"
+    assert cli_main(["--db", str(db), "build", "--corpus", str(benchmark_corpus_path),
+                     "--manifest", str(benchmark_manifest_path)]) == 0
+    assert cli_main(["--db", str(db), "export", str(out)]) == 0
+    with CatalogStore(out) as copy:
+        assert copy.stats()["beatmaps"] == 120
+    assert cli_main(["--db", str(db), "export", str(out)]) == 2   # never overwrites

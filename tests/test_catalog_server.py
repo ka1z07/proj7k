@@ -96,3 +96,16 @@ def test_pages_load_no_external_scripts_or_styles():
         assert not re.search(r"<(script|link)[^>]+(src|href)=[\"'](https?:)?//", text), path.name
         assert "@import" not in text, path.name
         assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/)", text), path.name
+
+
+def test_answers_may_be_cached_briefly_but_errors_not(site):
+    assert _get(f"{site}/api/stats")[1]["Cache-Control"] == "public, max-age=60"
+    assert _get(f"{site}/static/catalog.js")[1]["Cache-Control"] == "public, max-age=300"
+    assert _get(f"{site}/api/beatmapsets/42")[1]["Cache-Control"] == "no-cache"
+
+
+def test_a_random_page_without_a_seed_is_never_cached(site):
+    _, headers, body = _get(f"{site}/api/beatmapsets/search?sort=random")
+    assert headers["Cache-Control"] == "no-store" and isinstance(json.loads(body)["seed"], int)
+    _, headers, body = _get(f"{site}/api/beatmapsets/search?sort=random&seed=3")
+    assert headers["Cache-Control"] == "public, max-age=60" and json.loads(body)["seed"] == 3

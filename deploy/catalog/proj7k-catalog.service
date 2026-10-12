@@ -1,0 +1,20 @@
+# /etc/systemd/system/proj7k-catalog.service — the website, read-only, behind Caddy.
+[Unit]
+Description=proj7k 7K chart catalog
+After=network.target
+
+[Service]
+User=proj7k
+WorkingDirectory=/opt/proj7k
+Environment=PYTHONPATH=/opt/proj7k/src
+ExecStart=/opt/proj7k/.venv/bin/python -m proj7k.catalog --db /var/lib/proj7k/catalog.sqlite3 serve --host 127.0.0.1 --port 7780
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/proj7k
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

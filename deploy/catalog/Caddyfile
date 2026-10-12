@@ -1,0 +1,9 @@
+# /etc/caddy/Caddyfile — Caddy obtains and renews the HTTPS certificate itself
+# (.dev is HTTPS-only). Point the subdomain's A record at this server first.
+7k.kaiz.dev {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:7780
+	log {
+		output file /var/log/caddy/catalog.log
+	}
+}
