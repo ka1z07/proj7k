@@ -318,3 +318,65 @@ def test_watcher_get_latest_beatmap_event(tmp_path: Path):
     assert ev.title == "Title2"
     assert ev.creator == "Mapper2"
     assert ev.difficulty == "Diff2"
+
+
+def test_find_latest_runtime_log_skips_a_log_deleted_while_it_looks(tmp_path: Path, monkeypatch):
+    """osu!lazer deletes week-old logs at start; one vanishing between the listing and its stat is skipped."""
+    from proj7k.live.watcher import find_latest_runtime_log
+
+    old = tmp_path / "1790000000.runtime.log"
+    new = tmp_path / "1791576444.runtime.log"
+    old.write_text("x\n", encoding="utf-8")
+    new.write_text("y\n", encoding="utf-8")
+    real_stat = Path.stat
+
+    def stat(self, *args, **kwargs):
+        if self.name == old.name:
+            raise FileNotFoundError(self)
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat)
+    assert find_latest_runtime_log(tmp_path) == new
+    assert find_latest_runtime_log(tmp_path / "missing") is None
+
+
+def test_watcher_survives_a_failing_poll_and_follows_the_next_log(tmp_path: Path, monkeypatch):
+    """A poll that raises must not end the watch: before, the dashboard kept the last chart until restarted."""
+    from proj7k.live import watcher as watcher_module
+
+    async def _run():
+        logs_dir = tmp_path / "logs"
+        logs_dir.mkdir()
+        (logs_dir / "1.runtime.log").write_text("start\n", encoding="utf-8")
+
+        real_find = watcher_module.find_latest_runtime_log
+        failures = []
+
+        def flaky_find(path):
+            if len(failures) < 3:
+                failures.append(1)
+                raise FileNotFoundError("deleted under us")
+            return real_find(path)
+
+        monkeypatch.setattr(watcher_module, "find_latest_runtime_log", flaky_find)
+        watcher = LazerLogWatcher(logs_dir=logs_dir, poll_interval_s=0.01)
+        events: asyncio.Queue = asyncio.Queue()
+
+        async def on_event(ev):
+            await events.put(ev)
+
+        task = asyncio.create_task(watcher.run(callback=on_event))
+        try:
+            while len(failures) < 3 and not task.done():
+                await asyncio.sleep(0.01)
+            await asyncio.sleep(0.05)
+            assert not task.done()
+            new_log = logs_dir / "2.runtime.log"
+            new_log.write_text("Game-wide working beatmap updated to A - After [D] (C)\n", encoding="utf-8")
+            ev = await asyncio.wait_for(events.get(), timeout=2.0)
+            assert ev.title == "After"
+        finally:
+            watcher.stop()
+            await task
+
+    asyncio.run(_run())
