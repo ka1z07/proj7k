@@ -30,12 +30,18 @@ SNAPSHOT_ENGINE = "spec-v0.2"
 #: How a snapshot's replay was read. 2: the play's mods are honoured (actual lazer rate, hit windows widening with
 #: the rate, HR/EZ, Mirror; plays under mods that cannot be aligned are not stored). A version-1 snapshot of a play
 #: under any of `AFFECTING_BITS` was misread and is left out of aggregates until it is re-imported.
-SNAPSHOT_INGEST_VERSION = 2
+#: 3: each skill also keeps the events played and the accuracy lost over them, and the summary keeps the play's
+#: overall reading, which the profile's fit across plays needs (ADR-0028). Importing re-reads older snapshots.
+SNAPSHOT_INGEST_VERSION = 3
+
+
+#: The first ingest version that honoured mods.
+MODS_HONOURED_INGEST = 2
 
 
 def snapshot_is_current(summary: Dict[str, Any]) -> bool:
     """Whether a snapshot's reading of its replay is still right (see `SNAPSHOT_INGEST_VERSION`)."""
-    if int(summary.get("ingest", 1)) >= SNAPSHOT_INGEST_VERSION:
+    if int(summary.get("ingest", 1)) >= MODS_HONOURED_INGEST:
         return True
     return not (int(summary.get("mods") or 0) & AFFECTING_BITS)
 
@@ -231,6 +237,8 @@ def build_snapshot_from_report(
                 "tested": res.tested,
                 "broke_down": res.broke_down,
                 "chart_level": round(float(res.chart_level), 2),
+                "events": round(float(res.events), 2),
+                "lost": round(float(res.lost), 4),
             }
 
     # 4. Extract overall UR
@@ -271,6 +279,12 @@ def build_snapshot_from_report(
         "engine": SNAPSHOT_ENGINE,
         "ingest": SNAPSHOT_INGEST_VERSION,
     }
+    overall = getattr(report.skill_radar, "overall", None) if report.skill_radar else None
+    if overall is not None:
+        summary_info["overall"] = {
+            "star_rating": round(overall.star_rating, 2), "chart_level": round(overall.chart_level, 3),
+            "events": round(overall.events, 2), "lost": round(overall.lost, 4), "eps": round(overall.eps, 5),
+        }
     play_mods = getattr(report, "play_mods", None)
     if play_mods is not None:
         summary_info["clock_rate"] = play_mods.clock_rate
@@ -420,13 +434,15 @@ class ProfilerStorage:
         return cur.fetchone() is not None
 
     def is_current_replay(self, replay_hash: str) -> bool:
-        """Whether a replay is stored and its snapshot's reading of it is current (`snapshot_is_current`)."""
+        """Whether a replay is stored and was read by this version of the profiler (`SNAPSHOT_INGEST_VERSION`)."""
         if not replay_hash:
             return False
         row = self.conn.execute(
             "SELECT summary_json FROM match_snapshots WHERE replay_hash = ? LIMIT 1", (replay_hash,)
         ).fetchone()
-        return row is not None and snapshot_is_current(json.loads(row["summary_json"] or "{}"))
+        if row is None:
+            return False
+        return int(json.loads(row["summary_json"] or "{}").get("ingest", 1)) >= SNAPSHOT_INGEST_VERSION
 
     def delete_replay(self, replay_hash: str) -> int:
         """Removes a replay's snapshot (so it can be ingested again), returning the number of rows removed."""

@@ -136,7 +136,8 @@ def test_mod_plays_read_before_mods_were_honoured_are_stale(tmp_path: Path):
     with ProfilerStorage(db_path=tmp_path / "p.db") as storage:
         storage.save_snapshot(_snapshot("nm", {"mods": 0, "engine": SNAPSHOT_ENGINE}))
         storage.save_snapshot(_snapshot("dt", {"mods": 64, "engine": SNAPSHOT_ENGINE}))
-        assert storage.is_current_replay("nm")
+        # Neither was read by this version, so importing re-reads both; only the mod play is left out meanwhile
+        assert storage.has_replay("nm") and not storage.is_current_replay("nm")
         assert storage.has_replay("dt") and not storage.is_current_replay("dt")
         profile = aggregate_macro_profile(storage, "P", horizon_days=None)
         assert profile.total_matches == 1

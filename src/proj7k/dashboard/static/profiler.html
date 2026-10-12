@@ -80,7 +80,7 @@
             <option value="specialty">只看长板</option>
           </select></div>
       </div>
-      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pfAll"> 全历史巅峰（忽略天数）</label>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pfAll"> 全历史（忽略天数）</label>
       <div><button class="primary" id="pfRun">查看画像</button></div>
     </div>
 
@@ -223,7 +223,7 @@
       const p = r.profile;
       const tc = p.trend_comparison;
       const nodes = [el("div", { class: "card" },
-        el("h2", { text: `${p.player_name} · ${p.window_mode === "all_time" ? "全历史巅峰" : `近 ${p.horizon_days} 天`}` }),
+        el("h2", { text: `${p.player_name} · ${p.window_mode === "all_time" ? "全历史" : `近 ${p.horizon_days} 天`}` }),
         el("div", { class: "row" }, el("span", { class: "big", text: p.total_matches ? `${p.overall_dan} ${p.overall_star_rating.toFixed(2)}★` : "暂无数据" }),
           p.total_matches ? el("span", { class: "hint", text: `主技法 ${P7.skillName(p.dominant_technique)} · 短板 ${P7.skillName(p.bottleneck_technique)}` }) : null),
         el("div", { class: "stats" },
@@ -231,8 +231,8 @@
           P7.stat("稳定 UR", p.average_ur === null ? "—" : p.average_ur.toFixed(1))),
         p.total_matches ? P7.skillBars(Object.fromEntries(Object.entries(p.dimensions).map(([k, d]) => [k, d.star_rating]))) : el("div", { class: "hint", text: "这个时间窗里没有对局。先导入回放或诊断几局。" }),
         p.total_matches ? dimsTable(p.dimensions, [["对局", (d) => d.match_count]]) : null,
-        tc ? [el("h3", { text: `与全历史巅峰对比（巅峰 ${tc.all_time_overall_dan} ${tc.all_time_overall_sr.toFixed(2)}★）` }),
-          el("table", {}, el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "近期" }), el("th", { class: "num", text: "巅峰" }), el("th", { class: "num", text: "差值" }), el("th", { text: "状态" })),
+        tc ? [el("h3", { text: `与全历史对比（全历史 ${tc.all_time_overall_dan} ${tc.all_time_overall_sr.toFixed(2)}★）` }),
+          el("table", {}, el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "近期" }), el("th", { class: "num", text: "全历史" }), el("th", { class: "num", text: "差值" }), el("th", { text: "状态" })),
             Object.entries(tc.dimension_deltas || {}).map(([k, d]) => el("tr", {}, el("td", { text: P7.skillName(k) }),
               el("td", { class: "num", text: d.recent_sr.toFixed(2) }), el("td", { class: "num", text: d.all_time_sr.toFixed(2) }),
               el("td", { class: "num", text: `${d.delta_sr >= 0 ? "+" : ""}${d.delta_sr.toFixed(2)}` }), el("td", { text: d.status }))))] : null,
@@ -273,7 +273,7 @@
       if (!job) return;
       const s = job.result;
       $("#results").replaceChildren(el("div", { class: "card" }, el("h2", { text: "导入完成" }), el("div", { class: "stats" },
-        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("按 mod 重算", s.reingested), P7.stat("已在库中", s.already_exists),
+        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("重新计算", s.reingested), P7.stat("已在库中", s.already_exists),
         P7.stat("不支持的 mod（未入库）", s.unsupported_mods),
         P7.stat("过滤（过短 / 完成度低）", s.noise_filtered), P7.stat("失败局（保留）", s.failed_preserved),
         P7.stat("缺文件", s.missing_files), P7.stat("出错", s.errors))));

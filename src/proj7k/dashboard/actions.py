@@ -463,7 +463,7 @@ def import_replays(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         limit=_int(params, "limit"),
     )
     logger.info(
-        f"Imported {stats['saved']} new replay(s), re-read {stats['reingested']} mod play(s); "
+        f"Imported {stats['saved']} new replay(s), re-read {stats['reingested']} older snapshot(s); "
         f"{stats['already_exists']} already in the database, {stats['unsupported_mods']} under unsupported mods."
     )
     return stats
