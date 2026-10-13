@@ -21,8 +21,14 @@
    $db   = "$env:USERPROFILE\.cache\proj7k\catalog.sqlite3"
    schtasks /Create /TN "proj7k catalog" /SC ONSTART /RU SYSTEM /RL HIGHEST /F `
      /TR "`"$repo\deploy\catalog\windows\catalog-serve.cmd`" `"$db`""
+   # 默认设置不适合常驻网站：优先级 7（低于正常，电脑忙时会超时）、72 小时后自动停止、用电池时停止。
+   $s = New-ScheduledTaskSettingsSet -Priority 5 -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
+     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+   Set-ScheduledTask -TaskName "proj7k catalog" -Settings $s
    schtasks /Run /TN "proj7k catalog"
    ```
+
+   建好这个任务后，根目录的 `restart-services.cmd` 重启网站时会改为重启这个任务，不会再从主目录另起一份。
 
 5. **每日抓取（可选）**：先把 `OSU_CLIENT_ID`、`OSU_CLIENT_SECRET` 设为自己账号的用户环境变量，再建一个以自己账号运行的每日任务执行 `deploy\catalog\windows\catalog-crawl.cmd`（任务计划程序里选「不管用户是否登录都要运行」）。
 6. 打开 `https://7k.kaiz.dev/beatmapsets` 检查。可以在 Cloudflare 里给 `/static/*` 和 `/api/*` 开缓存，接口本身已带 `Cache-Control`。
