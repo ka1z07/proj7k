@@ -2,3 +2,4 @@
 *.cmd text eol=crlf
 # The engine's version hashes these files byte for byte; a CRLF checkout must not change it.
 src/proj7k/engine/*.json text eol=lf
+src/proj7k/dan_table.json text eol=lf
