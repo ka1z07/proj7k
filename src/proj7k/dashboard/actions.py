@@ -448,6 +448,19 @@ def profile_player(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     return result
 
 
+def profile_habits(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    from proj7k.profiler.habits import aggregate_habits
+    from proj7k.profiler.storage import ProfilerStorage
+
+    player = _text(params, "player")
+    if not player:
+        raise ValueError("请填写玩家名")
+    horizon = None if _flag(params, "all_time") else (_float(params, "horizon_days") or 30.0)
+    with ProfilerStorage(db_path=config.db_path) as storage:
+        habits = aggregate_habits(storage, player, horizon_days=horizon)
+    return {"habits": habits.to_dict()}
+
+
 def import_replays(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     from proj7k.profiler.cli import run_replay_import
 
@@ -482,5 +495,6 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "generate": bind(generate_chart),
         "profile_replay": bind(profile_replay),
         "profile_player": bind(profile_player),
+        "profile_habits": bind(profile_habits),
         "import_replays": bind(import_replays),
     }

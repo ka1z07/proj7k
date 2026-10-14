@@ -37,6 +37,7 @@ from proj7k.profiler.matcher import (
 )
 from proj7k.profiler.mods import PlayMods, resolve_play_mods
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, parse_osr
+from proj7k.profiler.habits import HabitStats, aggregate_habits, extract_play_habits, format_habit_profile
 from proj7k.profiler.pathology import PathologyReport, analyze_pathology
 from proj7k.profiler.response import SkillRadarReport, analyze_strain_response
 from proj7k.profiler.storage import (
@@ -84,6 +85,8 @@ class ProfilerIngestionReport:
     beatmap: Optional[Beatmap7K] = None
     #: What the play's mods did (rate, hit windows, mirror), and which of them the profiler cannot honour.
     play_mods: PlayMods = dc_field(default_factory=PlayMods)
+    #: The play's technique-habit statistics (ADR-0029), merged across plays by `aggregate_habits`.
+    habits: Optional[HabitStats] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -226,6 +229,7 @@ def run_ingestion(
 
     # 5. Micro-Biomechanics & Pathology Analysis (ADR-0012)
     pathology = analyze_pathology(alignment, beatmap)
+    habits = extract_play_habits(alignment, replay.action_frames, clock_rate)
 
     # 6. Skill-level response and the 8-skill radar (ADR-0012, ADR-0020), on the engine's field in physical time
     field = trace_beatmap(_scale_beatmap_clock_rate(beatmap, clock_rate)) if beatmap.hit_objects else None
@@ -271,6 +275,7 @@ def run_ingestion(
         replay_frames=replay.action_frames,
         beatmap=beatmap,
         play_mods=play_mods,
+        habits=habits,
     )
 
 
@@ -807,6 +812,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Query all-time peak profile instead of rolling window.",
     )
     parser.add_argument(
+        "--habits",
+        action="store_true",
+        help="With --player: show technique habits read from the stored replays (ADR-0029) instead of the skill profile.",
+    )
+    parser.add_argument(
         "--db",
         type=str,
         default=None,
@@ -1012,6 +1022,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if stats["errors"] > 0:
                 print(f"Errors/Unmatched:     {stats['errors']}")
             print("============================================================")
+        return 0
+
+    # 3. Mode: Player Technique Habits (ADR-0029)
+    if args.player and args.habits:
+        with ProfilerStorage(db_path=args.db) as storage:
+            habits = aggregate_habits(storage, args.player, horizon_days=None if args.all_time else args.horizon_days)
+        data = habits.to_dict()
+        print(json.dumps(data, indent=2, ensure_ascii=False) if args.json else format_habit_profile(data))
         return 0
 
     # 3. Mode: Player Macro Profile Query

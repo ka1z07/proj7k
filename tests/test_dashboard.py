@@ -464,6 +464,10 @@ def test_profile_replay_action_writes_a_servable_viewer(tmp_path):
 
                 job, _ = await _run_job(ws, "profile_player", {"player": "DashPlayer", "all_time": True})
                 assert job["status"] == "done" and job["result"]["profile"]["window_mode"] == "all_time"
+
+                job, _ = await _run_job(ws, "profile_habits", {"player": "DashPlayer", "all_time": True})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["habits"]["window_mode"] == "all_time"
         finally:
             await s.server.stop()
 
