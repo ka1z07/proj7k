@@ -48,7 +48,9 @@ def test_pages_are_served(site):
     assert b"Catalog.searchPage()" in body
     status, _, body = _get(f"{site}/beatmapsets/1877617")
     assert status == 200 and b"Catalog.setPage()" in body
-    assert _get(f"{site}/")[0] == 302
+    status, headers, body = _get(f"{site}/")
+    assert status == 200 and headers["Content-Type"].startswith("text/html")
+    assert b"Catalog.homePage()" in body and b'href="/beatmapsets"' in body
 
 
 def test_search_api_returns_both_star_ratings(site):
@@ -90,12 +92,13 @@ def test_bad_parameters_do_not_break_the_api(site):
 
 
 def test_pages_load_no_external_scripts_or_styles():
-    """The site's own code is self-contained; only osu!'s cover images are fetched from outside."""
+    """The site's own code is self-contained; only osu!'s cover images are fetched from outside.
+    Plain links may also point at proj7k's own homes (its repository, the author's blog)."""
     for path in STATIC_DIR.iterdir():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"<(script|link)[^>]+(src|href)=[\"'](https?:)?//", text), path.name
         assert "@import" not in text, path.name
-        assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/)", text), path.name
+        assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/|github\.com/ka1z07/proj7k|kaiz\.dev/)", text), path.name
 
 
 def test_answers_may_be_cached_briefly_but_errors_not(site):

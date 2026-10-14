@@ -373,5 +373,18 @@ const Catalog = (() => {
     if (data.total > data.beatmapsets.length) grid.insertAdjacentHTML("afterend", `<a class="more" href="/beatmapsets?q=${encodeURIComponent(q)}&sort=engine_desc">在谱面列表里查看全部 ${data.total} 组 →</a>`);
   }
 
-  return { searchPage, setPage, mappersPage, mapperPage, starColour };
+  // ---- home -------------------------------------------------------------------------------------
+
+  async function homePage() {
+    navMeta();
+    try {
+      const s = await getJSON("/api/stats");
+      document.querySelectorAll("#homeStats [data-k]").forEach((dd) => {
+        const v = s[dd.dataset.k];
+        if (typeof v === "number") dd.textContent = v.toLocaleString("zh-CN");
+      });
+    } catch (e) { /* the numbers stay as dashes */ }
+  }
+
+  return { homePage, searchPage, setPage, mappersPage, mapperPage, starColour };
 })();

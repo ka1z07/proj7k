@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>proj7k · osu!mania 7K 工具箱</title>
+<meta name="description" content="proj7k：osu!mania 7K 的难度评级、降阶练习、谱面生成、回放分析工具，以及收录全部 7K 谱面的在线谱面库。">
+<link rel="stylesheet" href="/static/catalog.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="logo" href="/">proj<b>7k</b> 谱面库</a>
+  <div class="links"><a class="active" href="/">首页</a><a href="/beatmapsets">谱面</a><a href="/mappers">谱师</a></div>
+  <div class="meta" id="meta"></div>
+</nav>
+
+<header class="home-hero">
+  <div class="container">
+    <p class="kicker">osu!mania 7K</p>
+    <h1>proj<b>7k</b>，给 7K 玩家的一套工具</h1>
+    <p class="lede">一把按 Jinjin 7K 段位标定的难度尺，配上谱面库、降阶练习、谱面生成和回放分析。打不过的图帮你降到能练的难度，打完的回放帮你看清卡在哪里。</p>
+    <div class="cta">
+      <a class="btn primary" href="/beatmapsets">进入谱面库 →</a>
+      <a class="btn" href="/beatmapsets?sort=random">随便看看</a>
+      <a class="btn" href="https://github.com/ka1z07/proj7k#readme" rel="noopener">下载工具</a>
+    </div>
+    <dl class="home-stats" id="homeStats">
+      <div><dt>谱面组</dt><dd data-k="beatmapsets">—</dd></div>
+      <div><dt>7K 难度</dt><dd data-k="beatmaps">—</dd></div>
+      <div><dt>有官方星级</dt><dd data-k="with_official_sr">—</dd></div>
+    </dl>
+  </div>
+</header>
+
+<main class="container home">
+  <section>
+    <h2>在线谱面库</h2>
+    <p class="sub">不用安装任何东西，打开就能用。</p>
+    <div class="feature-grid">
+      <a class="feature" href="/beatmapsets">
+        <h3>官方星级和引擎星级并排</h3>
+        <p>每个难度都同时显示 osu! 官方星级（黄）和 proj7k 星级（蓝），并标出对应段位。按「偏差」排序就能找出被官方高估或低估的图。</p>
+      </a>
+      <a class="feature" href="/beatmapsets?sort=engine_desc">
+        <h3>按技法找图</h3>
+        <p>想练叠键、切、反键还是放手？按主技法筛选，或者在搜索框里写 <code>engine&gt;5 engine&lt;6</code> 这样的条件，精确到星级区间。</p>
+      </a>
+      <a class="feature" href="/mappers">
+        <h3>谱师风格</h3>
+        <p>每位谱师写过哪些 7K 图、偏爱哪类技法、整体难度落在哪个段位，一页看完。</p>
+      </a>
+      <a class="feature" href="/beatmapsets?status=graveyard">
+        <h3>不止 Ranked</h3>
+        <p>Ranked、Loved、Qualified 之外，Pending、WIP 和坟图里的 7K 图也都收录。</p>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2>装在自己电脑上的工具</h2>
+    <p class="sub">下载后双击 <code>dashboard.cmd</code>，所有工具都在同一个网页里，点按钮就行，不用记命令。配合 osu!lazer 使用。</p>
+    <div class="tool-grid">
+      <article class="tool">
+        <span class="tag">实时雷达</span>
+        <h3>选歌时就知道这张图难在哪</h3>
+        <p>在 osu!lazer 里切换谱面，旁边的网页立刻显示星级、段位和八项技法雷达（叠键、技巧、速度、耐力切，以及四项长条技法），还有整首歌的难度时间线。</p>
+      </article>
+      <article class="tool">
+        <span class="tag">曲库同步</span>
+        <h3>把游戏里的星级换成 proj7k 星级</h3>
+        <p>一键把整个 lazer 曲库的星级改成 proj7k 星级，并打上段位和技法标签，在游戏里就能按标签找图。写入前自动备份，随时一键还原成官方星级。</p>
+      </article>
+      <article class="tool">
+        <span class="tag">降阶练习</span>
+        <h3>打不过的图，降到你能练的难度</h3>
+        <p>选一张图和目标段位或星级，生成一张保留原图手型和节奏、只是更简单的练习谱，点「导入 osu!」直接进游戏。</p>
+      </article>
+      <article class="tool">
+        <span class="tag">谱面生成</span>
+        <h3>拿一首歌直接出一张 7K 谱</h3>
+        <p>给一个音频文件和目标段位，自动测 BPM、生成米键谱，并把难度调到目标星级附近，打包成 .osz。</p>
+      </article>
+      <article class="tool">
+        <span class="tag">回放与画像</span>
+        <h3>从回放里看出自己的水平和短板</h3>
+        <p>导入 lazer 里的历史回放，得到你在八项技法上各自对应的段位、整体水平，以及左右手、各轨道的发力习惯。单局回放可以逐帧回看，失误和最难的段落一目了然。</p>
+      </article>
+      <article class="tool">
+        <span class="tag">练习推荐</span>
+        <h3>针对卡住的地方出练习包</h3>
+        <p>根据回放找出让你断连的那一段，切出来做成由易到难的三档练习谱；也会从你本地曲库里挑适合补短板的图。</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>三步开始</h2>
+    <ol class="steps">
+      <li><b>下载</b> 从 <a href="https://github.com/ka1z07/proj7k" rel="noopener">GitHub</a> 下载 proj7k（绿色 Code 按钮 → Download ZIP），解压到任意文件夹。</li>
+      <li><b>安装 Python</b> 装好 Python 3.14，在文件夹里运行一次 <code>pip install -r requirements.txt</code>。</li>
+      <li><b>打开面板</b> 双击 <code>dashboard.cmd</code>，浏览器会自动打开控制台。</li>
+    </ol>
+    <p class="sub">每一步的详细说明见 <a href="https://github.com/ka1z07/proj7k#readme" rel="noopener">使用说明</a>。</p>
+  </section>
+
+  <section class="home-links">
+    <a href="https://github.com/ka1z07/proj7k" rel="noopener">GitHub 仓库 ↗</a>
+    <a href="https://kaiz.dev/projects/proj7k/" rel="noopener">开发进度与日志 ↗</a>
+  </section>
+</main>
+<script src="/static/catalog.js"></script>
+<script>Catalog.homePage();</script>
+</body>
+</html>
