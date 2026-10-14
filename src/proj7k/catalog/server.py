@@ -16,6 +16,7 @@ Read-only: nothing a client sends reaches the database except as a bound SQL par
 files of `static/` are served. In production it sits behind a reverse proxy (TLS, caching, rate limits).
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -34,6 +35,13 @@ STATIC_DIR = Path(__file__).with_name("static")
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
                 ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
 STATIC_FILES = {p.name for p in STATIC_DIR.iterdir() if p.suffix in STATIC_TYPES} if STATIC_DIR.is_dir() else set()
+#: The pages link scripts and styles as `/static/<name>?v=<content hash>`, so a deploy never pairs a new page
+#: with a script or stylesheet a browser or the proxy kept from before (the proxy may cache them for hours).
+_ASSET_VERSIONS = {
+    name: hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:10]
+    for name in STATIC_FILES if name.endswith((".js", ".css"))
+}
+_ASSET_LINK = re.compile(r'"/static/([\w.-]+\.(?:js|css))"')
 
 _SET_PAGE = re.compile(r"^/beatmapsets/(-?\d+)/?$")
 _BEATMAP_PAGE = re.compile(r"^/beatmaps/(-?\d+)/?$")
@@ -137,9 +145,13 @@ class CatalogHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _static(name: str) -> Tuple[int, Dict[str, str], bytes]:
         path = STATIC_DIR / name
+        body = path.read_bytes()
+        if path.suffix == ".html":
+            body = _ASSET_LINK.sub(
+                lambda m: f'"/static/{m.group(1)}?v={_ASSET_VERSIONS[m.group(1)]}"' if m.group(1) in _ASSET_VERSIONS
+                else m.group(0), body.decode("utf-8")).encode("utf-8")
         return HTTPStatus.OK, {"Content-Type": STATIC_TYPES[path.suffix],
-                                 "Cache-Control": f"public, max-age={STATIC_MAX_AGE_S}"}, \
-            path.read_bytes()
+                                 "Cache-Control": f"public, max-age={STATIC_MAX_AGE_S}"}, body
 
     @staticmethod
     def _redirect(location: str) -> Tuple[int, Dict[str, str], bytes]:

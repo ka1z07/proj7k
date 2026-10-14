@@ -1,5 +1,6 @@
 """The catalog website and JSON API (ADR-0026)."""
 
+import hashlib
 import json
 import re
 import threading
@@ -99,6 +100,16 @@ def test_pages_load_no_external_scripts_or_styles():
         assert not re.search(r"<(script|link)[^>]+(src|href)=[\"'](https?:)?//", text), path.name
         assert "@import" not in text, path.name
         assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/|github\.com/ka1z07/proj7k|kaiz\.dev/)", text), path.name
+
+
+def test_pages_link_scripts_and_styles_by_content_version(site):
+    """A deploy must not pair a new page with a script or stylesheet cached from before it."""
+    body = _get(f"{site}/")[2].decode("utf-8")
+    links = re.findall(r'"(/static/catalog\.(?:js|css)[^"]*)"', body)
+    assert len(links) == 2 and all(re.search(r"\?v=[0-9a-f]{10}$", link) for link in links)
+    for link in links:
+        status, _, asset = _get(f"{site}{link}")
+        assert status == 200 and hashlib.sha256(asset).hexdigest()[:10] == link.rsplit("=", 1)[1]
 
 
 def test_answers_may_be_cached_briefly_but_errors_not(site):
