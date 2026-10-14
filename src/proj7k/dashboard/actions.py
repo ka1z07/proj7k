@@ -34,6 +34,7 @@ class DashboardConfig:
     lock_path: Optional[Path] = None
     db_path: Optional[Path] = None
     output_dir: Path = DEFAULT_DASHBOARD_DIR
+    lazer_exe: Optional[Path] = None
 
     @property
     def lazer_files_dir(self) -> Path:
@@ -128,11 +129,18 @@ def sync_setup(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext)
 
 def sync_once(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     dry_run = _flag(params, "dry_run")
-    logger.info(f"{'Dry run over' if dry_run else 'Synchronizing'} osu!lazer database at '{config.realm_path}'...")
-    summary = _sync_manager(config).sync_once(wait_for_lock=_flag(params, "wait"), dry_run=dry_run)
+    # With `restart`, the game is closed for the write and started again afterwards, whether or not the sync worked.
+    client = lazer_client(config) if _flag(params, "restart") and not dry_run else None
+    was_running = client.close() if client else False
+    try:
+        logger.info(f"{'Dry run over' if dry_run else 'Synchronizing'} osu!lazer database at '{config.realm_path}'...")
+        summary = _sync_manager(config).sync_once(wait_for_lock=_flag(params, "wait") or was_running, dry_run=dry_run)
+    finally:
+        if was_running:
+            client.start()
     if not summary.success:
         raise RuntimeError(summary.error or "同步失败")
-    return asdict(summary)
+    return {**asdict(summary), "restarted_lazer": was_running}
 
 
 def sync_revert(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
@@ -141,6 +149,32 @@ def sync_revert(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext
     if not res.success:
         raise RuntimeError(res.error or "还原失败")
     return {"restored": res.updated_count}
+
+
+# --- the game itself ------------------------------------------------------------------------------------------
+
+
+def lazer_client(config: DashboardConfig):
+    from proj7k.lazer.client import LazerClient
+
+    return LazerClient(executable=config.lazer_exe) if config.lazer_exe else LazerClient()
+
+
+def lazer_control(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    """Restart (default), close or start osu!lazer."""
+    mode = _text(params, "mode") or "restart"
+    client = lazer_client(config)
+    if mode == "restart":
+        return {"mode": mode, "was_running": client.restart()}
+    if mode == "close":
+        return {"mode": mode, "was_running": client.close()}
+    if mode == "start":
+        if client.is_running():
+            logger.info("osu!lazer is already running.")
+            return {"mode": mode, "was_running": True}
+        client.start()
+        return {"mode": mode, "was_running": False}
+    raise ValueError(f"未知的操作：{mode}")
 
 
 # --- downscaler ------------------------------------------------------------------------------------------------
@@ -478,6 +512,7 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "sync_setup": bind(sync_setup),
         "sync_once": bind(sync_once),
         "sync_revert": bind(sync_revert),
+        "lazer_control": bind(lazer_control),
         "downscale": bind(downscale),
         "generate": bind(generate_chart),
         "profile_replay": bind(profile_replay),
