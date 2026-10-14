@@ -223,3 +223,97 @@ def test_cli_export_writes_a_compact_copy(tmp_path, benchmark_corpus_path, bench
     with CatalogStore(out) as copy:
         assert copy.stats()["beatmaps"] == 120
     assert cli_main(["--db", str(db), "export", str(out)]) == 2   # never overwrites
+
+
+def _update_fake(corpus, store, sets):
+    """osu!'s search answering by status and query, and set lookups (a set missing from `sets` is deleted)."""
+    import urllib.error
+
+    calls = []
+
+    def fake(url, headers, body):
+        calls.append(url)
+        parts = urlsplit(url)
+        if parts.path == "/oauth/token":
+            return json.dumps({"access_token": "tok", "expires_in": 86400}).encode()
+        if parts.path == "/api/v2/beatmapsets/search":
+            q = parse_qs(parts.query)
+            listing = sets.get((q["s"][0], q["q"][0]), [])
+            return json.dumps({"beatmapsets": listing, "total": len(listing), "cursor_string": None}).encode()
+        if parts.path.startswith("/api/v2/beatmapsets/"):
+            set_id = int(parts.path.rsplit("/", 1)[1])
+            if set_id not in sets:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return json.dumps(sets[set_id]).encode()
+        if parts.path.startswith("/osu/"):
+            return corpus[int(parts.path.rsplit("/", 1)[1])].encode()
+        raise AssertionError(url)
+
+    return fake, calls
+
+
+def _bm(id_, checksum, sr=3.0):
+    return {"id": id_, "mode": "mania", "cs": 7, "difficulty_rating": sr, "checksum": checksum}
+
+
+def test_update_catches_new_removed_and_moved_charts(benchmark_corpus):
+    from datetime import datetime, timezone
+
+    from proj7k.catalog.charts import chart_row
+    from proj7k.catalog.ingest import UPDATE_WATERMARK, update_osu_api, update_since
+
+    store = CatalogStore()
+    have = {}
+    for i in (3864745, 3864746, 3864777, 3864809):
+        row = chart_row(benchmark_corpus[i])
+        store.upsert(row)
+        have[i] = row.checksum
+    store.set_status(1877617, "ranked")
+    store.set_status(1877625, "pending")
+    store.set_status(1877636, "wip")
+    store.set_meta(UPDATE_WATERMARK, "2026-10-10T06:00:00Z")
+
+    sets = {
+        # Re-uploaded since: one difficulty kept, one new, one (3864746) removed.
+        ("any", "keys=7 updated>=2026-10-08"): [{"id": 1877617, "status": "ranked", "user_id": 7, "creator": "H",
+                                                  "beatmaps": [_bm(3864745, have[3864745], 3.9),
+                                                               _bm(3864747, "new")]}],
+        # A pending set got ranked; its last_update did not move.
+        ("any", "keys=7 ranked>=2026-10-08"): [{"id": 1877625, "status": "ranked", "ranked_date": "2026-10-12T00:00:00Z",
+                                                 "beatmaps": [_bm(3864777, have[3864777])]}],
+        # 1877636 (WIP) is listed nowhere and its lookup 404s: deleted from osu!.
+    }
+    fake, calls = _update_fake(benchmark_corpus, store, sets)
+    client = OsuApiClient("id", "secret", fetch=fake, min_interval_s=0)
+    now = datetime(2026, 10, 14, 3, 0, tzinfo=timezone.utc)
+    summary = update_osu_api(store, client, update_since(store), now=now)
+
+    assert {b["id"] for b in store.beatmapset(1877617)["beatmaps"]} == {3864745, 3864747}
+    assert next(b for b in store.beatmapset(1877617)["beatmaps"] if b["id"] == 3864745)["official_sr"] == 3.9
+    assert store.beatmapset(1877625)["status"] == "ranked"
+    assert store.beatmapset(1877636) is None
+    assert (summary.added, summary.removed, summary.failed) == (1, 2, [])
+    assert [u for u in calls if "/osu/" in u] == ["https://osu.ppy.sh/osu/3864747"]   # only the new chart
+    assert store.get_meta(UPDATE_WATERMARK) == "2026-10-14T03:00:00Z"
+
+    # Nothing changed on osu! since: the next update writes nothing but its watermark.
+    before = store._db.total_changes
+    update_osu_api(store, client, update_since(store), now=now)
+    assert store._db.total_changes - before == 1
+
+
+def test_update_falls_back_to_the_last_crawl(benchmark_corpus):
+    from proj7k.catalog.ingest import update_since
+
+    store = CatalogStore()
+    assert update_since(store) is None
+    ingest_osu_api(store, OsuApiClient("id", "secret", fetch=_FakeOsu(benchmark_corpus), min_interval_s=0),
+                   statuses=("ranked",))
+    assert update_since(store) is not None
+
+
+def test_cli_update_needs_a_crawled_catalog(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("OSU_CLIENT_ID", "id")
+    monkeypatch.setenv("OSU_CLIENT_SECRET", "secret")
+    assert cli_main(["--db", str(tmp_path / "c.sqlite3"), "update"]) == 2
+    assert "crawl --status all" in capsys.readouterr().err

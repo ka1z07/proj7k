@@ -1,4 +1,5 @@
-# /etc/systemd/system/proj7k-catalog-crawl.service — one daily pass over osu!'s 7K listings.
+# /etc/systemd/system/proj7k-catalog-crawl.service — one weekly full pass over osu!'s 7K listings
+# (proj7k-catalog-update does the frequent runs and catches deletions).
 # Known charts are only refreshed (official SR, status, mapper); new ones are downloaded and evaluated.
 # Then anything the running engine has not evaluated yet is re-evaluated (after a `git pull`).
 [Unit]

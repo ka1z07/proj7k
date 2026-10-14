@@ -1,0 +1,23 @@
+# /etc/systemd/system/proj7k-catalog-update.service — what changed on osu! since the last run
+# (new and re-uploaded sets, status changes, deletions); a minute or two. New charts are downloaded and evaluated.
+# Then anything the running engine has not evaluated yet is re-evaluated (after a `git pull`).
+[Unit]
+Description=proj7k catalog update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=proj7k
+WorkingDirectory=/opt/proj7k
+Environment=PYTHONPATH=/opt/proj7k/src
+# OSU_CLIENT_ID=... and OSU_CLIENT_SECRET=..., owned by root, mode 600.
+EnvironmentFile=/etc/proj7k/osu.env
+ExecStart=/opt/proj7k/.venv/bin/python -m proj7k.catalog --db /var/lib/proj7k/catalog.sqlite3 update
+ExecStartPost=/opt/proj7k/.venv/bin/python -m proj7k.catalog --db /var/lib/proj7k/catalog.sqlite3 refresh
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/proj7k
+PrivateTmp=true

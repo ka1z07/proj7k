@@ -1,0 +1,11 @@
+# /etc/systemd/system/proj7k-catalog-update.timer
+[Unit]
+Description=proj7k catalog update every 6 hours
+
+[Timer]
+OnCalendar=*-*-* 03,09,15,21:30:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

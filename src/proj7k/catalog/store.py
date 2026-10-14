@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS users (
     username    TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS meta (              -- bookkeeping values (the incremental update's watermark)
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
 """
 
 #: Columns added after the first release, added in place to an existing database (table, column, type).
@@ -266,17 +270,23 @@ class CatalogStore:
         """Record a difficulty's official star rating; False when the catalog does not have it."""
         with self._lock, self._db:
             cur = self._db.execute(
-                "UPDATE beatmaps SET official_sr = ?, official_sr_source = ? WHERE id = ?",
-                (official_sr, source, beatmap_id),
+                "UPDATE beatmaps SET official_sr = ?, official_sr_source = ? WHERE id = ? "
+                "AND (official_sr IS NOT ? OR official_sr_source IS NOT ?)",
+                (official_sr, source, beatmap_id, official_sr, source),
             )
-            return cur.rowcount > 0
+            if cur.rowcount:
+                return True
+            return self._db.execute("SELECT 1 FROM beatmaps WHERE id = ?", (beatmap_id,)).fetchone() is not None
 
     def set_status(self, set_id: int, status: str, ranked_date: Optional[str] = None) -> None:
         if status not in STATUSES:
             return
         with self._lock, self._db:
-            self._db.execute("UPDATE beatmapsets SET status = ?, ranked_date = COALESCE(?, ranked_date) WHERE id = ?",
-                             (status, ranked_date, set_id))
+            # Only a real change is written, so a pass over unchanged sets leaves the database untouched
+            # (the website rebuilds its mapper profiles whenever the database changes).
+            self._db.execute("UPDATE beatmapsets SET status = ?, ranked_date = COALESCE(?, ranked_date) WHERE id = ? "
+                             "AND (status IS NOT ? OR ranked_date IS NOT COALESCE(?, ranked_date))",
+                             (status, ranked_date, set_id, status, ranked_date))
 
     def set_mapper(self, beatmap_id: int, mapper_id: int, mapper_name: Optional[str] = None) -> None:
         """Record who owns a difficulty; a known username of that id wins over `mapper_name`."""
@@ -284,10 +294,12 @@ class CatalogStore:
             known = self._db.execute("SELECT username FROM users WHERE id = ?", (mapper_id,)).fetchone()
             name = known[0] if known else mapper_name
             if name:
-                self._db.execute("UPDATE beatmaps SET mapper_id = ?, mapper_name = ?, mapper_search = ? WHERE id = ?",
-                                 (mapper_id, name, _fold(name), beatmap_id))
+                self._db.execute("UPDATE beatmaps SET mapper_id = ?, mapper_name = ?, mapper_search = ? WHERE id = ? "
+                                 "AND (mapper_id IS NOT ? OR mapper_name IS NOT ?)",
+                                 (mapper_id, name, _fold(name), beatmap_id, mapper_id, name))
             else:
-                self._db.execute("UPDATE beatmaps SET mapper_id = ? WHERE id = ?", (mapper_id, beatmap_id))
+                self._db.execute("UPDATE beatmaps SET mapper_id = ? WHERE id = ? AND mapper_id IS NOT ?",
+                                 (mapper_id, beatmap_id, mapper_id))
 
     def set_users(self, users: Dict[int, str]) -> None:
         """Usernames of osu! users; every difficulty they own takes the name."""
@@ -295,9 +307,10 @@ class CatalogStore:
         with self._lock, self._db:
             for user_id, name in users.items():
                 self._db.execute("INSERT INTO users (id, username, updated_at) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE "
-                                 "SET username=excluded.username, updated_at=excluded.updated_at", (user_id, name, now))
-                self._db.execute("UPDATE beatmaps SET mapper_name = ?, mapper_search = ? WHERE mapper_id = ?",
-                                 (name, _fold(name), user_id))
+                                 "SET username=excluded.username, updated_at=excluded.updated_at "
+                                 "WHERE username IS NOT excluded.username", (user_id, name, now))
+                self._db.execute("UPDATE beatmaps SET mapper_name = ?, mapper_search = ? WHERE mapper_id = ? "
+                                 "AND mapper_name IS NOT ?", (name, _fold(name), user_id, name))
 
     def unnamed_mappers(self) -> List[int]:
         """Mapper ids with no username on record (guest difficulty owners the set does not name)."""
@@ -305,6 +318,47 @@ class CatalogStore:
             return [r[0] for r in self._db.execute(
                 "SELECT DISTINCT b.mapper_id FROM beatmaps b LEFT JOIN users u ON u.id = b.mapper_id "
                 "WHERE b.mapper_id IS NOT NULL AND u.id IS NULL")]
+
+    def prune_set(self, set_id: int, keep: Iterable[int]) -> int:
+        """Drop the difficulties of a set that osu! no longer lists (removed by its mapper, or no longer 7K);
+        a set left with none goes too. Returns how many difficulties went."""
+        keep = sorted(set(keep))
+        with self._lock, self._db:
+            cur = self._db.execute(
+                f"DELETE FROM beatmaps WHERE beatmapset_id = ? AND id NOT IN ({','.join('?' * len(keep))})",
+                (set_id, *keep))
+            if cur.rowcount:
+                self._db.execute("DELETE FROM beatmapsets WHERE id = ? AND id NOT IN "
+                                 "(SELECT DISTINCT beatmapset_id FROM beatmaps)", (set_id,))
+            return cur.rowcount
+
+    def delete_set(self, set_id: int) -> bool:
+        """Remove a set osu! has deleted."""
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM beatmaps WHERE beatmapset_id = ?", (set_id,))
+            return self._db.execute("DELETE FROM beatmapsets WHERE id = ?", (set_id,)).rowcount > 0
+
+    def sets_with_status(self, statuses: Iterable[str]) -> List[int]:
+        statuses = list(statuses)
+        with self._lock:
+            return [r[0] for r in self._db.execute(
+                f"SELECT id FROM beatmapsets WHERE id > 0 AND status IN ({','.join('?' * len(statuses))})",
+                statuses)]
+
+    def last_ingest(self) -> Optional[str]:
+        """When a set was last written (ISO 8601, UTC); None for a catalog with no osu! sets."""
+        with self._lock:
+            return self._db.execute("SELECT MAX(updated_at) FROM beatmapsets WHERE id > 0").fetchone()[0]
+
+    def get_meta(self, key: str) -> Optional[str]:
+        with self._lock:
+            rec = self._db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return rec[0] if rec else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        with self._lock, self._db:
+            self._db.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE "
+                             "SET value = excluded.value", (key, value))
 
     def checksums(self) -> List[str]:
         with self._lock:
