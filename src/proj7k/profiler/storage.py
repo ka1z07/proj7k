@@ -32,7 +32,8 @@ SNAPSHOT_ENGINE = "spec-v0.2"
 #: under any of `AFFECTING_BITS` was misread and is left out of aggregates until it is re-imported.
 #: 3: each skill also keeps the events played and the accuracy lost over them, and the summary keeps the play's
 #: overall reading, which the profile's fit across plays needs (ADR-0028). Importing re-reads older snapshots.
-SNAPSHOT_INGEST_VERSION = 3
+#: 4: the summary also keeps the play's technique-habit statistics (`summary.habits`, ADR-0029).
+SNAPSHOT_INGEST_VERSION = 4
 
 
 #: The first ingest version that honoured mods.
@@ -289,6 +290,9 @@ def build_snapshot_from_report(
     if play_mods is not None:
         summary_info["clock_rate"] = play_mods.clock_rate
         summary_info["mod_acronyms"] = list(play_mods.acronyms)
+    habits = getattr(report, "habits", None)
+    if habits is not None:
+        summary_info["habits"] = habits.to_dict()
     if report.pathology and report.pathology.cascade_precursor:
         summary_info["dominant_break_technique"] = report.pathology.cascade_precursor.dominant_technique
 

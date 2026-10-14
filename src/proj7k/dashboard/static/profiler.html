@@ -11,7 +11,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">回放与画像</div>
-        <div class="page-sub">诊断一局回放、查看玩家八项技法画像、从 osu!lazer 导入历史回放。</div>
+        <div class="page-sub">诊断一局回放、查看玩家八项技法画像和发力习惯、从 osu!lazer 导入历史回放。</div>
       </div>
       <a class="standalone-only" href="/#profiler">← 返回控制台</a>
     </div>
@@ -19,6 +19,7 @@
     <div class="tabs" id="tabs">
       <button data-tab="replay" class="active">回放诊断</button>
       <button data-tab="player">玩家画像</button>
+      <button data-tab="habits">发力习惯</button>
       <button data-tab="import">导入 lazer 回放</button>
     </div>
 
@@ -84,6 +85,18 @@
       <div><button class="primary" id="pfRun">查看画像</button></div>
     </div>
 
+    <!-- 发力习惯 -->
+    <div class="card hidden" data-pane="habits">
+      <h2>发力习惯</h2>
+      <p class="hint" style="margin-bottom:10px">从存档里的回放累积：每列按早按晚、按住多久、和弦谁先按、滚着打还是分开打、叠键压缩、LN 怎么松。回放只记录每个键按下和松开的时刻，没有手指信息；中键由哪只手按，是从和弦里各键时间误差的相关性推断的。</p>
+      <div class="row">
+        <div class="field"><label for="hbPlayer">玩家名</label><input type="text" id="hbPlayer" list="players"></div>
+        <div class="field"><label for="hbDays">近多少天</label><input type="number" id="hbDays" min="1" value="30"></div>
+      </div>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="hbAll" checked> 全历史（忽略天数）</label>
+      <div><button class="primary" id="hbRun">查看习惯</button></div>
+    </div>
+
     <!-- 导入 -->
     <div class="card hidden" data-pane="import">
       <h2>从 osu!lazer 导入历史回放</h2>
@@ -106,7 +119,7 @@
     const panel = P7.jobPanel($("#job"));
     const dropReplay = P7.dropZone($("#dropReplay"), ".osr", (f) => { $("#rpReplay").disabled = !!f; });
     const dropBeatmap = P7.dropZone($("#dropBeatmap"), ".osu", (f) => { $("#rpBeatmap").disabled = !!f; });
-    const runButtons = ["#rpRun", "#pfRun", "#imRun"].map((s) => $(s));
+    const runButtons = ["#rpRun", "#pfRun", "#hbRun", "#imRun"].map((s) => $(s));
 
     document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === b));
@@ -141,7 +154,7 @@
       const data = await P7.getJSON("/api/players");
       $("#players").replaceChildren(...(data.players || []).map((p) => el("option", { value: p })));
       const first = (data.players || [])[0];
-      if (first) ["#rpPlayer", "#pfPlayer", "#imPlayer"].forEach((s) => { if (!$(s).value) $(s).value = first; });
+      if (first) ["#rpPlayer", "#pfPlayer", "#hbPlayer", "#imPlayer"].forEach((s) => { if (!$(s).value) $(s).value = first; });
     }
     loadPlayers();
 
@@ -243,6 +256,76 @@
       return nodes;
     }
 
+    const HAND = { L: "左手", R: "右手" };
+    const ms = (x, signed) => (x === null || x === undefined ? "—" : `${signed && x > 0 ? "+" : ""}${x}ms`);
+    const pctOr = (x) => (x === null || x === undefined ? "—" : P7.pct(x));
+    const gapLabel = (b) => (b.hi === null ? `≥${b.lo}ms` : `${b.lo}–${b.hi}ms`);
+
+    function corrGrid(h) {
+      const lanes = h.columns.map((c) => c.lane);
+      const corr = {};
+      h.pairs.forEach((p) => { corr[`${p.a}-${p.b}`] = p; corr[`${p.b}-${p.a}`] = p; });
+      return el("table", {},
+        el("tr", {}, el("th", { text: "" }), ...lanes.map((l) => el("th", { class: "num", text: l }))),
+        lanes.map((l, a) => el("tr", {}, el("th", { text: l }), ...lanes.map((_, b) => {
+          const p = corr[`${a}-${b}`];
+          if (a === b || !p || p.corr === null) return el("td", { class: "num hint", text: a === b ? "·" : "—" });
+          const alpha = Math.max(0, Math.min(1, p.corr / 0.6));
+          return el("td", { class: "num", text: p.corr.toFixed(2), title: `${p.lanes}：${p.chords} 个和弦，按下时间差中位 ${p.median_diff_ms}ms`,
+            style: `background: rgba(56, 189, 248, ${(0.08 + 0.6 * alpha).toFixed(2)})` });
+        }))));
+    }
+
+    function habitsResult(r) {
+      const h = r.habits;
+      const head = el("div", { class: "card" },
+        el("h2", { text: `${h.player_name} · ${h.window_mode === "all_time" ? "全历史" : `近 ${h.horizon_days} 天`}` }),
+        el("div", { class: "stats" }, P7.stat("回放", h.plays), P7.stat("音符", h.notes),
+          P7.stat("中键归属", h.hands.middle_hand ? HAND[h.hands.middle_hand] : "不确定"),
+          P7.stat("滚奏阈值", h.roll_threshold_ms === null ? "—" : `${h.roll_threshold_ms}ms`)),
+        h.stale_plays ? el("p", { class: "warn", text: `${h.stale_plays} 局是旧版本存的，没有习惯数据；重新「导入回放」即可补上。` }) : null);
+      if (!h.plays) return [head, el("div", { class: "card hint", text: "这个时间窗里没有带习惯数据的回放。先导入回放。" })];
+
+      const hd = h.hands;
+      const hands = el("div", { class: "card" }, el("h2", { text: "手的分工" }),
+        el("p", { text: hd.middle_hand
+          ? `中键由${HAND[hd.middle_hand]}按：和${HAND[hd.middle_hand]}的键一起按时误差更同步（相关 ${hd.middle_hand === "R" ? hd.middle_right_corr : hd.middle_left_corr} 对 ${hd.middle_hand === "R" ? hd.middle_left_corr : hd.middle_right_corr}），按下时间差也更小（${hd.middle_hand === "R" ? hd.middle_right_diff_ms : hd.middle_left_diff_ms}ms 对 ${hd.middle_hand === "R" ? hd.middle_left_diff_ms : hd.middle_right_diff_ms}ms）。`
+          : "中键和两只手的同步程度差不多，看不出由哪只手按（可能两只手都按，或者数据还不够）。" }),
+        el("p", { class: "hint", text: hd.hands_separable
+          ? `同一只手的键误差相关平均 ${hd.within_hand_corr}，跨手 ${hd.cross_hand_corr}：两只手在时间上分得很清楚。下表是和弦里两列按键误差的相关系数，越亮越像同一只手一起动。`
+          : `同手相关 ${hd.within_hand_corr ?? "—"}，跨手 ${hd.cross_hand_corr ?? "—"}：两只手在时间上分不太开，下面的推断要谨慎看。` }),
+        corrGrid(h),
+        el("h3", { text: "和弦里谁先按（同一只手内，这个键先按下的比例）" }),
+        P7.kv(Object.entries(h.hand_lead).map(([hand, rows]) => [HAND[hand],
+          rows.map((x) => `${x.lane} ${pctOr(x.first_rate)}`).join(" · ")])));
+
+      const cols = el("div", { class: "card" }, el("h2", { text: "每列" }),
+        el("table", {}, el("tr", {}, el("th", { text: "列" }), el("th", { class: "num", text: "平均偏移" }), el("th", { class: "num", text: "偏移标准差" }),
+          el("th", { class: "num", text: "米键按住（中位，p10–p90）" }), el("th", { class: "num", text: "LN 尾平均" }),
+          el("th", { class: "num", text: "LN 早松" }), el("th", { class: "num", text: "LN 晚松" }), el("th", { class: "num", text: "空按" })),
+          h.columns.map((c) => el("tr", {}, el("td", { text: c.lane }), el("td", { class: "num", text: ms(c.mean_offset_ms, true) }),
+            el("td", { class: "num", text: ms(c.sd_offset_ms) }),
+            el("td", { class: "num", text: c.hold_median_ms === null ? "—" : `${c.hold_median_ms}ms（${c.hold_p10_ms}–${c.hold_p90_ms}）` }),
+            el("td", { class: "num", text: ms(c.ln_tail_mean_ms, true) }), el("td", { class: "num", text: pctOr(c.ln_early_rate) }),
+            el("td", { class: "num", text: pctOr(c.ln_late_rate) }), el("td", { class: "num", text: c.ghost_taps })))),
+        el("p", { class: "hint", text: "偏移为负是按早。LN 早松 / 晚松指松手离尾判超过 50ms。" }));
+
+      const motion = el("div", { class: "card" }, el("h2", { text: "按键方式" }),
+        el("h3", { text: "米键按住多久（按同一列到下一个音的间隔分）" }),
+        el("table", {}, el("tr", {}, el("th", { text: "同列间隔" }), el("th", { class: "num", text: "音符" }), el("th", { class: "num", text: "按住中位" })),
+          h.hold_by_gap.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.notes }), el("td", { class: "num", text: ms(b.hold_median_ms) })))),
+        el("p", { class: "hint", text: "间隔变大而按住时长不变，说明是固定的「点一下」；随间隔变长，说明习惯按住到下一个音附近。" }),
+        el("h3", { text: `滚奏：同一只手换键时，前一个键还没松开的比例${h.roll_threshold_ms === null ? "" : `（约 ${h.roll_threshold_ms}ms 以下是滚着打）`}` }),
+        el("table", {}, el("tr", {}, el("th", { text: "间隔" }), el("th", { class: "num", text: "音符对" }), el("th", { class: "num", text: "前键未松" })),
+          h.roll.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.pairs }), el("td", { class: "num", text: pctOr(b.overlap_rate) })))),
+        el("h3", { text: "叠键：同列连打两下的平均偏移" }),
+        el("table", {}, el("tr", {}, el("th", { text: "间隔" }), el("th", { class: "num", text: "叠键对" }), el("th", { class: "num", text: "第一下" }), el("th", { class: "num", text: "第二下" })),
+          h.jack.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.pairs }),
+            el("td", { class: "num", text: ms(b.first_offset_ms, true) }), el("td", { class: "num", text: ms(b.second_offset_ms, true) })))),
+        el("p", { class: "hint", text: "第一下偏早、第二下偏晚，说明这个速度的叠键被压缩、手跟不上。" }));
+      return [head, hands, cols, motion];
+    }
+
     // --- 按钮 -------------------------------------------------------------------------------------------
     $("#rpRun").onclick = async () => {
       const src = source();
@@ -266,6 +349,11 @@
         player: $("#pfPlayer").value, horizon_days: $("#pfDays").value, all_time: $("#pfAll").checked, recommend: $("#pfRecommend").value,
       });
       if (job) $("#results").replaceChildren(...profileResult(job.result));
+    };
+
+    $("#hbRun").onclick = async () => {
+      const job = await run("profile_habits", { player: $("#hbPlayer").value, horizon_days: $("#hbDays").value, all_time: $("#hbAll").checked });
+      if (job) $("#results").replaceChildren(...habitsResult(job.result));
     };
 
     $("#imRun").onclick = async () => {
