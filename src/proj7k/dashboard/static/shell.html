@@ -45,6 +45,7 @@
     <div class="status">
       <span id="gameState" class="game-state" title="osu!lazer 里当前选中的谱面"></span>
       <span id="lazerState" title="osu!lazer 数据库状态"></span>
+      <button class="small" id="lazerBtn" title="关闭 osu!lazer（和点窗口的 ✕ 一样，游戏会正常保存后退出）再重新打开；没在运行就直接打开">重启 osu!</button>
       <span id="jobState"></span>
       <span><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
     </div>
@@ -90,7 +91,7 @@
       const j = msg.job;
       if (j.status === "queued" || j.status === "running") active.set(j.id, j); else active.delete(j.id);
       renderJobs();
-      if (!["queued", "running"].includes(j.status) && j.kind.startsWith("sync")) refreshLazer();
+      if (!["queued", "running"].includes(j.status) && (j.kind.startsWith("sync") || j.kind === "lazer_control")) refreshLazer();
     });
 
     // The game's current chart, which the downscaler, generator and profiler pages preselect.
@@ -110,6 +111,17 @@
         node.className = !cfg.realm_exists ? "warn" : "";
       } catch (e) { node.textContent = ""; }
     }
+    document.getElementById("lazerBtn").onclick = async () => {
+      const btn = document.getElementById("lazerBtn");
+      const node = document.getElementById("lazerState");
+      btn.disabled = true;
+      node.textContent = "正在重启 osu!lazer…";
+      const job = await P7.startJob("lazer_control", { mode: "restart" });
+      btn.disabled = false;
+      if (job.status === "failed") alert(`重启 osu!lazer 失败：${job.error}`);
+      refreshLazer();
+    };
+
     // Probed on load and after each sync job only: the probe takes osu!lazer's lock for an instant.
     refreshLazer();
   </script>

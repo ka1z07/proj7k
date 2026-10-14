@@ -483,6 +483,59 @@ def test_cli_config_follows_lazer_dir(tmp_path):
     assert cfg.db_path == tmp_path / "p.db"
     args = build_parser().parse_args(["--realm", str(tmp_path / "r" / "client.realm")])
     assert build_config(args).lazer_files_dir == tmp_path / "r" / "files"
+    assert build_config(args).lazer_exe is None
+    args = build_parser().parse_args(["--lazer-exe", str(tmp_path / "osu.AppImage")])
+    assert build_config(args).lazer_exe == tmp_path / "osu.AppImage"
+
+
+class _FakeLazer:
+    def __init__(self, running):
+        self.running = running
+        self.events = []
+
+    def is_running(self):
+        return self.running
+
+    def close(self):
+        self.events.append("close")
+        was, self.running = self.running, False
+        return was
+
+    def start(self):
+        self.events.append("start")
+        self.running = True
+
+    def restart(self):
+        was = self.close()
+        self.start()
+        return was
+
+
+def test_lazer_control_and_sync_with_restart(tmp_path, monkeypatch):
+    from proj7k.dashboard import actions
+
+    fake = _FakeLazer(running=True)
+    monkeypatch.setattr(actions, "lazer_client", lambda config: fake)
+    cfg = _config(tmp_path)
+
+    assert actions.lazer_control(cfg, {}, None) == {"mode": "restart", "was_running": True}
+    assert fake.events == ["close", "start"]
+    assert actions.lazer_control(cfg, {"mode": "start"}, None)["was_running"] is True
+    assert fake.events == ["close", "start"]  # already running: not started twice
+    with pytest.raises(ValueError):
+        actions.lazer_control(cfg, {"mode": "explode"}, None)
+
+    # The sync fails (no library here), and the game is started again all the same.
+    fake.events.clear()
+    with pytest.raises(RuntimeError):
+        actions.sync_once(cfg, {"restart": True}, None)
+    assert fake.events == ["close", "start"]
+
+    # A dry run never touches the game.
+    fake.events.clear()
+    with pytest.raises(RuntimeError):
+        actions.sync_once(cfg, {"restart": True, "dry_run": True}, None)
+    assert fake.events == []
 
 
 def test_the_games_current_chart_reaches_every_page(tmp_path):

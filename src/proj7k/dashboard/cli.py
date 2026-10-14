@@ -3,6 +3,7 @@ CLI entrypoint for the proj7k dashboard: live radar, lazer sync, downscaler and 
 
 Usage:
     python3 -m proj7k.dashboard [--port 7770] [--no-open] [--no-watch] [--lazer-dir DIR] [--db PATH] [--output-dir DIR]
+        [--lazer-exe PATH]
 
 ADR-0024 (built on the live server of ADR-0010).
 """
@@ -51,6 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_DASHBOARD_DIR,
         help=f"Where practice maps, bundles and replay views are written (default: {DEFAULT_DASHBOARD_DIR}).",
     )
+    parser.add_argument(
+        "--lazer-exe",
+        type=Path,
+        default=None,
+        help=(
+            "osu!lazer to start when the dashboard restarts the game (default: %%LOCALAPPDATA%%\\osulazer\\osu!.exe "
+            "on Windows, /Applications/osu!.app on macOS; on Linux, your AppImage)."
+        ),
+    )
     return parser
 
 
@@ -62,6 +72,7 @@ def build_config(args: argparse.Namespace) -> DashboardConfig:
         cache_dir=args.cache_dir,
         db_path=args.db,
         output_dir=args.output_dir,
+        lazer_exe=args.lazer_exe,
     )
 
 

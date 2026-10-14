@@ -46,7 +46,7 @@ pip install -r requirements.txt
 ```bash
 PYTHONPATH=src python3 -m proj7k.dashboard
 ```
-Windows 上直接双击仓库根目录的 `dashboard.cmd`（有 `.venv` 就用它）。浏览器会自动打开 `http://127.0.0.1:7770/`；谱面、回放可以填本机路径，也可以直接拖进页面。降阶生成的 `.osz` 点「导入 osu!」即交给 osu! 导入。下面各条命令行照常可用，与控制台走的是同一套代码（[ADR-0024](docs/adr/0024-unified-web-dashboard.md)）。
+Windows 上直接双击仓库根目录的 `dashboard.cmd`（有 `.venv` 就用它）。浏览器会自动打开 `http://127.0.0.1:7770/`；谱面、回放可以填本机路径，也可以直接拖进页面。降阶生成的 `.osz` 点「导入 osu!」即交给 osu! 导入。顶栏的「重启 osu!」会像点窗口 ✕ 一样关掉 osu!lazer 再重新打开；曲库同步默认也会先关游戏、写完再打开（游戏不在默认位置时用 `--lazer-exe` 指定，Linux 上指向 AppImage）。下面各条命令行照常可用，与控制台走的是同一套代码（[ADR-0024](docs/adr/0024-unified-web-dashboard.md)）。
 
 ### 2. 体验单曲客观评级与 8 维雷达 (10秒)
 直接测试仓库内置的示范谱面：

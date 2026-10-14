@@ -31,8 +31,9 @@
           <button id="dryBtn" title="评估全部 7K 谱面，报告会改写多少张、主技法标签如何变化；不写入，osu! 开着也能跑">预演（不写入）</button>
           <button id="syncBtn" class="primary" title="增量同步：只重算有变化的谱面，写入前自动快照">立即同步</button>
         </div>
+        <label class="check"><input type="checkbox" id="restartChk" checked> osu!lazer 开着时，先关掉它，同步完再重新打开</label>
         <label class="check"><input type="checkbox" id="waitChk"> osu!lazer 正在运行时，最多等它释放数据库 60 秒</label>
-        <p class="hint" style="margin:8px 0 12px">写入需要 osu!lazer 关闭（它运行时会锁住数据库）；预演不需要。</p>
+        <p class="hint" style="margin:8px 0 12px">写入需要 osu!lazer 关闭（它运行时会锁住数据库）；预演不需要。关闭和点窗口的 ✕ 一样，游戏会正常保存后退出。</p>
         <div class="row">
           <button id="setupBtn" class="small" title="安装 / 检查读写 Realm 数据库用的 Node.js 组件（首次同步前需要 Node.js 与 npm）">安装 / 检查 bridge</button>
           <button id="revertBtn" class="small danger" title="撤销 proj7k 对曲库的全部改动，恢复官方星级与标签">还原为官方星级</button>
@@ -83,7 +84,8 @@
         el("div", { class: "stats" },
           P7.stat("7K 谱面", r.total_7k), P7.stat("已评估", r.evaluated_count), P7.stat("已写入", r.updated_count),
           P7.stat("其中旧引擎重算", r.refreshed_count), P7.stat("跳过", r.skipped_count), P7.stat("失败", r.failed_count)),
-        r.snapshot_path ? P7.kv([["备份快照", r.snapshot_path]]) : null);
+        r.snapshot_path ? P7.kv([["备份快照", r.snapshot_path]]) : null,
+        r.restarted_lazer ? el("p", { class: "hint", style: "margin-top:8px", text: "已关闭 osu!lazer 写入，并重新打开了它。" }) : null);
     }
 
     async function run(kind, params) {
@@ -99,7 +101,7 @@
 
     $("#refreshBtn").onclick = loadInfo;
     $("#dryBtn").onclick = () => run("sync_once", { dry_run: true });
-    $("#syncBtn").onclick = () => run("sync_once", { wait: $("#waitChk").checked });
+    $("#syncBtn").onclick = () => run("sync_once", { wait: $("#waitChk").checked, restart: $("#restartChk").checked });
     $("#setupBtn").onclick = () => run("sync_setup", {});
     $("#revertBtn").onclick = () => {
       if (confirm("撤销 proj7k 对 osu!lazer 曲库的全部改动，恢复官方星级与标签？")) run("sync_revert", {});
