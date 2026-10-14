@@ -2,6 +2,8 @@
 # Kills whatever serves those ports, then relaunches both detached (hidden, outside the caller's
 # process tree) so they survive the terminal or Claude session that started them.
 # A running `proj7k.catalog crawl` is never touched. Logs: %USERPROFILE%\.cache\proj7k\logs\.
+# Where the boot task "proj7k catalog" exists (deploy/catalog/README.md), the catalog is restarted through
+# that task instead, so the public site keeps running from the task's own checkout and settings.
 param(
   [switch]$DashboardOnly,
   [switch]$CatalogOnly,
@@ -16,6 +18,7 @@ $cache = Join-Path $env:USERPROFILE '.cache\proj7k'
 $logs = Join-Path $cache 'logs'
 New-Item -ItemType Directory -Force $logs | Out-Null
 
+$catalogTask = 'proj7k catalog'
 $services = @()
 if (-not $CatalogOnly) {
   $services += @{ Name = 'dashboard'; Port = $DashboardPort; Match = 'proj7k\.dashboard'
@@ -41,6 +44,11 @@ function Stop-Service7k($svc) {
 }
 
 function Start-Service7k($svc) {
+  if ($svc.Name -eq 'catalog' -and (Get-ScheduledTask -TaskName $catalogTask -ErrorAction SilentlyContinue)) {
+    Start-ScheduledTask -TaskName $catalogTask
+    Write-Host "started catalog via scheduled task '$catalogTask' (its own checkout and log)"
+    return
+  }
   $log = Join-Path $logs "$($svc.Name).log"
   # Win32_Process.Create starts the process under WMI, outside this shell's job object, so it
   # outlives the session. It does not inherit our environment, hence the `set` in cmd.
@@ -60,6 +68,7 @@ function Wait-Port($svc) {
   return $false
 }
 
+if (-not $DashboardOnly) { Stop-ScheduledTask -TaskName $catalogTask -ErrorAction SilentlyContinue }
 foreach ($svc in $services) { Stop-Service7k $svc }
 Start-Sleep -Milliseconds 500
 foreach ($svc in $services) { Start-Service7k $svc }

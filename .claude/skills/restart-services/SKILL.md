@@ -6,6 +6,9 @@ description: Restart the proj7k dashboard (port 7770) and the chart catalog webs
 # Restart the dashboard and catalog site
 
 Both services run from the main checkout (`C:\Users\Administrator\Documents\proj7k`), not from a worktree.
+Exception: when the boot task `proj7k catalog` exists (it does on Kai's machine; it serves the public site
+https://7k.kaiz.dev from its own checkout), the script restarts the catalog through that task instead, so a
+`git pull` of the main checkout does not change what the public site runs.
 
 1. Make sure the checkout is on `main` and up to date if the user wants the latest code (`git pull --ff-only origin main`).
 2. Run the script from the repo root (PowerShell):
