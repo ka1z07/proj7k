@@ -6,6 +6,7 @@ Command line of the catalog.
     python3 -m proj7k.catalog add     --db catalog.sqlite3 PATH...          (.osu files or folders)
     python3 -m proj7k.catalog lazer   --db catalog.sqlite3 [--realm ... --files-dir ...]
     python3 -m proj7k.catalog crawl   --db catalog.sqlite3                  (osu! API; OSU_CLIENT_ID / OSU_CLIENT_SECRET)
+    python3 -m proj7k.catalog update  --db catalog.sqlite3                  (osu! API, only what changed since last time)
     python3 -m proj7k.catalog refresh --db catalog.sqlite3                  (re-evaluate after an engine change)
     python3 -m proj7k.catalog serve   --db catalog.sqlite3 [--host 127.0.0.1 --port 7780]
     python3 -m proj7k.catalog export  --db catalog.sqlite3 OUTPUT           (one compact file to copy to a server)
@@ -50,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help="listing statuses to crawl: ranked loved qualified pending wip graveyard, or all")
     crawl.add_argument("--max-pages", type=int, default=None, help="stop after this many search pages per status")
 
+    update = sub.add_parser("update", help="bring a crawled catalog up to date with osu! (only what changed since "
+                                           "the last update or crawl; for a scheduled task)")
+    update.add_argument("--since", default=None, metavar="DATE",
+                        help="look for changes since this date (ISO 8601) instead of the last update")
+
     sub.add_parser("refresh", help="re-evaluate every difficulty the running engine version has not evaluated "
                                    "(and fill in pattern features a database from before them lacks)")
 
@@ -84,15 +90,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(ingest.ingest_osu_files(store, args.paths))
     elif args.command == "lazer":
         print(ingest.ingest_lazer(store, args.realm, args.files_dir, args.cache_dir))
-    elif args.command == "crawl":
+    elif args.command in ("crawl", "update"):
         client_id, secret = os.environ.get("OSU_CLIENT_ID"), os.environ.get("OSU_CLIENT_SECRET")
         if not client_id or not secret:
             print("set OSU_CLIENT_ID and OSU_CLIENT_SECRET (an OAuth application at "
                   "https://osu.ppy.sh/home/account/edit#oauth)", file=sys.stderr)
             return 2
-        statuses = ingest.ALL_STATUSES if args.status == ["all"] else args.status
-        summary = ingest.ingest_osu_api(store, ingest.OsuApiClient(client_id, secret), statuses, args.max_pages)
-        print(summary)
+        client = ingest.OsuApiClient(client_id, secret)
+        if args.command == "crawl":
+            statuses = ingest.ALL_STATUSES if args.status == ["all"] else args.status
+            print(ingest.ingest_osu_api(store, client, statuses, args.max_pages))
+        else:
+            since = ingest.parse_time(args.since) if args.since else ingest.update_since(store)
+            if since is None:
+                print("the catalog has no osu! sets yet; run `crawl --status all` first", file=sys.stderr)
+                return 2
+            print(f"changes since {since:%Y-%m-%d %H:%M}Z")
+            print(ingest.update_osu_api(store, client, since))
     elif args.command == "refresh":
         print(f"re-evaluated {store.reevaluate_stale()}")
     elif args.command == "export":

@@ -10,6 +10,8 @@ official star rating and the ranked status; the engine's rating is always comput
   from sync's backup state, and a rewritten difficulty without a backup is listed without an official rating.
 - `ingest_osu_api`: osu!'s API v2 (`OsuApiClient`): every ranked/loved 7K mania set, the official rating
   and status from the API, the `.osu` from osu!'s download endpoint. Needs an OAuth client of the operator.
+- `update_osu_api`: the same, incrementally: only what changed on osu! since the last run (new and
+  re-uploaded sets, status changes, deleted sets). Cheap enough to run every few hours.
 """
 
 import gzip
@@ -19,6 +21,7 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
@@ -33,9 +36,11 @@ class IngestSummary:
     added: int = 0
     skipped: int = 0          # not 7K mania, or already current
     failed: List[Tuple[str, str]] = field(default_factory=list)
+    removed: int = 0          # difficulties osu! no longer lists (incremental update only)
 
     def __str__(self) -> str:
-        return f"added {self.added}, skipped {self.skipped}, failed {len(self.failed)}"
+        text = f"added {self.added}, skipped {self.skipped}, failed {len(self.failed)}"
+        return text + (f", removed {self.removed}" if self.removed else "")
 
 
 def _add(store: CatalogStore, summary: IngestSummary, label: str, content: str, **known: Any) -> None:
@@ -187,8 +192,15 @@ class OsuApiClient:
             names.update({int(u["id"]): u["username"] for u in data.get("users", [])})
         return names
 
-    def search_7k(self, status: str = "ranked", max_pages: Optional[int] = None) -> Iterator[Dict[str, Any]]:
-        """Every mania beatmapset of `status` that has a 7K difficulty (osu!'s own `keys=7` filter).
+    def beatmapset(self, set_id: int) -> Dict[str, Any]:
+        """One set with all its difficulties; raises an HTTPError with code 404 when osu! has deleted it."""
+        return self.get(f"beatmapsets/{set_id}")
+
+    def search_7k(self, status: str = "ranked", max_pages: Optional[int] = None, query: str = "",
+                  sort: Optional[str] = None) -> Iterator[Dict[str, Any]]:
+        """Every mania beatmapset of `status` that has a 7K difficulty (osu!'s own `keys=7` filter), narrowed
+        by `query` (more of osu!'s search terms, such as `updated>=2026-10-01`). `status` "any" lists every
+        status.
 
         osu!'s search reports at most SEARCH_CAP results (graveyard has over three times that). Paging
         past the cap works today, but nothing promises it, so a listing that reaches the cap is cut into
@@ -199,7 +211,7 @@ class OsuApiClient:
         pending: List[Tuple[float, Optional[float]]] = [(0.0, None)]
         while pending:
             lo, hi = pending.pop(0)
-            first = self._search_page(status, lo, hi, None)
+            first = self._search_page(status, lo, hi, None, query, sort)
             if first.get("total", 0) >= SEARCH_CAP and _can_split(lo, hi):
                 pending[:0] = _split(lo, hi)
                 logger.info("osu! search %s stars %s..%s reaches the cap; slicing", status, lo, hi)
@@ -219,13 +231,15 @@ class OsuApiClient:
                 cursor = data.get("cursor_string")
                 if not cursor:
                     break
-                data = self._search_page(status, lo, hi, cursor)
+                data = self._search_page(status, lo, hi, cursor, query, sort)
             earlier |= listed
 
-    def _search_page(self, status: str, lo: float, hi: Optional[float], cursor: Optional[str]) -> Any:
+    def _search_page(self, status: str, lo: float, hi: Optional[float], cursor: Optional[str], query: str = "",
+                     sort: Optional[str] = None) -> Any:
         # Unranked sets have no ranked date to sort by; any stable order works with the cursor.
-        sort = "ranked_desc" if status in ("ranked", "loved", "qualified", "approved") else "updated_desc"
-        q = "keys=7" + (f" stars>={lo:g}" if lo > 0 else "") + (f" stars<{hi:g}" if hi is not None else "")
+        sort = sort or ("ranked_desc" if status in ("ranked", "loved", "qualified", "approved") else "updated_desc")
+        q = "keys=7" + (f" {query}" if query else "") + (f" stars>={lo:g}" if lo > 0 else "") \
+            + (f" stars<{hi:g}" if hi is not None else "")
         params = {"m": "3", "q": q, "s": status, "sort": sort}
         if cursor:
             params["cursor_string"] = cursor
@@ -270,6 +284,47 @@ def _owner(bm: Dict[str, Any], bms: Dict[str, Any]) -> Tuple[Optional[int], Opti
     return int(user_id), bms.get("creator") if user_id == bms.get("user_id") else None
 
 
+def _seven_k(bms: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [bm for bm in bms.get("beatmaps", []) if bm.get("mode") == "mania" and round(float(bm.get("cs", 0))) == 7]
+
+
+def _ingest_set(store: CatalogStore, client: OsuApiClient, bms: Dict[str, Any], status: str, known: Set[str],
+                names: Dict[int, str], summary: IngestSummary) -> None:
+    """One listed set: download its new 7K difficulties, refresh what the catalog already has."""
+    set_status = bms.get("status", status)
+    for bm in _seven_k(bms):
+        sr = float(bm["difficulty_rating"])
+        mapper_id, mapper_name = _owner(bm, bms)
+        if mapper_id and mapper_name:
+            names[mapper_id] = mapper_name
+        if bm.get("checksum") in known:
+            store.set_official(int(bm["id"]), sr, "osu-api")
+            store.set_status(int(bms["id"]), set_status, bms.get("ranked_date"))
+            if mapper_id:
+                store.set_mapper(int(bm["id"]), mapper_id, mapper_name)
+            summary.skipped += 1
+            continue
+        try:
+            content = client.osu_file(int(bm["id"]))
+        except Exception as e:
+            summary.failed.append((str(bm["id"]), f"download: {e}"))
+            continue
+        _add(store, summary, str(bm["id"]), content, official_sr=sr, official_sr_source="osu-api",
+             status=set_status, ranked_date=bms.get("ranked_date"), submitted_date=bms.get("submitted_date"),
+             creator_id=bms.get("user_id"), mapper_id=mapper_id, mapper_name=mapper_name)
+        known.add(bm.get("checksum"))
+
+
+def _name_mappers(store: CatalogStore, client: OsuApiClient, names: Dict[int, str]) -> None:
+    store.set_users(names)
+    unnamed = store.unnamed_mappers()
+    if unnamed:
+        try:
+            store.set_users(client.users(unnamed))
+        except Exception as e:
+            logger.warning("could not look up %d mapper names: %s", len(unnamed), e)
+
+
 def ingest_osu_api(store: CatalogStore, client: OsuApiClient, statuses: Iterable[str] = ("ranked", "loved"),
                    max_pages: Optional[int] = None) -> IngestSummary:
     """Crawl osu!'s 7K mania sets. A difficulty already in the catalog with the same MD5 is not downloaded
@@ -280,35 +335,86 @@ def ingest_osu_api(store: CatalogStore, client: OsuApiClient, statuses: Iterable
     names: Dict[int, str] = {}
     for status in statuses:
         for bms in client.search_7k(status, max_pages=max_pages):
-            set_status = bms.get("status", status)
-            for bm in bms.get("beatmaps", []):
-                if bm.get("mode") != "mania" or round(float(bm.get("cs", 0))) != 7:
-                    continue
-                sr = float(bm["difficulty_rating"])
-                mapper_id, mapper_name = _owner(bm, bms)
-                if mapper_id and mapper_name:
-                    names[mapper_id] = mapper_name
-                if bm.get("checksum") in known:
-                    store.set_official(int(bm["id"]), sr, "osu-api")
-                    store.set_status(int(bms["id"]), set_status, bms.get("ranked_date"))
-                    if mapper_id:
-                        store.set_mapper(int(bm["id"]), mapper_id, mapper_name)
-                    summary.skipped += 1
-                    continue
-                try:
-                    content = client.osu_file(int(bm["id"]))
-                except Exception as e:
-                    summary.failed.append((str(bm["id"]), f"download: {e}"))
-                    continue
-                _add(store, summary, str(bm["id"]), content, official_sr=sr, official_sr_source="osu-api",
-                     status=set_status, ranked_date=bms.get("ranked_date"), submitted_date=bms.get("submitted_date"),
-                     creator_id=bms.get("user_id"), mapper_id=mapper_id, mapper_name=mapper_name)
-                known.add(bm.get("checksum"))
-    store.set_users(names)
-    unnamed = store.unnamed_mappers()
-    if unnamed:
+            _ingest_set(store, client, bms, status, known, names, summary)
+    _name_mappers(store, client, names)
+    return summary
+
+
+#: `meta` key of the incremental update's watermark: when the last successful update started (UTC).
+UPDATE_WATERMARK = "osu_update_since"
+#: How far before the watermark an update looks again. osu!'s search index lags behind osu! itself, and a
+#: date filter is whole days, so a generous overlap costs a few pages and misses nothing.
+UPDATE_OVERLAP = timedelta(days=2)
+#: Statuses a set leaves without its `last_update` moving (qualified sets get ranked or disqualified, pending
+#: and WIP sets get graveyarded). They are few, so they are listed in full on every update.
+_MOVING_STATUSES = ("qualified", "pending", "wip")
+
+
+def parse_time(value: str) -> datetime:
+    """An ISO 8601 date or time; one without a zone is UTC."""
+    t = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t.astimezone(timezone.utc)
+
+
+def update_since(store: CatalogStore) -> Optional[datetime]:
+    """Where an incremental update starts: the last update's watermark, else the last write of a crawl."""
+    value = store.get_meta(UPDATE_WATERMARK) or store.last_ingest()
+    return parse_time(value) if value else None
+
+
+def update_osu_api(store: CatalogStore, client: OsuApiClient, since: datetime,
+                   now: Optional[datetime] = None) -> IngestSummary:
+    """Bring the catalog up to date with osu! since `since` (from `update_since`), and move the watermark.
+
+    osu!'s `last_update` moves when a mapper uploads a set, not when its status changes, so three passes:
+    1. every set (any status) updated since then: new sets, new and changed difficulties, removed ones;
+    2. sets ranked or loved since then, and every qualified, pending and WIP set: the current status;
+    3. a set the catalog has as qualified, pending or WIP that neither pass listed has left those statuses
+       (graveyarded, mostly) or was deleted: it is looked up on its own.
+    """
+    now = now or datetime.now(timezone.utc)
+    day = (since - UPDATE_OVERLAP).strftime("%Y-%m-%d")
+    summary = IngestSummary()
+    known = set(store.checksums())
+    names: Dict[int, str] = {}
+    seen: Set[int] = set()
+
+    for bms in client.search_7k("any", query=f"updated>={day}", sort="updated_desc"):
+        _ingest_set(store, client, bms, "unknown", known, names, summary)
+        listed = [int(bm["id"]) for bm in _seven_k(bms)]
+        if listed:
+            summary.removed += store.prune_set(int(bms["id"]), listed)
+        seen.add(int(bms["id"]))
+
+    # `ranked>=` matches ranked, approved and loved sets by the day they got that status.
+    for status, query, sort in [("any", f"ranked>={day}", "ranked_desc")] + [(s, "", None) for s in _MOVING_STATUSES]:
+        for bms in client.search_7k(status, query=query, sort=sort):
+            if int(bms["id"]) not in seen:
+                _ingest_set(store, client, bms, status, known, names, summary)
+                seen.add(int(bms["id"]))
+
+    for set_id in store.sets_with_status(_MOVING_STATUSES):
+        if set_id in seen:
+            continue
         try:
-            store.set_users(client.users(unnamed))
+            bms = client.beatmapset(set_id)
         except Exception as e:
-            logger.warning("could not look up %d mapper names: %s", len(unnamed), e)
+            if getattr(e, "code", None) == 404:
+                store.delete_set(set_id)
+                summary.removed += 1
+                logger.info("set %d is gone from osu!; removed", set_id)
+            else:
+                summary.failed.append((f"set {set_id}", f"lookup: {e}"))
+            continue
+        listed = [int(bm["id"]) for bm in _seven_k(bms)]
+        if not listed:   # no 7K difficulty left
+            summary.removed += store.delete_set(set_id)
+            continue
+        _ingest_set(store, client, bms, "unknown", known, names, summary)
+        summary.removed += store.prune_set(set_id, listed)
+
+    _name_mappers(store, client, names)
+    # A run that got this far moves the watermark even with failures: a download osu! refuses (some
+    # charts have no file) would otherwise hold it back for good. The periodic full crawl retries them.
+    store.set_meta(UPDATE_WATERMARK, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
     return summary

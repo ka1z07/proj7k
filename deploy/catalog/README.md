@@ -30,14 +30,34 @@
 
    建好这个任务后，根目录的 `restart-services.cmd` 重启网站时会改为重启这个任务，不会再从主目录另起一份。
 
-5. **每日抓取（可选）**：先把 `OSU_CLIENT_ID`、`OSU_CLIENT_SECRET` 设为自己账号的用户环境变量，再建一个以自己账号运行的每日任务执行 `deploy\catalog\windows\catalog-crawl.cmd`（任务计划程序里选「不管用户是否登录都要运行」）。
+5. **定时更新（可选）**：两个以自己账号运行的任务（凭据只在环境变量里，不进任何文件）。
+   - `catalog-update.cmd`，每 6 小时：`update` 只取上次以来 osu! 上变了的东西（新传和重传的谱、上架/Loved/进坟场等状态变化、删掉的谱和难度），一次几十个请求、一两分钟，只为新难度跑引擎。
+   - `catalog-crawl.cmd`，每周一次：`crawl --status all` 全量对一遍，补上 `update` 看不到的变化（osu! 重算官方 SR、下架回坟场、下载失败的谱），约 15–30 分钟，大部分时间在等网络。
+
+   两个任务都要指向**网站任务用的同一份检出**（上面的 `$repo`）和同一个数据库：引擎版本号不同的话，之后的 `refresh` 会把整库重算一遍。先把 `OSU_CLIENT_ID`、`OSU_CLIENT_SECRET` 设为自己账号的用户环境变量，然后在 PowerShell 里：
+
+   ```powershell
+   $repo = "C:\Users\Administrator\Documents\proj7k"      # 与网站任务相同
+   schtasks /Create /TN "proj7k catalog update" /SC HOURLY /MO 6 /ST 03:30 /IT /F `
+     /TR "`"$repo\deploy\catalog\windows\catalog-update.cmd`""
+   schtasks /Create /TN "proj7k catalog crawl" /SC WEEKLY /D MON /ST 04:00 /IT /F `
+     /TR "`"$repo\deploy\catalog\windows\catalog-crawl.cmd`""
+   # 默认优先级 7 在电脑忙时会被饿住；这两个任务大多在等网络，正常优先级也不占 CPU。
+   $s = New-ScheduledTaskSettingsSet -Priority 5 -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
+     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
+   Set-ScheduledTask -TaskName "proj7k catalog update" -Settings $s
+   Set-ScheduledTask -TaskName "proj7k catalog crawl" -Settings $s
+   schtasks /Run /TN "proj7k catalog update"
+   ```
+
+   `/IT` 表示只在自己登录着的时候跑（不用把密码交给任务计划程序）；错过的时间点登录后补跑（`-StartWhenAvailable`）。想在注销时也跑，把 `/IT` 换成 `/RU $env:USERNAME /RP`（会提示输入密码）。网站进程会自己发现库变了，不用重启。手动跑一次：`schtasks /Run /TN "proj7k catalog update"`；也可以 `update --since 2026-10-01` 指定从哪天起查。
 6. 打开 `https://7k.kaiz.dev/beatmapsets` 检查。可以在 Cloudflare 里给 `/static/*` 和 `/api/*` 开缓存，接口本身已带 `Cache-Control`。
 
 电脑关机、重启后两项服务都会自己起来；断网期间访客会看到 Cloudflare 的 502 页。
 
 # B. Linux VPS + Caddy
 
-一台能跑 Python 的 Linux 小机器（2 核 2 GB、20 GB 磁盘够用）。Caddy 对外提供 HTTPS；每天由定时器增量抓取一次 osu! 并重算。
+一台能跑 Python 的 Linux 小机器（2 核 2 GB、20 GB 磁盘够用）。Caddy 对外提供 HTTPS；定时器每 6 小时增量更新一次（`update`），每周全量对一遍（`crawl --status all`），之后都 `refresh`。
 
 ## B1. DNS
 
@@ -77,7 +97,7 @@ cp deploy/catalog/Caddyfile /etc/caddy/Caddyfile        # 改成你的子域名
 mkdir -p /etc/proj7k && install -m 600 /dev/null /etc/proj7k/osu.env
 # 编辑 /etc/proj7k/osu.env：OSU_CLIENT_ID=… 和 OSU_CLIENT_SECRET=…（osu! 设置 → OAuth）
 systemctl daemon-reload
-systemctl enable --now proj7k-catalog proj7k-catalog-crawl.timer
+systemctl enable --now proj7k-catalog proj7k-catalog-update.timer proj7k-catalog-crawl.timer
 systemctl reload caddy
 ```
 
@@ -85,7 +105,7 @@ systemctl reload caddy
 
 ## B5. 日常
 
-- 看日志：`journalctl -u proj7k-catalog -u proj7k-catalog-crawl`。
-- 手动抓一次：`systemctl start proj7k-catalog-crawl`。
-- 更新代码：`cd /opt/proj7k && git pull && systemctl restart proj7k-catalog && systemctl start proj7k-catalog-crawl`（引擎变了的话，抓取后的 `refresh` 会重算全部难度）。
+- 看日志：`journalctl -u proj7k-catalog -u proj7k-catalog-update -u proj7k-catalog-crawl`。
+- 手动更新一次：`systemctl start proj7k-catalog-update`；全量对一遍：`systemctl start proj7k-catalog-crawl`。
+- 更新代码：`cd /opt/proj7k && git pull && systemctl restart proj7k-catalog && systemctl start proj7k-catalog-update`（引擎变了的话，抓取后的 `refresh` 会重算全部难度）。
 - 备份：`python -m proj7k.catalog --db /var/lib/proj7k/catalog.sqlite3 export /root/backup-$(date +%F).sqlite3`。
