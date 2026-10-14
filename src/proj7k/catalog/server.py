@@ -1,6 +1,7 @@
 """
 The catalog website and its JSON API, on the standard library's threaded HTTP server.
 
+    GET /                                 the home page: what proj7k is, the way into the catalog
     GET /beatmapsets                      the listing (search page)
     GET /beatmapsets/<set id>             a set's page; `#<beatmap id>` selects a difficulty
     GET /beatmaps/<beatmap id>            redirects to its set's page
@@ -84,7 +85,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
     def route(self, path: str, query: Dict[str, str]) -> Tuple[int, Dict[str, str], bytes]:
         if path in ("/", ""):
-            return self._redirect("/beatmapsets")
+            return self._static("home.html")
         if path == "/beatmapsets":
             return self._static("search.html")
         if _SET_PAGE.match(path):

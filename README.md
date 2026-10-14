@@ -1,180 +1,243 @@
-# 🎹 proj7k
+# proj7k
 
-<p align="center">
-  <strong>基于第一性原理与视觉/生物力学感知的 osu!mania 7K 客观难度评价与技法解构系统</strong>
-</p>
+给 osu!mania 7K 玩家的一套工具：看一张图难在哪、把打不过的图降到能练的难度、从一首歌生成谱面、从自己的回放里看出水平和短板。
 
-<p align="center">
-  <a href="docs/quickstart.md">🚀 5分钟快速上手</a> •
-  <a href="docs/user-guide.md">📖 玩家实操指南</a> •
-  <a href="docs/faq.md">❓ 常见问题 (FAQ)</a> •
-  <a href="CONTEXT.md">📐 领域词汇体系</a>
-</p>
+难度用的是 proj7k 自己的星级，按 [Jinjin 7K 段位](#星级和段位怎么看)标定：同样是 5 星，不管是叠键图还是长条图，难度应该差不多。
+
+**🌐 在线谱面库：<https://7k.kaiz.dev/>**（不用安装，打开就能用）
 
 ---
 
-## 🌟 为什么需要 proj7k？
+## 目录
 
-在传统的下落式音游（特别是 osu!mania 7K）中，官方评级算法常常让玩家困惑：
-- **反键与高密长条**：明明难得令人窒息（负空间读谱倒错、微观放手窗口极窄），官方星级却严重低估；
-- **纯单轨连打 (Jack)**：微观肌肉疲劳巨大，却被当成普通低密度处理；
-- **单纯看总体 NPS / 简单加和**：忽视了双手轮换与单手死扛之间 2 倍生理负荷的巨大天壤之别。
-
-**proj7k** 拒绝黑盒，基于**第一性物理键力时钟**、**微观手型拓扑**与**人类神经应变感知**，带来真正反映玩家实操体验的客观工具链：
-- **🎯 8 维技法雷达**：将铺面精准解构为 `Jack`（叠键）、`Tech`（混押）、`Speed`（手速）、`Stream`（切键）与 4 维 `LN`（长条综合/技巧/反键/尾放）；
-- **📊 客观 Star Rating**：告别虚高与低估，严密锚定全球权威 Jinjin 7K Dan 考核梯级；
-- **🖥️ 实时网页仪表盘**：一边选歌打歌，一边在旁侧屏幕实时展示动态雷达与难度流；
-- **🔄 osu!lazer 数据库安全同步**：一键将游戏内失衡星级替换为客观星级，并提供随时一键无痕还原；
-- **🛠️ 自适应降级练习器 (Downscaler)**：打不过神图？智能保留手型骨架，原汁原味降至适合你的专属段位/星级；
-- **🩺 回放微观病理诊断 (Player Profiler)**：因果时序判定击键，量化各轨 UR、双手偏载、Jack 疲劳漂移斜率与 LN 释放粘键，严格隔离惊慌鬼键；
-- **📈 8 维承压雷达与段位映射**：点对点对齐微观瞬时应变与击键偏差，拟合生理承压拐点输出 8 维 Jinjin Dan 段位；
-- **🎯 双教练模式与三阶梯练习包 (Closed-Loop Coaching)**：支持“短板突破”与“长板专精”双策略（严禁段位考题，本地曲库精准召回）；自动截取致死高应变切片（$t_{\text{fatal}}-10\text{s}, +5\text{s}$），闭环生成 Recovery、Bridge、Push 三阶梯练习包（打包为独立 `.osz`）。
+- [有哪些工具](#有哪些工具)
+- [在线谱面库](#在线谱面库)
+- [安装（第一次用）](#安装第一次用)
+- [打开控制台](#打开控制台)
+- [每个工具怎么用](#每个工具怎么用)
+  - [实时雷达](#实时雷达)
+  - [曲库同步](#曲库同步)
+  - [降阶练习](#降阶练习)
+  - [谱面生成](#谱面生成)
+  - [回放与画像](#回放与画像)
+- [星级和段位怎么看](#星级和段位怎么看)
+- [常见问题](#常见问题)
+- [命令行用法（进阶）](#命令行用法进阶)
 
 ---
 
-## ⚡ 5 分钟极速上手
+## 有哪些工具
 
-### 1. 准备环境 (30秒)
+| 工具 | 一句话 | 在哪用 |
+| :--- | :--- | :--- |
+| **在线谱面库** | 搜索全部 7K 谱面，官方星级和 proj7k 星级并排显示 | 网页 <https://7k.kaiz.dev/> |
+| **实时雷达** | 在游戏里选歌时，旁边的网页实时显示这张图的星级、段位和八项技法 | 控制台 |
+| **曲库同步** | 把 osu!lazer 里所有 7K 图的星级换成 proj7k 星级，随时可以还原 | 控制台 |
+| **降阶练习** | 把一张图降到你选的段位或星级，生成练习谱并导入游戏 | 控制台 |
+| **谱面生成** | 给一首歌，按目标难度自动生成一张 7K 谱 | 控制台 |
+| **回放与画像** | 分析回放：你的八项技法水平、发力习惯、卡在哪一段，并推荐练习 | 控制台 |
+
+「控制台」是装在你自己电脑上的一个网页，所有本地工具都在里面，点按钮就能用，不需要会写代码。
+
+---
+
+## 在线谱面库
+
+打开 <https://7k.kaiz.dev/>，点「进入谱面库」。
+
+- **两个星级并排**：每个难度都显示 osu! 官方星级（黄色）和 proj7k 星级（蓝色），以及对应的段位。排序选「偏差」可以找到两边差得最多的图。
+- **按技法找图**：用「主技能」按钮筛出以叠键、切、反键、放手等为主的图。
+- **搜索条件**：搜索框里除了歌名、谱师，还可以写条件，例如 `engine>5 engine<6`（proj7k 星级在 5 到 6 之间）。点搜索框旁边的「搜索语法」可以看全部写法。
+- **随机**：排序选「随机」，每次刷新换一批图，适合找新图打。
+- **谱师**：顶栏「谱师」页可以看每位谱师写过哪些 7K 图、擅长什么技法。
+- 除了 Ranked、Loved、Qualified，Pending、WIP 和坟图里的 7K 图也收录了。谱面详情页可以一键跳到 osu! 官网下载，或用 osu!direct 直接打开。
+
+---
+
+## 安装（第一次用）
+
+下面以 Windows 为例。macOS / Linux 见[这一节的最后](#macos--linux)。
+
+### 1. 装 Python
+
+到 <https://www.python.org/downloads/> 下载 **Python 3.14** 并安装。
+
+> [!IMPORTANT]
+> 安装界面第一页底部一定要勾选 **「Add python.exe to PATH」**，再点 Install。
+
+### 2. 下载 proj7k
+
+打开 <https://github.com/ka1z07/proj7k>，点绿色的 **Code** 按钮 → **Download ZIP**，解压到一个你找得到的文件夹，比如 `文档\proj7k`。
+
+（会用 git 的话也可以 `git clone https://github.com/ka1z07/proj7k.git`，以后用 `git pull` 更新。）
+
+### 3. 安装依赖（只需一次）
+
+打开解压出来的 proj7k 文件夹，在地址栏输入 `cmd` 回车，会打开一个黑色窗口，粘贴下面这行并回车：
+
+```bat
+python -m pip install -r requirements.txt
+```
+
+等它跑完即可，以后不用再做。
+
+### 4.（可选）装 Node.js
+
+只有要用 **[曲库同步](#曲库同步)** 才需要。到 <https://nodejs.org/> 下载 LTS 版本，一路下一步安装。其他工具都不需要它。
+
+### macOS / Linux
+
+装好 Python 3.14 后，在终端里：
+
 ```bash
 git clone https://github.com/ka1z07/proj7k.git
 cd proj7k
-pip install -r requirements.txt
-```
-
-### 🖥️ 推荐：一站式控制台
-实时雷达、曲库同步、降阶练习、回放诊断与玩家画像都在同一个网页里，点按钮即可，不用记命令：
-```bash
+python3 -m pip install -r requirements.txt
 PYTHONPATH=src python3 -m proj7k.dashboard
 ```
-Windows 上直接双击仓库根目录的 `dashboard.cmd`（有 `.venv` 就用它）。浏览器会自动打开 `http://127.0.0.1:7770/`；谱面、回放可以填本机路径，也可以直接拖进页面。降阶生成的 `.osz` 点「导入 osu!」即交给 osu! 导入。顶栏的「重启 osu!」会像点窗口 ✕ 一样关掉 osu!lazer 再重新打开；曲库同步默认也会先关游戏、写完再打开（游戏不在默认位置时用 `--lazer-exe` 指定，Linux 上指向 AppImage）。下面各条命令行照常可用，与控制台走的是同一套代码（[ADR-0024](docs/adr/0024-unified-web-dashboard.md)）。
 
-### 2. 体验单曲客观评级与 8 维雷达 (10秒)
-直接测试仓库内置的示范谱面：
-```bash
-PYTHONPATH=src python3 -m proj7k.difficulty docs/sample_7k.osu
-```
-或者测试你电脑上的任意谱面（把 `.osu` 拖进终端）：
-```bash
-PYTHONPATH=src python3 -m proj7k.difficulty "/path/to/your/beatmap.osu"
-```
+最后一行就是打开控制台，以后每次用都运行它。
 
-**终端输出效果：**
-```text
-============================================================
- PROJ7K INTRINSIC DIFFICULTY REPORT
-============================================================
- Song       : proj7k Benchmark Team - Cyber Stream & Chordjack Demonstration [7K Regular Benchmark (Sample)]
- Creator    : ka1z07
- Notes      : 43 (LN: 4.7%) | NPS: 10.42
-------------------------------------------------------------
- ★ Star Rating: 1.68★ (0th Dan)
- Dominance   : speed (1.38★)
-------------------------------------------------------------
- 8-Skill Technique Radar:
-   Jack       :  0.00★    LN General :  0.00★
-   Tech       :  1.41★    LN Tech    :  0.00★
-   Speed      :  1.38★    LN Inverse :  0.00★
-   Stream     :  1.08★    LN Release :  0.00★
-------------------------------------------------------------
- Hardest stretches:
-   0:00.00 - 0:08.00  100.0% of the risk, carried by speed
-============================================================
-```
+---
 
-### 3. 打开实时雷达大屏 (10秒)
-启动实时仪表盘，并在浏览器中自动打开：
-```bash
-PYTHONPATH=src python3 -m proj7k.live --open
-```
-在 osu!lazer 中切换 7K 谱面，网页雷达图将随选歌近乎零延迟动态刷新！
+## 打开控制台
 
-### 4. 一键刷新 osu!lazer 曲库星级 (安全有保障)
-退出 osu!lazer 后运行：
-```bash
-PYTHONPATH=src python3 -m proj7k.sync
-```
+**双击 proj7k 文件夹里的 `dashboard.cmd`**。
+
+稍等几秒，浏览器会自动打开 <http://127.0.0.1:7770/>。用的时候不要关掉那个黑色窗口，关掉它控制台就停了。
+
+控制台左边是各个工具，顶栏会显示你在 osu!lazer 里当前选中的谱面。大部分工具默认就用「游戏当前谱面」，所以通常的用法是：**先在游戏里选好图，再到控制台点按钮。** 也可以把 `.osu`、`.osr` 文件直接拖进网页。
+
+顶栏的 **「重启 osu!」** 按钮会正常关掉 osu!lazer（和点窗口右上角 ✕ 一样，会保存）再重新打开，导入新谱面后用得到。
+
 > [!NOTE]
-> 首次运行同步前需执行 `PYTHONPATH=src python3 -m proj7k.sync --setup` 安装 Node.js bridge。  
-> 详见 [快速上手文档](docs/quickstart.md)。
+> 控制台只在你自己电脑上运行，不会上传任何东西。osu!lazer 装在默认位置时会自动找到，不需要设置。
+
+---
+
+## 每个工具怎么用
+
+### 实时雷达
+
+打开控制台默认就是这一页。在 osu!lazer 里换一张 7K 谱面，页面马上跟着刷新：
+
+- **星级与段位**：这张图的 proj7k 星级和对应的段位。
+- **八项技法雷达**：米键四项（叠键 Jack、技巧 Tech、速度 Speed、耐力切 Stream）和长条四项（LN 综合、LN 技巧、反键、放手）。哪一项最突出，这张图就主要考什么。
+- **难度时间线**：整首歌每一段有多难、由哪项技法撑起来。最高的几段就是最容易断连的地方。
+
+适合放在第二个屏幕上，一边选歌一边看。
+
+### 曲库同步
+
+把游戏里 7K 图的星级换成 proj7k 星级，这样在 osu!lazer 里按星级排序、筛选时用的就是 proj7k 的难度。同时会给每张图打上段位和主技法标签，在游戏里搜标签就能找到对应的图。
+
+1. 第一次使用先点 **「安装 / 检查 bridge」**（需要先装 [Node.js](#4可选装-nodejs)）。
+2. 点 **「预演（不写入）」** 看看会改多少张图，这一步什么都不会改。
+3. 点 **「立即同步」**。osu!lazer 开着的话，默认会先帮你关掉，写完再打开。
+
+- **写入前会自动备份**。想换回官方星级，点 **「还原为官方星级」** 即可。
+- 只改你电脑上的游戏数据库，不影响线上成绩和排名。
+
+### 降阶练习
+
+打不过的图，降成一张同样的歌、同样风格、但更简单的练习谱。
+
+1. 在游戏里选中这张图（或者在页面里选「指定谱面」，填文件路径、谱面 ID 或 osu! 谱面链接，或直接拖 `.osu` 进来）。
+2. 选目标：**段位**（比如 3rd）或 **星级**（比如 4.5）。
+3. 选降阶方式：
+   - **保留主技法**：原图是叠键图，练习谱也还是叠键图，只是更简单。默认用这个。
+   - **只追难度**：不强求保留主技法，只要难度降到目标附近。如果「保留主技法」降不到你要的难度，结果里会提示你改用这个。
+4. 点 **「开始降阶」**。
+
+练习谱只删音符、不加音符，强拍和和弦的骨架、左右手的平衡都会保留。勾上「打包 .osz」会带上原曲音频和背景；在结果里点 **「导入 osu!」** 就进游戏了，勾选导入选项的话还会自动放进「7K Practice」收藏夹。
+
+### 谱面生成
+
+给一首歌，自动生成一张 7K 谱。
+
+1. 选歌：用「游戏当前谱面的歌」（会借用那张谱的 BPM 和 offset，节奏最准），或「指定音频」（mp3 / ogg / wav / flac，可以直接拖进来）。
+2. 选目标段位或星级。
+3. Timing（节奏）：有参考谱面时默认借用；没有就选「自动测」；自动测得不对时选「手动」自己填 BPM 和第一个强拍的时间。
+4. 点 **「生成」**。生成后会自动微调，让难度落在目标附近，并打包成 `.osz`。
+
+> 目前只生成米键（没有长条）。同样的设置换一个「配键种子」数字，就会得到另一种配法。
+
+### 回放与画像
+
+这一页有四个标签：
+
+**回放诊断**：分析一局回放。默认取你在游戏里当前选中的那张图上最近一次游玩，也可以选任意一局或自己拖 `.osr` 和 `.osu` 进来。可以勾选：
+
+- **生成回放查看器**：下落式回放，判定线上方是谱面、下方是你实际的按键，失误、漏按、多按、长条早放一眼能看出来。底部的难度时间线可以拖动，能在失误和最难的段落之间跳转。
+- **存入画像档案库**：把这一局计入你的玩家画像。
+- **在崩盘点切三阶练习包**：自动找到你断掉的那一段，切出来做成由易到难的三张练习谱（Recovery 在你当前水平、Push 是原图片段、Bridge 在中间），打包成 `.osz`。
+- **练习推荐**：从你本地曲库里挑图，「短板突破」补弱项，「长板专精」继续拉强项（不会推荐段位考试的图）。
+
+**导入 lazer 回放**：第一次用时先来这里。填你的玩家名，点「开始导入」，会把 osu!lazer 里你所有的 7K 回放读进画像档案。重复导入是安全的，不会重复计数；太短或明显是重开的局会被过滤掉。
+
+**玩家画像**：填玩家名，看你在八项技法上各自对应的段位，以及整体水平。可以只看最近 N 天，也可以看全历史。
+
+**发力习惯**：从所有回放里统计你的按键习惯，例如每一列偏早还是偏晚、按住多久、和弦里哪根手指先按、滚键还是齐按、长条怎么松手，以及中间那一列你习惯用哪只手。
 
 > [!TIP]
-> 随时想还原官方原始星级？只需一条指令：  
-> `PYTHONPATH=src python3 -m proj7k.sync --revert`
-
-### 5. 诊断玩家回放并生成靶向降阶练习包 (15秒)
-分析 `.osr` 回放文件，诊断微观病理并针对断连/致死段落直接生成 Recovery、Bridge、Push 三阶梯专属 `.osz` 练习包：
-```bash
-PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --recommend --bundle
-```
-**终端输出效果：**
-- 诊断各轨击键偏差均值与 UR、左右手偏载比例、连叠漂移疲劳告警；
-- 把回放丢掉的准度放回新引擎的逐事件难度读数上，反解出你在 8 个技法上的水平（与星级、段位同一把尺），输出 8 维 Jinjin Dan 段位雷达；
-- 运用双教练策略（短板突破 / 长板专精），扫描本地已装曲库（严格排除段位考题）推荐针对性练习谱；
-- 自动截取致死高应变切片（$-10\text{s}, +5\text{s}$），并在 `./practice_bundles/` 生成独立三阶梯练习谱面及 `.osz` 包：Recovery 落在你自己的水平、Push 是原切片、Bridge 居中，各档由下缩器直接对着引擎星级收敛。
-
-加上 `--view` 得到一页自包含的**回放查看器**（`--audio` 指定音频，`--open` 直接打开）：下落式谱面与你的实际按键同步回放，判定线以上是谱面、以下是你的游玩（失误、漏拍、乱敲、长条尾放一目了然）；底部是可拖动的难度时间线，显示每一段的难度读数、承载它的技法和你在该段丢掉的准度，可拖到回放的任意时刻，并能在失误与最难段之间跳转：
-```bash
-PYTHONPATH=src python3 -m proj7k.profiler -r "replay.osr" -b "beatmap.osu" --view --open
-```
-
-### 6. 查询玩家宏观技能画像与历史趋势 (5秒)
-查询近 30 天滑动窗口竞技状态（Recent Rolling Form）并对比全历史巅峰（All-Time Peak）：
-```bash
-PYTHONPATH=src python3 -m proj7k.profiler -p "YourUsername" --horizon-days 30 --recommend
-```
-
-### 7. 导入 osu!lazer 历史回放 (一次性)
-将本地 osu!lazer 中的历史 7K 对局批量导入本地档案库，作为宏观画像的历史样本：
-```bash
-PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "YourUsername"
-```
-
-**要点：**
-- 按**回放指纹**（物理回放文件哈希）幂等去重，重复执行不会产生重复样本；
-- 遵守脏数据清洗规则（ADR-0012）：剔除时长 <30 秒或完成度 <50% 的重试对局，但**保留中途暴毙对局的致死前高应变样本**；
-- 可选 `--import-limit N` 限制单次处理量，`--realm` 指定非默认的 `client.realm` 路径。
-
-> ⚠️ **方向区分**：`--import-replays` 是**读入**方向（lazer → 本地档案库）；反向的 `--sync-lazer` 属于降阶器与 `proj7k.sync`，用于将星级标签与衍生练习谱**写入** lazer 数据库。两者方向相反，不可混用。
+> 更新 proj7k 之后，记得回「导入 lazer 回放」再导入一次，旧的回放会按新版本重新计算。
 
 ---
 
-## 🎛️ 玩家常用命令速查
+## 星级和段位怎么看
 
-| 使用场景 | 命令示例 | 说明 |
-| :--- | :--- | :--- |
-| **评测单曲** | `PYTHONPATH=src python3 -m proj7k.difficulty <谱面.osu>` | 打印 8 维技法与星级简报 |
-| **输出 JSON** | `PYTHONPATH=src python3 -m proj7k.difficulty <谱面.osu> --json` | 导出结构化数据供程序调用 |
-| **一站式控制台** | `PYTHONPATH=src python3 -m proj7k.dashboard`（Windows：双击 `dashboard.cmd`） | 实时雷达 + 曲库同步 + 降阶练习 + 回放与画像，同一网页 |
-| **实时大屏** | `PYTHONPATH=src python3 -m proj7k.live --open` | 启动 Web 实时雷达监控 |
-| **同步 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync` | 批量将客观星级写入 lazer 数据库 |
-| **7K 谱面库（网站）** | `PYTHONPATH=src python3 -m proj7k.catalog build` 然后 `... catalog serve --open` | 仿 osu! 官网的谱面搜索与详情页，每个难度同时显示官方 SR 与引擎 SR（[ADR-0026](docs/adr/0026-online-7k-chart-catalog.md)）；`catalog lazer` 收录本机 lazer 曲库，`catalog crawl` 用 osu! API 收录 7K 谱面（`--status` 可加 pending、wip、graveyard）；`/mappers` 是按谱师分类的风格分析 |
-| **还原 Lazer** | `PYTHONPATH=src python3 -m proj7k.sync --revert` | 彻底还原为官方原始星级 |
-| **降级练习** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "7th" -o ./out` | 降级到指定 Jinjin 段位 |
-| **指定星级降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -s 6.5 -o ./out` | 降级到指定连续星级（新引擎的星级，直接对着它收敛） |
-| **只追难度降级** | `PYTHONPATH=src python3 -m proj7k.downscaler -i "图.osu" -d "3rd" --mode free` | 不要求保留主技法，只把难度降到目标附近（仍保持节奏骨架与左右手平衡，[ADR-0025](docs/adr/0025-downscaler-free-mode.md)） |
-| **回放微观诊断** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu"` | 诊断离散度、双手偏载、Jack漂移与8维承压段位 |
-| **双教练智能推荐** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --recommend` | 推荐本地曲库练习谱（短板突破/长板专精，严格排除考题） |
-| **回放查看器** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --view --open` | 下落式同步回放按键 + 可拖动的难度时间线（失误、难点、技法一目了然） |
-| **直接看 lazer 里最新的回放** | `PYTHONPATH=src python3 -m proj7k.profiler --view-lazer --player "Username" --open` | 从 osu!lazer 库取该玩家最新的 7K 回放并打开查看器（`--lazer-index N` 取第 N 新的） |
-| **致死降阶练习包** | `PYTHONPATH=src python3 -m proj7k.profiler -r "play.osr" -b "map.osu" --bundle` | 自动切出致死高应变切片并导出 Recovery/Bridge/Push 三阶梯 .osz |
-| **近期30天画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --horizon-days 30` | 聚合近 30 天竞技状态并对比全历史巅峰 |
-| **全历史巅峰画像** | `PYTHONPATH=src python3 -m proj7k.profiler -p "Username" --all-time` | 查看全历史极限承压雷达与各技法巅峰 |
-| **批量对局回放入库** | `PYTHONPATH=src python3 -m proj7k.profiler --batch-dir ./replays --beatmap-dir ./beatmaps [--player "Username"]` | 批量过滤重试脏数据并持久化到本地 SQLite 档案库（可限定单一玩家） |
-| **Lazer 回放导入** | `PYTHONPATH=src python3 -m proj7k.profiler --import-replays --player "Username"` | 从本地 osu!lazer 存储提取该玩家历史 7K 回放，按回放指纹幂等入库 |
+proj7k 的星级按 Jinjin 7K 段位考试标定，一共 15 级：
+
+`0th` → `1st` → … → `10th` → `Gamma` → `Azimuth` → `Zenith` → `Stellium`
+
+- 星级越高越难；每个段位对应一段星级区间，控制台和谱面库会同时显示两者。
+- proj7k 星级和 osu! 官方星级不是一把尺子，同一张图两边数字不同是正常的。
+- 八项技法各自也有星级，代表「这张图在这一项上有多难」；对整张图难度贡献最大的那一项就是它的主技法。
 
 ---
 
-## 🛡️ 安全与数据保障承诺
+## 常见问题
 
-1. **纯本地离线计算**：所有分析与数据库写入全部在您的个人电脑本地完成，绝不上报或截取任何账号凭据。
-2. **零封号风险**：仅修改客户端离线缓存，与多人联机/排位防作弊系统完全正交解耦。
-3. **自动防灾备份**：任何写入操作均先建立 `client.realm.backup_*` 副本。
+**会不会被封号？**
+不会。proj7k 只读你的回放和谱面文件；「曲库同步」只改你本机游戏数据库里显示的星级，不碰成绩，也不上传任何东西。
+
+**曲库同步后想换回官方星级？**
+控制台「曲库同步」页点「还原为官方星级」。
+
+**双击 `dashboard.cmd` 一闪就没了 / 提示找不到 python？**
+多半是装 Python 时没勾「Add python.exe to PATH」。重新运行 Python 安装程序，选 Modify，勾上它；或者卸载重装并勾选。然后再做一次[安装依赖](#3-安装依赖只需一次)。
+
+**提示缺少模块（No module named …）？**
+在 proj7k 文件夹里重新运行一次 `python -m pip install -r requirements.txt`。
+
+**控制台找不到我的游戏 / 曲库？**
+在游戏设置里挪过数据目录也能自动找到。仍然找不到时，用 `dashboard.cmd --lazer-dir "数据目录"` 指定 osu!lazer 的数据文件夹（里面有 `client.realm` 的那个）；还不行请提 [Issue](https://github.com/ka1z07/proj7k/issues)。
+
+**端口 7770 被占用？**
+通常是之前开的控制台还没关。关掉旧的黑色窗口再双击一次；或者用 `dashboard.cmd --port 7771` 换一个端口。
+
+**怎么更新？**
+重新下载 ZIP 覆盖原文件夹（用 git 的话运行 `git pull`），再运行一次安装依赖那一行，然后重新打开控制台。
 
 ---
 
-## 📚 深入阅读与文档导航
+## 命令行用法（进阶）
 
-- 📘 [快速上手与环境配置 (Quickstart)](docs/quickstart.md)：全平台环境安装、依赖与别名配置。
-- 📙 [玩家完整实操指南 (User Guide)](docs/user-guide.md)：8 维雷达指标深度剖析、大屏交互、以及 Downscaler 高阶参数。
-- 📕 [常见问题解答 (FAQ)](docs/faq.md)：疑难排查与还原攻略。
-- 📐 [领域模型词汇表 (CONTEXT.md)](CONTEXT.md)：深入了解 7k-VSDL、反相位对偶、动作时钟与第一性原理物理定义。
+控制台里的每个功能也都能在命令行里用，适合批量处理。在 proj7k 文件夹里运行（Windows 上先执行 `set PYTHONPATH=src`，macOS / Linux 在命令前加 `PYTHONPATH=src`）：
+
+| 用途 | 命令 |
+| :--- | :--- |
+| 打开控制台 | `python3 -m proj7k.dashboard` |
+| 看一张图的星级和技法 | `python3 -m proj7k.difficulty "谱面.osu"` |
+| 降阶到段位 / 星级 | `python3 -m proj7k.downscaler -i "谱面.osu" -d 3rd -o ./out`（`-s 4.5` 指定星级） |
+| 生成谱面 | `python3 -m proj7k.generator --audio 歌.mp3 --target-dan 2nd` |
+| 同步曲库星级 / 还原 | `python3 -m proj7k.sync` / `python3 -m proj7k.sync --revert` |
+| 诊断回放并打开查看器 | `python3 -m proj7k.profiler -r "回放.osr" -b "谱面.osu" --view --open` |
+| 导入 lazer 回放 | `python3 -m proj7k.profiler --import-replays --player "玩家名"` |
+| 查看玩家画像 | `python3 -m proj7k.profiler -p "玩家名" --horizon-days 30` |
+
+每个命令加 `--help` 可以看全部选项。
+
+---
+
+开发相关的文档（难度模型、设计决策、测试）在 [`CONTEXT.md`](CONTEXT.md)、[`docs/adr/`](docs/adr/) 和 [`CLAUDE.md`](CLAUDE.md)。开发进度与日志见 <https://kaiz.dev/projects/proj7k/>。
