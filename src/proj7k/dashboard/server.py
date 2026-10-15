@@ -55,8 +55,8 @@ PAGES = {
     "/profiler": "profiler.html",
 }
 
-#: Uploads ride the WebSocket base64-encoded; a replay plus its chart stays far below this.
-MAX_MESSAGE_BYTES = 64 * 2**20
+#: Uploads ride the WebSocket base64-encoded, so this caps an upload at about 190 MB (a long lossless audio file fits).
+MAX_MESSAGE_BYTES = 256 * 2**20
 
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
