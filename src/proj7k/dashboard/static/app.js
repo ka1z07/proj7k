@@ -31,8 +31,8 @@ const P7 = (() => {
   const jobWatchers = {};     // job id -> {onUpdate, onLog, resolve}
   const requestWatchers = {}; // request id -> watcher, until the job id is known
   let requestSeq = 0;
-  // Uploads ride job_start base64-encoded; the server's MAX_MESSAGE_BYTES is 64 MiB, so leave room for the rest.
-  const MAX_UPLOAD_BASE64 = 63 * 2 ** 20;
+  // Uploads ride job_start base64-encoded; the server's MAX_MESSAGE_BYTES is 256 MiB, so leave room for the rest.
+  const MAX_UPLOAD_BASE64 = 255 * 2 ** 20;
 
   function on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }
   function emit(type, msg) { (listeners[type] || []).forEach((fn) => { try { fn(msg); } catch (e) { console.error(e); } }); }
