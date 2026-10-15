@@ -31,6 +31,8 @@ const P7 = (() => {
   const jobWatchers = {};     // job id -> {onUpdate, onLog, resolve}
   const requestWatchers = {}; // request id -> watcher, until the job id is known
   let requestSeq = 0;
+  // Uploads ride job_start base64-encoded; the server's MAX_MESSAGE_BYTES is 64 MiB, so leave room for the rest.
+  const MAX_UPLOAD_BASE64 = 63 * 2 ** 20;
 
   function on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }
   function emit(type, msg) { (listeners[type] || []).forEach((fn) => { try { fn(msg); } catch (e) { console.error(e); } }); }
@@ -42,8 +44,21 @@ const P7 = (() => {
       emit("connection", true);
       const pending = queue; queue = [];
       pending.forEach((m) => ws.send(m));
+      Object.values(requestWatchers).forEach((w) => { w.sent = true; });
+      // Jobs followed across a reconnect: the server may have restarted and forgotten them (see the `jobs` reply).
+      if (Object.keys(jobWatchers).length) ws.send(JSON.stringify({ type: "jobs_list" }));
     };
-    ws.onclose = () => { emit("connection", false); setTimeout(connect, 2000); };
+    ws.onclose = () => {
+      emit("connection", false);
+      // A job_start already sent but not yet answered is lost with the connection (the server restarted, or closed
+      // it because the message was too large); fail it instead of waiting forever.
+      for (const [id, w] of Object.entries(requestWatchers)) {
+        if (!w.sent) continue;
+        delete requestWatchers[id];
+        w.resolve(lostJob("连接中断，任务没有送达看板（看板重启了，或上传的文件太大），请重新运行"));
+      }
+      setTimeout(connect, 2000);
+    };
     ws.onmessage = (event) => {
       let msg;
       try { msg = JSON.parse(event.data); } catch (e) { return; }
@@ -64,6 +79,18 @@ const P7 = (() => {
       } else if (msg.type === "job_log") {
         const w = jobWatchers[msg.id];
         if (w && w.onLog) w.onLog(msg.line);
+      } else if (msg.type === "jobs") {
+        // The server's jobs after a reconnect: a followed job it no longer knows died with a restart; one that
+        // finished while the connection was down resolves now.
+        const known = Object.fromEntries((msg.jobs || []).map((j) => [j.id, j]));
+        for (const [id, w] of Object.entries(jobWatchers)) {
+          const job = known[id];
+          if (job && !["done", "failed", "cancelled"].includes(job.status)) continue;
+          delete jobWatchers[id];
+          const final = job || lostJob("看板重启了，这个任务随之中断，请重新运行", id);
+          w.onUpdate(final);
+          w.resolve(final);
+        }
       } else if (msg.type === "error" && msg.request_id in requestWatchers) {
         const w = requestWatchers[msg.request_id];
         delete requestWatchers[msg.request_id];
@@ -73,9 +100,16 @@ const P7 = (() => {
     };
   }
 
+  // Returns whether the message went out now (false: queued until the connection opens).
   function send(obj) {
     const text = JSON.stringify(obj);
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(text); else queue.push(text);
+    if (ws && ws.readyState === WebSocket.OPEN) { ws.send(text); return true; }
+    queue.push(text);
+    return false;
+  }
+
+  function lostJob(error, id) {
+    return { id, status: "failed", error, artifacts: [], logs: [] };
   }
 
   // Start a job; resolves with the finished job. `uploads` maps a parameter to a File.
@@ -84,10 +118,16 @@ const P7 = (() => {
     for (const [key, file] of Object.entries(uploads || {})) {
       if (file) encoded[key] = { name: file.name, data: await fileToBase64(file) };
     }
+    // The server closes the connection on a message over MAX_MESSAGE_BYTES (server.py) instead of answering.
+    const size = Object.values(encoded).reduce((n, u) => n + u.data.length, 0);
+    if (size > MAX_UPLOAD_BASE64) {
+      return lostJob(`上传的文件太大（${(size * 3 / 4 / 2 ** 20).toFixed(0)} MB），看板最多收 ${(MAX_UPLOAD_BASE64 * 3 / 4 / 2 ** 20).toFixed(0)} MB`);
+    }
     const request_id = `r${Date.now()}-${++requestSeq}`;
     return new Promise((resolve) => {
-      requestWatchers[request_id] = { onUpdate: onUpdate || (() => {}), onLog, resolve };
-      send({ type: "job_start", kind, params, uploads: encoded, request_id });
+      const w = { onUpdate: onUpdate || (() => {}), onLog, resolve, sent: false };
+      requestWatchers[request_id] = w;
+      w.sent = send({ type: "job_start", kind, params, uploads: encoded, request_id });
     });
   }
 
