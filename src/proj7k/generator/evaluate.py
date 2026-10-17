@@ -10,6 +10,9 @@ in osu!lazer's library, the song is charted twice by the generator:
 2. **with the timing estimated from the music** — the estimate is compared with the chart's main BPM
    (exact, or off by an octave) and, when the BPM is right, with its beat phase.
 
+Both charts' keys are also read by `patterns.pattern_stats` (stairs, trills, jacks, repeated key
+patterns and repeated measures), so the generated chart's patterns can be held against the human one's.
+
 Nothing is written into the library; the summary goes to the terminal and, with --output, a JSON file.
 
     python3 -m proj7k.generator.evaluate --lazer --limit 30
@@ -30,6 +33,7 @@ from proj7k.engine import evaluate_osu
 from proj7k.generator.audio import load_audio
 from proj7k.generator.generate import GeneratorOptions, generate
 from proj7k.generator.onset import onset_envelope
+from proj7k.generator.patterns import pattern_stats, rows_of_chart
 from proj7k.generator.tempo import estimate_tempo
 from proj7k.parser import Beatmap7K, dominant_timing_point, parse_osu_7k
 
@@ -52,6 +56,8 @@ class ChartScore:
     onset_shift_ms: float = 0.0   # music onsets vs the chart's beats (positive: onsets later)
     onbeat_ratio: Optional[dict] = None  # per band: onset on the chart's beats / onset half a beat away
     audio: str = ""               # the audio's extension and the decoder that read it
+    human_patterns: Optional[dict] = None      # patterns.pattern_stats of the human chart
+    generated_patterns: Optional[dict] = None  # and of the generated one
     error: Optional[str] = None
 
 
@@ -109,9 +115,13 @@ def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, see
         a, b = _beat_sum(env.total, env, on, beat_s), _beat_sum(env.total, env, off, beat_s)
         onbeat["total"] = round(a / b, 3) if b > 0 else None
     ext = Path(chart.audio_filename).suffix.lower() or audio_path.suffix.lower()
+    beat_ms = main_tp.beat_length if main_tp else 0.0
+    patterns = [{k: round(v, 3) for k, v in pattern_stats(rows_of_chart(c.hit_objects), beat_ms).items()}
+                for c in (chart, result.beatmap)]
     return ChartScore(name, round(human_stars, 3), round(result.stars, 3), len(human_rows), len(gen_rows),
                       round(precision, 3), round(recall, 3), round(true_bpm, 2), est_bpm, match,
-                      None if phase is None else round(phase, 1), result.onset_shift_ms, onbeat, f"{ext} {audio.source}")
+                      None if phase is None else round(phase, 1), result.onset_shift_ms, onbeat, f"{ext} {audio.source}",
+                      patterns[0], patterns[1])
 
 
 def _beat_sum(values: np.ndarray, env, start_s: float, step_s: float) -> float:
@@ -173,6 +183,12 @@ def summarize(scores: List[ChartScore]) -> dict:
         "onbeat_band_wins": {
             band: sum(1 for s in ok if s.onbeat_ratio and (s.onbeat_ratio.get(band) or 0) > 1.0) / len(ok)
             for band in ("low", "mid", "high", "total")
+        },
+        "patterns_median": {
+            who: {k: float(np.median([getattr(s, attr)[k] for s in ok if getattr(s, attr)]))
+                  for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat")}
+            for who, attr in (("human", "human_patterns"), ("generated", "generated_patterns"))
+            if any(getattr(s, attr) for s in ok)
         },
         "onset_shift_by_audio": {
             kind: float(np.median([s.onset_shift_ms for s in ok if s.audio == kind]))
