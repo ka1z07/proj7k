@@ -39,11 +39,15 @@ from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 GENERATOR_VERSION = "gen-3"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
-X_MIN, X_MAX = 0.0, 3.0
+X_MIN, X_MAX = 0.0, 3.5
 #: The song's quietest section gets this share of the notes per grid point its loudest gets (ADR-0031).
 QUIET_SHARE = 0.45
 #: Grid points with almost no onset are filled into a stream only in sections at least this loud.
 FILL_ENERGY = 0.6
+#: Past this intensity the quieter sections fill up too (and their weak points open), reaching the
+#: loudest section's density at X_MAX, and chords widen faster: the contrast gives way so a hard
+#: target can still be reached.
+SPREAD_FROM = 2.5
 MAX_ITERATIONS = 18
 #: Other draws of the keys tried when the bisection ends outside the tolerance.
 KEY_RETRIES = 8
@@ -188,22 +192,25 @@ def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[i
     chorus can be a full 1/16 stream while the verse stays at eighths with a few sixteenths. Within a
     section the points are ranked by onset strength plus their place in the measure (downbeat, beat,
     half beat) and the strongest are taken; a point with almost no onset (`MIN_STRENGTH`) is taken only
-    in sections at least `FILL_ENERGY` loud, once x reaches 1. Chords widen with x as well, and past
-    the point where the loudest section is full only they do: the picked rows are ordered by weight (strength, metric place, kick), and the strongest get
-    the widest, more in loud sections and fewer in quiet ones. With `groups` (from
+    in sections at least `FILL_ENERGY` loud, once x reaches 1. Chords widen with x as well (the picked
+    rows are ordered by weight: strength, metric place, kick; the strongest get the widest, more in
+    loud sections and fewer in quiet ones). Past `SPREAD_FROM` the quieter sections fill up to the
+    loudest one's density by `X_MAX`, so a hard target is still reachable. With `groups` (from
     `phrases.group_measures`) the measures of a group are then given one rhythm.
     """
     energy = list(energy) if energy is not None else [1.0] * len(grid)
     share = density(x)
     by_energy: dict = {}
     for i, (p, e) in enumerate(zip(grid, energy)):
-        if p.silent or (p.strength < MIN_STRENGTH and (e < FILL_ENERGY or x < 1.0)):
+        if p.silent or (p.strength < MIN_STRENGTH and (x < 1.0 or (e < FILL_ENERGY and x < SPREAD_FROM))):
             continue
         by_energy.setdefault(e, []).append(i)
     take = set()
     for e, idx in by_energy.items():
         n_section = sum(1 for p, pe in zip(grid, energy) if pe == e and not p.silent)
-        k = int(round(share * (QUIET_SHARE + (1.0 - QUIET_SHARE) * e) * n_section))
+        fill = QUIET_SHARE + (1.0 - QUIET_SHARE) * e
+        fill += (1.0 - fill) * min(1.0, max(0.0, x - SPREAD_FROM))
+        k = int(round(share * fill * n_section))
         ranked = sorted(idx, key=lambda i: (-(grid[i].strength + LEVEL_BONUS.get(grid[i].level, 0.0)), grid[i].time_ms))
         take.update(ranked[:k])
     picked = [grid[i] for i in sorted(take)]
@@ -231,7 +238,12 @@ def density(x: float) -> float:
 
 def chord_extra(x: float) -> float:
     """Mean notes per row beyond the first, at intensity `x`."""
-    return min(1.8, 0.45 * max(0.0, x))
+    x = max(0.0, x)
+    if x <= 1.0:
+        return 0.45 * x
+    if x <= SPREAD_FROM:
+        return 0.45 + 0.6 * (x - 1.0)
+    return min(2.2, 0.45 + 0.6 * (SPREAD_FROM - 1.0) + 0.9 * (x - SPREAD_FROM))
 
 
 def _chart(grid: Sequence[GridPoint], groups: Sequence[int], energy: Sequence[float], styles: dict, x: float,

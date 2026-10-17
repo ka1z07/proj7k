@@ -292,9 +292,9 @@ class PatternSampler:
 #: "trill": a row that repeats the one before last (trills, jumptrills); "plain": the model as it is.
 STYLES: Dict[str, Dict[str, float]] = {
     "plain": {},
-    "flow": {"roll": 2.0},
-    "jack": {"jack": 2.0},
-    "trill": {"trill": 1.5},
+    "flow": {"roll": 1.2},
+    "jack": {"jack": 1.0},
+    "trill": {"trill": 0.8},
 }
 
 
