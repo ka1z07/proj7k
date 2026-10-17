@@ -208,7 +208,10 @@ def _beatmap(objs: List[HitObject], timing: List[TimingPoint], options: Generato
             bm.extra_sections["General"] = dict(ref.extra_sections["General"])
         if ref.extra_sections.get("Metadata"):
             meta = dict(ref.extra_sections["Metadata"])
+            # An independent local set: osu!lazer marks any existing set sharing the imported set's online ID
+            # for deletion, so keeping the reference's BeatmapSetID would replace the original chart.
             meta["BeatmapID"] = "0"
+            meta["BeatmapSetID"] = "-1"
             bm.extra_sections["Metadata"] = meta
         # The background only: a video or storyboard would name files the .osz does not carry.
         bm.raw_events = [e for e in ref.raw_events if e.lstrip().startswith(("0,0,", "//"))]
