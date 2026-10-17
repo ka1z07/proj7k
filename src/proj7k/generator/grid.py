@@ -2,14 +2,15 @@
 Candidate note times: the chart's beat grid, each point read against the onset envelope.
 
 Every beat of every uninherited timing section is split either binary (1/2 and 1/4) or ternary (1/3)
-depending on which subdivision the music actually plays in that beat; the choice is made per beat,
-so a song that swings for two bars gets triplets there and straight 16ths elsewhere. Each point keeps
+depending on which subdivision the music actually plays in that measure; the choice is made per
+measure, so a song that swings for two bars gets triplets there and straight 16ths elsewhere, and
+measures that sound alike get the same grid (a choice per beat flipped on noise, ADR-0030). Each point keeps
 how strong the strongest onset near it is (within an eighth of a beat, at most 25 ms), the strength
 per band, and where in the spectrum that onset sits.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -85,6 +86,7 @@ def build_grid(env: OnsetEnvelope, timing: Sequence[TimingPoint], end_ms: Option
         k = k0 = 0
         if i == 0:  # osu! extends the first section backwards to the start of the song
             k = k0 = -int(np.floor(tp.time / L))
+        ternary_bar: Dict[int, bool] = {}
         while True:
             tb = tp.time + k * L
             if tb >= sec_end - 1e-6:
@@ -93,8 +95,11 @@ def build_grid(env: OnsetEnvelope, timing: Sequence[TimingPoint], end_ms: Option
             if tb >= 0:
                 level = DOWNBEAT if k % meter == 0 else BEAT
                 points.append(_point(env, tb, level, L, shift_ms, place, 0, k % meter))
-            ternary = _is_ternary(env, tb + shift_ms, L)
-            subs = ((1 / 3, SUB), (2 / 3, SUB)) if ternary else ((0.25, SUB), (0.5, HALF), (0.75, SUB))
+            m = k // meter
+            if m not in ternary_bar:
+                starts = [tp.time + (m * meter + j) * L + shift_ms for j in range(meter)]
+                ternary_bar[m] = _is_ternary(env, [t for t in starts if t < sec_end + shift_ms], L)
+            subs = ((1 / 3, SUB), (2 / 3, SUB)) if ternary_bar[m] else ((0.25, SUB), (0.5, HALF), (0.75, SUB))
             for frac, lvl in subs:
                 t = tb + frac * L
                 if 0 <= t < sec_end - 1e-6:
@@ -116,10 +121,13 @@ def _window_s(beat_ms: float) -> float:
     return min(0.025, beat_ms / 8000.0)
 
 
-def _is_ternary(env: OnsetEnvelope, tb: float, L: float) -> bool:
-    s_bin = max(_strength_at(env, tb + 0.25 * L, L), _strength_at(env, tb + 0.75 * L, L))
-    s_tri = max(_strength_at(env, tb + L / 3, L), _strength_at(env, tb + 2 * L / 3, L))
-    return s_tri > 0.2 and s_tri > TERNARY_MARGIN * s_bin
+def _is_ternary(env: OnsetEnvelope, beats: Sequence[float], L: float) -> bool:
+    """Whether a measure (the start times of its beats) plays in thirds of a beat rather than quarters."""
+    if not beats:
+        return False
+    s_bin = sum(max(_strength_at(env, tb + 0.25 * L, L), _strength_at(env, tb + 0.75 * L, L)) for tb in beats)
+    s_tri = sum(max(_strength_at(env, tb + L / 3, L), _strength_at(env, tb + 2 * L / 3, L)) for tb in beats)
+    return s_tri > 0.2 * len(beats) and s_tri > TERNARY_MARGIN * s_bin
 
 
 def _point(env: OnsetEnvelope, t_ms: float, level: int, beat_ms: float, shift_ms: float = 0.0,

@@ -20,7 +20,7 @@ from proj7k.generator import patterns
 from proj7k.generator.grid import DOWNBEAT, build_grid
 from proj7k.generator.patterns import (MASKS_BY_SIZE, PatternModel, PatternSampler, default_model, mirror, pattern_stats,
                                        popcount)
-from proj7k.generator.phrases import unify_repeats
+from proj7k.generator.phrases import group_measures, harmonize
 from proj7k.generator.onset import FRAME_S, frame_time
 from proj7k.generator.tempo import CHART_SYNC_MS
 from proj7k.parser import TimingPoint, dump_osu_7k, parse_osu_7k
@@ -123,21 +123,29 @@ def test_grid_counts_beats_and_measures_across_sections(song):
     assert grid[second].beat == 36 and grid[second].bar == grid[second - 1].bar + 1
 
 
-def test_measures_that_sound_alike_get_the_same_strengths(song):
+def test_measures_that_sound_alike_get_one_rhythm(song):
     audio, _ = song
     env = onset_envelope(audio)
     grid = build_grid(env, [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)])
-    unified, group = unify_repeats(grid)
-    assert len(unified) == len(grid) and [p.time_ms for p in unified] == [p.time_ms for p in grid]
-    # The drum song repeats one groove under a random melody: the groove's places (kick, snare, hats)
-    # are made alike across the measures, the melody's 16ths, which differ, keep their own strengths.
-    groove = [g for p, g in zip(unified, group) if p.slot % 24 == 0 and p.time_ms > 600.0]
-    assert np.mean([g >= 0 for g in groove]) > 0.9
-    by = collections.defaultdict(list)
-    for p, g in zip(unified, group):
-        if g >= 0:
-            by[(g, p.slot)].append(p.strength)
-    assert all(max(v) == min(v) for v in by.values())
+    groups = group_measures(grid)
+    # The drum song repeats one groove under a random melody: its measures fall into one group.
+    assert np.mean([g >= 0 for p, g in zip(grid, groups) if p.time_ms > 600.0]) > 0.9
+    # A place picked in most of a group's measures is picked in all of them; a place picked in only one
+    # is dropped, unless the music is clearly louder there (a fill).
+    sizes = [0] * len(grid)
+    members = sorted({p.bar for p, g in zip(grid, groups) if g == groups[-1]})
+    third = members[2]
+    for i, p in enumerate(grid):
+        if p.bar in members[1:] and p.slot == 48:
+            sizes[i] = 2
+        if p.bar == third and p.slot == 12:
+            sizes[i] = 1
+    out = harmonize(grid, groups, sizes)
+    for i, p in enumerate(grid):
+        if groups[i] == groups[-1] and p.slot == 48 and not p.silent:
+            assert out[i] == 2
+        if p.bar == third and p.slot == 12:
+            assert out[i] == 0
 
 
 # --- the pattern model ----------------------------------------------------------------------------------------
