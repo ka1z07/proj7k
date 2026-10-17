@@ -196,12 +196,16 @@ def test_cli_writes_osu_and_osz_and_borrows_a_reference(tmp_path, capsys):
     (ref_dir / "song.wav").write_bytes((tmp_path / "song.wav").read_bytes())
     ref = chart
     ref.timing_points = [TimingPoint(time=512.0, beat_length=60000.0 / 170.0)]
+    ref.extra_sections["Metadata"] = {"Title": "T", "Artist": "A", "BeatmapID": "123", "BeatmapSetID": "456"}
     (ref_dir / "ref.osu").write_text(dump_osu_7k(ref), encoding="utf-8")
     assert main(["--timing-from", str(ref_dir / "ref.osu"), "--target-sr", "2.5", "--output-dir", str(out),
                  "--no-package", "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["timing_source"] == "reference" and report["offset_ms"] == 512.0 and report["osz_file"] is None
     assert report["title"].startswith("A - T [Gen 2.50")
+    # A local set of its own: keeping the reference's set ID would make osu!lazer delete the original on import.
+    meta = parse_osu_7k(Path(report["output_file"]).read_text(encoding="utf-8")).extra_sections["Metadata"]
+    assert meta["BeatmapID"] == "0" and meta["BeatmapSetID"] == "-1"
 
     assert main(["--target-dan", "3rd", "--output-dir", str(out)]) == 1
     assert "缺少音频" in capsys.readouterr().err
