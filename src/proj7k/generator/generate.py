@@ -1,30 +1,38 @@
 """
 From audio to a chart at a target star rating (ADR-0027).
 
-    audio ─ onset envelope ─┬─ beat grid (timing given, or estimated) ─ pick points ─ columns ─ engine
-                            └─ tempo estimate (when no timing is given)          ▲               │
-                                                                                 └── intensity ──┘
+    audio ─ onset envelope ─┬─ beat grid (timing given, or estimated) ─ pick points ─ alike measures, one rhythm ─ keys ─ engine
+                            └─ tempo estimate (when no timing is given)          ▲                                       │
+                                                                                 └──────────────── intensity ────────────┘
 
 One knob, the *intensity* x, sets how much of the grid becomes notes and how wide the chords are.
 A grid point is a note when its onset strength plus a bonus for its place in the measure clears
 `1 - x`; a note's chord grows with its strength and with x. The engine's total star rating rises
 with x, so x is bisected until the chart lands within the tolerance of the target, or the knob runs
 out (the song is too sparse to reach the target, or too busy to go under it), which is reported.
+
+The keys each row presses are drawn from a model of charts people wrote (`patterns`, ADR-0030), and
+measures that sound alike are given one rhythm (`phrases`), so the chart repeats where the music does. The seed fixes the draw; the same seed gives the same chart at every intensity tried, up to the
+rows that intensity adds or removes (and, when the target falls between two steps of the rating, a few
+other draws derived from the seed are tried).
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, Union
 
+import numpy as np
+
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator.columns import Row, assign_columns
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
+from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
+from proj7k.generator.phrases import group_measures, harmonize
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
-GENERATOR_VERSION = "gen-1"
+GENERATOR_VERSION = "gen-2"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
 X_MIN, X_MAX = 0.0, 3.0
@@ -32,6 +40,8 @@ X_MIN, X_MAX = 0.0, 3.0
 #: quieter grid points (a continuous stream) instead of only stacking wider chords.
 FILL_FROM = 1.6
 MAX_ITERATIONS = 18
+#: Other draws of the keys tried when the bisection ends outside the tolerance.
+KEY_RETRIES = 8
 
 
 @dataclass
@@ -104,12 +114,15 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     # that lines its onsets up with the beats, and keep writing notes on the beats themselves.
     shift = onset_shift_ms(env, timing)
     grid = build_grid(env, timing, shift_ms=shift)
+    groups = group_measures(grid)
     lo, hi = X_MIN, X_MAX
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
 
-    def attempt(x: float) -> Tuple[List[HitObject], DifficultyProfile]:
-        objs = _chart(grid, x, options.seed)
+    def attempt(x: float, retry: int = 0) -> Tuple[List[HitObject], DifficultyProfile]:
+        seed = options.seed if retry == 0 else [options.seed, retry]
+        draws = dict(zip((p.time_ms for p in grid), np.random.default_rng(seed).random(len(grid))))
+        objs = _chart(grid, groups, x, seed, draws)
         if not objs:
             return objs, evaluate_notes([])
         return objs, evaluate_notes([(o.column, o.time / 1000.0, None) for o in objs])
@@ -127,6 +140,17 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         else:
             lo = x
     assert best is not None
+    # Alike measures change their rhythm together, so the star rating climbs with the intensity in
+    # steps, and a step can jump over the target. The keys move the rating too (a jack, a trill): when
+    # the bisection ends outside the tolerance, other draws of the keys on either side of the step
+    # usually land inside it.
+    for retry in range(1, KEY_RETRIES + 1):
+        if abs(best[2].total_stars - options.target_stars) <= options.tolerance:
+            break
+        for xv in (lo, hi):
+            objs, prof = attempt(xv, retry)
+            if abs(prof.total_stars - options.target_stars) < abs(best[2].total_stars - options.target_stars):
+                best = (xv, objs, prof)
     x, objs, prof = best
     if abs(prof.total_stars - options.target_stars) > options.tolerance:
         top_objs, top = attempt(X_MAX)
@@ -147,12 +171,14 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                             timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings)
 
 
-def select_rows(grid: Sequence[GridPoint], x: float) -> List[Tuple[GridPoint, int]]:
+def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[int]] = None
+                ) -> List[Tuple[GridPoint, int]]:
     """The grid points that become notes at intensity `x`, each with its chord size.
 
     A point is a note when its strength plus its metric bonus clears `1 - x`. Chord sizes are handed
     out by rank: the picked rows are ordered by weight (strength, metric place, kick), and the
-    strongest get the widest chords, so that the mean row carries `1 + chord_extra(x)` notes.
+    strongest get the widest chords, so that the mean row carries `1 + chord_extra(x)` notes. With
+    `groups` (from `phrases.group_measures`) the measures of a group are then given one rhythm.
     """
     threshold = 1.0 - x
     gate = MIN_STRENGTH * min(1.0, max(0.0, (X_MAX - 0.4 - x) / (X_MAX - 0.4 - FILL_FROM)))
@@ -167,7 +193,12 @@ def select_rows(grid: Sequence[GridPoint], x: float) -> List[Tuple[GridPoint, in
     for r, i in enumerate(order):
         q[i] = (r + 0.5) / len(picked)
     extra = chord_extra(x)
-    return [(p, 1 + int(2.0 * extra * q[i] + 0.5)) for i, p in enumerate(picked)]
+    sized = [(p, 1 + int(2.0 * extra * q[i] + 0.5)) for i, p in enumerate(picked)]
+    if groups is None:
+        return sized
+    size_at = {id(p): n for p, n in sized}
+    sizes = harmonize(grid, groups, [size_at.get(id(p), 0) for p in grid])
+    return [(p, n) for p, n in zip(grid, sizes) if n > 0]
 
 
 def chord_extra(x: float) -> float:
@@ -175,14 +206,15 @@ def chord_extra(x: float) -> float:
     return min(1.8, 0.6 * max(0.0, x))
 
 
-def _chart(grid: Sequence[GridPoint], x: float, seed: int) -> List[HitObject]:
-    picked = select_rows(grid, x)
-    rows = [Row(time_ms=p.time_ms, size=n, brightness=p.brightness) for p, n in picked]
-    cols = assign_columns(rows, seed=seed)
+def _chart(grid: Sequence[GridPoint], groups: Sequence[int], x: float, seed, draws: dict) -> List[HitObject]:
+    picked = select_rows(grid, x, groups)
+    sampler = PatternSampler(default_model())
+    masks = sampler.sample([(p.time_ms, n) for p, n in picked], np.random.default_rng(seed),
+                           beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked])
     objs = []
-    for row, cs in zip(rows, cols):
-        t = float(round(row.time_ms))
-        for c in cs:
+    for (p, _n), mask in zip(picked, masks):
+        t = float(round(p.time_ms))
+        for c in mask_columns(mask):
             objs.append(HitObject(column=c, time=t, note_type=NoteType.RICE))
     return objs
 
