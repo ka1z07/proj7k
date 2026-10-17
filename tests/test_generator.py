@@ -323,3 +323,65 @@ def test_evaluation_scores_a_songs_folder(tmp_path, capsys):
     assert summary["charts"] == 1 and summary["failed"] == 0
     assert summary["precision_median"] > 0.9 and summary["recall_median"] > 0.9
     assert summary["bpm_exact"] == 1.0 and summary["phase_within_10ms"] == 1.0
+
+
+# --- song structure (ADR-0031) --------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def verse_chorus():
+    """16 measures of a quiet verse (kick and snare, soft) and 16 of a loud chorus (the full groove)."""
+    bpm = 170.0
+    verse, _ = drum_song(bpm=bpm, offset_s=0.5, measures=16, seed=5, melody=False)
+    chorus, _ = drum_song(bpm=bpm, offset_s=0.0, measures=16, seed=6)
+    beat_s = 60.0 / bpm
+    cut = int(round((0.5 + 16 * 4 * beat_s) * SR))
+    song = np.concatenate([0.25 * verse[:cut], chorus]).astype(np.float32)
+    return Audio(song, SR, "synth"), 500.0, 60000.0 / bpm
+
+
+def test_sections_follow_the_song_and_the_chorus_is_louder(verse_chorus):
+    from proj7k.generator.structure import find_sections
+
+    audio, offset, beat = verse_chorus
+    timing = [TimingPoint(time=offset, beat_length=beat)]
+    env = onset_envelope(audio)
+    grid = build_grid(env, timing)
+    sections = find_sections(env, grid)
+    starts = [s.first_bar for s in sections]
+    assert any(abs(b - 16) <= 1 for b in starts)  # a boundary where the chorus comes in
+    verse = [s for s in sections if s.last_bar <= 16]
+    chorus = [s for s in sections if s.first_bar >= 15]
+    assert verse and chorus
+    assert min(s.energy for s in chorus) > max(s.energy for s in verse)
+
+
+def test_the_loud_part_gets_more_notes_per_beat(verse_chorus):
+    audio, offset, beat = verse_chorus
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=[TimingPoint(time=offset, beat_length=beat)]))
+    split = offset + 16 * 4 * beat
+    rows = sorted(_rows(result.beatmap))
+    verse = sum(1 for t in rows if offset <= t < split)
+    chorus = sum(1 for t in rows if split <= t < split + 16 * 4 * beat)
+    assert chorus > 1.3 * verse
+
+
+def test_each_part_gets_one_style_and_neighbours_differ():
+    from proj7k.generator.structure import Section, section_styles
+
+    grid = [type("P", (), {"bar": b})() for b in range(24)]
+    sections = [Section(0, 3, 0, 0.2), Section(4, 11, 1, 0.9), Section(12, 15, 0, 0.2), Section(16, 23, 1, 0.9)]
+    styles = section_styles(grid, sections, seed=4)
+    assert len({styles[b] for b in range(0, 4)} | {styles[b] for b in range(12, 16)}) == 1
+    assert styles[0] != styles[4] and styles[4] == styles[16]
+    assert styles[0] in patterns.STYLES and styles[4] in patterns.STYLES
+
+
+def test_a_style_leans_the_keys():
+    rows = [(i * 60000.0 / 180 / 2, 2 if i % 2 == 0 else 1) for i in range(600)]
+
+    def jack_rate(style):
+        m = PatternSampler(default_model()).sample(rows, np.random.default_rng(1), styles=[style] * len(rows))
+        return np.mean([bool(a & b) for a, b in zip(m, m[1:])])
+
+    assert jack_rate("jack") > 3 * jack_rate("plain")

@@ -1,18 +1,21 @@
 """
 From audio to a chart at a target star rating (ADR-0027).
 
-    audio ─ onset envelope ─┬─ beat grid (timing given, or estimated) ─ pick points ─ alike measures, one rhythm ─ keys ─ engine
-                            └─ tempo estimate (when no timing is given)          ▲                                       │
-                                                                                 └──────────────── intensity ────────────┘
+    audio ─ onset envelope ─┬─ beat grid (timing given, or estimated) ─┬─ sections ─ pick points ─ alike measures, one rhythm ─ keys ─ engine
+                            └─ tempo estimate (when no timing is given)  └───────────────┘    ▲                                       │
+                                                                                              └──────────────── intensity ────────────┘
 
 One knob, the *intensity* x, sets how much of the grid becomes notes and how wide the chords are.
-A grid point is a note when its onset strength plus a bonus for its place in the measure clears
-`1 - x`; a note's chord grows with its strength and with x. The engine's total star rating rises
+The song is cut into sections by how its sound changes, each with an energy (`structure`, ADR-0031);
+each section takes its strongest grid points (onset strength plus place in the measure), as many as
+x and its energy allow, so a loud part is denser than a quiet one; past the point where the loudest
+part is full, x widens the chords. The engine's total star rating rises
 with x, so x is bisected until the chart lands within the tolerance of the target, or the knob runs
 out (the song is too sparse to reach the target, or too busy to go under it), which is reported.
 
 The keys each row presses are drawn from a model of charts people wrote (`patterns`, ADR-0030), and
-measures that sound alike are given one rhythm (`phrases`), so the chart repeats where the music does. The seed fixes the draw; the same seed gives the same chart at every intensity tried, up to the
+measures that sound alike are given one rhythm (`phrases`), so the chart repeats where the music
+does. The seed fixes the draw; the same seed gives the same chart at every intensity tried, up to the
 rows that intensity adds or removes (and, when the target falls between two steps of the rating, a few
 other draws derived from the seed are tried).
 """
@@ -29,16 +32,18 @@ from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, GridPoint, build_grid, o
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
 from proj7k.generator.phrases import group_measures, harmonize
+from proj7k.generator.structure import find_sections, section_energy, section_styles
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
-GENERATOR_VERSION = "gen-2"
+GENERATOR_VERSION = "gen-3"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
 X_MIN, X_MAX = 0.0, 3.0
-#: Above this intensity the weak-onset gate opens gradually, so a busy target can fill a passage's
-#: quieter grid points (a continuous stream) instead of only stacking wider chords.
-FILL_FROM = 1.6
+#: The song's quietest section gets this share of the notes per grid point its loudest gets (ADR-0031).
+QUIET_SHARE = 0.45
+#: Grid points with almost no onset are filled into a stream only in sections at least this loud.
+FILL_ENERGY = 0.6
 MAX_ITERATIONS = 18
 #: Other draws of the keys tried when the bisection ends outside the tolerance.
 KEY_RETRIES = 8
@@ -115,6 +120,9 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     shift = onset_shift_ms(env, timing)
     grid = build_grid(env, timing, shift_ms=shift)
     groups = group_measures(grid)
+    sections = find_sections(env, grid)
+    energy = section_energy(grid, sections)
+    styles = section_styles(grid, sections, options.seed)
     lo, hi = X_MIN, X_MAX
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
@@ -122,7 +130,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     def attempt(x: float, retry: int = 0) -> Tuple[List[HitObject], DifficultyProfile]:
         seed = options.seed if retry == 0 else [options.seed, retry]
         draws = dict(zip((p.time_ms for p in grid), np.random.default_rng(seed).random(len(grid))))
-        objs = _chart(grid, groups, x, seed, draws)
+        objs = _chart(grid, groups, energy, styles, x, seed, draws)
         if not objs:
             return objs, evaluate_notes([])
         return objs, evaluate_notes([(o.column, o.time / 1000.0, None) for o in objs])
@@ -171,20 +179,35 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                             timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings)
 
 
-def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[int]] = None
-                ) -> List[Tuple[GridPoint, int]]:
-    """The grid points that become notes at intensity `x`, each with its chord size.
+def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[int]] = None,
+                energy: Optional[Sequence[float]] = None) -> List[Tuple[GridPoint, int]]:
+    """The grid points that become notes at intensity `x`, each with its chord size (ADR-0031).
 
-    A point is a note when its strength plus its metric bonus clears `1 - x`. Chord sizes are handed
-    out by rank: the picked rows are ordered by weight (strength, metric place, kick), and the
-    strongest get the widest chords, so that the mean row carries `1 + chord_extra(x)` notes. With
-    `groups` (from `phrases.group_measures`) the measures of a group are then given one rhythm.
+    Each section (its points share an `energy`, from `structure`) is given a share of its grid points:
+    `density(x)` in the song's loudest part and down to `QUIET_SHARE` of that in its quietest, so the
+    chorus can be a full 1/16 stream while the verse stays at eighths with a few sixteenths. Within a
+    section the points are ranked by onset strength plus their place in the measure (downbeat, beat,
+    half beat) and the strongest are taken; a point with almost no onset (`MIN_STRENGTH`) is taken only
+    in sections at least `FILL_ENERGY` loud, once x reaches 1. Chords widen with x as well, and past
+    the point where the loudest section is full only they do: the picked rows are ordered by weight (strength, metric place, kick), and the strongest get
+    the widest, more in loud sections and fewer in quiet ones. With `groups` (from
+    `phrases.group_measures`) the measures of a group are then given one rhythm.
     """
-    threshold = 1.0 - x
-    gate = MIN_STRENGTH * min(1.0, max(0.0, (X_MAX - 0.4 - x) / (X_MAX - 0.4 - FILL_FROM)))
-    picked = [p for p in grid
-              if not p.silent and p.strength >= gate
-              and p.strength + LEVEL_BONUS.get(p.level, 0.0) >= threshold]
+    energy = list(energy) if energy is not None else [1.0] * len(grid)
+    share = density(x)
+    by_energy: dict = {}
+    for i, (p, e) in enumerate(zip(grid, energy)):
+        if p.silent or (p.strength < MIN_STRENGTH and (e < FILL_ENERGY or x < 1.0)):
+            continue
+        by_energy.setdefault(e, []).append(i)
+    take = set()
+    for e, idx in by_energy.items():
+        n_section = sum(1 for p, pe in zip(grid, energy) if pe == e and not p.silent)
+        k = int(round(share * (QUIET_SHARE + (1.0 - QUIET_SHARE) * e) * n_section))
+        ranked = sorted(idx, key=lambda i: (-(grid[i].strength + LEVEL_BONUS.get(grid[i].level, 0.0)), grid[i].time_ms))
+        take.update(ranked[:k])
+    picked = [grid[i] for i in sorted(take)]
+    picked_e = [energy[i] for i in sorted(take)]
     if not picked:
         return []
     weight = [p.strength + 0.25 * (p.level == DOWNBEAT) + 0.1 * (p.level == BEAT) + 0.1 * p.low for p in picked]
@@ -193,7 +216,7 @@ def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[i
     for r, i in enumerate(order):
         q[i] = (r + 0.5) / len(picked)
     extra = chord_extra(x)
-    sized = [(p, 1 + int(2.0 * extra * q[i] + 0.5)) for i, p in enumerate(picked)]
+    sized = [(p, 1 + int(2.0 * extra * (0.5 + picked_e[i]) * q[i] + 0.5)) for i, p in enumerate(picked)]
     if groups is None:
         return sized
     size_at = {id(p): n for p, n in sized}
@@ -201,16 +224,23 @@ def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[i
     return [(p, n) for p, n in zip(grid, sizes) if n > 0]
 
 
+def density(x: float) -> float:
+    """The share of its grid points the loudest section gets at intensity `x`."""
+    return min(1.0, max(0.0, x))
+
+
 def chord_extra(x: float) -> float:
     """Mean notes per row beyond the first, at intensity `x`."""
-    return min(1.8, 0.6 * max(0.0, x))
+    return min(1.8, 0.45 * max(0.0, x))
 
 
-def _chart(grid: Sequence[GridPoint], groups: Sequence[int], x: float, seed, draws: dict) -> List[HitObject]:
-    picked = select_rows(grid, x, groups)
+def _chart(grid: Sequence[GridPoint], groups: Sequence[int], energy: Sequence[float], styles: dict, x: float,
+           seed, draws: dict) -> List[HitObject]:
+    picked = select_rows(grid, x, groups, energy)
     sampler = PatternSampler(default_model())
     masks = sampler.sample([(p.time_ms, n) for p, n in picked], np.random.default_rng(seed),
-                           beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked])
+                           beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked],
+                           styles=[styles.get(p.bar, "plain") for p, _ in picked])
     objs = []
     for (p, _n), mask in zip(picked, masks):
         t = float(round(p.time_ms))
