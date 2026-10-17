@@ -16,8 +16,11 @@ from generator_synth import SR, drum_song, write_wav
 from proj7k.engine import evaluate_osu
 from proj7k.generator import Audio, AudioDecodeError, GeneratorOptions, estimate_tempo, generate, load_audio, onset_envelope
 from proj7k.generator.cli import main
-from proj7k.generator.columns import Row, assign_columns
+from proj7k.generator import patterns
 from proj7k.generator.grid import DOWNBEAT, build_grid
+from proj7k.generator.patterns import (MASKS_BY_SIZE, PatternModel, PatternSampler, default_model, mirror, pattern_stats,
+                                       popcount)
+from proj7k.generator.phrases import group_measures, harmonize
 from proj7k.generator.onset import FRAME_S, frame_time
 from proj7k.generator.tempo import CHART_SYNC_MS
 from proj7k.parser import TimingPoint, dump_osu_7k, parse_osu_7k
@@ -104,16 +107,102 @@ def test_grid_follows_every_timing_section_and_finds_the_attacks(song):
     assert np.mean([np.min(np.abs(attack_ms - p.time_ms)) < 2.0 for p in strong]) > 0.95
 
 
-def test_columns_spread_load_and_avoid_fast_jacks():
-    rows = [Row(time_ms=i * 90.0, size=1 + (i % 3 == 0), brightness=(i * 37 % 11) / 10) for i in range(400)]
-    cols = assign_columns(rows, seed=1)
-    assert [len(c) for c in cols] == [r.size for r in rows]
-    assert all(len(set(c)) == len(c) and all(0 <= x < 7 for x in c) for c in cols)
-    counts = collections.Counter(x for c in cols for x in c)
-    assert max(counts.values()) < 1.6 * min(counts.values())
-    assert not any(set(a) & set(b) for a, b in zip(cols, cols[1:]))  # no same-column repeat 90 ms apart
-    assert cols == assign_columns(rows, seed=1)
-    assert cols != assign_columns(rows, seed=2)
+def test_grid_counts_beats_and_measures_across_sections(song):
+    audio, _ = song
+    env = onset_envelope(audio)
+    beat = 60000.0 / 170.0
+    timing = [TimingPoint(time=500.0, beat_length=beat), TimingPoint(time=500.0 + 30 * beat, beat_length=beat)]
+    grid = build_grid(env, timing)
+    for p in grid:
+        assert p.slot == round((p.beat % 4) * 48)  # every measure starts on a multiple of 4 beats
+        assert (p.level == DOWNBEAT) == (p.slot == 0)
+    # The song starts on beat 3 of the measure before the first timing point; the first section's 30
+    # beats end mid-measure (count 34), so the second section starts a new measure at count 36.
+    assert grid[0].beat == 3 and grid[0].bar == 0
+    second = next(i for i, p in enumerate(grid) if p.time_ms >= 500.0 + 30 * beat - 1e-6)
+    assert grid[second].beat == 36 and grid[second].bar == grid[second - 1].bar + 1
+
+
+def test_measures_that_sound_alike_get_one_rhythm(song):
+    audio, _ = song
+    env = onset_envelope(audio)
+    grid = build_grid(env, [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)])
+    groups = group_measures(grid)
+    # The drum song repeats one groove under a random melody: its measures fall into one group.
+    assert np.mean([g >= 0 for p, g in zip(grid, groups) if p.time_ms > 600.0]) > 0.9
+    # A place picked in most of a group's measures is picked in all of them; a place picked in only one
+    # is dropped, unless the music is clearly louder there (a fill).
+    sizes = [0] * len(grid)
+    members = sorted({p.bar for p, g in zip(grid, groups) if g == groups[-1]})
+    third = members[2]
+    for i, p in enumerate(grid):
+        if p.bar in members[1:] and p.slot == 48:
+            sizes[i] = 2
+        if p.bar == third and p.slot == 12:
+            sizes[i] = 1
+    out = harmonize(grid, groups, sizes)
+    for i, p in enumerate(grid):
+        if groups[i] == groups[-1] and p.slot == 48 and not p.silent:
+            assert out[i] == 2
+        if p.bar == third and p.slot == 12:
+            assert out[i] == 0
+
+
+# --- the pattern model ----------------------------------------------------------------------------------------
+
+
+def test_the_shipped_pattern_model_is_mirror_symmetric_and_normalised():
+    model = default_model()
+    assert model.meta["charts"] > 1000
+    for n in (1, 2, 3):
+        keys = patterns.contexts(n, 3, 0b0000100, 3, 0b0000010)
+        masks, p = model.distribution(keys, n)
+        assert set(masks) == set(MASKS_BY_SIZE[n]) and p.sum() == pytest.approx(1.0)
+        mkeys = patterns.contexts(n, 3, mirror(0b0000100), 3, mirror(0b0000010))
+        mmasks, mp = model.distribution(mkeys, n)
+        mirrored = dict(zip(mmasks, mp))
+        assert np.allclose(p, [mirrored[mirror(m)] for m in masks])
+
+
+def test_sampled_keys_read_like_charts_people_write():
+    # A plain 1/4 stream at 170 BPM with a chord on every beat.
+    beat = 60000.0 / 170.0
+    rows = [(i * beat / 4, 2 if i % 4 == 0 else 1) for i in range(800)]
+    beats = [i / 4 for i in range(800)]
+    masks = PatternSampler(default_model()).sample(rows, np.random.default_rng(1), beats=beats)
+    assert [popcount(m) for m in masks] == [n for _, n in rows]
+    assert masks == PatternSampler(default_model()).sample(rows, np.random.default_rng(1), beats=beats)
+    stats = pattern_stats([(t, m) for (t, _), m in zip(rows, masks)], beat)
+    # Ranked charts: about a fifth of three single notes are stairs and a tenth are trills; the old
+    # greedy assignment made 2-3 % stairs and about 1 % trills.
+    assert stats["roll"] > 0.10 and stats["trill"] > 0.04
+    assert stats["key_repeat"] > 0.05
+    counts = collections.Counter(c for m in masks for c in range(7) if m >> c & 1)
+    assert min(counts.values()) > 0.5 * max(counts.values())
+
+
+def test_a_repeated_rhythm_can_repeat_its_keys(monkeypatch):
+    monkeypatch.setattr(patterns, "REPEAT_SPANS", ((4, 0.0, 1.0), (2, 0.0, 0.0), (1, 0.0, 0.0)))
+    rows = [(i * 100.0, 1) for i in range(32)]
+    masks = PatternSampler(default_model()).sample(rows, np.random.default_rng(0), beats=[i / 2 for i in range(32)])
+    # Every 4-beat stretch (8 rows) after the first mirrors the one before it.
+    for k in range(1, 4):
+        assert masks[8 * k:8 * k + 8] == [mirror(m) for m in masks[8 * k - 8:8 * k]]
+
+
+def test_a_model_trains_counts_and_round_trips(tmp_path):
+    model = PatternModel()
+    model.add_chart([(i * 100.0, 1 << (i % 7)) for i in range(50)])
+    assert sum(model.levels[3]["1"].values()) == 100  # every row, as written and mirrored
+    path = tmp_path / "m.json.gz"
+    model.save(path, meta={"charts": 1})
+    again = PatternModel.load(path)
+    assert again.levels == model.levels and again.meta == {"charts": 1}
+    rows = [(i * 100.0, 1 << (i % 7)) for i in range(20)]
+    assert again.log_prob(rows) == pytest.approx(model.log_prob(rows))
+    # Trained on rolls: the next roll step is by far the likeliest.
+    masks, p = model.distribution(patterns.contexts(1, patterns.gap_bucket(100), 1 << 3, patterns.gap_bucket(100), 1 << 2), 1)
+    assert masks[int(np.argmax(p))] == 1 << 4
 
 
 # --- the closed loop ------------------------------------------------------------------------------------------
