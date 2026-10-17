@@ -32,7 +32,7 @@ MIN_ACTIVITY = 0.05
 #: group's mean strength at that place.
 FILL = 0.35
 #: The most measures of one group that are given one rhythm together.
-MAX_RUN = 4
+MAX_RUN = 2
 
 
 def group_measures(grid: Sequence[GridPoint]) -> List[int]:
