@@ -1,10 +1,12 @@
 """
-Train the generator's rhythm model (ADR-0032) from `tools/export_rhythm_data.py` output.
+Train the generator's rhythm model (ADR-0032), or with `--target hold` its long-note model (ADR-0033),
+from `tools/export_rhythm_data.py` output.
 
 One song in ten (by its audio file) is held out: those songs are never trained on, and
 `python3 -m proj7k.generator.evaluate --holdout` evaluates the generator on them only.
 
     PYTHONPATH=src python3 tools/train_rhythm_model.py --data ~/.cache/proj7k/rhythm-data.npz
+    PYTHONPATH=src python3 tools/train_rhythm_model.py --data ~/.cache/proj7k/rhythm-data.npz --target hold
 """
 
 import argparse
@@ -13,6 +15,7 @@ from typing import List, Optional
 
 import numpy as np
 
+from proj7k.generator import holds as H
 from proj7k.generator import rhythm as R
 
 HIDDEN = (64, 32)
@@ -48,9 +51,9 @@ def log_loss(layers, X, y, batch=65536):
     return total / max(len(X), 1)
 
 
-def train(X, y, Xv, yv, epochs, seed=0, lr=2e-3, batch=2048, l2=1e-5):
+def train(X, y, Xv, yv, epochs, classes=R.CLASSES, seed=0, lr=2e-3, batch=2048, l2=1e-5):
     rng = np.random.default_rng(seed)
-    layers = init([X.shape[1], *HIDDEN, R.CLASSES], rng)
+    layers = init([X.shape[1], *HIDDEN, classes], rng)
     m = [[np.zeros_like(W), np.zeros_like(b)] for W, b in layers]
     v = [[np.zeros_like(W), np.zeros_like(b)] for W, b in layers]
     step = 0
@@ -87,20 +90,28 @@ def train(X, y, Xv, yv, epochs, seed=0, lr=2e-3, batch=2048, l2=1e-5):
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--data", required=True)
-    p.add_argument("--output", default=str(R.MODEL_PATH))
+    p.add_argument("--target", choices=("rhythm", "hold"), default="rhythm")
+    p.add_argument("--output", help="default: the shipped model file of the target")
     p.add_argument("--epochs", type=int, default=10)
     args = p.parse_args(argv)
 
     d = np.load(args.data)
-    X, y, chart = d["X"].astype(np.float32), d["y"].astype(np.int64), d["chart"]
+    holds = args.target == "hold"
+    classes = H.CLASSES if holds else R.CLASSES
+    expect = H.n_features(R.n_features()) if holds else R.n_features()
+    output = args.output or str(H.MODEL_PATH if holds else R.MODEL_PATH)
+    if holds:
+        X, y, chart = d["Xh"].astype(np.float32), d["yh"].astype(np.int64), d["chart_h"]
+    else:
+        X, y, chart = d["X"].astype(np.float32), d["y"].astype(np.int64), d["chart"]
     X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
     # Charts whose rows mostly miss the places are off their audio (dan courses chain several songs).
     good = np.asarray(d["unmatched"]) <= MAX_UNMATCHED
     keep = good[chart]
     X, y, chart = X[keep], y[keep], chart[keep]
     print(f"dropped {int((~good).sum())} charts with more than {MAX_UNMATCHED:.0%} of rows off the places", flush=True)
-    if X.shape[1] != R.n_features():
-        print(f"data has {X.shape[1]} features, the model expects {R.n_features()}: re-export", file=sys.stderr)
+    if X.shape[1] != expect:
+        print(f"data has {X.shape[1]} features, the model expects {expect}: re-export", file=sys.stderr)
         return 1
     hold_chart = np.array([R.is_holdout(str(a)) for a in d["audios"]])
     hold = hold_chart[chart]
@@ -108,17 +119,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     std = X[~hold].std(axis=0) + 1e-3
     Xn = (X - mean) / std
     print(f"{int(good.sum())} charts ({int((hold_chart & good).sum())} held out), {len(X)} places, "
-          f"classes {np.bincount(y, minlength=R.CLASSES).tolist()}", flush=True)
-    prior = np.bincount(y[~hold], minlength=R.CLASSES) / (~hold).sum()
+          f"classes {np.bincount(y, minlength=classes).tolist()}", flush=True)
+    prior = np.bincount(y[~hold], minlength=classes) / (~hold).sum()
     base = -np.log(prior[y[hold]]).mean()
-    layers, loss = train(Xn[~hold], y[~hold], Xn[hold], y[hold], args.epochs)
+    layers, loss = train(Xn[~hold], y[~hold], Xn[hold], y[hold], args.epochs, classes)
     print(f"holdout log loss {loss:.4f} (class prior alone {base:.4f})")
     model = R.RhythmModel({"mean": mean.tolist(), "std": std.tolist(),
                            "layers": [[W.tolist(), b.tolist()] for W, b in layers],
                            "meta": {"charts": int(len(d["names"])), "holdout_charts": int(hold_chart.sum()),
                                     "holdout_log_loss": round(float(loss), 4), "prior_log_loss": round(float(base), 4)}})
-    model.save(args.output)
-    print(f"wrote {args.output}")
+    model.save(output)
+    print(f"wrote {output}")
     return 0
 
 

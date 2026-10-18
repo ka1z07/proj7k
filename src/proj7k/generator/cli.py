@@ -76,6 +76,7 @@ class GenerateRun:
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
+            "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
             "leads": [{"first_bar": l.first_bar, "last_bar": l.last_bar, "stem": l.stem,
                        "name": STEM_NAMES.get(l.stem, l.stem)} for l in r.leads],
         }
@@ -182,7 +183,7 @@ def format_report(run: GenerateRun) -> str:
     lines = [
         f"生成：{d['title']}",
         f"  星级 {d['stars']:.2f}★（目标 {d['target_stars']:.2f}★），主技能 {d['dominant_skill']}",
-        f"  {d['notes']} 个音符 / {d['rows']} 行，强度 {d['intensity']:.2f}",
+        f"  {d['notes']} 个音符 / {d['rows']} 行，长条 {d['ln_share']:.0%}，强度 {d['intensity']:.2f}",
     ]
     source = {"reference": "借用参考谱面", "manual": "手动指定", "auto": "自动测得"}[d["timing_source"]]
     lines.append(f"  timing：{source}，{d['bpm']:g} BPM，offset {d['offset_ms']:g} ms")
@@ -217,6 +218,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--od", type=float, default=8.0, help="OverallDifficulty，默认 8")
     p.add_argument("--stems", action="store_true",
                    help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
+    p.add_argument("--ln", type=float, default=0.0,
+                   help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段")
+    p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
@@ -244,7 +248,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
-            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say,
+            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say, ln_ratio=args.ln, whole_inverse=args.inverse,
         )
         if args.stems:
             stems.install(_say)

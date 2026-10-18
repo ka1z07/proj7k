@@ -498,3 +498,72 @@ def test_stems_say_how_to_install_when_demucs_is_missing(monkeypatch, tmp_path):
     monkeypatch.setattr(stems, "available", lambda: False)
     with pytest.raises(stems.StemsUnavailable, match="Demucs"):
         stems.separate(Audio(np.zeros(SR, np.float32), SR, "synth"), cache_dir=tmp_path)
+
+
+# --- long notes (ADR-0033) ------------------------------------------------------------------------------------
+
+
+class _EvenHolds:
+    """A stand-in long-note model: every length class equally likely."""
+
+    def predict(self, X):
+        from proj7k.generator import holds, rhythm
+
+        assert X.shape[1] == holds.n_features(rhythm.n_features())
+        return np.full((len(X), holds.CLASSES), 1.0 / holds.CLASSES)
+
+
+def _assert_playable(beatmap):
+    by_col = collections.defaultdict(list)
+    for o in beatmap.hit_objects:
+        end = o.end_time if o.note_type.value == "ln" else o.time
+        assert end >= o.time
+        by_col[o.column].append((o.time, end))
+    for notes in by_col.values():
+        notes.sort()
+        for (t0, e0), (t1, _) in zip(notes, notes[1:]):
+            assert e0 < t1, "a tail runs into the next note of its column"
+
+
+def test_long_notes_take_the_asked_share_and_stay_playable(song, monkeypatch):
+    from proj7k.generator import holds
+
+    monkeypatch.setattr(holds, "default_model", lambda: _EvenHolds())
+    audio, _ = song
+    timing = [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing, ln_ratio=0.4))
+    lns = [o for o in result.beatmap.hit_objects if o.note_type.value == "ln"]
+    share = len(lns) / result.n_notes
+    assert 0.15 <= share <= 0.6
+    assert result.holds and all(h.kind == "general" for h in result.holds)
+    _assert_playable(result.beatmap)
+    assert abs(result.stars - 3.0) <= 0.3
+    text = dump_osu_7k(result.beatmap)
+    assert parse_osu_7k(text).hit_objects[0].column == result.beatmap.hit_objects[0].column
+
+
+def test_an_inverse_section_holds_every_note_to_just_before_the_next(song, monkeypatch):
+    from proj7k.generator import holds
+    from proj7k.generator.structure import find_sections
+
+    monkeypatch.setattr(holds, "default_model", lambda: _EvenHolds())
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    timing = [TimingPoint(time=500.0, beat_length=beat)]
+    env = onset_envelope(audio)
+    first = find_sections(env, build_grid(env, timing))[0]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing,
+                                              section_holds={first.first_bar: (0.0, "inverse")}))
+    _assert_playable(result.beatmap)
+    sec = [h for h in result.holds if h.kind == "inverse"]
+    assert sec
+    start = 500.0 + sec[0].first_bar * 4 * beat
+    end = 500.0 + (sec[0].last_bar + 1) * 4 * beat
+    inside = [o for o in result.beatmap.hit_objects if start <= o.time < end - 2 * beat]
+    assert inside and sum(o.note_type.value == "ln" for o in inside) / len(inside) > 0.8
+
+
+def test_hold_lengths_fall_in_their_classes():
+    from proj7k.generator import holds
+
+    assert [holds.length_class(b) for b in (0, 0.25, 0.5, 1, 2, 4)] == [0, 1, 2, 3, 4, 5]

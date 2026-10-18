@@ -32,7 +32,7 @@ import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator import rhythm, stems as stems_mod
+from proj7k.generator import holds, rhythm, stems as stems_mod
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
@@ -76,6 +76,9 @@ class GeneratorOptions:
     stems: bool = False                       # split the song (Demucs) and follow a lead layer per section (ADR-0033)
     leads: Optional[Dict[int, str]] = None    # a section's first bar -> its lead stem, overriding the automatic choice
     separator: Optional[Callable] = None      # stands in for Demucs (tests)
+    ln_ratio: float = 0.0                     # the chart's share of long notes, spread over sections by how the sound rings
+    section_holds: Optional[Dict[int, Tuple[float, str]]] = None  # a section's first bar -> (share, kind), overriding
+    whole_inverse: bool = False               # every section written as inverse long notes
     log: Optional[Callable[[str], None]] = None
 
 
@@ -91,6 +94,7 @@ class GenerationResult:
     iterations: int
     warnings: List[str] = field(default_factory=list)
     leads: List[stems_mod.Lead] = field(default_factory=list)  # each section's lead layer, with stems
+    holds: List[holds.SectionHolds] = field(default_factory=list)  # each section's long notes
 
     @property
     def stars(self) -> float:
@@ -136,14 +140,15 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     leads: List[stems_mod.Lead] = []
     if options.stems and model is None:
         warnings.append("分轨需要节奏模型（rhythm_model.json.gz），这次没有分轨。")
+    env_read = env
     if model is not None:
         places = rhythm.places(timing, env.duration_s * 1000.0)
         feats = rhythm.features(env, places, shift)
         grid = rhythm.grid_points(places, feats, SILENCE_DB)
         if options.stems:
             leads, stem_envs = _follow_leads(audio, env, grid, options)
-            env_lead = stems_mod.blend(env, stem_envs, leads, stems_mod.bar_spans(grid))
-            feats = rhythm.features(env_lead, places, shift)
+            env_read = stems_mod.blend(env, stem_envs, leads, stems_mod.bar_spans(grid))
+            feats = rhythm.features(env_read, places, shift)
             grid = rhythm.grid_points(places, feats, SILENCE_DB)
         same_draw = _same_draw(grid, group_measures(grid, runs=False))
         lo, hi = rhythm.D_MIN, rhythm.D_MAX + rhythm.CHORD_RANGE
@@ -154,6 +159,24 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     sections = find_sections(env, grid)
     energy = section_energy(grid, sections)
     styles = section_styles(grid, sections, options.seed)
+    hold_model = holds.default_model()
+    hold_plan: List[holds.SectionHolds] = []
+    if model is not None and (options.ln_ratio > 0 or options.section_holds or options.whole_inverse):
+        if hold_model is None:
+            warnings.append("没有长条模型（hold_model.json.gz），这次只出米键。")
+        else:
+            sustain = holds.sustain_by_section(env, sections, stems_mod.bar_spans(grid))
+            override = dict(options.section_holds or {})
+            if options.whole_inverse:
+                override = {s.first_bar: (1.0, "inverse") for s in sections}
+            hold_plan = holds.plan(sections, options.ln_ratio, sustain, override)
+            if not any(h.ratio > 0 or h.kind == "inverse" for h in hold_plan):
+                hold_plan = []
+    if hold_plan:
+        hold_rng = np.random.default_rng([options.seed, 7])
+        hold_u = hold_rng.random((len(grid), 7))[same_draw]
+        hold_v = hold_rng.random((len(grid), 7))[same_draw]
+        place_at = {int(round(p.time_ms)): i for i, p in enumerate(grid)}
     x_top = hi
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
@@ -180,7 +203,11 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         objs = _chart(picked, styles, seed, draws)
         if not objs:
             return objs, evaluate_notes([])
-        return objs, evaluate_notes([(o.column, o.time / 1000.0, None) for o in objs])
+        if hold_plan:
+            objs = _with_holds(objs, hold_plan, hold_model, feats, places, grid, place_at, env_read, shift,
+                               hold_u, hold_v)
+        return objs, evaluate_notes([(o.column, o.time / 1000.0, o.end_time / 1000.0 if o.note_type == NoteType.LN else None)
+                                     for o in objs])
 
     for iterations in range(1, MAX_ITERATIONS + 1):
         x = (lo + hi) / 2.0
@@ -224,7 +251,48 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     beatmap = _beatmap(objs, timing, options, prof.total_stars)
     return GenerationResult(beatmap=beatmap, profile=prof, target_stars=options.target_stars, intensity=x,
                             timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings,
-                            leads=leads)
+                            leads=leads, holds=hold_plan)
+
+
+def _with_holds(objs: List[HitObject], plan: Sequence[holds.SectionHolds], model, feats: np.ndarray,
+                places, grid: Sequence[GridPoint], place_at: dict, env, shift: float,
+                hold_u: np.ndarray, hold_v: np.ndarray) -> List[HitObject]:
+    """The chart's taps with the planned long notes made (ADR-0033)."""
+    heads = np.array([o.time for o in objs])
+    cols = np.array([o.column for o in objs])
+    row_times = np.unique(heads)
+    row_of = np.searchsorted(row_times, heads)
+    sizes = np.bincount(row_of, minlength=len(row_times))
+    pidx = np.array([place_at.get(int(round(t)), -1) for t in row_times])
+    if (pidx < 0).any():
+        return objs
+    bars = np.array([grid[i].bar for i in pidx])
+    sec_of_bar = {}
+    for k, h in enumerate(plan):
+        for b in range(h.first_bar, h.last_bar + 1):
+            sec_of_bar[b] = k
+    row_sec = np.array([sec_of_bar.get(int(b), -1) for b in bars])
+    ratios = np.array([h.ratio for h in plan] + [0.0])
+    beat_ms = places.beat_ms[pidx]
+    X = holds.features(feats[pidx], row_times, sizes, beat_ms, env, shift, ratios[row_sec])
+    probs = model.predict(X)[row_of]
+    note_sec = row_sec[row_of]
+    u = hold_u[pidx[row_of], cols]
+    v = hold_v[pidx[row_of], cols]
+    v_row = hold_v[pidx, 0]
+    kinds = [h.kind for h in plan]
+    classes = holds.assign(probs, note_sec, ratios, kinds, u, v, v_row, row_of)
+    nb = beat_ms[row_of]
+    tails = holds.tail_times(heads, classes, nb, places, feats[:, rhythm.F_TOTAL])
+    inverse = np.array([s >= 0 and kinds[s] == "inverse" for s in note_sec])
+    tails = holds.settle(cols, heads, tails, nb, inverse)
+    out = []
+    for o, t in zip(objs, tails):
+        if np.isnan(t):
+            out.append(o)
+        else:
+            out.append(HitObject(column=o.column, time=o.time, note_type=NoteType.LN, end_time=float(round(t))))
+    return out
 
 
 def _follow_leads(audio: Audio, env, grid: Sequence[GridPoint], options: GeneratorOptions):
