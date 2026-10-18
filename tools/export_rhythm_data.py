@@ -12,7 +12,11 @@ One song's difficulties share the decoded audio.
 The output holds X [n, features] float16, y [n] int8, chart [n] int32 (index into `names`), and per chart
 its name, audio file name, density and timing source. For the long-note model (ADR-0033) it also holds
 one sample per note of the kept measures: Xh [m, hold features] float16, yh [m] int8 (tap, or the
-length class of the hold), chart_h [m] int32, and per chart its share of long notes.
+length class of the hold), chart_h [m] int32, and per chart its share of long notes. For the technique
+prior (ADR-0033 decision 8) it holds one record per section of every chart (`structure.find_sections`
+on the chart's own timing): sec_chart, sec_bars [k, 2], sec_energy, sec_label, sec_notes, sec_ln and
+sec_stars [k, 8] (the engine's skill stars over the section's notes, in `engine.SKILLS` order); and
+per chart its total stars and skill stars (chart_stars, chart_skills [n, 8]).
 """
 
 import argparse
@@ -25,12 +29,15 @@ from typing import List, Optional
 
 import numpy as np
 
+from proj7k.engine import SKILLS, evaluate_notes
 from proj7k.generator import holds as H
 from proj7k.generator import rhythm as R
 from proj7k.generator.audio import load_audio
 from proj7k.generator.evaluate import lazer_charts, songs_folder_charts
-from proj7k.generator.grid import onset_shift_ms
+from proj7k.generator.grid import SILENCE_DB, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
+from proj7k.generator.stems import bar_spans
+from proj7k.generator.structure import find_sections
 from proj7k.parser import NoteType, parse_osu_7k
 
 KEEP_BARS = 3
@@ -66,6 +73,29 @@ def hold_samples(chart, pl, X, row_times, rows, env, shift, keep):
     return Xh[np.array(xs, dtype=np.int64)], np.array(ys, dtype=np.int8), share
 
 
+def _notes(objs):
+    return [(o.column, o.time / 1000.0, (o.end_time / 1000.0) if o.note_type == NoteType.LN and o.end_time
+             and o.end_time > o.time else None) for o in objs]
+
+
+def section_records(chart, pl, X, env, min_notes: int = 24):
+    """The chart's engine profile, and per section with at least `min_notes` notes: its bars, energy,
+    label, note count, long-note share and skill stars."""
+    prof = evaluate_notes(_notes(chart.hit_objects))
+    grid = R.grid_points(pl, X, SILENCE_DB)
+    span = bar_spans(grid)
+    out = []
+    for s in find_sections(env, grid):
+        t0, t1 = span[s.first_bar][0], span[s.last_bar][1]
+        objs = [o for o in chart.hit_objects if t0 - 2 <= o.time < t1 - 2]
+        if len(objs) < min_notes:
+            continue
+        sp = evaluate_notes(_notes(objs))
+        ln = sum(o.note_type == NoteType.LN for o in objs) / len(objs)
+        out.append((s.first_bar, s.last_bar, s.energy, s.label, len(objs), ln, [sp.skills[k].stars for k in SKILLS]))
+    return prof, out
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     src = p.add_mutually_exclusive_group(required=True)
@@ -81,6 +111,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     Xs, ys, cs = [], [], []
     Xhs, yhs, chs = [], [], []
     names, audios, dens, missed, ln_share = [], [], [], [], []
+    secs, chart_stars, chart_skills = [], [], []
     env_cache = {}
     t0 = time.time()
     for name, osu, audio in charts:
@@ -108,6 +139,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             h = int(hashlib.md5(name.encode("utf-8")).hexdigest(), 16)
             keep = (pl.bar % KEEP_BARS) == (h % KEEP_BARS)
             Xh, yh, share = hold_samples(chart, pl, X, rt, rows, env, shift, keep)
+            prof, sec = section_records(chart, pl, X, env)
         except Exception as e:  # one bad chart must not stop a long export
             print(f"skip {name[:60]}: {str(e)[:120]}", flush=True)
             continue
@@ -119,6 +151,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         yhs.append(yh)
         chs.append(np.full(len(yh), i, dtype=np.int32))
         ln_share.append(share)
+        chart_stars.append(prof.total_stars)
+        chart_skills.append([prof.skills[k].stars for k in SKILLS])
+        secs.extend((i, *r) for r in sec)
         names.append(name)
         audios.append(Path(audio).name)
         dens.append(d)
@@ -132,7 +167,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                         names=np.array(names), audios=np.array(audios), density=np.array(dens),
                         unmatched=np.array(missed), n_features=R.n_features(),
                         Xh=np.concatenate(Xhs), yh=np.concatenate(yhs), chart_h=np.concatenate(chs),
-                        ln_share=np.array(ln_share))
+                        ln_share=np.array(ln_share), chart_stars=np.array(chart_stars),
+                        chart_skills=np.array(chart_skills, dtype=np.float32),
+                        sec_chart=np.array([r[0] for r in secs], dtype=np.int32),
+                        sec_bars=np.array([(r[1], r[2]) for r in secs], dtype=np.int32).reshape(-1, 2),
+                        sec_energy=np.array([r[3] for r in secs], dtype=np.float32),
+                        sec_label=np.array([r[4] for r in secs], dtype=np.int32),
+                        sec_notes=np.array([r[5] for r in secs], dtype=np.int32),
+                        sec_ln=np.array([r[6] for r in secs], dtype=np.float32),
+                        sec_stars=np.array([r[7] for r in secs], dtype=np.float32).reshape(-1, len(SKILLS)))
     print(f"wrote {args.output}: {len(names)} charts, {sum(len(y) for y in ys)} places")
     return 0
 
