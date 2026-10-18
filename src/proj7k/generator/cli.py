@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
-from proj7k.generator import stems
+from proj7k.generator import brief, stems
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
 from proj7k.generator.stems import STEM_NAMES
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
@@ -220,6 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
     p.add_argument("--ln", type=float, default=0.0,
                    help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段")
+    p.add_argument("--brief", help="谱面设计稿 JSON（ADR-0033，chart-design skill 写的）：每段的主跟层、技法、键形、密度与长条")
     p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
@@ -249,6 +250,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
             version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say, ln_ratio=args.ln, whole_inverse=args.inverse,
+            brief=brief.load(args.brief) if args.brief else None,
         )
         if args.stems:
             stems.install(_say)

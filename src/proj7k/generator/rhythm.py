@@ -232,7 +232,7 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
 
 
 def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
-         rows_per_s: Optional[float] = None, chords: float = 0.0) -> np.ndarray:
+         rows_per_s: Optional[float] = None, chords: float = 0.0, gain: Optional[np.ndarray] = None) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
     (row or not) and `v` (its size), so a higher density only adds rows.
 
@@ -246,8 +246,11 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
     With `rows_per_s`, the row probabilities are then scaled together so the chart has that many rows
     per second (the model alone undershoots dense charts: it cannot know which song is a stream chart).
     `chords` > 0 moves every row's size draw toward wider chords, for targets the density alone cannot
-    reach."""
+    reach. `gain` (per place) weighs the row probabilities before all that: a design brief's dense sections
+    against its sparse ones."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
+    if gain is not None:
+        p_row = np.minimum(1.0, p_row * gain)
     slot48 = np.array(SLOTS)[pl.slot]
     quarter = np.isin(slot48, _QUARTER)
     eighth = np.isin(slot48, _EIGHTH_ONLY)

@@ -567,3 +567,59 @@ def test_hold_lengths_fall_in_their_classes():
     from proj7k.generator import holds
 
     assert [holds.length_class(b) for b in (0, 0.25, 0.5, 1, 2, 4)] == [0, 1, 2, 3, 4, 5]
+
+
+# --- design brief (ADR-0033) ----------------------------------------------------------------------------------
+
+
+def _brief(**kw):
+    from proj7k.generator import brief
+
+    data = {"song": "synth", "sections": [
+        {"bars": [0, 11], "role": "verse", "intensity": 0.2, "technique": "rc_speed", "pattern": "stairs"},
+        {"bars": [12, 25], "role": "chorus", "intensity": 0.9, "technique": "rc_jack", "pattern": "chordjack",
+         "accent": {"pattern": "jumptrill", "at": "phrase_end"}},
+    ]}
+    data.update(kw)
+    return brief.parse(data)
+
+
+def test_a_brief_is_checked_and_says_what_is_wrong():
+    from proj7k.generator import brief
+
+    b = _brief()
+    assert [s.pattern for s in b.sections] == ["stairs", "chordjack"]
+    for bad, msg in [({"sections": []}, "sections"),
+                     ({"sections": [{"bars": [4, 2]}]}, "bars"),
+                     ({"sections": [{"bars": [0, 3], "lead": "piano"}]}, "lead"),
+                     ({"sections": [{"bars": [0, 3], "technique": "jack"}]}, "technique"),
+                     ({"sections": [{"bars": [0, 3]}, {"bars": [3, 5]}]}, "重叠"),
+                     ({"sections": [{"bars": [0, 3], "ln": {"kind": "weird"}}]}, "ln")]:
+        with pytest.raises(brief.BriefError, match=msg):
+            brief.parse(bad)
+    assert brief.parse({"sections": [{"bars": [0, 3], "technique": "rc_stamina"}]}).sections[0].pattern == "chordstream"
+    assert brief.parse({"sections": [{"bars": [0, 3], "technique": "ln_inverse"}]}).holds() == {0: (1.0, "inverse")}
+
+
+def test_a_brief_sets_each_sections_density_and_key_pattern(song):
+    from proj7k.generator.brief import PATTERNS
+
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    timing = [TimingPoint(time=500.0, beat_length=beat)]
+    result = generate(audio, GeneratorOptions(target_stars=3.5, timing=timing, brief=_brief()))
+    rows = sorted(_rows(result.beatmap).items())
+    split = 500.0 + 12 * 4 * beat
+    verse = [r for r in rows if r[0] < split]
+    chorus = [r for r in rows if r[0] >= split]
+    assert len(chorus) / 14 > 1.5 * len(verse) / 12   # rows per measure follow the intensities
+
+    def share(part, name):
+        masks = [sum(1 << c for c in cols) for _, cols in part]
+        test = PATTERNS[name][1]
+        hits = [test(m, r1, r2) for r2, r1, m in zip(masks, masks[1:], masks[2:])]
+        return sum(hits) / max(len(hits), 1)
+
+    # The primary pattern holds at least seven rows in ten (ADR-0033 decision 5).
+    assert share(verse, "stairs") >= 0.7
+    assert share(chorus, "chordjack") >= 0.7

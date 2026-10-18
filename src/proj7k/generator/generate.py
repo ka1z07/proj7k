@@ -32,12 +32,12 @@ import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator import holds, rhythm, stems as stems_mod
+from proj7k.generator import brief as brief_mod, holds, rhythm, stems as stems_mod
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
 from proj7k.generator.phrases import group_measures, harmonize
-from proj7k.generator.structure import find_sections, section_energy, section_styles
+from proj7k.generator.structure import Section, find_sections, section_energy, section_styles
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
@@ -79,6 +79,7 @@ class GeneratorOptions:
     ln_ratio: float = 0.0                     # the chart's share of long notes, spread over sections by how the sound rings
     section_holds: Optional[Dict[int, Tuple[float, str]]] = None  # a section's first bar -> (share, kind), overriding
     whole_inverse: bool = False               # every section written as inverse long notes
+    brief: Optional[brief_mod.Brief] = None   # a chart design brief (ADR-0033): sections, leads, patterns, long notes
     log: Optional[Callable[[str], None]] = None
 
 
@@ -146,7 +147,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         feats = rhythm.features(env, places, shift)
         grid = rhythm.grid_points(places, feats, SILENCE_DB)
         if options.stems:
-            leads, stem_envs = _follow_leads(audio, env, grid, options)
+            leads, stem_envs = _follow_leads(audio, env, grid, options, options.brief)
             env_read = stems_mod.blend(env, stem_envs, leads, stems_mod.bar_spans(grid))
             feats = rhythm.features(env_read, places, shift)
             grid = rhythm.grid_points(places, feats, SILENCE_DB)
@@ -157,16 +158,21 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         lo, hi = X_MIN, X_MAX
     groups = group_measures(grid)
     sections = find_sections(env, grid)
+    if options.brief is not None:
+        sections = _brief_sections(options.brief, sections)
     energy = section_energy(grid, sections)
     styles = section_styles(grid, sections, options.seed)
     hold_model = holds.default_model()
     hold_plan: List[holds.SectionHolds] = []
-    if model is not None and (options.ln_ratio > 0 or options.section_holds or options.whole_inverse):
+    if model is not None and (options.ln_ratio > 0 or options.section_holds or options.whole_inverse
+                              or (options.brief is not None and any(r > 0 or k == "inverse"
+                                                                    for r, k in options.brief.holds().values()))):
         if hold_model is None:
             warnings.append("没有长条模型（hold_model.json.gz），这次只出米键。")
         else:
             sustain = holds.sustain_by_section(env, sections, stems_mod.bar_spans(grid))
-            override = dict(options.section_holds or {})
+            override = dict(options.brief.holds() if options.brief else {})
+            override.update(options.section_holds or {})
             if options.whole_inverse:
                 override = {s.first_bar: (1.0, "inverse") for s in sections}
             hold_plan = holds.plan(sections, options.ln_ratio, sustain, override)
@@ -177,6 +183,16 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         hold_u = hold_rng.random((len(grid), 7))[same_draw]
         hold_v = hold_rng.random((len(grid), 7))[same_draw]
         place_at = {int(round(p.time_ms)): i for i, p in enumerate(grid)}
+    row_gain = None
+    shape_of: dict = {}
+    shape_name: Optional[List[Optional[str]]] = None
+    if options.brief is not None:
+        b = options.brief
+        row_gain = np.array([2.0 ** (2.0 * ((b.section_at(p.bar).intensity if b.section_at(p.bar) else 0.5) - 0.5))
+                             for p in grid])
+        shapes = brief_mod.row_shapes(b, [p.bar for p in grid], [p.slot / 48.0 for p in grid])
+        shape_of = {p.time_ms: brief_mod.predicates(sh) for p, sh in zip(grid, shapes)}
+        shape_name = shapes
     x_top = hi
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
@@ -195,12 +211,14 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
             u, v = u[same_draw], v[same_draw]
             sizes = rhythm.pick(model.predict(feats), places, u, v,
                                 np.array([p.silent for p in grid]), rows_per_s=2.0 ** d,
-                                chords=max(0.0, x - rhythm.D_MAX))
+                                chords=max(0.0, x - rhythm.D_MAX), gain=row_gain)
             sizes = harmonize(grid, groups, list(sizes))
+            if shape_name is not None:
+                sizes = [brief_mod.sized(int(n), sh) for n, sh in zip(sizes, shape_name)]
             picked = [(p, int(n)) for p, n in zip(grid, sizes) if n > 0]
         else:
             picked = select_rows(grid, x, groups, energy)
-        objs = _chart(picked, styles, seed, draws)
+        objs = _chart(picked, styles, seed, draws, shape_of)
         if not objs:
             return objs, evaluate_notes([])
         if hold_plan:
@@ -295,12 +313,32 @@ def _with_holds(objs: List[HitObject], plan: Sequence[holds.SectionHolds], model
     return out
 
 
-def _follow_leads(audio: Audio, env, grid: Sequence[GridPoint], options: GeneratorOptions):
+def _follow_leads(audio: Audio, env, grid: Sequence[GridPoint], options: GeneratorOptions,
+                  brief: Optional[brief_mod.Brief] = None):
     """Each section's lead layer (ADR-0033), and the stems' envelopes."""
     kw = {"log": options.log} if options.log else {}
     parts = stems_mod.separate(audio, separator=options.separator, **kw)
     stem_envs = stems_mod.stem_envelopes(parts, audio)
-    return stems_mod.choose_leads(stem_envs, grid, find_sections(env, grid), options.leads), stem_envs
+    override = dict(options.leads or {})
+    sections = find_sections(env, grid)
+    if brief is not None:
+        override.update(brief.leads())
+        sections = _brief_sections(brief, sections)
+    return stems_mod.choose_leads(stem_envs, grid, sections, override), stem_envs
+
+
+def _brief_sections(brief: brief_mod.Brief, auto: Sequence[Section]) -> List[Section]:
+    """The brief's sections, with the generator's own where the brief leaves bars uncovered."""
+    out = [Section(s.first_bar, s.last_bar, 1000 + i, s.intensity) for i, s in enumerate(brief.sections)]
+    for a in auto:
+        run: List[int] = []
+        for b in list(range(a.first_bar, a.last_bar + 1)) + [None]:
+            if b is not None and brief.section_at(b) is None:
+                run.append(b)
+            elif run:
+                out.append(Section(run[0], run[-1], a.label, a.energy))
+                run = []
+    return sorted(out, key=lambda s: s.first_bar)
 
 
 def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[int]] = None,
@@ -377,11 +415,13 @@ def chord_extra(x: float) -> float:
     return min(2.2, 0.45 + 0.6 * (SPREAD_FROM - 1.0) + 0.9 * (x - SPREAD_FROM))
 
 
-def _chart(picked: Sequence[Tuple[GridPoint, int]], styles: dict, seed, draws: dict) -> List[HitObject]:
+def _chart(picked: Sequence[Tuple[GridPoint, int]], styles: dict, seed, draws: dict,
+           shape_of: Optional[dict] = None) -> List[HitObject]:
     sampler = PatternSampler(default_model())
     masks = sampler.sample([(p.time_ms, n) for p, n in picked], np.random.default_rng(seed),
                            beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked],
-                           styles=[styles.get(p.bar, "plain") for p, _ in picked])
+                           styles=[styles.get(p.bar, "plain") for p, _ in picked],
+                           shapes=[shape_of.get(p.time_ms) for p, _ in picked] if shape_of else None)
     objs = []
     for (p, _n), mask in zip(picked, masks):
         t = float(round(p.time_ms))
