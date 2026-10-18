@@ -35,8 +35,9 @@ FILL = 0.35
 MAX_RUN = 2
 
 
-def group_measures(grid: Sequence[GridPoint]) -> List[int]:
-    """Each point's group of alike measures (-1: its measure is like no other)."""
+def group_measures(grid: Sequence[GridPoint], runs: bool = True) -> List[int]:
+    """Each point's group of alike measures (-1: its measure is like no other); with `runs`, the groups
+    are cut into runs of at most `MAX_RUN` measures, each its own group."""
     bars: Dict[int, List[int]] = {}
     for i, p in enumerate(grid):
         bars.setdefault(p.bar, []).append(i)
@@ -59,6 +60,13 @@ def group_measures(grid: Sequence[GridPoint]) -> List[int]:
             lay, total, members = groups[best]
             groups[best] = (lay, total + v, members + [bar])
     out = [-1] * len(grid)
+    if not runs:
+        for g, (_lay, _total, members) in enumerate(groups):
+            if len(members) >= 2:
+                for b in members:
+                    for i in bars[b]:
+                        out[i] = g
+        return out
     n = 0
     for _lay, _total, members in groups:
         # A group is charted alike in runs of at most MAX_RUN measures: within a run the rhythm is one,

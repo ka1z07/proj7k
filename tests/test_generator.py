@@ -208,7 +208,9 @@ def test_a_model_trains_counts_and_round_trips(tmp_path):
 # --- the closed loop ------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("target, on_attack", [(2.0, 0.95), (4.42, 0.8)])
+# Alike measures share their rhythm draws (ADR-0032): a measure whose loop is a little different from its
+# cluster's first measure can take a row where only that one has the attack, so a few rows miss.
+@pytest.mark.parametrize("target, on_attack", [(2.0, 0.88), (4.42, 0.75)])
 def test_generated_chart_lands_on_the_target(song, target, on_attack):
     audio, attacks = song
     result = generate(audio, GeneratorOptions(target_stars=target))
@@ -385,3 +387,34 @@ def test_a_style_leans_the_keys():
         return np.mean([bool(a & b) for a, b in zip(m, m[1:])])
 
     assert jack_rate("jack") > 3 * jack_rate("plain")
+
+
+# --- rhythm model (ADR-0032) ------------------------------------------------------------------------------------
+
+
+def test_rhythm_places_cover_every_beat_at_twelve_places_and_rows_label_them():
+    from proj7k.generator import rhythm as R
+
+    timing = [TimingPoint(time=1000.0, beat_length=500.0), TimingPoint(time=5000.0, beat_length=400.0)]
+    pl = R.places(timing, 7000.0)
+    first = pl.time_ms < 5000.0
+    assert int(first.sum()) == 10 * len(R.SLOTS)          # 0 .. 5000 ms at 500 ms per beat
+    assert int((~first).sum()) == 5 * len(R.SLOTS)        # 5000 .. 7000 ms at 400 ms per beat
+    assert np.all(np.diff(pl.time_ms) > 0)
+    y, missed = R.labels(pl, [1000.0, 1125.0, 1166.0, 5200.0, 1031.0], [1, 2, 5, 1, 1])
+    assert missed == 1                                    # 1031 ms is a 1/16, not a place
+    assert sorted(y[y > 0].tolist()) == [1, 1, 2, 4]
+
+
+def test_rhythm_pick_matches_the_asked_density_and_one_grid_per_beat():
+    from proj7k.generator import rhythm as R
+
+    pl = R.places([TimingPoint(time=0.0, beat_length=400.0)], 60000.0)
+    rng = np.random.default_rng(0)
+    probs = rng.dirichlet(np.ones(R.CLASSES), size=len(pl))
+    sizes = R.pick(probs, pl, rng.random(len(pl)), rng.random(len(pl)), np.zeros(len(pl), bool), rows_per_s=6.0)
+    assert abs((sizes > 0).sum() / 60.0 - 6.0) < 0.6
+    slots = np.array(R.SLOTS)[pl.slot]
+    on_8th = np.isin(slots, (6, 12, 18, 30, 36, 42)) & (sizes > 0)
+    on_6th = np.isin(slots, (8, 16, 32, 40)) & (sizes > 0)
+    assert not (set(pl.beat[on_8th]) & set(pl.beat[on_6th]))
