@@ -24,7 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
+from proj7k.generator import stems
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
+from proj7k.generator.stems import STEM_NAMES
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
 
 logger = logging.getLogger("proj7k.generator")
@@ -74,6 +76,8 @@ class GenerateRun:
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
+            "leads": [{"first_bar": l.first_bar, "last_bar": l.last_bar, "stem": l.stem,
+                       "name": STEM_NAMES.get(l.stem, l.stem)} for l in r.leads],
         }
 
 
@@ -185,6 +189,8 @@ def format_report(run: GenerateRun) -> str:
     t = d["tempo"]
     if t is not None:
         lines.append(f"  自动测速：置信度 {t['confidence']:.2f}，前后段拍点差 {t['drift_ms']:g} ms")
+    if d["leads"]:
+        lines.append("  主跟层：" + "，".join(f"{l['first_bar'] + 1}–{l['last_bar'] + 1} 小节{l['name']}" for l in d["leads"]))
     for w in d["warnings"]:
         lines.append(f"  注意：{w}")
     lines.append(f"  谱面：{d['output_file']}")
@@ -209,6 +215,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--creator", default="proj7k")
     p.add_argument("--version", help="难度名，默认 'Gen <目标> (<星级>)'")
     p.add_argument("--od", type=float, default=8.0, help="OverallDifficulty，默认 8")
+    p.add_argument("--stems", action="store_true",
+                   help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
@@ -218,6 +226,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="以 JSON 输出结果")
     p.add_argument("-v", "--verbose", action="store_true")
     return p
+
+
+def _say(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -232,8 +244,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
-            version=args.version, overall_difficulty=args.od,
+            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say,
         )
+        if args.stems:
+            stems.install(_say)
         run = run_generate(options, Path(args.output_dir).expanduser(),
                            audio=Path(args.audio).expanduser() if args.audio else None,
                            reference=reference, auto_timing=args.auto_timing, package=not args.no_package)

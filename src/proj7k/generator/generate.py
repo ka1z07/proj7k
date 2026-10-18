@@ -26,13 +26,13 @@ other draws derived from the seed are tried).
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator import rhythm
+from proj7k.generator import rhythm, stems as stems_mod
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
@@ -73,6 +73,10 @@ class GeneratorOptions:
     version: Optional[str] = None
     overall_difficulty: float = 8.0
     reference: Optional[Beatmap7K] = None     # copy its metadata, background and General section
+    stems: bool = False                       # split the song (Demucs) and follow a lead layer per section (ADR-0033)
+    leads: Optional[Dict[int, str]] = None    # a section's first bar -> its lead stem, overriding the automatic choice
+    separator: Optional[Callable] = None      # stands in for Demucs (tests)
+    log: Optional[Callable[[str], None]] = None
 
 
 @dataclass
@@ -86,6 +90,7 @@ class GenerationResult:
     tempo: Optional[TempoEstimate]
     iterations: int
     warnings: List[str] = field(default_factory=list)
+    leads: List[stems_mod.Lead] = field(default_factory=list)  # each section's lead layer, with stems
 
     @property
     def stars(self) -> float:
@@ -128,10 +133,18 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     # that lines its onsets up with the beats, and keep writing notes on the beats themselves.
     shift = onset_shift_ms(env, timing)
     model = rhythm.default_model()
+    leads: List[stems_mod.Lead] = []
+    if options.stems and model is None:
+        warnings.append("分轨需要节奏模型（rhythm_model.json.gz），这次没有分轨。")
     if model is not None:
         places = rhythm.places(timing, env.duration_s * 1000.0)
         feats = rhythm.features(env, places, shift)
         grid = rhythm.grid_points(places, feats, SILENCE_DB)
+        if options.stems:
+            leads, stem_envs = _follow_leads(audio, env, grid, options)
+            env_lead = stems_mod.blend(env, stem_envs, leads, stems_mod.bar_spans(grid))
+            feats = rhythm.features(env_lead, places, shift)
+            grid = rhythm.grid_points(places, feats, SILENCE_DB)
         same_draw = _same_draw(grid, group_measures(grid, runs=False))
         lo, hi = rhythm.D_MIN, rhythm.D_MAX + rhythm.CHORD_RANGE
     else:
@@ -210,7 +223,16 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
 
     beatmap = _beatmap(objs, timing, options, prof.total_stars)
     return GenerationResult(beatmap=beatmap, profile=prof, target_stars=options.target_stars, intensity=x,
-                            timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings)
+                            timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings,
+                            leads=leads)
+
+
+def _follow_leads(audio: Audio, env, grid: Sequence[GridPoint], options: GeneratorOptions):
+    """Each section's lead layer (ADR-0033), and the stems' envelopes."""
+    kw = {"log": options.log} if options.log else {}
+    parts = stems_mod.separate(audio, separator=options.separator, **kw)
+    stem_envs = stems_mod.stem_envelopes(parts, audio)
+    return stems_mod.choose_leads(stem_envs, grid, find_sections(env, grid), options.leads), stem_envs
 
 
 def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[int]] = None,

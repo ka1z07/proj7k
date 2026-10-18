@@ -34,6 +34,9 @@ class OnsetEnvelope:
     brightness: np.ndarray  # [frames] 0..1: where in the spectrum the new energy is (0 = 100 Hz, 1 = 8 kHz)
     loudness_db: np.ndarray  # [frames] frame RMS in dB relative to the song's loud level
     duration_s: float
+    #: The song's loud level (power) relative to another envelope's, when loudness is compared across
+    #: envelopes (the stems against the mix, `stems.stem_envelopes`); 1 otherwise.
+    loud_ref: float = 1.0
 
     @property
     def n(self) -> int:

@@ -418,3 +418,83 @@ def test_rhythm_pick_matches_the_asked_density_and_one_grid_per_beat():
     on_8th = np.isin(slots, (6, 12, 18, 30, 36, 42)) & (sizes > 0)
     on_6th = np.isin(slots, (8, 16, 32, 40)) & (sizes > 0)
     assert not (set(pl.beat[on_8th]) & set(pl.beat[on_6th]))
+
+
+# --- stems and lead layers (ADR-0033) -------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def two_layers():
+    """16 measures of a melody alone, then 16 of drums with the melody faint underneath; and the two layers
+    apart, as a separator would give them."""
+    from generator_synth import _tone
+
+    bpm, offset_s, measures = 170.0, 0.5, 32
+    beat = 60.0 / bpm
+    drums, _ = drum_song(bpm=bpm, offset_s=offset_s + 16 * 4 * beat, measures=16, seed=7, melody=False)
+    n = len(drums)
+    melody = np.zeros(n, dtype=np.float32)
+    rng = np.random.default_rng(8)
+    for k in range(measures * 8):
+        t = offset_s + k * beat / 2
+        tone = _tone(SR, float(rng.choice([261.6, 329.6, 392.0, 523.3])), beat / 2)
+        i = int(round(t * SR))
+        gain = 0.5 if k < 16 * 8 else 0.08
+        melody[i:i + len(tone)] += gain * tone[: max(0, n - i)]
+    mix = (drums + melody).astype(np.float32)
+    return Audio(mix, SR, "synth"), {"drums": drums, "bass": np.zeros(n, np.float32),
+                                     "vocals": np.zeros(n, np.float32), "other": melody}, offset_s * 1000, beat * 1000
+
+
+def test_each_section_follows_the_layer_that_carries_it(two_layers, tmp_path):
+    from proj7k.generator import stems
+    from proj7k.generator.structure import find_sections
+
+    audio, parts, offset, beat = two_layers
+    calls = []
+
+    def separator(a):
+        calls.append(1)
+        return parts
+
+    split = stems.separate(audio, cache_dir=tmp_path, separator=separator)
+    again = stems.separate(audio, cache_dir=tmp_path, separator=separator)
+    assert len(calls) == 1 and set(again) == set(stems.STEMS)  # the second read comes from the cache
+    np.testing.assert_allclose(again["other"].samples, split["other"].samples, atol=1e-3)
+
+    env = onset_envelope(audio)
+    grid = build_grid(env, [TimingPoint(time=offset, beat_length=beat)])
+    envs = stems.stem_envelopes(split, audio)
+    leads = stems.choose_leads(envs, grid, find_sections(env, grid))
+    by_bar = {b: l.stem for l in leads for b in range(l.first_bar, l.last_bar + 1)}
+    assert by_bar[4] == "other" and by_bar[24] == "drums"
+
+    first = leads[0].first_bar
+    forced = stems.choose_leads(envs, grid, find_sections(env, grid), override={first: "bass"})
+    assert forced[0].stem == "bass"
+
+    mixed = stems.blend(env, envs, leads, stems.bar_spans(grid))
+    assert mixed.total.shape == env.total.shape
+    late = env.frame_of((offset + 24 * 4 * beat) / 1000.0)
+    w = slice(late, late + 200)
+    # In a drum section the blend reads the drums' onsets more than the mix does.
+    assert np.corrcoef(mixed.total[w], envs["drums"].total[w])[0, 1] >= np.corrcoef(env.total[w], envs["drums"].total[w])[0, 1]
+
+
+def test_generating_with_stems_reports_its_leads(two_layers, tmp_path, monkeypatch):
+    from proj7k.generator import stems
+
+    audio, parts, offset, beat = two_layers
+    monkeypatch.setattr(stems, "CACHE_DIR", tmp_path)
+    result = generate(audio, GeneratorOptions(target_stars=2.0, timing=[TimingPoint(time=offset, beat_length=beat)],
+                                              stems=True, separator=lambda a: parts))
+    assert result.leads and {l.stem for l in result.leads} >= {"drums", "other"}
+    assert abs(result.stars - 2.0) <= 0.3
+
+
+def test_stems_say_how_to_install_when_demucs_is_missing(monkeypatch, tmp_path):
+    from proj7k.generator import stems
+
+    monkeypatch.setattr(stems, "available", lambda: False)
+    with pytest.raises(stems.StemsUnavailable, match="Demucs"):
+        stems.separate(Audio(np.zeros(SR, np.float32), SR, "synth"), cache_dir=tmp_path)
