@@ -28,7 +28,8 @@ import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, GridPoint, build_grid, onset_shift_ms
+from proj7k.generator import rhythm
+from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
 from proj7k.generator.phrases import group_measures, harmonize
@@ -122,19 +123,36 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     # estimated timing; whatever it is for a borrowed or typed-in one): read the music through the shift
     # that lines its onsets up with the beats, and keep writing notes on the beats themselves.
     shift = onset_shift_ms(env, timing)
-    grid = build_grid(env, timing, shift_ms=shift)
+    model = rhythm.default_model()
+    if model is not None:
+        places = rhythm.places(timing, env.duration_s * 1000.0)
+        feats = rhythm.features(env, places, shift)
+        grid = rhythm.grid_points(places, feats, SILENCE_DB)
+        lo, hi = rhythm.D_MIN, rhythm.D_MAX
+    else:
+        grid = build_grid(env, timing, shift_ms=shift)
+        lo, hi = X_MIN, X_MAX
     groups = group_measures(grid)
     sections = find_sections(env, grid)
     energy = section_energy(grid, sections)
     styles = section_styles(grid, sections, options.seed)
-    lo, hi = X_MIN, X_MAX
+    x_top = hi
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
 
     def attempt(x: float, retry: int = 0) -> Tuple[List[HitObject], DifficultyProfile]:
         seed = options.seed if retry == 0 else [options.seed, retry]
-        draws = dict(zip((p.time_ms for p in grid), np.random.default_rng(seed).random(len(grid))))
-        objs = _chart(grid, groups, energy, styles, x, seed, draws)
+        rng = np.random.default_rng(seed)
+        draws = dict(zip((p.time_ms for p in grid), rng.random(len(grid))))
+        if model is not None:
+            feats[:, -1] = x
+            sizes = rhythm.pick(model.predict(feats), places, rng.random(len(grid)), rng.random(len(grid)),
+                                np.array([p.silent for p in grid]))
+            sizes = harmonize(grid, groups, list(sizes))
+            picked = [(p, int(n)) for p, n in zip(grid, sizes) if n > 0]
+        else:
+            picked = select_rows(grid, x, groups, energy)
+        objs = _chart(picked, styles, seed, draws)
         if not objs:
             return objs, evaluate_notes([])
         return objs, evaluate_notes([(o.column, o.time / 1000.0, None) for o in objs])
@@ -165,9 +183,9 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                 best = (xv, objs, prof)
     x, objs, prof = best
     if abs(prof.total_stars - options.target_stars) > options.tolerance:
-        top_objs, top = attempt(X_MAX)
+        top_objs, top = attempt(x_top)
         if top.total_stars < options.target_stars - options.tolerance:
-            x, objs, prof = X_MAX, top_objs, top
+            x, objs, prof = x_top, top_objs, top
             warnings.append(
                 f"这首歌的起音不够密，最高只能生成 {top.total_stars:.2f}★（目标 {options.target_stars:.2f}★）。"
             )
@@ -246,9 +264,7 @@ def chord_extra(x: float) -> float:
     return min(2.2, 0.45 + 0.6 * (SPREAD_FROM - 1.0) + 0.9 * (x - SPREAD_FROM))
 
 
-def _chart(grid: Sequence[GridPoint], groups: Sequence[int], energy: Sequence[float], styles: dict, x: float,
-           seed, draws: dict) -> List[HitObject]:
-    picked = select_rows(grid, x, groups, energy)
+def _chart(picked: Sequence[Tuple[GridPoint, int]], styles: dict, seed, draws: dict) -> List[HitObject]:
     sampler = PatternSampler(default_model())
     masks = sampler.sample([(p.time_ms, n) for p, n in picked], np.random.default_rng(seed),
                            beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked],

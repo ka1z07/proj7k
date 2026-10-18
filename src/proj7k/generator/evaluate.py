@@ -34,6 +34,7 @@ from proj7k.generator.audio import load_audio
 from proj7k.generator.generate import GeneratorOptions, generate
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import pattern_stats, rows_of_chart
+from proj7k.generator.rhythm import is_holdout
 from proj7k.generator.tempo import estimate_tempo
 from proj7k.parser import Beatmap7K, dominant_timing_point, parse_osu_7k
 
@@ -205,6 +206,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--realm", help="client.realm 路径")
     p.add_argument("--limit", type=int, default=30, help="最多评测几张谱，默认 30")
     p.add_argument("--one-per-song", action="store_true", help="同一首歌只取一个难度")
+    p.add_argument("--holdout", action="store_true", help="只评测节奏模型训练时留出的歌（rhythm.is_holdout）")
     p.add_argument("--output", help="把逐谱结果与汇总写成 JSON")
     args = p.parse_args(argv)
 
@@ -216,6 +218,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if len(scores) >= args.limit:
             break
         if args.one_per_song and audio in seen_audio:
+            continue
+        if args.holdout and not is_holdout(Path(audio).name):
             continue
         seen_audio.add(audio)
         try:

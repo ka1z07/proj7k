@@ -15,6 +15,7 @@ rating) and draws the rows.
 """
 
 import gzip
+import hashlib
 import json
 from dataclasses import dataclass
 from functools import lru_cache
@@ -144,6 +145,11 @@ def labels(pl: Places, row_times_ms: Sequence[float], row_sizes: Sequence[int]) 
     return y, int((~ok).sum())
 
 
+def is_holdout(audio_name: str) -> bool:
+    """One song in ten, by its audio file name, is never trained on (evaluation uses only these)."""
+    return int(hashlib.md5(audio_name.encode("utf-8")).hexdigest(), 16) % 10 == 0
+
+
 def chart_density(row_times_ms: Sequence[float]) -> float:
     """log2 rows per second over the charted span."""
     if len(row_times_ms) < 2:
@@ -186,3 +192,49 @@ class RhythmModel:
 @lru_cache(maxsize=1)
 def default_model() -> Optional[RhythmModel]:
     return RhythmModel.load(MODEL_PATH) if MODEL_PATH.is_file() else None
+
+
+#: Feature columns the generator reads back.
+F_LOW, F_MID, F_HIGH, F_TOTAL = 0, 1, 2, 3
+F_BRIGHT = 4 + len(CONTEXT_24THS)
+F_LOUD = F_BRIGHT + 3
+#: The density knob's range, log2 rows per second (about 0.35 .. 28).
+D_MIN, D_MAX = -1.5, 4.8
+_BINARY = {SLOTS.index(s) for s in (6, 12, 18, 30, 36, 42)}
+_TERNARY = {SLOTS.index(s) for s in (8, 16, 32, 40)}
+
+
+def grid_points(pl: Places, X: np.ndarray, silence_db: float):
+    """The places as `grid.GridPoint`s (for phrases, sections and keys)."""
+    from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SUB, GridPoint
+
+    out = []
+    loud_db = (X[:, F_LOUD] - 1.0) * 60.0
+    for i in range(len(pl)):
+        s = SLOTS[pl.slot[i]]
+        level = (DOWNBEAT if pl.beat_in_bar[i] == 0 else BEAT) if s == 0 else HALF if s == 24 else SUB
+        low, mid, high = float(X[i, F_LOW]), float(X[i, F_MID]), float(X[i, F_HIGH])
+        out.append(GridPoint(time_ms=float(pl.time_ms[i]), level=level, strength=float(X[i, F_TOTAL]),
+                             low=low, mid=mid, high=high, brightness=float(X[i, F_BRIGHT]),
+                             silent=bool(loud_db[i] < silence_db), beat=float(pl.beat[i] + s / 48.0),
+                             bar=int(pl.bar[i]), slot=int(pl.beat_in_bar[i] * 48 + s)))
+    return out
+
+
+def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray) -> np.ndarray:
+    """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
+    (row or not) and `v` (its size), so a higher density only adds rows. In a beat, rows go either on
+    the 1/8 grid or on the 1/6 grid, whichever the model expects more rows on."""
+    p_row = 1.0 - probs[:, 0]
+    row = (u < p_row) & ~silent
+    is_bin = np.isin(pl.slot, list(_BINARY))
+    is_ter = np.isin(pl.slot, list(_TERNARY))
+    beats = pl.beat
+    n_beats = int(beats.max()) + 1 if len(beats) else 0
+    bin_score = np.bincount(beats[is_bin], weights=p_row[is_bin], minlength=n_beats)
+    ter_score = np.bincount(beats[is_ter], weights=p_row[is_ter], minlength=n_beats)
+    ternary = ter_score > bin_score
+    row &= ~(is_bin & ternary[beats]) & ~(is_ter & ~ternary[beats])
+    cond = probs[:, 1:] / np.maximum(probs[:, 1:].sum(axis=1, keepdims=True), 1e-9)
+    size = 1 + (v[:, None] > np.cumsum(cond, axis=1)[:, :-1]).sum(axis=1)
+    return np.where(row, size, 0)
