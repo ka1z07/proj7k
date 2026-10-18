@@ -200,6 +200,7 @@ F_BRIGHT = 4 + len(CONTEXT_24THS)
 F_LOUD = F_BRIGHT + 3
 #: The density knob's range, log2 rows per second (about 0.35 .. 28).
 D_MIN, D_MAX = -1.5, 4.8
+SHARPEN = 1.5
 _BINARY = {SLOTS.index(s) for s in (6, 12, 18, 30, 36, 42)}
 _TERNARY = {SLOTS.index(s) for s in (8, 16, 32, 40)}
 
@@ -221,20 +222,43 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
     return out
 
 
-def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray) -> np.ndarray:
+def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
+         rows_per_s: Optional[float] = None) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
     (row or not) and `v` (its size), so a higher density only adds rows. In a beat, rows go either on
-    the 1/8 grid or on the 1/6 grid, whichever the model expects more rows on."""
-    p_row = 1.0 - probs[:, 0]
-    row = (u < p_row) & ~silent
+    the 1/8 grid or on the 1/6 grid, whichever holds the place the model most expects a row at. With
+    `rows_per_s`, the row probabilities are scaled together so the chart has that many rows per second
+    (the model alone undershoots dense charts: it cannot know which song is a stream chart)."""
+    p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
     is_bin = np.isin(pl.slot, list(_BINARY))
     is_ter = np.isin(pl.slot, list(_TERNARY))
     beats = pl.beat
     n_beats = int(beats.max()) + 1 if len(beats) else 0
-    bin_score = np.bincount(beats[is_bin], weights=p_row[is_bin], minlength=n_beats)
-    ter_score = np.bincount(beats[is_ter], weights=p_row[is_ter], minlength=n_beats)
-    ternary = ter_score > bin_score
-    row &= ~(is_bin & ternary[beats]) & ~(is_ter & ~ternary[beats])
+    bin_max = np.zeros(n_beats)
+    ter_max = np.zeros(n_beats)
+    np.maximum.at(bin_max, beats[is_bin], p_row[is_bin])
+    np.maximum.at(ter_max, beats[is_ter], p_row[is_ter])
+    ternary = ter_max > bin_max
+    p_row = np.where((is_bin & ternary[beats]) | (is_ter & ~ternary[beats]), 0.0, p_row)
+    if rows_per_s is not None and len(pl) and p_row.sum() > 0:
+        span_s = max((pl.time_ms[-1] - pl.time_ms[0]) / 1000.0, 1.0)
+        p_row = _scaled(p_row, rows_per_s * span_s)
+    row = u < p_row
     cond = probs[:, 1:] / np.maximum(probs[:, 1:].sum(axis=1, keepdims=True), 1e-9)
     size = 1 + (v[:, None] > np.cumsum(cond, axis=1)[:, :-1]).sum(axis=1)
     return np.where(row, size, 0)
+
+
+def _scaled(p: np.ndarray, target: float) -> np.ndarray:
+    """min(1, c p) with c such that the expected count is `target` (or as close as the places allow)."""
+    q = p ** SHARPEN
+    lo, hi = 0.0, 1.0
+    while np.minimum(1.0, hi * q).sum() < target and hi < 1e9:
+        hi *= 2.0
+    for _ in range(50):
+        c = (lo + hi) / 2.0
+        if np.minimum(1.0, c * q).sum() < target:
+            lo = c
+        else:
+            hi = c
+    return np.minimum(1.0, hi * q)

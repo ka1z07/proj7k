@@ -30,6 +30,8 @@ MIN_BPM, MAX_BPM = 70.0, 300.0
 PRIOR_BPM, PRIOR_SIGMA_OCT = 170.0, 0.6
 PHASE_BINS = 128
 DRIFT_LIMIT_S = 0.025
+#: A fitted tempo this close to a whole BPM is moved onto it when the song's beat agrees with it as well.
+WHOLE_BPM_SNAP = 0.3
 #: How much earlier a ranked chart's beat sits than the onset envelope's reading of the same beat. Measured
 #: on 40 charts of Kai's osu!lazer library with their own timing (`onset_shift_ms`, median 28.5 ms; mp3 29,
 #: ogg 28, so not a decoder delay): charts are timed to where an attack starts to be heard, the envelope
@@ -82,6 +84,26 @@ def _best_tempo(env_total: np.ndarray, bpm0: float) -> float:
         score = _pulse_strength(env, t, 60.0 / b) * (0.5 + _prior(b))
         if score > best_score:
             best, best_score = b, score
+    # Songs are nearly always made at a whole BPM; a fit a little off it is pulled by a passage that
+    # drifts (a tempo change, a rubato intro), and over a whole song even 0.1 BPM adds up to a beat.
+    # The whole BPM is kept when at least as many stretches of the song agree on its beat phase.
+    whole = float(round(best))
+    if abs(whole - best) <= WHOLE_BPM_SNAP and _agreeing(env, 60.0 / whole) >= _agreeing(env, 60.0 / best):
+        return whole
+    return best
+
+
+def _agreeing(env_total: np.ndarray, beat_s: float, parts: int = 8, tol_s: float = 0.015) -> int:
+    """How many of `parts` stretches of the song put the beat at the same phase (within `tol_s`)."""
+    phases = []
+    for idx in np.array_split(np.arange(len(env_total)), parts):
+        part = np.zeros_like(env_total)
+        part[idx] = env_total[idx]
+        if part.sum() > 0:
+            phases.append(_phase(part, beat_s)[0])
+    best = 0
+    for p0 in phases:
+        best = max(best, sum(abs(((p - p0) + beat_s / 2) % beat_s - beat_s / 2) <= tol_s for p in phases))
     return best
 
 

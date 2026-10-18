@@ -37,7 +37,7 @@ from proj7k.generator.structure import find_sections, section_energy, section_st
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
-GENERATOR_VERSION = "gen-3"
+GENERATOR_VERSION = "gen-4"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
 X_MIN, X_MAX = 0.0, 3.5
@@ -147,7 +147,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         if model is not None:
             feats[:, -1] = x
             sizes = rhythm.pick(model.predict(feats), places, rng.random(len(grid)), rng.random(len(grid)),
-                                np.array([p.silent for p in grid]))
+                                np.array([p.silent for p in grid]), rows_per_s=2.0 ** x)
             sizes = harmonize(grid, groups, list(sizes))
             picked = [(p, int(n)) for p, n in zip(grid, sizes) if n > 0]
         else:
