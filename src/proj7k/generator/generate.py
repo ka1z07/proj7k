@@ -1,6 +1,10 @@
 """
 From audio to a chart at a target star rating (ADR-0027).
 
+With the rhythm model (`rhythm`, ADR-0032; it ships with the package) the rows come from a model of
+charts people wrote to the same audio, and the knob is the density, log2 rows per second; the rule
+below (onset strength and section energy) is what is used when the model file is missing.
+
     audio ─ onset envelope ─┬─ beat grid (timing given, or estimated) ─┬─ sections ─ pick points ─ alike measures, one rhythm ─ keys ─ engine
                             └─ tempo estimate (when no timing is given)  └───────────────┘    ▲                                       │
                                                                                               └──────────────── intensity ────────────┘
