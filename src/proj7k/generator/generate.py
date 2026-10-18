@@ -128,6 +128,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         places = rhythm.places(timing, env.duration_s * 1000.0)
         feats = rhythm.features(env, places, shift)
         grid = rhythm.grid_points(places, feats, SILENCE_DB)
+        same_draw = _same_draw(grid, group_measures(grid, runs=False))
         lo, hi = rhythm.D_MIN, rhythm.D_MAX + rhythm.CHORD_RANGE
     else:
         grid = build_grid(env, timing, shift_ms=shift)
@@ -148,7 +149,11 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
             # Up to D_MAX the knob is the density; past it, the rows stay and the chords widen.
             d = min(x, rhythm.D_MAX)
             feats[:, -1] = d
-            sizes = rhythm.pick(model.predict(feats), places, rng.random(len(grid)), rng.random(len(grid)),
+            u, v = rng.random(len(grid)), rng.random(len(grid))
+            # Alike measures share their draws place by place, so where the model rates them alike they
+            # get the same rhythm, wherever in the song they come back.
+            u, v = u[same_draw], v[same_draw]
+            sizes = rhythm.pick(model.predict(feats), places, u, v,
                                 np.array([p.silent for p in grid]), rows_per_s=2.0 ** d,
                                 chords=max(0.0, x - rhythm.D_MAX))
             sizes = harmonize(grid, groups, list(sizes))
@@ -250,6 +255,17 @@ def select_rows(grid: Sequence[GridPoint], x: float, groups: Optional[Sequence[i
     size_at = {id(p): n for p, n in sized}
     sizes = harmonize(grid, groups, [size_at.get(id(p), 0) for p in grid])
     return [(p, n) for p, n in zip(grid, sizes) if n > 0]
+
+
+def _same_draw(grid: Sequence[GridPoint], clusters: Sequence[int]) -> np.ndarray:
+    """For each point, the index of the first point at its place in the measure among the measures of
+    its cluster (itself when it has none)."""
+    first: dict = {}
+    out = np.arange(len(grid))
+    for i, (p, c) in enumerate(zip(grid, clusters)):
+        if c >= 0:
+            out[i] = first.setdefault((c, p.slot), i)
+    return out
 
 
 def density(x: float) -> float:
