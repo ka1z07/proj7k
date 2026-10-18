@@ -247,7 +247,18 @@ def _say(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
+def utf8_console() -> None:
+    """Print Chinese as UTF-8 on a Windows console too (it defaults to GBK there and garbles it)."""
+    for stream in (sys.stdout, sys.stderr):
+        if (getattr(stream, "encoding", "") or "").lower().replace("-", "") != "utf8" and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    utf8_console()
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING, format="%(message)s")
     try:

@@ -625,6 +625,24 @@ def test_a_brief_sets_each_sections_density_and_key_pattern(song):
     assert share(chorus, "chordjack") >= 0.7
 
 
+def test_a_briefs_intensity_wins_over_what_the_model_hears(verse_chorus):
+    # The brief turns the song around: the quiet kick-and-snare verse is to be the dense part. A section
+    # the model rates sparse still gets the rows its intensity asks for and doesn't hand them to the rest.
+    from proj7k.generator import brief
+
+    audio, offset, beat = verse_chorus
+    b = brief.parse({"sections": [
+        {"bars": [0, 15], "role": "drop", "intensity": 0.9, "technique": "rc_speed", "pattern": "stairs"},
+        {"bars": [16, 31], "role": "verse", "intensity": 0.3, "technique": "rc_speed", "pattern": "stairs"}]})
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=[TimingPoint(time=offset, beat_length=beat)],
+                                              brief=b))
+    split = offset + 16 * 4 * beat
+    rows = sorted(_rows(result.beatmap))
+    first = sum(1 for t in rows if offset <= t < split)
+    second = sum(1 for t in rows if split <= t < split + 16 * 4 * beat)
+    assert first > 1.5 * second
+
+
 def test_analysis_lists_sections_layers_and_a_brief_to_fill(two_layers, tmp_path, monkeypatch):
     from proj7k.generator import analyze, brief, stems
 

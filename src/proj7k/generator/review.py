@@ -145,8 +145,11 @@ def review(bm: Beatmap7K, brief: brief_mod.Brief, analysis: Optional[dict] = Non
     rated = [d for d in sections if "stars" in d]
     loud = [d["stars"] for d in rated if d["role"] in LOUD_ROLES]
     if loud:
-        over = [d["bars"] for d in rated if d["role"] not in LOUD_ROLES and d["stars"] > max(loud) + HARDEST_SLACK]
-        checks.append({"id": 2, "name": "最难处在高潮", "ok": not over, "harder_than_chorus": over})
+        # Every chorus and drop, not just the hardest one: a main drop thinner than a verse fails.
+        over = [d["bars"] for d in rated if d["role"] not in LOUD_ROLES and d["stars"] > min(loud) + HARDEST_SLACK]
+        weakest = min((d for d in rated if d["role"] in LOUD_ROLES), key=lambda d: d["stars"])
+        checks.append({"id": 2, "name": "最难处在高潮", "ok": not over, "harder_than_chorus": over,
+                       "weakest_chorus": weakest["bars"]})
     else:
         checks.append({"id": 2, "name": "最难处在高潮", "ok": None, "note": "设计稿里没有 chorus/drop 段"})
     # 3. Density follows the lead.
@@ -270,6 +273,9 @@ def preview(bm: Beatmap7K, brief: brief_mod.Brief, path: Path, bars_each: int = 
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from proj7k.generator.cli import utf8_console
+
+    utf8_console()
     p = argparse.ArgumentParser(prog="python3 -m proj7k.generator.review", description=__doc__.split("\n\n")[0])
     p.add_argument("--chart", required=True)
     p.add_argument("--brief", required=True)

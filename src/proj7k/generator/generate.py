@@ -41,7 +41,7 @@ from proj7k.generator.structure import Section, find_sections, section_energy, s
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
-GENERATOR_VERSION = "gen-4"
+GENERATOR_VERSION = "gen-5"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
 X_MIN, X_MAX = 0.0, 3.5
@@ -56,6 +56,9 @@ SPREAD_FROM = 2.5
 MAX_ITERATIONS = 18
 #: Other draws of the keys tried when the bisection ends outside the tolerance.
 KEY_RETRIES = 8
+#: A brief section's share of the rows doubles every 1/INTENSITY_OCTAVES of intensity: from 0.35× the
+#: song's density at intensity 0 to 2.8× at 1 (ADR-0033).
+INTENSITY_OCTAVES = 3.0
 
 
 @dataclass
@@ -189,13 +192,15 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         hold_v = hold_rng.random((len(grid), 7))[same_draw]
         place_at = {int(round(p.time_ms)): i for i, p in enumerate(grid)}
     row_gain = None
+    row_section = None
     shape_of: dict = {}
     shape_name: Optional[List[Optional[str]]] = None
     phrase_of_bar: Optional[dict] = None
     if design is not None:
         b = design
-        row_gain = np.array([2.0 ** (2.0 * ((b.section_at(p.bar).intensity if b.section_at(p.bar) else 0.5) - 0.5))
-                             for p in grid])
+        at = [b.section_at(p.bar) for p in grid]
+        row_gain = np.array([2.0 ** (INTENSITY_OCTAVES * ((s.intensity if s else 0.5) - 0.5)) for s in at])
+        row_section = np.array([b.sections.index(s) if s else -1 for s in at])
         shapes = brief_mod.row_shapes(b, [p.bar for p in grid], [p.slot / 48.0 for p in grid])
         shape_of = {p.time_ms: brief_mod.predicates(sh) for p, sh in zip(grid, shapes)}
         shape_name = shapes
@@ -219,7 +224,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
             u, v = u[same_draw], v[same_draw]
             sizes = rhythm.pick(model.predict(feats), places, u, v,
                                 np.array([p.silent for p in grid]), rows_per_s=2.0 ** d,
-                                chords=max(0.0, x - rhythm.D_MAX), gain=row_gain)
+                                chords=max(0.0, x - rhythm.D_MAX), gain=row_gain,
+                                section=row_section)
             sizes = harmonize(grid, groups, list(sizes))
             if shape_name is not None:
                 sizes = [brief_mod.sized(int(n), sh) for n, sh in zip(sizes, shape_name)]

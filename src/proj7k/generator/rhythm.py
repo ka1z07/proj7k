@@ -232,7 +232,8 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
 
 
 def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
-         rows_per_s: Optional[float] = None, chords: float = 0.0, gain: Optional[np.ndarray] = None) -> np.ndarray:
+         rows_per_s: Optional[float] = None, chords: float = 0.0, gain: Optional[np.ndarray] = None,
+         section: Optional[np.ndarray] = None) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
     (row or not) and `v` (its size), so a higher density only adds rows.
 
@@ -246,10 +247,15 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
     With `rows_per_s`, the row probabilities are then scaled together so the chart has that many rows
     per second (the model alone undershoots dense charts: it cannot know which song is a stream chart).
     `chords` > 0 moves every row's size draw toward wider chords, for targets the density alone cannot
-    reach. `gain` (per place) weighs the row probabilities before all that: a design brief's dense sections
-    against its sparse ones."""
+    reach. `gain` (per place) is a design brief's density for each section relative to the others. With
+    `section` (per place, which brief section) and `rows_per_s`, each section gets its own share of the
+    rows: its sounding time times its gain. Scaling the model's probabilities alone could not do that: a
+    section the model rates sparse stays sparse under any uniform gain, and the song-wide rescale hands
+    its rows to the other sections (ADR-0033). The gain also ranks the measures that keep their 1/8 and
+    1/6 places, so a dense section gets them first."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
-    if gain is not None:
+    by_section = gain is not None and section is not None and rows_per_s is not None
+    if gain is not None and not by_section:
         p_row = np.minimum(1.0, p_row * gain)
     slot48 = np.array(SLOTS)[pl.slot]
     quarter = np.isin(slot48, _QUARTER)
@@ -262,6 +268,10 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
         base = np.bincount(bars[quarter], weights=p_row[quarter], minlength=n_bars)
         fine_mass = np.bincount(bars[fine], weights=p_row[fine], minlength=n_bars)
         ratio = fine_mass / (base + 1e-6)
+        if by_section:
+            bar_gain = np.zeros(n_bars)
+            np.maximum.at(bar_gain, bars, gain)
+            ratio = ratio * bar_gain
         order = np.argsort(-ratio, kind="stable")
         k = max(1, int(round(FINE_MEASURES * n_bars)))
         if rows_per_s is not None:
@@ -276,24 +286,43 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
         keep_bar = np.zeros(n_bars, bool)
         keep_bar[order[:k]] = True
         kept = keep_bar[bars]
-        gain = fine_mass.sum() / max(fine_mass[keep_bar].sum(), 1e-9)
+        fine_gain = fine_mass.sum() / max(fine_mass[keep_bar].sum(), 1e-9)
         beats = pl.beat - pl.beat.min()
         n_beats = int(beats.max()) + 1
         e8 = np.bincount(beats[eighth], weights=p_row[eighth], minlength=n_beats)
         e6 = np.bincount(beats[sixth], weights=p_row[sixth], minlength=n_beats)
         ternary = ((e6 > e8) & (e6 >= TRIPLET_MIN))[beats] & kept
-        p_row = np.where(fine & kept, np.minimum(1.0, p_row * gain), np.where(fine, 0.0, p_row))
+        p_row = np.where(fine & kept, np.minimum(1.0, p_row * fine_gain), np.where(fine, 0.0, p_row))
         p_row = np.where((eighth | quarter) & ternary, 0.0, p_row)
         p_row = np.where(sixth & kept & ~ternary, 0.0, p_row)
     if rows_per_s is not None and len(pl) and p_row.sum() > 0:
         span_s = max((pl.time_ms[-1] - pl.time_ms[0]) / 1000.0, 1.0)
-        p_row = _scaled(p_row, rows_per_s * span_s)
+        if by_section:
+            p_row = _scaled_by_section(p_row, rows_per_s * span_s, pl.time_ms, silent, gain, section)
+        else:
+            p_row = _scaled(p_row, rows_per_s * span_s)
     row = u < p_row
     if chords > 0:
         v = v ** (1.0 / (1.0 + CHORD_GAIN * chords))
     cond = probs[:, 1:] / np.maximum(probs[:, 1:].sum(axis=1, keepdims=True), 1e-9)
     size = 1 + (v[:, None] > np.cumsum(cond, axis=1)[:, :-1]).sum(axis=1)
     return np.where(row, size, 0)
+
+
+def _scaled_by_section(p: np.ndarray, target: float, time_ms: np.ndarray, silent: np.ndarray,
+                       gain: np.ndarray, section: np.ndarray) -> np.ndarray:
+    """`_scaled` within each section, its target the song's `target` split by sounding time times gain."""
+    step = np.diff(time_ms, append=time_ms[-1]) / 1000.0
+    sounding = np.where(silent, 0.0, step)
+    ids = np.unique(section)
+    weight = {s: float(sounding[section == s].sum() * gain[section == s].max()) for s in ids}
+    total = sum(weight.values())
+    out = np.zeros_like(p)
+    for s in ids:
+        m = section == s
+        if weight[s] > 0 and p[m].sum() > 0:
+            out[m] = _scaled(p[m], target * weight[s] / total)
+    return out
 
 
 def _scaled(p: np.ndarray, target: float) -> np.ndarray:

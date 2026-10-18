@@ -176,6 +176,9 @@ def _log_spectrogram(x: np.ndarray, sr: int, hop_s: float = 0.02, bins: int = 96
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from proj7k.generator.cli import utf8_console
+
+    utf8_console()
     p = argparse.ArgumentParser(prog="python3 -m proj7k.generator.analyze", description=__doc__.split("\n\n")[0])
     p.add_argument("--audio")
     p.add_argument("--timing-from", dest="timing_from", help=".osu 路径，或 osu!lazer 里的 MD5 / 谱面 ID / 链接")
