@@ -200,9 +200,13 @@ F_BRIGHT = 4 + len(CONTEXT_24THS)
 F_LOUD = F_BRIGHT + 3
 #: The density knob's range, log2 rows per second (about 0.35 .. 28).
 D_MIN, D_MAX = -1.5, 4.8
+#: Past D_MAX the knob widens the chords instead (`pick`'s `chords`), up to this much further.
+CHORD_RANGE, CHORD_GAIN = 1.5, 2.0
 SHARPEN = 1.5
 #: Share of the song's measures that keep their 1/8 and 1/6 places (see `pick`).
 FINE_MEASURES = 0.3
+#: ... or more, so the places that can take a row number this many times the rows asked for.
+ROOM = 2.0
 #: A beat goes 1/6 only when the model expects at least this many rows on its 1/6-only places.
 TRIPLET_MIN = 0.3
 _QUARTER = (0, 12, 24, 36)
@@ -228,7 +232,7 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
 
 
 def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
-         rows_per_s: Optional[float] = None) -> np.ndarray:
+         rows_per_s: Optional[float] = None, chords: float = 0.0) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
     (row or not) and `v` (its size), so a higher density only adds rows.
 
@@ -240,7 +244,9 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
     either 1/8 or 1/6, whichever the model expects more rows on (1/6 only when it expects at least
     `TRIPLET_MIN` of them; a 1/6 beat also drops its 1/4s).
     With `rows_per_s`, the row probabilities are then scaled together so the chart has that many rows
-    per second (the model alone undershoots dense charts: it cannot know which song is a stream chart)."""
+    per second (the model alone undershoots dense charts: it cannot know which song is a stream chart).
+    `chords` > 0 moves every row's size draw toward wider chords, for targets the density alone cannot
+    reach."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
     slot48 = np.array(SLOTS)[pl.slot]
     quarter = np.isin(slot48, _QUARTER)
@@ -253,9 +259,19 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
         base = np.bincount(bars[quarter], weights=p_row[quarter], minlength=n_bars)
         fine_mass = np.bincount(bars[fine], weights=p_row[fine], minlength=n_bars)
         ratio = fine_mass / (base + 1e-6)
+        order = np.argsort(-ratio, kind="stable")
         k = max(1, int(round(FINE_MEASURES * n_bars)))
+        if rows_per_s is not None:
+            # A dense target needs room: more measures keep their fine places until the places that can
+            # take a row hold the asked rows with some slack (a stream chart is 1/8 nearly throughout).
+            span_s = max((pl.time_ms[-1] - pl.time_ms[0]) / 1000.0, 1.0)
+            open_place = ~silent & ~fine
+            fine_per_bar = np.bincount(bars[fine & ~silent], minlength=n_bars)
+            room = open_place.sum() + np.cumsum(fine_per_bar[order])
+            need = np.searchsorted(room, ROOM * rows_per_s * span_s) + 1
+            k = min(n_bars, max(k, int(need)))
         keep_bar = np.zeros(n_bars, bool)
-        keep_bar[np.argsort(-ratio, kind="stable")[:k]] = True
+        keep_bar[order[:k]] = True
         kept = keep_bar[bars]
         gain = fine_mass.sum() / max(fine_mass[keep_bar].sum(), 1e-9)
         beats = pl.beat - pl.beat.min()
@@ -270,6 +286,8 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
         span_s = max((pl.time_ms[-1] - pl.time_ms[0]) / 1000.0, 1.0)
         p_row = _scaled(p_row, rows_per_s * span_s)
     row = u < p_row
+    if chords > 0:
+        v = v ** (1.0 / (1.0 + CHORD_GAIN * chords))
     cond = probs[:, 1:] / np.maximum(probs[:, 1:].sum(axis=1, keepdims=True), 1e-9)
     size = 1 + (v[:, None] > np.cumsum(cond, axis=1)[:, :-1]).sum(axis=1)
     return np.where(row, size, 0)

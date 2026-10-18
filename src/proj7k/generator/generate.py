@@ -128,7 +128,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         places = rhythm.places(timing, env.duration_s * 1000.0)
         feats = rhythm.features(env, places, shift)
         grid = rhythm.grid_points(places, feats, SILENCE_DB)
-        lo, hi = rhythm.D_MIN, rhythm.D_MAX
+        lo, hi = rhythm.D_MIN, rhythm.D_MAX + rhythm.CHORD_RANGE
     else:
         grid = build_grid(env, timing, shift_ms=shift)
         lo, hi = X_MIN, X_MAX
@@ -145,9 +145,12 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         rng = np.random.default_rng(seed)
         draws = dict(zip((p.time_ms for p in grid), rng.random(len(grid))))
         if model is not None:
-            feats[:, -1] = x
+            # Up to D_MAX the knob is the density; past it, the rows stay and the chords widen.
+            d = min(x, rhythm.D_MAX)
+            feats[:, -1] = d
             sizes = rhythm.pick(model.predict(feats), places, rng.random(len(grid)), rng.random(len(grid)),
-                                np.array([p.silent for p in grid]), rows_per_s=2.0 ** x)
+                                np.array([p.silent for p in grid]), rows_per_s=2.0 ** d,
+                                chords=max(0.0, x - rhythm.D_MAX))
             sizes = harmonize(grid, groups, list(sizes))
             picked = [(p, int(n)) for p, n in zip(grid, sizes) if n > 0]
         else:
