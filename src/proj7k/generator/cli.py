@@ -76,6 +76,8 @@ class GenerateRun:
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
+            "design": [{"bars": [s.first_bar, s.last_bar], "technique": s.technique, "pattern": s.pattern}
+                       for s in (r.design.sections if r.design else [])],
             "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
             "leads": [{"first_bar": l.first_bar, "last_bar": l.last_bar, "stem": l.stem,
                        "name": STEM_NAMES.get(l.stem, l.stem)} for l in r.leads],
@@ -227,6 +229,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--ln", type=float, default=0.0,
                    help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段")
     p.add_argument("--brief", help="谱面设计稿 JSON（ADR-0033，chart-design skill 写的）：每段的主跟层、技法、键形、密度与长条")
+    p.add_argument("--auto-design", action="store_true",
+                   help="没有设计稿时，按人写谱的技法配比给每段定主技法与键形（ADR-0033）")
     p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
@@ -256,7 +260,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
             version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say, ln_ratio=args.ln, whole_inverse=args.inverse,
-            brief=brief.load(args.brief) if args.brief else None,
+            brief=brief.load(args.brief) if args.brief else None, auto_design=args.auto_design,
         )
         if args.stems:
             stems.install(_say)

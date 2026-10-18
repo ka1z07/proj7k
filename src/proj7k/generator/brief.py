@@ -235,3 +235,72 @@ def predicates(shape: Optional[str]) -> Optional[List[Callable[[int, int, int], 
     if shape in FALLBACK:
         out.append(PATTERNS[FALLBACK[shape]][1])
     return out
+
+
+PRIOR_PATH = Path(__file__).with_name("technique_prior.json")
+
+
+def load_prior() -> Optional[dict]:
+    try:
+        return json.loads(PRIOR_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def auto(sections: Sequence, target_stars: float, ln_ratio: float = 0.0, seed: int = 0,
+         prior: Optional[dict] = None) -> Optional[Brief]:
+    """A brief made without a mapper (ADR-0033 decision 8): the chart uses as many techniques as people's
+    charts at its level do, the loud parts get what loud parts get, sections that sound alike share one,
+    and long-note techniques only when the chart has long notes. None without a prior."""
+    import numpy as np
+
+    prior = prior or load_prior()
+    if not prior or not sections:
+        return None
+    band = next((b for b in prior["bands"].values() if b["stars"][0] <= target_stars < b["stars"][1]), None)
+    if band is None:
+        return None
+    rng = np.random.default_rng([seed, 33])
+    allowed = [s for s in SKILLS if ln_ratio > 0 or s.startswith("rc_")]
+
+    def pick(weights: Dict[str, float], among: Sequence[str]) -> Optional[str]:
+        w = np.array([max(weights.get(s, 0.0), 0.0) for s in among])
+        if not len(among) or w.sum() <= 0:
+            return among[0] if among else None
+        return among[int(rng.choice(len(among), p=w / w.sum()))]
+
+    counts = {int(k): v for k, v in band["techniques_per_chart"].items() if int(k) > 0}
+    k = pick({str(n): v for n, v in counts.items()}, [str(n) for n in sorted(counts)]) if counts else "2"
+    k = max(1, min(3, int(k)))
+    chosen = [pick(band["by_energy"].get("loud", band["primary_share"]), allowed)]
+    while len(chosen) < k:
+        rest = [s for s in allowed if s not in chosen]
+        if not rest:
+            break
+        w = {s: band["primary_share"].get(s, 0.0) * (1e-3 + sum(band["used_with"].get(c, {}).get(s, 0.0) for c in chosen))
+             for s in rest}
+        nxt = pick(w, rest)
+        if nxt is None:
+            break
+        chosen.append(nxt)
+    chosen = [c for c in chosen if c]
+    by_label: Dict[int, str] = {}
+    out = []
+    for s in sections:
+        tier = "quiet" if s.energy < 1 / 3 else "middle" if s.energy < 2 / 3 else "loud"
+        if s.label not in by_label:
+            w = band["by_energy"].get(tier, {})
+            by_label[s.label] = pick({c: w.get(c, 0.0) + 0.05 for c in chosen}, chosen)
+        tech = by_label[s.label]
+        pattern = DEFAULT_PATTERN[tech]
+        if tech == "rc_speed":
+            pattern = ("stairs", "split")[int(rng.integers(2))]
+        elif tech == "rc_jack" and s.energy < 0.5:
+            pattern = "jack"
+        ln = None
+        if tech in DEFAULT_LN:
+            r, kind = DEFAULT_LN[tech]
+            ln = (r if kind == "inverse" else max(ln_ratio, 0.3), kind)
+        out.append(BriefSection(s.first_bar, s.last_bar, "", None, "", round(0.35 + 0.4 * s.energy, 2), tech,
+                                pattern, None, ln))
+    return Brief(out, "", ln_ratio, "auto")

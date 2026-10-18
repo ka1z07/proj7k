@@ -80,6 +80,7 @@ class GeneratorOptions:
     section_holds: Optional[Dict[int, Tuple[float, str]]] = None  # a section's first bar -> (share, kind), overriding
     whole_inverse: bool = False               # every section written as inverse long notes
     brief: Optional[brief_mod.Brief] = None   # a chart design brief (ADR-0033): sections, leads, patterns, long notes
+    auto_design: bool = False                 # without a brief, give each section a technique from people's charts
     log: Optional[Callable[[str], None]] = None
 
 
@@ -96,6 +97,7 @@ class GenerationResult:
     warnings: List[str] = field(default_factory=list)
     leads: List[stems_mod.Lead] = field(default_factory=list)  # each section's lead layer, with stems
     holds: List[holds.SectionHolds] = field(default_factory=list)  # each section's long notes
+    design: Optional[brief_mod.Brief] = None  # the brief the chart followed (given, or made by auto_design)
 
     @property
     def stars(self) -> float:
@@ -158,20 +160,23 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         lo, hi = X_MIN, X_MAX
     groups = group_measures(grid)
     sections = find_sections(env, grid)
-    if options.brief is not None:
-        sections = _brief_sections(options.brief, sections)
+    design = options.brief
+    if design is None and options.auto_design and model is not None:
+        design = brief_mod.auto(sections, options.target_stars, options.ln_ratio, options.seed)
+    if design is not None:
+        sections = _brief_sections(design, sections)
     energy = section_energy(grid, sections)
     styles = section_styles(grid, sections, options.seed)
     hold_model = holds.default_model()
     hold_plan: List[holds.SectionHolds] = []
     if model is not None and (options.ln_ratio > 0 or options.section_holds or options.whole_inverse
-                              or (options.brief is not None and any(r > 0 or k == "inverse"
-                                                                    for r, k in options.brief.holds().values()))):
+                              or (design is not None and any(r > 0 or k == "inverse"
+                                                             for r, k in design.holds().values()))):
         if hold_model is None:
             warnings.append("没有长条模型（hold_model.json.gz），这次只出米键。")
         else:
             sustain = holds.sustain_by_section(env, sections, stems_mod.bar_spans(grid))
-            override = dict(options.brief.holds() if options.brief else {})
+            override = dict(design.holds() if design else {})
             override.update(options.section_holds or {})
             if options.whole_inverse:
                 override = {s.first_bar: (1.0, "inverse") for s in sections}
@@ -187,8 +192,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     shape_of: dict = {}
     shape_name: Optional[List[Optional[str]]] = None
     phrase_of_bar: Optional[dict] = None
-    if options.brief is not None:
-        b = options.brief
+    if design is not None:
+        b = design
         row_gain = np.array([2.0 ** (2.0 * ((b.section_at(p.bar).intensity if b.section_at(p.bar) else 0.5) - 0.5))
                              for p in grid])
         shapes = brief_mod.row_shapes(b, [p.bar for p in grid], [p.slot / 48.0 for p in grid])
@@ -272,7 +277,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     beatmap = _beatmap(objs, timing, options, prof.total_stars)
     return GenerationResult(beatmap=beatmap, profile=prof, target_stars=options.target_stars, intensity=x,
                             timing_source=source, onset_shift_ms=shift, tempo=tempo, iterations=iterations, warnings=warnings,
-                            leads=leads, holds=hold_plan)
+                            leads=leads, holds=hold_plan, design=design)
 
 
 def _with_holds(objs: List[HitObject], plan: Sequence[holds.SectionHolds], model, feats: np.ndarray,

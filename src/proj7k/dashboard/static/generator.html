@@ -99,6 +99,7 @@
       <div class="row" style="margin-bottom:10px">
         <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
         <label class="check"><input type="checkbox" id="stems"> 实验：Demucs 分轨</label>
+        <label class="check"><input type="checkbox" id="autoDesign"> 实验：每段一种主技法（按人写谱配比）</label>
       </div>
       <div class="hint" style="margin-bottom:10px">分轨：把歌拆成鼓、贝斯、人声、其他，每段只跟一层写。第一次勾选会安装 Demucs 与 PyTorch（数 GB），每首歌第一次分轨在 CPU 上约 1–3 分钟，之后读缓存。</div>
       <button class="primary" id="runBtn">生成</button>
@@ -170,6 +171,8 @@
       $("#outDir").placeholder = `默认：${cfg.generated_dir}`;
     });
 
+    const PATTERN_NAME = { stairs: "楼梯", split: "切", trill: "颤", jumptrill: "跳颤", jack: "单叠", chordjack: "跳叠",
+      chordstream: "和弦串", handstream: "手流", free: "随意" };
     function leadRuns(leads) {
       const runs = [];
       for (const l of leads) {
@@ -195,6 +198,8 @@
           r.tempo ? P7.stat("测速置信度", `${r.tempo.confidence.toFixed(2)}（前后差 ${r.tempo.drift_ms} ms）`) : null),
         (r.leads || []).length ? el("div", { class: "hint", style: "margin-top:6px",
           text: "主跟层：" + leadRuns(r.leads).map((l) => `${l.first_bar + 1}–${l.last_bar + 1} 小节${l.name}`).join("，") }) : null,
+        (r.design || []).length ? el("div", { class: "hint", style: "margin-top:6px",
+          text: "段落设计：" + r.design.map((d) => `${d.bars[0] + 1}–${d.bars[1] + 1} 小节 ${P7.skillName(d.technique.replace("rc_", "").replace("stamina", "stream"))}/${PATTERN_NAME[d.pattern] || d.pattern}`).join("，") }) : null,
         el("h3", { text: "八项技法星级" }),
         P7.skillBars(r.skills),
         (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join("；")) : null,
@@ -221,6 +226,7 @@
         output_dir: $("#outDir").value,
         package: $("#pkg").checked,
         stems: $("#stems").checked,
+        auto_design: $("#autoDesign").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
         inverse: $("#ln").value === "inverse",
       };

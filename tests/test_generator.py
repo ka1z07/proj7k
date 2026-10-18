@@ -661,3 +661,24 @@ def test_the_review_checks_a_chart_against_its_brief(song, tmp_path):
     assert "六项检查" in review.markdown(r)
     review.preview(result.beatmap, b, tmp_path / "p.png")
     assert (tmp_path / "p.png").stat().st_size > 1000
+
+
+_PRIOR = {"charts": 10, "bands": {"low": {
+    "stars": [0, 4], "charts": 10, "techniques_per_chart": {"2": 1.0},
+    "primary_share": {"rc_jack": 0.4, "rc_speed": 0.6},
+    "used_with": {"rc_jack": {"rc_speed": 1.0}, "rc_speed": {"rc_jack": 1.0}},
+    "by_energy": {"quiet": {"rc_speed": 1.0}, "middle": {"rc_speed": 0.5, "rc_jack": 0.5}, "loud": {"rc_jack": 1.0}},
+    "ln_share_quartiles": [0, 0, 0]}}}
+
+
+def test_without_a_brief_the_sections_get_techniques_from_peoples_charts(song, monkeypatch):
+    from proj7k.generator import brief
+
+    monkeypatch.setattr(brief, "load_prior", lambda: _PRIOR)
+    audio, _ = song
+    timing = [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing, auto_design=True))
+    techs = {s.technique for s in result.design.sections}
+    assert techs <= {"rc_jack", "rc_speed"} and techs
+    assert all(s.pattern for s in result.design.sections)
+    assert abs(result.stars - 3.0) <= 0.3

@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from proj7k.generator import holds, rhythm, stems as stems_mod
+from proj7k.generator.brief import PRIOR_PATH
 from proj7k.generator.audio import Audio, load_audio
 from proj7k.generator.grid import SILENCE_DB, build_grid, onset_shift_ms
 from proj7k.generator.onset import FRAME_S, OnsetEnvelope, onset_envelope
@@ -32,7 +33,6 @@ from proj7k.generator.structure import find_sections
 from proj7k.generator.tempo import estimate_tempo
 from proj7k.parser import TimingPoint
 
-PRIOR_PATH = Path(__file__).with_name("technique_prior.json")
 BAND_NAMES = ("low", "mid", "high")
 
 
