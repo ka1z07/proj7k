@@ -2,10 +2,13 @@
 A constant tempo and the first downbeat, from the onset envelope.
 
 1. **Period.** The envelope's autocorrelation, with a comb over the lag's 2nd and 4th multiples (a
-   real pulse repeats), weighted by a prior centred on 170 BPM (7K songs mostly run 140-220).
-2. **Refinement.** Around the winning lag, tempos within ±2.5 % are scored by the strength of the
+   real pulse repeats), weighted by a prior centred on 170 BPM (7K songs mostly run 140-220). 3/2 and
+   2/3 of the winner are kept as candidates too: on a 220 BPM song full of triplet fills the
+   autocorrelation at 146 BPM is as high as at 220, and the prior alone picks the wrong one.
+2. **Refinement.** Around each candidate, tempos within ±2.5 % are scored by the strength of the
    envelope's Fourier components at the beat frequency and its 2nd and 4th harmonics (0.05 BPM steps,
    then 0.005 around the best). Over a three-minute song a tempo off by 0.1 % already loses most of it.
+   The candidate whose refined beat is strongest (times the prior) wins.
 3. **Phase and downbeat.** The sharpest bin is the beat, unless the point half a beat away carries more
    mid-band (snare, vocal, chord) onset, in which case the sharpest bin was the off-beat; of the four beats in a
    4/4 measure, the one with the most low-band onset is the downbeat.
@@ -53,8 +56,7 @@ def estimate_tempo(env: OnsetEnvelope) -> TempoEstimate:
         raise ValueError("音频太短或没有可辨认的起音，无法自动测 BPM；请用 --bpm/--offset 或 --timing-from 指定 timing。")
     x = x - x.mean()
 
-    lag = _coarse_lag(x)
-    bpm = _refine_bpm(env.total, 60.0 / (lag * FRAME_S))
+    bpm = _best_tempo(env.total, 60.0 / (_coarse_lag(x) * FRAME_S))
     beat_s = 60.0 / bpm
     pulse_s, sharp = _phase(env.total, beat_s)
     phase_s = _on_beat(env, beat_s, pulse_s)
@@ -66,7 +68,35 @@ def estimate_tempo(env: OnsetEnvelope) -> TempoEstimate:
                          steady=bool(drift <= DRIFT_LIMIT_S), drift_ms=round(float(drift) * 1000.0, 1))
 
 
+def _best_tempo(env_total: np.ndarray, bpm0: float) -> float:
+    """The refined tempo of the autocorrelation's pick, or of 3/2 or 2/3 of it, whichever beat is strongest
+    in the envelope (times the prior). The octave stays the autocorrelation's: a strong off-beat hi-hat
+    makes twice the tempo look as strong as the beat."""
+    t = frame_time(np.arange(len(env_total)))
+    env = env_total.astype(np.float64)
+    best, best_score = bpm0, -np.inf
+    for b0 in (bpm0, bpm0 * 1.5, bpm0 / 1.5):
+        if not MIN_BPM <= b0 <= MAX_BPM:
+            continue
+        b = _refine_bpm(env_total, b0)
+        score = _pulse_strength(env, t, 60.0 / b) * (0.5 + _prior(b))
+        if score > best_score:
+            best, best_score = b, score
+    return best
+
+
+def _prior(bpm: float) -> float:
+    return float(np.exp(-0.5 * (np.log2(bpm / PRIOR_BPM) / PRIOR_SIGMA_OCT) ** 2))
+
+
 def _coarse_lag(x: np.ndarray) -> int:
+    scores = _lag_scores(x)
+    if not scores:
+        return int(np.floor(60.0 / MAX_BPM / FRAME_S))
+    return max(scores, key=lambda l: scores[l])
+
+
+def _lag_scores(x: np.ndarray) -> dict:
     n = len(x)
     spec = np.fft.rfft(x, 2 * n)
     ac = np.fft.irfft(spec * np.conj(spec))[:n]
@@ -75,15 +105,11 @@ def _coarse_lag(x: np.ndarray) -> int:
     ac = np.maximum(ac, np.maximum(np.roll(ac, 1), np.roll(ac, -1)))
     lo = int(np.floor(60.0 / MAX_BPM / FRAME_S))
     hi = int(np.ceil(60.0 / MIN_BPM / FRAME_S))
-    best, best_score = lo, -np.inf
+    out = {}
     for lag in range(max(lo, 2), min(hi, n // 4)):
         comb = ac[lag] + 0.5 * ac[min(2 * lag, n - 1)] + 0.25 * ac[min(4 * lag, n - 1)]
-        bpm = 60.0 / (lag * FRAME_S)
-        prior = np.exp(-0.5 * (np.log2(bpm / PRIOR_BPM) / PRIOR_SIGMA_OCT) ** 2)
-        score = comb * (0.5 + prior)
-        if score > best_score:
-            best, best_score = lag, score
-    return best
+        out[lag] = float(comb * (0.5 + _prior(60.0 / (lag * FRAME_S))))
+    return out
 
 
 def _fold(env_total: np.ndarray, period_s: float) -> np.ndarray:
