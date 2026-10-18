@@ -16,6 +16,7 @@ import numpy as np
 from proj7k.generator import rhythm as R
 
 HIDDEN = (64, 32)
+MAX_UNMATCHED = 0.2
 
 
 def init(sizes, rng):
@@ -92,6 +93,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     d = np.load(args.data)
     X, y, chart = d["X"].astype(np.float32), d["y"].astype(np.int64), d["chart"]
+    X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+    # Charts whose rows mostly miss the places are off their audio (dan courses chain several songs).
+    good = np.asarray(d["unmatched"]) <= MAX_UNMATCHED
+    keep = good[chart]
+    X, y, chart = X[keep], y[keep], chart[keep]
+    print(f"dropped {int((~good).sum())} charts with more than {MAX_UNMATCHED:.0%} of rows off the places", flush=True)
     if X.shape[1] != R.n_features():
         print(f"data has {X.shape[1]} features, the model expects {R.n_features()}: re-export", file=sys.stderr)
         return 1
@@ -100,7 +107,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     mean = X[~hold].mean(axis=0)
     std = X[~hold].std(axis=0) + 1e-3
     Xn = (X - mean) / std
-    print(f"{len(d['names'])} charts ({int(hold_chart.sum())} held out), {len(X)} places, "
+    print(f"{int(good.sum())} charts ({int((hold_chart & good).sum())} held out), {len(X)} places, "
           f"classes {np.bincount(y, minlength=R.CLASSES).tolist()}", flush=True)
     prior = np.bincount(y[~hold], minlength=R.CLASSES) / (~hold).sum()
     base = -np.log(prior[y[hold]]).mean()
