@@ -208,7 +208,9 @@ def test_a_model_trains_counts_and_round_trips(tmp_path):
 # --- the closed loop ------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("target, on_attack", [(2.0, 0.95), (4.42, 0.8)])
+# Alike measures share their rhythm draws (ADR-0032): a measure whose loop is a little different from its
+# cluster's first measure can take a row where only that one has the attack, so a few rows miss.
+@pytest.mark.parametrize("target, on_attack", [(2.0, 0.88), (4.42, 0.75)])
 def test_generated_chart_lands_on_the_target(song, target, on_attack):
     audio, attacks = song
     result = generate(audio, GeneratorOptions(target_stars=target))
