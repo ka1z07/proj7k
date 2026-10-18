@@ -35,7 +35,7 @@ from proj7k.generator.audio import Audio, load_audio
 from proj7k.generator import brief as brief_mod, holds, rhythm, stems as stems_mod
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
-from proj7k.generator.patterns import PatternSampler, default_model, mask_columns
+from proj7k.generator.patterns import PatternSampler, default_model, mask_columns, mirror, popcount
 from proj7k.generator.phrases import group_measures, harmonize
 from proj7k.generator.structure import Section, find_sections, section_energy, section_styles
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
@@ -186,6 +186,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     row_gain = None
     shape_of: dict = {}
     shape_name: Optional[List[Optional[str]]] = None
+    phrase_of_bar: Optional[dict] = None
     if options.brief is not None:
         b = options.brief
         row_gain = np.array([2.0 ** (2.0 * ((b.section_at(p.bar).intensity if b.section_at(p.bar) else 0.5) - 0.5))
@@ -193,6 +194,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         shapes = brief_mod.row_shapes(b, [p.bar for p in grid], [p.slot / 48.0 for p in grid])
         shape_of = {p.time_ms: brief_mod.predicates(sh) for p, sh in zip(grid, shapes)}
         shape_name = shapes
+        if model is not None:
+            phrase_of_bar = {p.bar: c for p, c in zip(grid, group_measures(grid, runs=False)) if c >= 0}
     x_top = hi
     best: Optional[Tuple[float, List[HitObject], DifficultyProfile]] = None
     iterations = 0
@@ -218,7 +221,7 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
             picked = [(p, int(n)) for p, n in zip(grid, sizes) if n > 0]
         else:
             picked = select_rows(grid, x, groups, energy)
-        objs = _chart(picked, styles, seed, draws, shape_of)
+        objs = _chart(picked, styles, seed, draws, shape_of, phrase_of_bar)
         if not objs:
             return objs, evaluate_notes([])
         if hold_plan:
@@ -416,18 +419,82 @@ def chord_extra(x: float) -> float:
 
 
 def _chart(picked: Sequence[Tuple[GridPoint, int]], styles: dict, seed, draws: dict,
-           shape_of: Optional[dict] = None) -> List[HitObject]:
+           shape_of: Optional[dict] = None, phrase_of_bar: Optional[dict] = None) -> List[HitObject]:
     sampler = PatternSampler(default_model())
     masks = sampler.sample([(p.time_ms, n) for p, n in picked], np.random.default_rng(seed),
                            beats=[p.beat for p, _ in picked], draws=[draws[p.time_ms] for p, _ in picked],
                            styles=[styles.get(p.bar, "plain") for p, _ in picked],
                            shapes=[shape_of.get(p.time_ms) for p, _ in picked] if shape_of else None)
+    if phrase_of_bar:
+        tests = [shape_of.get(p.time_ms) for p, _ in picked] if shape_of else None
+        masks = _same_phrase_same_keys(picked, masks, phrase_of_bar, tests)
     objs = []
     for (p, _n), mask in zip(picked, masks):
         t = float(round(p.time_ms))
         for c in mask_columns(mask):
             objs.append(HitObject(column=c, time=t, note_type=NoteType.RICE))
     return objs
+
+
+def _same_phrase_same_keys(picked: Sequence[Tuple[GridPoint, int]], masks: List[int], phrase_of_bar: dict,
+                           tests: Optional[Sequence] = None) -> List[int]:
+    """A measure that comes back with the same rhythm gets the keys it had the first time; from its third
+    time on, every other time mirrored (ADR-0033 decision 6, check 1). Where the copy would break the
+    section's key pattern at the measure's first rows (a stair that jumps), the mirror or the copy moved
+    across the keys is taken instead, if one of them keeps it."""
+    by_bar: dict = {}
+    for i, (p, n) in enumerate(picked):
+        by_bar.setdefault(p.bar, []).append(i)
+    first: dict = {}
+    seen: dict = {}
+    out = list(masks)
+    for bar in sorted(by_bar):
+        c = phrase_of_bar.get(bar)
+        idx = by_bar[bar]
+        if c is None or len(idx) < 2:
+            continue
+        key = (c, tuple((picked[i][0].slot, picked[i][1]) for i in idx))
+        if key not in first:
+            first[key] = [out[i] for i in idx]
+            seen[key] = 1
+            continue
+        k = seen[key]
+        seen[key] = k + 1
+        src = first[key]
+        flip = k >= 2 and k % 2 == 0
+        variants = [[mirror(m) for m in src] if flip else src, src if flip else [mirror(m) for m in src]]
+        for d in range(-6, 7):
+            if d and all(_shifted(m, d) for m in src):
+                variants.append([_shifted(m, d) for m in src])
+        pick = variants[0]
+        if tests is not None:
+            for v in variants:
+                if _joins(out, idx, v, tests):
+                    pick = v
+                    break
+        for i, m in zip(idx, pick):
+            out[i] = m
+    return out
+
+
+def _shifted(mask: int, d: int) -> int:
+    m = mask << d if d > 0 else mask >> -d
+    return m if popcount(m) == popcount(mask) and m < (1 << 7) else 0
+
+
+def _joins(out: List[int], idx: Sequence[int], new: Sequence[int], tests: Sequence) -> bool:
+    """Whether `new` (the masks of the consecutive rows `idx`) keeps the key-pattern test of its first two
+    rows after the rows before it."""
+    def before(j: int, k: int) -> int:
+        return new[j - k] if j - k >= 0 else out[idx[0] + j - k]
+
+    for j in range(min(2, len(idx))):
+        t = tests[idx[j]]
+        if not t or idx[0] + j - 2 < 0:
+            continue
+        if not t[0](new[j], before(j, 1), before(j, 2)):
+            return False
+    return True
 
 
 def _beatmap(objs: List[HitObject], timing: List[TimingPoint], options: GeneratorOptions, stars: float) -> Beatmap7K:

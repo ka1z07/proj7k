@@ -643,3 +643,21 @@ def test_analysis_lists_sections_layers_and_a_brief_to_fill(two_layers, tmp_path
     template = analyze.brief_template(result)
     b = brief.parse(template)
     assert len(b.sections) == len(result["sections"])
+
+
+def test_the_review_checks_a_chart_against_its_brief(song, tmp_path):
+    from proj7k.generator import review
+
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    b = _brief()
+    result = generate(audio, GeneratorOptions(target_stars=3.5, timing=[TimingPoint(time=500.0, beat_length=beat)], brief=b))
+    r = review.review(result.beatmap, b, target=3.5)
+    assert [c["id"] for c in r["checks"]] == [1, 2, 3, 4, 5, 6]
+    verse, chorus = r["sections"]
+    assert verse["primary_share"] >= 0.7 and chorus["primary_share"] >= 0.7
+    assert chorus["rows_per_bar"] > verse["rows_per_bar"]
+    assert r["checks"][4]["ok"] and r["checks"][0]["ok"]
+    assert "六项检查" in review.markdown(r)
+    review.preview(result.beatmap, b, tmp_path / "p.png")
+    assert (tmp_path / "p.png").stat().st_size > 1000
