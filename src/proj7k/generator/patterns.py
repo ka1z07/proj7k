@@ -198,14 +198,18 @@ class PatternSampler:
     repeat: bool = True
 
     def sample(self, rows: Sequence[Tuple[float, int]], rng: np.random.Generator,
-               beats: Optional[Sequence[float]] = None, draws: Optional[Sequence[float]] = None) -> List[int]:
+               beats: Optional[Sequence[float]] = None, draws: Optional[Sequence[float]] = None,
+               styles: Optional[Sequence[str]] = None) -> List[int]:
         """Masks for rows given as (time ms, size). `beats` places each row on the beat grid (in beats from
         the first beat); without it no stretch is repeated.
 
         `draws` gives each row its own uniform number for its draw, and with `beats` the repeat choices
         are drawn per stretch from `rng`'s seed and the stretch's number: a row added or removed elsewhere
         then leaves the other rows' draws alone. The generator relies on that, so that its star rating
-        moves smoothly with the intensity it bisects."""
+        moves smoothly with the intensity it bisects.
+
+        `styles` names each row's section style (`STYLES`), which leans the model toward one kind of
+        pattern without leaving what mappers write."""
         stretch_seed = int(rng.integers(1 << 31))
         n_rows = len(rows)
         out: List[int] = [0] * n_rows
@@ -229,7 +233,8 @@ class PatternSampler:
                 m = None
             if m is None:
                 u = float(draws[i]) if draws is not None else float(rng.random())
-                m = self._draw(contexts(n, g1, r1, g2, r2), n, t, last_hit, u)
+                style = styles[i] if styles is not None else "plain"
+                m = self._draw(contexts(n, g1, r1, g2, r2), n, t, last_hit, u, style, r1, r2)
             out[i] = m
             for c in range(COLUMNS):
                 if m >> c & 1:
@@ -238,8 +243,12 @@ class PatternSampler:
             t2, t1 = t1, t
         return out
 
-    def _draw(self, keys, n: int, t: float, last_hit: np.ndarray, u: float) -> int:
+    def _draw(self, keys, n: int, t: float, last_hit: np.ndarray, u: float,
+              style: str = "plain", r1: int = 0, r2: int = 0) -> int:
         masks, p = self.model.distribution(keys, n)
+        lean = STYLES.get(style)
+        if lean and r1:
+            p = p * np.exp(np.array([_lean(mk, r1, r2, lean) for mk in masks]))
         if self.min_jack_ms > 0:
             blocked = 0
             for c in range(COLUMNS):
@@ -277,6 +286,32 @@ class PatternSampler:
             return
 
 
+#: Section styles (ADR-0031): how strongly each leans toward a kind of pattern, as log-weights on the
+#: model's probabilities. "flow": stairs (a single note one column on from the last, in the same
+#: direction); "jack": rows that hit a column of the previous row (jacks, chordjacks, anchors);
+#: "trill": a row that repeats the one before last (trills, jumptrills); "plain": the model as it is.
+STYLES: Dict[str, Dict[str, float]] = {
+    "plain": {},
+    "flow": {"roll": 1.2},
+    "jack": {"jack": 1.0},
+    "trill": {"trill": 0.8},
+}
+
+
+def _lean(mask: int, r1: int, r2: int, lean: Dict[str, float]) -> float:
+    w = 0.0
+    if "jack" in lean and mask & r1:
+        w += lean["jack"]
+    if "trill" in lean and r2 and mask == r2 and mask != r1:
+        w += lean["trill"]
+    if "roll" in lean and popcount(mask) == 1 and popcount(r1) == 1:
+        a, b = r1.bit_length() - 1, mask.bit_length() - 1
+        step = (a - (r2.bit_length() - 1)) if popcount(r2) == 1 else 0
+        if abs(b - a) == 1 and (step == 0 or b - a == step):
+            w += lean["roll"]
+    return w
+
+
 def _windows(beats: Sequence[float]) -> Dict[int, Dict]:
     """For each span: {first row index of a stretch: (stretch number, [(position in 48ths of a beat, row)])},
     plus ("k", stretch number) → the same list, for looking back."""
@@ -308,9 +343,13 @@ def pattern_stats(rows: Sequence[Tuple[float, int]], beat_ms: float) -> Dict[str
     - `key_repeat`: of 1-beat stretches whose rhythm (positions and chord sizes) repeats the most recent
       such stretch up to 8 beats back, the share whose keys repeat too, as they were or mirrored;
     - `rhythm_repeat`: of measures (4 beats from the first row) with notes, the share whose rhythm is
-      exactly that of an earlier measure.
+      exactly that of an earlier measure;
+    - `density_cv`: how much the number of rows changes from one 16-beat stretch to the next
+      (coefficient of variation; ranked charts about 0.3 at every level);
+    - `quarter`, `triplet`: the share of rows on a quarter (1/16 note) or third of a beat.
     """
-    out = {"roll": 0.0, "trill": 0.0, "jack_half": 0.0, "key_repeat": 0.0, "rhythm_repeat": 0.0}
+    out = {"roll": 0.0, "trill": 0.0, "jack_half": 0.0, "key_repeat": 0.0, "rhythm_repeat": 0.0,
+           "density_cv": 0.0, "quarter": 0.0, "triplet": 0.0}
     if len(rows) < 3 or beat_ms <= 0:
         return out
     times = [t for t, _ in rows]
@@ -355,6 +394,13 @@ def pattern_stats(rows: Sequence[Tuple[float, int]], beat_ms: float) -> Dict[str
         n_bars += 1
         bars += sig in seen
         seen.add(sig)
+    t_rel = (np.array(times) - t0) / beat_ms
+    counts = np.bincount((t_rel // 16).astype(int))
+    counts = counts[counts > 0]
+    frac = t_rel % 1.0
+    near = lambda f: np.minimum(np.abs(frac - f), 1 - np.abs(frac - f)) < 0.03  # noqa: E731
+    out.update(density_cv=float(counts.std() / counts.mean()) if len(counts) > 1 else 0.0,
+               quarter=float(np.mean(near(0.25) | near(0.75))), triplet=float(np.mean(near(1 / 3) | near(2 / 3))))
     out.update(roll=rolls / tri if tri else 0.0, trill=trills / tri if tri else 0.0,
                jack_half=jacks / close if close else 0.0, key_repeat=kept / matched if matched else 0.0,
                rhythm_repeat=bars / n_bars if n_bars else 0.0)

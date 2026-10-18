@@ -186,7 +186,7 @@ def summarize(scores: List[ChartScore]) -> dict:
         },
         "patterns_median": {
             who: {k: float(np.median([getattr(s, attr)[k] for s in ok if getattr(s, attr)]))
-                  for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat")}
+                  for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat", "density_cv", "quarter", "triplet")}
             for who, attr in (("human", "human_patterns"), ("generated", "generated_patterns"))
             if any(getattr(s, attr) for s in ok)
         },
