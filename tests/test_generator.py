@@ -623,3 +623,23 @@ def test_a_brief_sets_each_sections_density_and_key_pattern(song):
     # The primary pattern holds at least seven rows in ten (ADR-0033 decision 5).
     assert share(verse, "stairs") >= 0.7
     assert share(chorus, "chordjack") >= 0.7
+
+
+def test_analysis_lists_sections_layers_and_a_brief_to_fill(two_layers, tmp_path, monkeypatch):
+    from proj7k.generator import analyze, brief, stems
+
+    monkeypatch.setattr(stems, "CACHE_DIR", tmp_path)
+    audio, parts, offset, beat = two_layers
+    result = analyze.analyze(audio, [TimingPoint(time=offset, beat_length=beat)], use_stems=True,
+                             separator=lambda a: parts, log=lambda m: None)
+    analyze.picture(audio, result, tmp_path / "a.png")
+    assert (tmp_path / "a.png").stat().st_size > 1000
+    result.pop("_envs")
+    json.dumps(result)
+    assert result["sections"] and all("lead" in s and "stem_scores" in s for s in result["sections"])
+    assert len(result["bars"]) >= 32 and "stems" in result["bars"][0]
+    leads = {s["lead"] for s in result["sections"]}
+    assert {"drums", "other"} <= leads
+    template = analyze.brief_template(result)
+    b = brief.parse(template)
+    assert len(b.sections) == len(result["sections"])

@@ -139,10 +139,11 @@ def choose_leads(stem_envs: Dict[str, OnsetEnvelope], grid: Sequence[GridPoint],
                  sections: Sequence, override: Optional[Dict[int, str]] = None) -> List[Lead]:
     """Each section's lead layer.
 
-    A stem scores, over the grid points of a section, its mean onset strength (each stem's envelope is
-    normalized over the song, so a stem that is quiet here reads low) times the square root of its share
-    of the section's loudness: the clearest of the layers that carry the sound. `override` (a section's
-    first bar → stem, from a design brief) wins.
+    A stem scores, over the grid points of a section, its mean onset strength on the mix's scale (each
+    stem's envelope is normalized over the song by itself, so a sparse layer such as the vocals would
+    otherwise read as strong as the drums) times the fourth root of its share of the section's loudness:
+    the layer whose attacks carry the section. `override` (a section's first bar → stem, from a design
+    brief) wins.
     """
     override = override or {}
     leads = []
@@ -154,7 +155,8 @@ def choose_leads(stem_envs: Dict[str, OnsetEnvelope], grid: Sequence[GridPoint],
             total = sum(loud.values()) or 1.0
             for s, env in stem_envs.items():
                 frames = np.clip([env.frame_of(p.time_ms / 1000.0) for p in pts], 0, env.n - 1)
-                scores[s] = round(float(env.total[frames].mean()) * float(np.sqrt(loud[s] / total)), 4)
+                onset = float(env.total[frames].mean()) * env.onset_ref
+                scores[s] = round(onset * float((loud[s] / total) ** 0.25), 4)
         stem = override.get(sec.first_bar) or (max(scores, key=scores.get) if scores else "drums")
         leads.append(Lead(sec.first_bar, sec.last_bar, stem, scores))
     return leads
@@ -166,12 +168,15 @@ def _power(env: OnsetEnvelope, pts: Sequence[GridPoint]) -> float:
 
 
 def stem_envelopes(stems: Dict[str, Audio], mix: Audio) -> Dict[str, OnsetEnvelope]:
-    """Each stem's onset envelope, with `loud_ref` set so stems' loudness compare on the mix's scale."""
+    """Each stem's onset envelope, with `loud_ref` and `onset_ref` set so the stems' loudness and attacks
+    compare on the mix's scale."""
     mix_ref = _loud_level(mix.samples)
+    mix_flux = onset_envelope(mix).flux_level
     out = {}
     for s, a in stems.items():
         env = onset_envelope(a)
-        out[s] = replace(env, loud_ref=(_loud_level(a.samples) / max(mix_ref, 1e-9)) ** 2)
+        out[s] = replace(env, loud_ref=(_loud_level(a.samples) / max(mix_ref, 1e-9)) ** 2,
+                         onset_ref=env.flux_level / max(mix_flux, 1e-9))
     return out
 
 

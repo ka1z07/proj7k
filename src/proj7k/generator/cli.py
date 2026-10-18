@@ -191,7 +191,13 @@ def format_report(run: GenerateRun) -> str:
     if t is not None:
         lines.append(f"  自动测速：置信度 {t['confidence']:.2f}，前后段拍点差 {t['drift_ms']:g} ms")
     if d["leads"]:
-        lines.append("  主跟层：" + "，".join(f"{l['first_bar'] + 1}–{l['last_bar'] + 1} 小节{l['name']}" for l in d["leads"]))
+        runs = []
+        for l in d["leads"]:
+            if runs and runs[-1][2] == l["name"] and runs[-1][1] + 1 == l["first_bar"]:
+                runs[-1][1] = l["last_bar"]
+            else:
+                runs.append([l["first_bar"], l["last_bar"], l["name"]])
+        lines.append("  主跟层：" + "，".join(f"{a + 1}–{b + 1} 小节{n}" for a, b, n in runs))
     for w in d["warnings"]:
         lines.append(f"  注意：{w}")
     lines.append(f"  谱面：{d['output_file']}")

@@ -170,6 +170,15 @@
       $("#outDir").placeholder = `默认：${cfg.generated_dir}`;
     });
 
+    function leadRuns(leads) {
+      const runs = [];
+      for (const l of leads) {
+        const last = runs[runs.length - 1];
+        if (last && last.name === l.name && last.last_bar + 1 === l.first_bar) last.last_bar = l.last_bar;
+        else runs.push({ ...l });
+      }
+      return runs;
+    }
     const TIMING_SOURCE = { reference: "借用参考谱面", manual: "手动指定", auto: "自动测得" };
     function resultCard(r) {
       return el("div", { class: "card" },
@@ -185,7 +194,7 @@
           P7.stat("Timing", TIMING_SOURCE[r.timing_source] || r.timing_source),
           r.tempo ? P7.stat("测速置信度", `${r.tempo.confidence.toFixed(2)}（前后差 ${r.tempo.drift_ms} ms）`) : null),
         (r.leads || []).length ? el("div", { class: "hint", style: "margin-top:6px",
-          text: "主跟层：" + r.leads.map((l) => `${l.first_bar + 1}–${l.last_bar + 1} 小节${l.name}`).join("，") }) : null,
+          text: "主跟层：" + leadRuns(r.leads).map((l) => `${l.first_bar + 1}–${l.last_bar + 1} 小节${l.name}`).join("，") }) : null,
         el("h3", { text: "八项技法星级" }),
         P7.skillBars(r.skills),
         (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join("；")) : null,
