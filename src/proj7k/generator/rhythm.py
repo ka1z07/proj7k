@@ -201,8 +201,13 @@ F_LOUD = F_BRIGHT + 3
 #: The density knob's range, log2 rows per second (about 0.35 .. 28).
 D_MIN, D_MAX = -1.5, 4.8
 SHARPEN = 1.5
-_BINARY = {SLOTS.index(s) for s in (6, 12, 18, 30, 36, 42)}
-_TERNARY = {SLOTS.index(s) for s in (8, 16, 32, 40)}
+#: Share of the song's measures that keep their 1/8 and 1/6 places (see `pick`).
+FINE_MEASURES = 0.3
+#: A beat goes 1/6 only when the model expects at least this many rows on its 1/6-only places.
+TRIPLET_MIN = 0.3
+_QUARTER = (0, 12, 24, 36)
+_EIGHTH_ONLY = (6, 18, 30, 42)
+_SIXTH_ONLY = (8, 16, 32, 40)
 
 
 def grid_points(pl: Places, X: np.ndarray, silence_db: float):
@@ -225,21 +230,42 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
 def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
          rows_per_s: Optional[float] = None) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
-    (row or not) and `v` (its size), so a higher density only adds rows. In a beat, rows go either on
-    the 1/8 grid or on the 1/6 grid, whichever holds the place the model most expects a row at. With
-    `rows_per_s`, the row probabilities are scaled together so the chart has that many rows per second
-    (the model alone undershoots dense charts: it cannot know which song is a stream chart)."""
+    (row or not) and `v` (its size), so a higher density only adds rows.
+
+    The model rates every place on its own, so it spreads its expectation of 1/8 and 1/6 rows thinly
+    over the whole song, where a mapper writes them in bursts: a measure of 1/8, a triplet fill, then
+    back to 1/4. So the finer places are gathered: the measures where the model expects the most of
+    them relative to their 1/4 grid (`FINE_MEASURES` of the song's measures) keep them, multiplied so
+    the song keeps its expected number, and the rest lose them. In those measures each beat goes
+    either 1/8 or 1/6, whichever the model expects more rows on (1/6 only when it expects at least
+    `TRIPLET_MIN` of them; a 1/6 beat also drops its 1/4s).
+    With `rows_per_s`, the row probabilities are then scaled together so the chart has that many rows
+    per second (the model alone undershoots dense charts: it cannot know which song is a stream chart)."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
-    is_bin = np.isin(pl.slot, list(_BINARY))
-    is_ter = np.isin(pl.slot, list(_TERNARY))
-    beats = pl.beat
-    n_beats = int(beats.max()) + 1 if len(beats) else 0
-    bin_max = np.zeros(n_beats)
-    ter_max = np.zeros(n_beats)
-    np.maximum.at(bin_max, beats[is_bin], p_row[is_bin])
-    np.maximum.at(ter_max, beats[is_ter], p_row[is_ter])
-    ternary = ter_max > bin_max
-    p_row = np.where((is_bin & ternary[beats]) | (is_ter & ~ternary[beats]), 0.0, p_row)
+    slot48 = np.array(SLOTS)[pl.slot]
+    quarter = np.isin(slot48, _QUARTER)
+    eighth = np.isin(slot48, _EIGHTH_ONLY)
+    sixth = np.isin(slot48, _SIXTH_ONLY)
+    fine = eighth | sixth
+    if len(pl):
+        bars = pl.bar - pl.bar.min()
+        n_bars = int(bars.max()) + 1
+        base = np.bincount(bars[quarter], weights=p_row[quarter], minlength=n_bars)
+        fine_mass = np.bincount(bars[fine], weights=p_row[fine], minlength=n_bars)
+        ratio = fine_mass / (base + 1e-6)
+        k = max(1, int(round(FINE_MEASURES * n_bars)))
+        keep_bar = np.zeros(n_bars, bool)
+        keep_bar[np.argsort(-ratio, kind="stable")[:k]] = True
+        kept = keep_bar[bars]
+        gain = fine_mass.sum() / max(fine_mass[keep_bar].sum(), 1e-9)
+        beats = pl.beat - pl.beat.min()
+        n_beats = int(beats.max()) + 1
+        e8 = np.bincount(beats[eighth], weights=p_row[eighth], minlength=n_beats)
+        e6 = np.bincount(beats[sixth], weights=p_row[sixth], minlength=n_beats)
+        ternary = ((e6 > e8) & (e6 >= TRIPLET_MIN))[beats] & kept
+        p_row = np.where(fine & kept, np.minimum(1.0, p_row * gain), np.where(fine, 0.0, p_row))
+        p_row = np.where((eighth | quarter) & ternary, 0.0, p_row)
+        p_row = np.where(sixth & kept & ~ternary, 0.0, p_row)
     if rows_per_s is not None and len(pl) and p_row.sum() > 0:
         span_s = max((pl.time_ms[-1] - pl.time_ms[0]) / 1000.0, 1.0)
         p_row = _scaled(p_row, rows_per_s * span_s)
