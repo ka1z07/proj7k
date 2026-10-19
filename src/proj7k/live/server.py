@@ -39,6 +39,7 @@ class LiveServer:
         no_watch: bool = False,
         static_dir: Optional[Path] = None,
         max_size: Optional[int] = 2**20,
+        open_timeout: Optional[float] = 10,
     ):
         self.host = host
         self.port = port
@@ -47,6 +48,8 @@ class LiveServer:
         self.static_dir = static_dir if static_dir is not None else DEFAULT_STATIC_DIR
         #: Largest WebSocket message accepted, in bytes (websockets' own default is 1 MiB).
         self.max_size = max_size
+        #: Seconds a connection may take from accept to response, `_process_request` included (websockets' default 10).
+        self.open_timeout = open_timeout
 
         index_path = self.static_dir / "index.html"
         if index_path.exists():
@@ -206,6 +209,7 @@ class LiveServer:
             self.port,
             process_request=self._process_request,
             max_size=self.max_size,
+            open_timeout=self.open_timeout,
         )
         logger.info(f"proj7k.live server listening on http://{self.host}:{self.port}/")
 

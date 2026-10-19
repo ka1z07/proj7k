@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import io
 import json
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -204,6 +205,51 @@ def test_player_api_over_http(lazer):
             await s.server.stop()
 
     asyncio.run(_run())
+
+
+def test_a_slow_first_read_of_the_library_still_answers(lazer):
+    """The player API answers inside websockets' handshake, so its open timeout must cover the library's first read."""
+    from proj7k.dashboard.server import PLAYER_API_TIMEOUT_S
+
+    def slow():
+        time.sleep(1.0)
+        return lazer["data"]
+
+    async def _run(open_timeout):
+        s = _Server(lazer["tmp"])
+        assert s.server.open_timeout == PLAYER_API_TIMEOUT_S >= 60
+        s.server.open_timeout = open_timeout
+        s.server.library = PlayerLibrary(
+            lazer["tmp"] / "lazer" / "client.realm", lazer["files"], loader=slow, evaluate_in_background=False)
+        await s.server.start()
+        try:
+            return await s.get("/api/me/players")
+        except OSError as e:  # the connection dropped with no response
+            return e
+        finally:
+            await s.server.stop()
+
+    status, _, body = asyncio.run(_run(5.0))
+    assert status == 200 and json.loads(body)["plays"] == 3
+    # What websockets' 10 s default did to a cold read of a large library.
+    assert isinstance(asyncio.run(_run(0.3)), OSError)
+
+
+def test_the_avatar_is_served_as_the_image_it_is(lazer):
+    async def _run():
+        s = _Server(lazer["tmp"])
+        s.server.library = _library(lazer)
+        cached = s.config.output_dir / "avatars" / "77.img"
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_bytes(b"\xff\xd8\xff\xe0" + b"\0" * 64)
+        await s.server.start()
+        try:
+            return await s.get("/api/me/avatar/77")
+        finally:
+            await s.server.stop()
+
+    status, headers, _ = asyncio.run(_run())
+    assert status == 200 and headers["Content-Type"] == "image/jpeg"
 
 
 def test_an_unreadable_library_reports_instead_of_failing(tmp_path):
