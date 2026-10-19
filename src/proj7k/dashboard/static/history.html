@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 游玩记录</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">游玩记录</div>
+        <div class="page-sub" id="sub">osu!lazer 里保存的每一局 7K 成绩。点一局看详情、诊断回放、在游戏里重看。</div>
+      </div>
+      <a class="standalone-only" href="/#history">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <input type="text" id="q" placeholder="搜索歌名、艺术家、难度名、谱师">
+        <select id="sort" title="排序">
+          <option value="date">最近</option>
+          <option value="stars">星级高到低</option>
+          <option value="accuracy">准确率高到低</option>
+          <option value="score">分数高到低</option>
+          <option value="ur">UR 低到高（稳）</option>
+        </select>
+        <select id="rank" title="评级">
+          <option value="">全部评级</option>
+          <option>SS</option><option>S</option><option>A</option><option>B</option><option>C</option><option>D</option>
+        </select>
+        <select id="dan" title="段位"><option value="">全部段位</option></select>
+        <select id="mods" title="Mod">
+          <option value="">全部 Mod</option>
+          <option value="none">没开 Mod</option>
+          <option value="rate">变速（DT/HT）</option>
+          <option value="other">其他 Mod</option>
+        </select>
+        <label class="check"><input type="checkbox" id="best"> 每张谱只看最好一局</label>
+      </div>
+      <div class="stats" id="summary"></div>
+    </div>
+
+    <div class="card" style="padding:6px 10px">
+      <div id="list"><div class="empty">正在读取…</div></div>
+      <div style="text-align:center;margin:10px 0"><button class="hidden" id="more">显示更多</button></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    let plays = [];
+    let shown = 100;
+    let chartFilter = null;   // {md5, title}: only this chart's plays (from a chart page)
+
+    const DANS = ["0th", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Gamma", "Azimuth", "Zenith", "Stellium"];
+    $("#dan").append(...DANS.map((d) => el("option", { value: d, text: d })));
+
+    function filtered() {
+      const q = $("#q").value.trim().toLowerCase();
+      const rank = $("#rank").value, dan = $("#dan").value, mods = $("#mods").value;
+      let out = plays.filter((p) => {
+        if (chartFilter && p.md5 !== chartFilter.md5) return false;
+        if (rank && p.rank_label !== rank) return false;
+        if (dan && p.dan !== dan) return false;
+        if (mods === "none" && p.mods.length) return false;
+        if (mods === "rate" && Math.abs(p.clock_rate - 1) < 1e-3) return false;
+        if (mods === "other" && !p.mods.some((m) => !/^(DT|NC|HT|DC)/.test(m))) return false;
+        if (q && !`${p.title} ${p.title_unicode} ${p.artist} ${p.version} ${p.creator}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      if ($("#best").checked) {
+        const best = {};
+        out.forEach((p) => { if (!best[p.md5] || p.score > best[p.md5].score) best[p.md5] = p; });
+        out = Object.values(best);
+      }
+      const key = $("#sort").value;
+      const sorters = {
+        date: (a, b) => b.timestamp - a.timestamp,
+        stars: (a, b) => b.stars - a.stars,
+        accuracy: (a, b) => b.accuracy - a.accuracy,
+        score: (a, b) => b.score - a.score,
+        ur: (a, b) => (a.ur ?? 1e9) - (b.ur ?? 1e9),
+      };
+      return out.sort(sorters[key]);
+    }
+
+    function render() {
+      const rows = filtered();
+      const accs = rows.map((p) => p.accuracy).sort((a, b) => a - b);
+      $("#summary").replaceChildren(...[
+        chartFilter ? el("div", { class: "stat" }, el("div", { class: "k", text: "只看这张谱" }),
+          el("div", { class: "v ellipsis" }, chartFilter.title, " ", el("button", { class: "small", text: "✕", onclick: () => { chartFilter = null; render(); } }))) : null,
+        P7.stat("局数", rows.length), P7.stat("准确率中位数", P7.acc(accs[accs.length >> 1])),
+        P7.stat("通关", rows.filter((p) => p.passed).length), P7.stat("已分析回放", rows.filter((p) => p.analyzed).length)].filter(Boolean));
+      $("#list").replaceChildren(...(rows.length ? rows.slice(0, shown).map((p) => P7.playRow(p)) : [el("div", { class: "empty", text: plays.length ? "没有符合条件的成绩。" : "还没有 7K 成绩。去 osu!lazer 打一局吧。" })]));
+      $("#more").classList.toggle("hidden", rows.length <= shown);
+      $("#more").textContent = `显示更多（还有 ${rows.length - shown} 局）`;
+    }
+
+    ["#q", "#sort", "#rank", "#dan", "#mods", "#best"].forEach((s) => $(s).addEventListener("input", () => { shown = 100; render(); }));
+    $("#more").onclick = () => { shown += 200; render(); };
+
+    async function load() {
+      const d = await P7.api("history");
+      plays = d.plays || [];
+      $("#sub").textContent = d.error && !plays.length ? d.error
+        : `${d.player.name} 在 osu!lazer 里保存的 ${plays.length} 局 7K 成绩。点一局看详情、诊断回放、在游戏里重看。`;
+      render();
+    }
+    P7.onNav((params) => {
+      if (params.md5) chartFilter = { md5: params.md5, title: params.title || "这张谱" };
+      if (params.q !== undefined) $("#q").value = params.q;
+      shown = 100;
+      render();
+    });
+    P7.onShown(load);
+    load();
+  </script>
+</body>
+</html>

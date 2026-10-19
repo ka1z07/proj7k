@@ -499,6 +499,144 @@ async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId) {
     outputJsonAndExit(result);
 }
 
+// Reads a property that older or newer osu!lazer schemas may not have.
+function prop(obj, key, fallback) {
+    if (!obj) return fallback;
+    try {
+        const v = obj[key];
+        return v === undefined || v === null ? fallback : v;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function isoDate(v) {
+    if (!v) return '';
+    try {
+        return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+    } catch (e) {
+        return '';
+    }
+}
+
+function parseJsonField(text, fallback) {
+    if (!text || typeof text !== 'string') return fallback;
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        return fallback;
+    }
+}
+
+function namedFileHash(beatmap, filename) {
+    if (!filename) return '';
+    const want = filename.toLowerCase();
+    const files = prop(prop(beatmap, 'BeatmapSet', null), 'Files', []);
+    for (const f of files) {
+        if ((f.Filename || '').toLowerCase() === want && f.File && f.File.Hash) return f.File.Hash;
+    }
+    return '';
+}
+
+function libraryBeatmap(b) {
+    const meta = prop(b, 'Metadata', null);
+    const set = prop(b, 'BeatmapSet', null);
+    const diff = prop(b, 'Difficulty', null);
+    const author = prop(meta, 'Author', null);
+    return {
+        id: safeIdToString(prop(b, 'ID', '')),
+        md5_hash: prop(b, 'MD5Hash', ''),
+        file_hash: resolveFileHash(b),
+        online_id: prop(b, 'OnlineID', -1),
+        set_online_id: prop(set, 'OnlineID', -1),
+        star_rating: typeof prop(b, 'StarRating', null) === 'number' ? b.StarRating : -1.0,
+        difficulty_name: prop(b, 'DifficultyName', ''),
+        title: prop(meta, 'Title', ''),
+        title_unicode: prop(meta, 'TitleUnicode', ''),
+        artist: prop(meta, 'Artist', ''),
+        artist_unicode: prop(meta, 'ArtistUnicode', ''),
+        creator: prop(author, 'Username', ''),
+        source: prop(meta, 'Source', ''),
+        tags: prop(meta, 'Tags', ''),
+        length_ms: prop(b, 'Length', 0),
+        bpm: prop(b, 'BPM', 0),
+        od: prop(diff, 'OverallDifficulty', 0),
+        hp: prop(diff, 'DrainRate', 0),
+        status: prop(b, 'Status', 0),
+        date_added: isoDate(prop(set, 'DateAdded', null)),
+        last_played: isoDate(prop(b, 'LastPlayed', null)),
+        preview_time: prop(meta, 'PreviewTime', -1),
+        audio_hash: namedFileHash(b, prop(meta, 'AudioFile', '')),
+        background_hash: namedFileHash(b, prop(meta, 'BackgroundFile', '')),
+    };
+}
+
+/**
+ * The player-facing view of the library: every 7K mania chart and every score set on one, with the fields the
+ * dashboard's home, history and chart pages show (judgements, mods, combo, the beatmap's set and cover).
+ * Unlike dump-7k-scores, scores without a replay file are included: a play is history whether or not it was saved.
+ */
+async function handleDumpPlayerData(realmPath) {
+    let realm;
+    let result;
+    try {
+        realm = new Realm({ path: realmPath, readOnly: true });
+        const mania7k = realm.objects('Beatmap').filtered('Ruleset.OnlineID == 3 && Difficulty.CircleSize == 7');
+        const beatmaps = [];
+        for (let i = 0; i < mania7k.length; i++) {
+            if (prop(mania7k[i].BeatmapSet, 'DeletePending', false)) continue;
+            beatmaps.push(libraryBeatmap(mania7k[i]));
+        }
+
+        const scores = [];
+        const all = realm.objects('Score');
+        for (let i = 0; i < all.length; i++) {
+            const s = all[i];
+            if (prop(s, 'DeletePending', false)) continue;
+            const bm = prop(s, 'BeatmapInfo', null);
+            const ruleset = prop(s, 'Ruleset', null) || prop(bm, 'Ruleset', null);
+            if (!bm || prop(ruleset, 'OnlineID', -1) !== 3) continue;
+            if (Math.abs(prop(prop(bm, 'Difficulty', null), 'CircleSize', 0) - 7.0) > 0.01) continue;
+
+            let replayHash = '';
+            for (const f of prop(s, 'Files', [])) {
+                if ((f.Filename || '').toLowerCase().endsWith('.osr') && f.File && f.File.Hash) {
+                    replayHash = f.File.Hash;
+                    break;
+                }
+            }
+            const user = prop(s, 'User', null);
+            const pp = prop(s, 'PP', null);
+            scores.push({
+                id: safeIdToString(prop(s, 'ID', '')),
+                online_id: prop(s, 'OnlineID', -1),
+                player_name: prop(user, 'Username', '') || 'Unknown',
+                user_id: prop(user, 'OnlineID', -1),
+                country: prop(user, 'CountryCode', ''),
+                date: isoDate(prop(s, 'Date', null)),
+                total_score: prop(s, 'TotalScore', 0),
+                accuracy: prop(s, 'Accuracy', 0),
+                rank: prop(s, 'Rank', -1),
+                max_combo: prop(s, 'MaxCombo', 0),
+                pp: typeof pp === 'number' ? pp : null,
+                mods: parseJsonField(prop(s, 'Mods', '') || prop(s, 'ModsJson', ''), []),
+                statistics: parseJsonField(prop(s, 'Statistics', '') || prop(s, 'StatisticsJson', ''), {}),
+                maximum_statistics: parseJsonField(
+                    prop(s, 'MaximumStatistics', '') || prop(s, 'MaximumStatisticsJson', ''), {}),
+                replay_file_hash: replayHash,
+                beatmap_md5: prop(bm, 'MD5Hash', '') || prop(s, 'BeatmapHash', ''),
+                beatmap: libraryBeatmap(bm),
+            });
+        }
+        result = { success: true, beatmaps: beatmaps, scores: scores };
+    } catch (err) {
+        result = { success: false, error: err.message };
+    } finally {
+        if (realm && !realm.isClosed) realm.close();
+    }
+    outputJsonAndExit(result);
+}
+
 async function main() {
     const { command, realmPath, onlineId, fileHash, setId, userName } = parseArgs();
 
@@ -517,6 +655,9 @@ async function main() {
             break;
         case 'dump-7k-scores':
             await handleDump7kScores(realmPath, userName);
+            break;
+        case 'dump-player-data':
+            await handleDumpPlayerData(realmPath);
             break;
         case 'dump-collections':
             await handleDumpCollections(realmPath);

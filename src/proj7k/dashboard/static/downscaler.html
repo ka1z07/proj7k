@@ -20,6 +20,7 @@
       <h2>输入</h2>
       <div class="choice">
         <label><input type="radio" name="src" value="game" checked> 游戏当前谱面</label>
+        <label class="hidden" id="pickedOpt"><input type="radio" name="src" value="picked"> <span id="pickedName">选中的谱</span></label>
         <label><input type="radio" name="src" value="manual"> 指定谱面</label>
       </div>
       <div id="gameSrc" class="field">
@@ -93,10 +94,12 @@
     let danTiers = [];
     let danTouched = false;
 
+    // A chart picked on the library, chart or play pages: {md5, title, dan}.
+    let picked = null;
     function showSource() {
       const game = source() === "game";
       $("#gameSrc").classList.toggle("hidden", !game);
-      $("#manualSrc").classList.toggle("hidden", game);
+      $("#manualSrc").classList.toggle("hidden", source() !== "manual");
       refreshRunButton();
     }
     // Until the player picks a source, it follows the game: its chart when there is one, else a file of their own.
@@ -122,14 +125,25 @@
 
     // A practice chart one tier below the game's chart, until the player picks a tier themselves.
     function suggestDan() {
-      if (!gameChart || !danTiers.length) { $("#danHint").textContent = ""; return; }
-      const i = danTiers.findIndex((t) => t.name === gameChart.dan_tier);
+      const dan = source() === "picked" ? picked && picked.dan : gameChart && gameChart.dan_tier;
+      if (!dan || !danTiers.length) { $("#danHint").textContent = ""; return; }
+      const i = danTiers.findIndex((t) => t.name === dan);
       if (i < 0) return;
       const suggested = danTiers[Math.max(0, i - 1)].name;
       if (!danTouched) $("#dan").value = suggested;
       if (!srTouched) $("#sr").value = danTiers[Math.max(0, i - 1)].stars.toFixed(1);
-      $("#danHint").textContent = `（当前谱 ${gameChart.dan_tier}，建议 ${suggested}）`;
+      $("#danHint").textContent = `（当前谱 ${dan}，建议 ${suggested}）`;
     }
+    P7.onNav((params) => {
+      if (!params.md5) return;
+      picked = params;
+      $("#pickedName").textContent = `选中的谱：${params.title || params.md5}`;
+      $("#pickedOpt").classList.remove("hidden");
+      sourceTouched = true;
+      danTouched = false; srTouched = false;
+      setSource("picked");
+      suggestDan();
+    });
     let srTouched = false;
     $("#dan").addEventListener("change", () => { danTouched = true; });
     $("#sr").addEventListener("input", () => { srTouched = true; });
@@ -207,7 +221,7 @@
       const fromGame = source() === "game";
       const params = {
         // The game's chart goes by its MD5: osu!lazer finds it, with its audio and background for the .osz.
-        input: fromGame ? gameChart.md5_hash : $("#input").value,
+        input: fromGame ? gameChart.md5_hash : source() === "picked" ? picked.md5 : $("#input").value,
         target_dan: mode === "dan" ? $("#dan").value : "",
         target_sr: mode === "sr" ? $("#sr").value : "",
         mode: keepMode(),
@@ -222,7 +236,7 @@
       $("#results").replaceChildren();
       panel.reset();
       const job = await P7.startJob("downscale", params, {
-        uploads: !fromGame && drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
+        uploads: source() === "manual" && drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
       });
       panel.update(job);
       running = false;

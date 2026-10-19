@@ -551,11 +551,13 @@ def resolve_lazer_replay(
     index: int = 0,
     client: Any = None,
     beatmap_file_hash: Optional[str] = None,
+    replay_file_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     The player's `index`-th most recent 7K replay in the osu!lazer library, as its replay and beatmap files
     in lazer's content-addressed store: `{"replay": Path, "beatmap": Path, "title", "difficulty_name", "date",
-    "player_name"}`. With `beatmap_file_hash`, only replays of that chart count. Without a player name, the player
+    "player_name"}`. With `beatmap_file_hash`, only replays of that chart count; with `replay_file_hash`, that one replay
+    (the player and index are then ignored). Without a player name, the player
     is the one with the most 7K replays in the library: the person whose game it is, not a leaderboard replay they
     watched.
     """
@@ -573,6 +575,11 @@ def resolve_lazer_replay(
         s for s in client.dump_7k_scores(realm_path=target_realm, user=player_name or None)
         if s.get("beatmap_file_hash") and s.get("replay_file_hash")
     ]
+    if replay_file_hash:
+        scores = [s for s in scores if s["replay_file_hash"] == replay_file_hash]
+        if not scores:
+            raise LookupError("this replay is not in the osu!lazer library")
+        player_name, index = scores[0].get("player_name") or "", 0
     if not player_name:
         counts = Counter(s.get("player_name") or "" for s in scores)
         if not counts:

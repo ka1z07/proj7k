@@ -29,6 +29,7 @@
     <div class="card" data-pane="replay">
       <h2>回放诊断</h2>
       <div class="choice">
+        <label class="hidden" id="playOpt"><input type="radio" name="src" value="play"> <span id="playName">选中的一局</span></label>
         <label><input type="radio" name="src" value="current" checked> 当前谱面的最近一局</label>
         <label><input type="radio" name="src" value="lazer"> 最近回放（任意谱面）</label>
         <label><input type="radio" name="src" value="files"> 回放文件 + 谱面文件</label>
@@ -121,10 +122,12 @@
     const dropBeatmap = P7.dropZone($("#dropBeatmap"), ".osu", (f) => { $("#rpBeatmap").disabled = !!f; });
     const runButtons = ["#rpRun", "#pfRun", "#hbRun", "#imRun"].map((s) => $(s));
 
-    document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => {
-      document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === b));
-      document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== b.dataset.tab));
-    }));
+    function showTab(tab) {
+      document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x.dataset.tab === tab));
+      document.querySelectorAll("[data-pane]").forEach((p) => p.classList.toggle("hidden", p.dataset.pane !== tab));
+    }
+    document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+    let pickedReplay = "";
     const source = () => document.querySelector("input[name=src]:checked").value;
     let gameChart = null;
     let sourceTouched = false;
@@ -132,7 +135,7 @@
     function showSource() {
       const src = source();
       $("#gameSrc").classList.toggle("hidden", src !== "current");
-      $("#lazerSrc").classList.toggle("hidden", src === "files");
+      $("#lazerSrc").classList.toggle("hidden", src === "files" || src === "play");
       $("#fileSrc").classList.toggle("hidden", src !== "files");
       refreshRunButtons();
     }
@@ -189,7 +192,8 @@
         el("p", { class: "hint", text: r.rationale }),
         r.candidates.length ? el("table", {},
           el("tr", {}, el("th", { text: "谱面" }), el("th", { class: "num", text: "星级" }), el("th", { text: "段位" })),
-          r.candidates.map((c) => el("tr", {}, el("td", { text: `${c.artist} - ${c.title} [${c.difficulty_name}]` }),
+          r.candidates.map((c) => el("tr", { class: c.md5_hash ? "clickable" : "", title: c.md5_hash ? "打开谱面详情" : "", onclick: () => P7.openChart(c.md5_hash) },
+            el("td", { text: `${c.artist} - ${c.title} [${c.difficulty_name}]` }),
             el("td", { class: "num", text: `${c.star_rating.toFixed(2)}★` }), el("td", { text: c.dan_tier }))))
           : el("div", { class: "hint", text: "曲库里没有找到合适的谱面（需要 osu!lazer 曲库）。" }))));
     }
@@ -330,8 +334,9 @@
     $("#rpRun").onclick = async () => {
       const src = source();
       const params = {
-        source: src,
+        source: src === "play" ? "lazer" : src,
         beatmap_hash: src === "current" && gameChart ? gameChart.file_hash : "",
+        replay_hash: src === "play" ? pickedReplay : "",
         player: $("#rpPlayer").value, index: $("#rpIndex").value,
         replay: $("#rpReplay").value, beatmap: $("#rpBeatmap").value,
         view: $("#rpView").checked, save: $("#rpSave").checked, bundle: $("#rpBundle").checked,
@@ -343,6 +348,26 @@
       $("#results").replaceChildren(...replayResult(job.result));
       if (params.save) loadPlayers();
     };
+
+    // Asked for from another page: a play to diagnose (from the history / play pages), or a tab to open.
+    P7.onNav((params) => {
+      if (params.tab) showTab(params.tab);
+      if (params.replay_hash) {
+        pickedReplay = params.replay_hash;
+        $("#playName").textContent = params.title ? `选中的一局：${params.title}` : "选中的一局";
+        $("#playOpt").classList.remove("hidden");
+        sourceTouched = true;
+        document.querySelector("input[name=src][value=play]").checked = true;
+        if (params.bundle !== undefined) $("#rpBundle").checked = !!params.bundle;
+        showSource();
+        if (params.run && !running) $("#rpRun").click();
+      } else if (params.source === "current") {
+        sourceTouched = true;
+        document.querySelector("input[name=src][value=current]").checked = true;
+        showSource();
+      }
+      if (params.recommend) { $("#pfRecommend").value = params.recommend; if (!running) $("#pfRun").click(); }
+    });
 
     $("#pfRun").onclick = async () => {
       const job = await run("profile_player", {

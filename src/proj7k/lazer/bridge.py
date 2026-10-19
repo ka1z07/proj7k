@@ -212,6 +212,32 @@ class RealmBridgeClient:
 
         return res.get("scores", [])
 
+    def dump_player_data(
+        self,
+        realm_path: Optional[Path] = None,
+        auto_setup: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Every 7K mania chart and every score set on one, for the dashboard's player pages (ADR-0034):
+        `{"beatmaps": [...], "scores": [...]}`. Read-only; works while osu!lazer is running.
+        """
+        if auto_setup:
+            self.ensure_installed()
+
+        target_realm = realm_path or self.default_realm_path
+        cmd = [
+            self.node_executable,
+            str(self.bridge_script),
+            "dump-player-data",
+            "--realm",
+            str(target_realm),
+        ]
+        res = self._run_command(cmd)
+        if not res.get("success", False):
+            raise RealmBridgeError(res.get("error", "Failed to read the player's library"))
+
+        return {"beatmaps": res.get("beatmaps", []), "scores": res.get("scores", [])}
+
     def dump_collections(
         self,
         realm_path: Optional[Path] = None,

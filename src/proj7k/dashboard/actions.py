@@ -379,6 +379,7 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     source = _text(params, "source")
     if source in ("lazer", "current"):
         # "current": the latest replay of the chart the game has selected (the page sends its file hash).
+        # `replay_hash`: one play the player picked (from the history or chart pages).
         chart_hash = _text(params, "beatmap_hash") if source == "current" else ""
         if source == "current" and not chart_hash:
             raise ValueError("还没有检测到游戏里的当前谱面：在 osu!lazer 里选一张 7K 谱")
@@ -386,6 +387,7 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
             found = resolve_lazer_replay(
                 _text(params, "player") or None, realm_path=config.realm_path, files_dir=config.lazer_files_dir,
                 index=_int(params, "index") or 0, beatmap_file_hash=chart_hash or None,
+                replay_file_hash=_text(params, "replay_hash") or None,
             )
         except LookupError as e:
             if chart_hash:

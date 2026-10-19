@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 曲库</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page" style="max-width:1400px">
+    <div class="page-header">
+      <div>
+        <div class="page-title">曲库</div>
+        <div class="page-sub" id="sub">osu!lazer 里的全部 7K 谱，按引擎星级、段位和主技法。点一张看详情。</div>
+      </div>
+      <a class="standalone-only" href="/#library">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <input type="text" id="q" placeholder="搜索歌名、艺术家、难度名、谱师、标签">
+        <select id="sort" title="排序">
+          <option value="added">最近加入</option>
+          <option value="played">最近玩过</option>
+          <option value="stars">星级高到低</option>
+          <option value="stars_asc">星级低到高</option>
+          <option value="plays">玩得最多</option>
+          <option value="title">歌名</option>
+        </select>
+        <select id="dan" title="段位"><option value="">全部段位</option></select>
+        <select id="skill" title="主技法"><option value="">全部技法</option></select>
+        <select id="played" title="玩过没有">
+          <option value="">玩过和没玩过</option>
+          <option value="yes">玩过</option>
+          <option value="no">没玩过</option>
+          <option value="unpassed">没过 A 的</option>
+        </select>
+        <button class="small" id="forMe" title="和你画像实力相近（±0.5★）而且还没玩过的谱">适合我练的</button>
+      </div>
+      <div class="hint" id="count" style="margin-top:8px"></div>
+    </div>
+
+    <div class="chart-grid" id="grid"><div class="empty">正在读取…</div></div>
+    <div style="text-align:center;margin:10px 0"><button class="hidden" id="more">显示更多</button></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    let charts = [];
+    let level = null;
+    let shown = 120;
+    let nearLevel = false;
+
+    const DANS = ["0th", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "Gamma", "Azimuth", "Zenith", "Stellium"];
+    $("#dan").append(...DANS.map((d) => el("option", { value: d, text: d })));
+    $("#skill").append(...Object.entries(P7.SKILL_LABELS).map(([k, v]) => el("option", { value: k, text: v })));
+
+    function filtered() {
+      const q = $("#q").value.trim().toLowerCase();
+      const dan = $("#dan").value, skill = $("#skill").value, played = $("#played").value;
+      const out = charts.filter((c) => {
+        if (dan && c.dan !== dan) return false;
+        if (skill && c.dominant !== skill) return false;
+        if (played === "yes" && !c.plays) return false;
+        if (played === "no" && c.plays) return false;
+        if (played === "unpassed" && (!c.plays || ["A", "S", "SS"].includes(c.best_rank))) return false;
+        if (nearLevel && (level === null || c.plays || Math.abs(c.stars - level) > 0.5)) return false;
+        if (q && !`${c.title} ${c.title_unicode} ${c.artist} ${c.artist_unicode} ${c.version} ${c.creator}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+      const by = {
+        added: (a, b) => (b.date_added || "").localeCompare(a.date_added || ""),
+        played: (a, b) => (b.last_played || "").localeCompare(a.last_played || ""),
+        stars: (a, b) => b.stars - a.stars,
+        stars_asc: (a, b) => a.stars - b.stars,
+        plays: (a, b) => b.plays - a.plays,
+        title: (a, b) => (a.title_unicode || a.title).localeCompare(b.title_unicode || b.title, "zh-CN"),
+      };
+      return out.sort(by[$("#sort").value]);
+    }
+
+    function card(c) {
+      return el("div", { class: "chart-card", onclick: () => P7.openChart(c.md5), title: `${c.artist} - ${c.title} [${c.version}]` },
+        P7.cover(c.md5, c.has_cover, 480, "card-cover"),
+        el("div", { class: "body" },
+          el("div", { class: "ellipsis" }, P7.chartTitle(c)),
+          el("div", { class: "hint ellipsis", text: `${c.artist_unicode || c.artist} · ${c.version}` }),
+          el("div", { class: "meta" },
+            el("span", {}, el("b", { style: "color:var(--text-main)", text: P7.stars(c.stars) }), ` ${c.dan || ""}`,
+              c.stars_source === "lazer" ? el("span", { class: "warn", title: "还没用引擎读过：这是 osu! 自己的星级，后台正在换算", text: " *" }) : null),
+            el("span", { text: c.dominant ? P7.skillName(c.dominant) : "" })),
+          el("div", { class: "meta" },
+            el("span", { text: c.plays ? `玩过 ${c.plays} 次` : "没玩过" }),
+            c.best_rank ? el("span", {}, P7.rankBadge(c.best_rank), ` ${P7.acc(c.best_accuracy)}`) : el("span", { text: c.creator ? `谱师 ${c.creator}` : "" }))));
+    }
+
+    function render() {
+      const rows = filtered();
+      $("#count").textContent = `${rows.length} 张谱${nearLevel ? `（画像实力 ${level === null ? "未知" : level.toFixed(2) + "★"} ±0.5★、没玩过的）` : ""}`;
+      $("#grid").replaceChildren(...(rows.length ? rows.slice(0, shown).map(card) : [el("div", { class: "empty", text: charts.length ? "没有符合条件的谱。" : "曲库里还没有 7K 谱。" })]));
+      $("#more").classList.toggle("hidden", rows.length <= shown);
+      $("#more").textContent = `显示更多（还有 ${rows.length - shown} 张）`;
+      $("#forMe").classList.toggle("primary", nearLevel);
+    }
+
+    ["#q", "#sort", "#dan", "#skill", "#played"].forEach((s) => $(s).addEventListener("input", () => { shown = 120; render(); }));
+    $("#more").onclick = () => { shown += 240; render(); };
+    $("#forMe").onclick = () => {
+      if (level === null) { alert("还没有画像：先在「回放与画像」里导入回放。"); return; }
+      nearLevel = !nearLevel; shown = 120; render();
+    };
+
+    async function load() {
+      const d = await P7.api("library");
+      charts = d.charts || [];
+      level = d.level;
+      $("#sub").textContent = d.error && !charts.length ? d.error
+        : `osu!lazer 里的 ${charts.length} 张 7K 谱，按引擎星级、段位和主技法。${d.pending_stars ? `${d.pending_stars} 张还没同步过，后台正在用引擎换算（标 *）。` : ""}`;
+      render();
+    }
+    P7.onNav((params) => {
+      if (params.dan !== undefined) $("#dan").value = params.dan;
+      if (params.skill !== undefined) $("#skill").value = params.skill;
+      if (params.q !== undefined) $("#q").value = params.q;
+      shown = 120;
+      render();
+    });
+    P7.onShown(load);
+    load();
+  </script>
+</body>
+</html>

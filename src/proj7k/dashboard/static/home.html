@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 主页</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page" id="page">
+    <div class="empty" id="loading">正在读取 osu!lazer 的游玩记录…</div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    let data = null;
+
+    // --- pieces -----------------------------------------------------------------------------------------------
+    function hero(d) {
+      const pl = d.player, prof = d.profile && d.profile.all_time, t = d.totals;
+      const avatar = pl.avatar ? el("img", { class: "avatar", src: pl.avatar, alt: "", onerror: (e) => e.target.replaceWith(el("div", { class: "avatar" })) }) : el("div", { class: "avatar" });
+      const lastCover = d.recent_plays[0];
+      return el("div", { class: "hero" },
+        lastCover ? P7.cover(lastCover.md5, lastCover.has_cover, 1280) : null,
+        el("div", { class: "hero-body" }, avatar,
+          el("div", { style: "flex:1;min-width:220px" },
+            el("div", { class: "hero-title", text: pl.name }),
+            el("div", { class: "hero-sub" },
+              pl.country ? `${flag(pl.country)} ${pl.country} · ` : "",
+              t.first_play ? `${new Date(t.first_play).toLocaleDateString("zh-CN")} 开始记录 · ` : "",
+              t.last_play ? `最近游玩 ${P7.ago(t.last_play)}` : "还没有游玩记录")),
+          el("div", { style: "text-align:right" },
+            el("div", { class: "hint", text: "画像实力（全部回放）" }),
+            el("div", { class: "big", text: prof ? `${prof.overall_dan} · ${prof.overall_stars.toFixed(2)}★` : "—" }),
+            prof ? el("div", { class: "hint", text: `擅长 ${P7.skillName(prof.dominant)} · 短板 ${P7.skillName(prof.bottleneck)}` })
+              : el("div", { class: "hint", text: "导入回放后显示" }),
+            el("div", { class: "actions", style: "justify-content:flex-end;margin-top:8px" },
+              pl.profile_url ? el("a", { href: pl.profile_url, target: "_blank", rel: "noopener" }, el("button", { class: "small", text: "osu! 官网主页" })) : null,
+              el("button", { class: "small", text: "完整画像", onclick: () => P7.navigate("profiler", { tab: "player" }) })))));
+    }
+
+    function flag(cc) {
+      if (!/^[A-Z]{2}$/.test(cc || "")) return "";
+      return String.fromCodePoint(...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+    }
+
+    function totals(d) {
+      const t = d.totals;
+      return el("div", { class: "card" }, el("h2", { text: "总览" }),
+        el("div", { class: "stats" },
+          P7.stat("游玩次数", P7.num(t.plays)), P7.stat("玩过的谱", P7.num(t.charts)), P7.stat("游玩时长", P7.duration(t.play_time_s)),
+          P7.stat("准确率中位数", P7.acc(t.median_accuracy)), P7.stat("最高连击", `${P7.num(t.max_combo)}x`), P7.stat("总击打", P7.num(t.hits)),
+          P7.stat("本地曲库", `${P7.num(d.library_charts)} 张 7K`)),
+        el("div", { class: "row", style: "gap:18px;margin-top:6px" },
+          Object.entries(t.ranks).map(([k, v]) => el("div", { class: "row", style: "gap:6px" }, P7.rankBadge(k), el("span", { class: "big", style: "font-size:1.1rem", text: v })))),
+        el("p", { class: "hint", text: "评级按每张谱的最好成绩算。" }));
+    }
+
+    function trend(d) {
+      const r = d.recent, p = d.previous;
+      function delta(a, b, fmt, better = 1) {
+        if (a === null || b === null || a === undefined || b === undefined) return "";
+        const x = a - b;
+        if (Math.abs(x) < 1e-9) return " ±0";
+        return el("span", { class: x * better > 0 ? "good" : "bad", text: ` ${x > 0 ? "+" : "−"}${fmt(Math.abs(x))}` });
+      }
+      const row = (k, a, b, fmt, better) => el("tr", {}, el("td", { text: k }), el("td", { class: "num" }, a === null || a === undefined ? "—" : fmt(a), delta(a, b, fmt, better)),
+        el("td", { class: "num muted", text: b === null || b === undefined ? "—" : fmt(b) }));
+      return el("div", { class: "card" }, el("h2", { text: "最近 30 天" }),
+        el("table", {}, el("tr", {}, el("th", { text: "" }), el("th", { class: "num", text: "近 30 天" }), el("th", { class: "num", text: "前 30 天" })),
+          row("游玩次数", r.plays, p.plays, (x) => String(Math.round(x))),
+          row("准确率中位数", r.median_accuracy, p.median_accuracy, (x) => `${(x * 100).toFixed(2)}%`),
+          row("谱面星级中位数", r.median_stars, p.median_stars, (x) => `${x.toFixed(2)}★`),
+          row("通关最高星级", r.best_stars, p.best_stars, (x) => `${x.toFixed(2)}★`)),
+        d.profile && d.profile.recent ? el("p", { class: "hint", style: "margin-top:8px", text: `近 30 天画像实力 ${d.profile.recent.overall_dan} · ${d.profile.recent.overall_stars.toFixed(2)}★（${d.profile.recent.matches} 局）` }) : null);
+    }
+
+    function skills(d) {
+      const prof = d.profile;
+      const card = el("div", { class: "card" }, el("h2", { text: "八项技法" }));
+      if (!prof || !prof.all_time) {
+        card.append(el("p", { class: "hint", text: "画像来自回放分析：还没有导入过回放。" }),
+          el("button", { class: "small primary", text: "去导入回放", onclick: () => P7.navigate("profiler", { tab: "import" }) }));
+        return card;
+      }
+      card.append(P7.skillBars(prof.all_time.skills, prof.recent ? prof.recent.skills : null),
+        el("p", { class: "hint", style: "margin-top:6px", text: prof.recent ? "灰条是全部回放的实力，彩条是近 30 天。" : "全部回放的实力。" }),
+        el("div", { class: "actions", style: "margin-top:6px" },
+          el("button", { class: "small", text: "发力习惯", onclick: () => P7.navigate("profiler", { tab: "habits" }) }),
+          el("button", { class: "small", text: `练短板：${P7.skillName(prof.all_time.bottleneck)}`, onclick: () => P7.navigate("profiler", { tab: "player", recommend: "bottleneck" }) })));
+      return card;
+    }
+
+    // Every play's stars over time: one dot per play, the dan ladder as reference lines.
+    function progression(d) {
+      const pts = d.progression;
+      const card = el("div", { class: "card" }, el("h2", { text: "进步曲线（每局谱面的星级）" }));
+      if (pts.length < 2) { card.append(el("div", { class: "hint", text: "多打几局就会有曲线。" })); return card; }
+      const W = 900, H = 260, L = 40, R = 46, T = 10, B = 24;
+      const t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1;
+      const smax = Math.max(...pts.map((p) => p.stars)) * 1.06, smin = Math.max(0, Math.min(...pts.map((p) => p.stars)) * 0.9);
+      const x = (t) => L + ((t - t0) / Math.max(1, t1 - t0)) * (W - L - R);
+      const y = (s) => T + (1 - (s - smin) / Math.max(0.1, smax - smin)) * (H - T - B);
+      const svgNode = P7.svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart-svg", role: "img", "aria-label": "每局谱面星级随时间变化" });
+      let lastLabel = Infinity;  // tiers close together on the scale keep their line but share a label slot
+      d.dan_stars.filter((t) => t.stars >= smin && t.stars <= smax).forEach((t) => {
+        svgNode.append(P7.svg("line", { x1: L, x2: W - R, y1: y(t.stars), y2: y(t.stars), stroke: "#1e293b", "stroke-width": 1 }));
+        if (lastLabel - y(t.stars) >= 13) { svgNode.append(P7.svg("text", { x: W - R + 4, y: y(t.stars) + 4 }, t.name)); lastLabel = y(t.stars); }
+      });
+      const ticks = 5;
+      for (let i = 0; i <= ticks; i++) {
+        const t = t0 + ((t1 - t0) * i) / ticks;
+        svgNode.append(P7.svg("text", { x: x(t), y: H - 6, "text-anchor": i === 0 ? "start" : i === ticks ? "end" : "middle" },
+          new Date(t * 1000).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })));
+      }
+      // A rolling median of the last 15 plays reads as the trend through the scatter.
+      const med = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - 14), i + 1).map((p) => p.stars).sort((a, b) => a - b); return w[w.length >> 1]; });
+      svgNode.append(P7.svg("polyline", { points: pts.map((p, i) => `${x(p.t)},${y(med[i])}`).join(" "), fill: "none", stroke: "#c084fc", "stroke-width": 2, "stroke-linejoin": "round" }));
+      pts.forEach((p) => {
+        const dot = P7.svg("circle", { cx: x(p.t), cy: y(p.stars), r: 4, fill: p.rank === "F" ? "#64748b" : "#38bdf8", "fill-opacity": 0.75, stroke: "#090d16", "stroke-width": 2, class: "clickable" });
+        dot.addEventListener("mousemove", (e) => P7.tip.show(e, [`${p.stars.toFixed(2)}★ · ${p.rank} · ${(p.accuracy * 100).toFixed(2)}%`, new Date(p.t * 1000).toLocaleString("zh-CN", { hour12: false }), "点击查看这局"]));
+        dot.addEventListener("mouseleave", P7.tip.hide);
+        dot.addEventListener("click", () => P7.openPlay(p.id));
+        svgNode.append(dot);
+      });
+      card.append(svgNode, el("div", { class: "judge-legend" },
+        el("span", {}, el("span", { class: "sw", style: "background:#38bdf8" }), "一局（点击查看）"),
+        el("span", {}, el("span", { class: "sw", style: "background:#c084fc" }), "最近 15 局的中位数"),
+        el("span", { class: "muted", text: "横线是段位星级" })));
+      return card;
+    }
+
+    function activity(d) {
+      const byDay = Object.fromEntries(d.activity.map((a) => [a.day, a.plays]));
+      const max = Math.max(1, ...d.activity.map((a) => a.plays));
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const start = new Date(today); start.setDate(start.getDate() - 7 * 26 + 1 - start.getDay());
+      const grid = el("div", { class: "heatmap" });
+      for (let dt = new Date(start); dt <= today; dt.setDate(dt.getDate() + 1)) {
+        const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+        const n = byDay[key] || 0;
+        const cell = el("div", { style: n ? `background: rgba(56, 189, 248, ${(0.25 + 0.75 * n / max).toFixed(2)})` : "" });
+        const label = `${key}：${n} 局`;
+        cell.addEventListener("mousemove", (e) => P7.tip.show(e, [label]));
+        cell.addEventListener("mouseleave", P7.tip.hide);
+        grid.append(cell);
+      }
+      const days = d.activity.length;
+      return el("div", { class: "card" }, el("h2", { text: "活跃度（近半年）" }), grid,
+        el("p", { class: "hint", text: `${days} 天有游玩，颜色越亮那天打得越多（最多 ${max} 局）。` }));
+    }
+
+    function dans(d) {
+      if (!d.dans.length) return null;
+      return el("div", { class: "card" }, el("h2", { text: "各段位的谱" }),
+        el("table", {}, el("tr", {}, el("th", { text: "段位" }), el("th", { class: "num", text: "玩过" }), el("th", { class: "num", text: "通关" }),
+          el("th", { class: "num", text: "A 以上" }), el("th", { class: "num", text: "最好准确率" }), el("th", { text: "" })),
+          d.dans.map((r) => el("tr", { class: "clickable", onclick: () => P7.navigate("library", { dan: r.dan }), title: `在曲库里看 ${r.dan} 的谱` },
+            el("td", { text: r.dan }), el("td", { class: "num", text: r.charts }), el("td", { class: "num", text: r.passed }),
+            el("td", { class: "num", text: r.a_or_better }), el("td", { class: "num", text: P7.acc(r.best_accuracy) }),
+            el("td", { class: "hint", text: "曲库 →" })))),
+        el("p", { class: "hint", text: "段位按引擎星级算（谱面星级就近归到段位）；变速局按变速后的星级。" }));
+    }
+
+    function list(title, plays, more) {
+      return el("div", { class: "card" }, el("div", { class: "row", style: "justify-content:space-between" }, el("h2", { text: title }), more),
+        plays.length ? plays.map((p) => P7.playRow(p)) : el("div", { class: "hint", text: "还没有。" }));
+    }
+
+    function nowPlaying(state) {
+      const c = state.chart;
+      if (!c) return el("div", { class: "card hidden" });
+      return el("div", { class: "card" }, el("h2", { text: "游戏里选中的谱" }), P7.gameChartLine(state),
+        el("div", { class: "actions", style: "margin-top:8px" },
+          el("button", { class: "small primary", text: "谱面详情", onclick: () => P7.openChart(c.md5_hash) }),
+          el("button", { class: "small", text: "实时雷达", onclick: () => P7.navigate("live") }),
+          el("button", { class: "small", text: "降一阶练习", onclick: () => P7.navigate("downscaler", { md5: c.md5_hash }) }),
+          el("button", { class: "small", text: "诊断最近一局", onclick: () => P7.navigate("profiler", { tab: "replay", source: "current" }) })));
+    }
+    let nowCard = el("div", { class: "card hidden" });
+    P7.onGameChart((state) => { const n = nowPlaying(state); nowCard.replaceWith(n); nowCard = n; });
+
+    function render(d) {
+      if (d.error && !d.totals.plays) {
+        $("#page").replaceChildren(el("div", { class: "card" }, el("h2", { text: "读不到游玩记录" }), el("p", { class: "warn", text: d.error }),
+          el("p", { class: "hint", text: "主页读的是 osu!lazer 自己的数据库（只读）。确认 osu!lazer 装在默认位置，或在「曲库同步」里看数据库路径。" })));
+        return;
+      }
+      $("#page").replaceChildren(hero(d), nowCard,
+        el("div", { class: "grid" }, totals(d), trend(d)),
+        progression(d),
+        el("div", { class: "grid" }, skills(d), activity(d)),
+        el("div", { class: "grid" },
+          list("最难的通关", d.top_plays, null),
+          list("最近游玩", d.recent_plays, el("button", { class: "small", text: "全部记录 →", onclick: () => P7.navigate("history") }))),
+        dans(d));
+    }
+
+    async function load() {
+      try {
+        data = await P7.api("overview");
+        render(data);
+      } catch (e) {
+        $("#page").replaceChildren(el("div", { class: "empty", text: `读取失败：${e}` }));
+      }
+    }
+    load();
+    // A play just set in the game shows up when the page is looked at again.
+    P7.onShown(load);
+  </script>
+</body>
+</html>
