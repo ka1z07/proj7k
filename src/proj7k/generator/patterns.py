@@ -199,7 +199,7 @@ class PatternSampler:
 
     def sample(self, rows: Sequence[Tuple[float, int]], rng: np.random.Generator,
                beats: Optional[Sequence[float]] = None, draws: Optional[Sequence[float]] = None,
-               styles: Optional[Sequence[str]] = None) -> List[int]:
+               styles: Optional[Sequence[str]] = None, shapes: Optional[Sequence] = None) -> List[int]:
         """Masks for rows given as (time ms, size). `beats` places each row on the beat grid (in beats from
         the first beat); without it no stretch is repeated.
 
@@ -209,7 +209,12 @@ class PatternSampler:
         moves smoothly with the intensity it bisects.
 
         `styles` names each row's section style (`STYLES`), which leans the model toward one kind of
-        pattern without leaving what mappers write."""
+        pattern without leaving what mappers write.
+
+        `shapes` gives a row a list of tests on (mask, previous row, the row before) from a design brief
+        (`brief.predicates`): the row is drawn among the masks the model allows that pass the first test
+        any of them passes, so a section keeps to its key pattern; rows with none, or none passing, are
+        drawn as usual."""
         stretch_seed = int(rng.integers(1 << 31))
         n_rows = len(rows)
         out: List[int] = [0] * n_rows
@@ -234,7 +239,8 @@ class PatternSampler:
             if m is None:
                 u = float(draws[i]) if draws is not None else float(rng.random())
                 style = styles[i] if styles is not None else "plain"
-                m = self._draw(contexts(n, g1, r1, g2, r2), n, t, last_hit, u, style, r1, r2)
+                tests = shapes[i] if shapes is not None else None
+                m = self._draw(contexts(n, g1, r1, g2, r2), n, t, last_hit, u, style, r1, r2, tests)
             out[i] = m
             for c in range(COLUMNS):
                 if m >> c & 1:
@@ -244,10 +250,16 @@ class PatternSampler:
         return out
 
     def _draw(self, keys, n: int, t: float, last_hit: np.ndarray, u: float,
-              style: str = "plain", r1: int = 0, r2: int = 0) -> int:
+              style: str = "plain", r1: int = 0, r2: int = 0, tests=None) -> int:
         masks, p = self.model.distribution(keys, n)
         lean = STYLES.get(style)
-        if lean and r1:
+        if tests and r1:
+            for test in tests:
+                ok = np.array([bool(test(mk, r1, r2)) for mk in masks])
+                if (p * ok).sum() > 0:
+                    p = p * ok
+                    break
+        elif lean and r1:
             p = p * np.exp(np.array([_lean(mk, r1, r2, lean) for mk in masks]))
         if self.min_jack_ms > 0:
             blocked = 0

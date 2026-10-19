@@ -24,7 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
+from proj7k.generator import brief, stems
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
+from proj7k.generator.stems import STEM_NAMES
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
 
 logger = logging.getLogger("proj7k.generator")
@@ -74,6 +76,11 @@ class GenerateRun:
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
+            "design": [{"bars": [s.first_bar, s.last_bar], "technique": s.technique, "pattern": s.pattern}
+                       for s in (r.design.sections if r.design else [])],
+            "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
+            "leads": [{"first_bar": l.first_bar, "last_bar": l.last_bar, "stem": l.stem,
+                       "name": STEM_NAMES.get(l.stem, l.stem)} for l in r.leads],
         }
 
 
@@ -178,13 +185,21 @@ def format_report(run: GenerateRun) -> str:
     lines = [
         f"生成：{d['title']}",
         f"  星级 {d['stars']:.2f}★（目标 {d['target_stars']:.2f}★），主技能 {d['dominant_skill']}",
-        f"  {d['notes']} 个音符 / {d['rows']} 行，强度 {d['intensity']:.2f}",
+        f"  {d['notes']} 个音符 / {d['rows']} 行，长条 {d['ln_share']:.0%}，强度 {d['intensity']:.2f}",
     ]
     source = {"reference": "借用参考谱面", "manual": "手动指定", "auto": "自动测得"}[d["timing_source"]]
     lines.append(f"  timing：{source}，{d['bpm']:g} BPM，offset {d['offset_ms']:g} ms")
     t = d["tempo"]
     if t is not None:
         lines.append(f"  自动测速：置信度 {t['confidence']:.2f}，前后段拍点差 {t['drift_ms']:g} ms")
+    if d["leads"]:
+        runs = []
+        for l in d["leads"]:
+            if runs and runs[-1][2] == l["name"] and runs[-1][1] + 1 == l["first_bar"]:
+                runs[-1][1] = l["last_bar"]
+            else:
+                runs.append([l["first_bar"], l["last_bar"], l["name"]])
+        lines.append("  主跟层：" + "，".join(f"{a + 1}–{b + 1} 小节{n}" for a, b, n in runs))
     for w in d["warnings"]:
         lines.append(f"  注意：{w}")
     lines.append(f"  谱面：{d['output_file']}")
@@ -209,6 +224,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--creator", default="proj7k")
     p.add_argument("--version", help="难度名，默认 'Gen <目标> (<星级>)'")
     p.add_argument("--od", type=float, default=8.0, help="OverallDifficulty，默认 8")
+    p.add_argument("--stems", action="store_true",
+                   help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
+    p.add_argument("--ln", type=float, default=0.0,
+                   help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段")
+    p.add_argument("--brief", help="谱面设计稿 JSON（ADR-0033，chart-design skill 写的）：每段的主跟层、技法、键形、密度与长条")
+    p.add_argument("--auto-design", action="store_true",
+                   help="没有设计稿时，按人写谱的技法配比给每段定主技法与键形（ADR-0033）")
+    p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
@@ -220,7 +243,22 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _say(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def utf8_console() -> None:
+    """Print Chinese as UTF-8 on a Windows console too (it defaults to GBK there and garbles it)."""
+    for stream in (sys.stdout, sys.stderr):
+        if (getattr(stream, "encoding", "") or "").lower().replace("-", "") != "utf8" and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    utf8_console()
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.WARNING, format="%(message)s")
     try:
@@ -232,8 +270,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
-            version=args.version, overall_difficulty=args.od,
+            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say, ln_ratio=args.ln, whole_inverse=args.inverse,
+            brief=brief.load(args.brief) if args.brief else None, auto_design=args.auto_design,
         )
+        if args.stems:
+            stems.install(_say)
         run = run_generate(options, Path(args.output_dir).expanduser(),
                            audio=Path(args.audio).expanduser() if args.audio else None,
                            reference=reference, auto_timing=args.auto_timing, package=not args.no_package)

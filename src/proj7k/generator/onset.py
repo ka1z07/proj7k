@@ -34,6 +34,13 @@ class OnsetEnvelope:
     brightness: np.ndarray  # [frames] 0..1: where in the spectrum the new energy is (0 = 100 Hz, 1 = 8 kHz)
     loudness_db: np.ndarray  # [frames] frame RMS in dB relative to the song's loud level
     duration_s: float
+    #: The song's loud level (power) relative to another envelope's, when loudness is compared across
+    #: envelopes (the stems against the mix, `stems.stem_envelopes`); 1 otherwise.
+    loud_ref: float = 1.0
+    #: The raw spectral flux the song's attacks reach (98th percentile, before normalizing), and this
+    #: envelope's onsets on another envelope's scale (`stems.stem_envelopes`; 1 otherwise).
+    flux_level: float = 0.0
+    onset_ref: float = 1.0
 
     @property
     def n(self) -> int:
@@ -90,7 +97,10 @@ def onset_envelope(audio: Audio) -> OnsetEnvelope:
     rms = np.sqrt(np.mean(frames ** 2, axis=1) + 1e-12)
     loud = np.percentile(rms, 95) + 1e-9
     loudness_db = 20.0 * np.log10(rms / loud)
-    return OnsetEnvelope(total, bands, brightness.astype(np.float32), loudness_db.astype(np.float32), audio.duration_s)
+    flux = rise.sum(axis=1)
+    level = float(np.percentile(flux[flux > 0], 98)) if (flux > 0).any() else 0.0
+    return OnsetEnvelope(total, bands, brightness.astype(np.float32), loudness_db.astype(np.float32), audio.duration_s,
+                         flux_level=level)
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:

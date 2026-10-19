@@ -418,3 +418,285 @@ def test_rhythm_pick_matches_the_asked_density_and_one_grid_per_beat():
     on_8th = np.isin(slots, (6, 12, 18, 30, 36, 42)) & (sizes > 0)
     on_6th = np.isin(slots, (8, 16, 32, 40)) & (sizes > 0)
     assert not (set(pl.beat[on_8th]) & set(pl.beat[on_6th]))
+
+
+# --- stems and lead layers (ADR-0033) -------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def two_layers():
+    """16 measures of a melody alone, then 16 of drums with the melody faint underneath; and the two layers
+    apart, as a separator would give them."""
+    from generator_synth import _tone
+
+    bpm, offset_s, measures = 170.0, 0.5, 32
+    beat = 60.0 / bpm
+    drums, _ = drum_song(bpm=bpm, offset_s=offset_s + 16 * 4 * beat, measures=16, seed=7, melody=False)
+    n = len(drums)
+    melody = np.zeros(n, dtype=np.float32)
+    rng = np.random.default_rng(8)
+    for k in range(measures * 8):
+        t = offset_s + k * beat / 2
+        tone = _tone(SR, float(rng.choice([261.6, 329.6, 392.0, 523.3])), beat / 2)
+        i = int(round(t * SR))
+        gain = 0.5 if k < 16 * 8 else 0.08
+        melody[i:i + len(tone)] += gain * tone[: max(0, n - i)]
+    mix = (drums + melody).astype(np.float32)
+    return Audio(mix, SR, "synth"), {"drums": drums, "bass": np.zeros(n, np.float32),
+                                     "vocals": np.zeros(n, np.float32), "other": melody}, offset_s * 1000, beat * 1000
+
+
+def test_each_section_follows_the_layer_that_carries_it(two_layers, tmp_path):
+    from proj7k.generator import stems
+    from proj7k.generator.structure import find_sections
+
+    audio, parts, offset, beat = two_layers
+    calls = []
+
+    def separator(a):
+        calls.append(1)
+        return parts
+
+    split = stems.separate(audio, cache_dir=tmp_path, separator=separator)
+    again = stems.separate(audio, cache_dir=tmp_path, separator=separator)
+    assert len(calls) == 1 and set(again) == set(stems.STEMS)  # the second read comes from the cache
+    np.testing.assert_allclose(again["other"].samples, split["other"].samples, atol=1e-3)
+
+    env = onset_envelope(audio)
+    grid = build_grid(env, [TimingPoint(time=offset, beat_length=beat)])
+    envs = stems.stem_envelopes(split, audio)
+    leads = stems.choose_leads(envs, grid, find_sections(env, grid))
+    by_bar = {b: l.stem for l in leads for b in range(l.first_bar, l.last_bar + 1)}
+    assert by_bar[4] == "other" and by_bar[24] == "drums"
+
+    first = leads[0].first_bar
+    forced = stems.choose_leads(envs, grid, find_sections(env, grid), override={first: "bass"})
+    assert forced[0].stem == "bass"
+
+    mixed = stems.blend(env, envs, leads, stems.bar_spans(grid))
+    assert mixed.total.shape == env.total.shape
+    late = env.frame_of((offset + 24 * 4 * beat) / 1000.0)
+    w = slice(late, late + 200)
+    # In a drum section the blend reads the drums' onsets more than the mix does.
+    assert np.corrcoef(mixed.total[w], envs["drums"].total[w])[0, 1] >= np.corrcoef(env.total[w], envs["drums"].total[w])[0, 1]
+
+
+def test_generating_with_stems_reports_its_leads(two_layers, tmp_path, monkeypatch):
+    from proj7k.generator import stems
+
+    audio, parts, offset, beat = two_layers
+    monkeypatch.setattr(stems, "CACHE_DIR", tmp_path)
+    result = generate(audio, GeneratorOptions(target_stars=2.0, timing=[TimingPoint(time=offset, beat_length=beat)],
+                                              stems=True, separator=lambda a: parts))
+    assert result.leads and {l.stem for l in result.leads} >= {"drums", "other"}
+    assert abs(result.stars - 2.0) <= 0.3
+
+
+def test_stems_say_how_to_install_when_demucs_is_missing(monkeypatch, tmp_path):
+    from proj7k.generator import stems
+
+    monkeypatch.setattr(stems, "available", lambda: False)
+    with pytest.raises(stems.StemsUnavailable, match="Demucs"):
+        stems.separate(Audio(np.zeros(SR, np.float32), SR, "synth"), cache_dir=tmp_path)
+
+
+# --- long notes (ADR-0033) ------------------------------------------------------------------------------------
+
+
+class _EvenHolds:
+    """A stand-in long-note model: every length class equally likely."""
+
+    def predict(self, X):
+        from proj7k.generator import holds, rhythm
+
+        assert X.shape[1] == holds.n_features(rhythm.n_features())
+        return np.full((len(X), holds.CLASSES), 1.0 / holds.CLASSES)
+
+
+def _assert_playable(beatmap):
+    by_col = collections.defaultdict(list)
+    for o in beatmap.hit_objects:
+        end = o.end_time if o.note_type.value == "ln" else o.time
+        assert end >= o.time
+        by_col[o.column].append((o.time, end))
+    for notes in by_col.values():
+        notes.sort()
+        for (t0, e0), (t1, _) in zip(notes, notes[1:]):
+            assert e0 < t1, "a tail runs into the next note of its column"
+
+
+def test_long_notes_take_the_asked_share_and_stay_playable(song, monkeypatch):
+    from proj7k.generator import holds
+
+    monkeypatch.setattr(holds, "default_model", lambda: _EvenHolds())
+    audio, _ = song
+    timing = [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing, ln_ratio=0.4))
+    lns = [o for o in result.beatmap.hit_objects if o.note_type.value == "ln"]
+    share = len(lns) / result.n_notes
+    assert 0.15 <= share <= 0.6
+    assert result.holds and all(h.kind == "general" for h in result.holds)
+    _assert_playable(result.beatmap)
+    assert abs(result.stars - 3.0) <= 0.3
+    text = dump_osu_7k(result.beatmap)
+    assert parse_osu_7k(text).hit_objects[0].column == result.beatmap.hit_objects[0].column
+
+
+def test_an_inverse_section_holds_every_note_to_just_before_the_next(song, monkeypatch):
+    from proj7k.generator import holds
+    from proj7k.generator.structure import find_sections
+
+    monkeypatch.setattr(holds, "default_model", lambda: _EvenHolds())
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    timing = [TimingPoint(time=500.0, beat_length=beat)]
+    env = onset_envelope(audio)
+    first = find_sections(env, build_grid(env, timing))[0]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing,
+                                              section_holds={first.first_bar: (0.0, "inverse")}))
+    _assert_playable(result.beatmap)
+    sec = [h for h in result.holds if h.kind == "inverse"]
+    assert sec
+    start = 500.0 + sec[0].first_bar * 4 * beat
+    end = 500.0 + (sec[0].last_bar + 1) * 4 * beat
+    inside = [o for o in result.beatmap.hit_objects if start <= o.time < end - 2 * beat]
+    assert inside and sum(o.note_type.value == "ln" for o in inside) / len(inside) > 0.8
+
+
+def test_hold_lengths_fall_in_their_classes():
+    from proj7k.generator import holds
+
+    assert [holds.length_class(b) for b in (0, 0.25, 0.5, 1, 2, 4)] == [0, 1, 2, 3, 4, 5]
+
+
+# --- design brief (ADR-0033) ----------------------------------------------------------------------------------
+
+
+def _brief(**kw):
+    from proj7k.generator import brief
+
+    data = {"song": "synth", "sections": [
+        {"bars": [0, 11], "role": "verse", "intensity": 0.2, "technique": "rc_speed", "pattern": "stairs"},
+        {"bars": [12, 25], "role": "chorus", "intensity": 0.9, "technique": "rc_jack", "pattern": "chordjack",
+         "accent": {"pattern": "jumptrill", "at": "phrase_end"}},
+    ]}
+    data.update(kw)
+    return brief.parse(data)
+
+
+def test_a_brief_is_checked_and_says_what_is_wrong():
+    from proj7k.generator import brief
+
+    b = _brief()
+    assert [s.pattern for s in b.sections] == ["stairs", "chordjack"]
+    for bad, msg in [({"sections": []}, "sections"),
+                     ({"sections": [{"bars": [4, 2]}]}, "bars"),
+                     ({"sections": [{"bars": [0, 3], "lead": "piano"}]}, "lead"),
+                     ({"sections": [{"bars": [0, 3], "technique": "jack"}]}, "technique"),
+                     ({"sections": [{"bars": [0, 3]}, {"bars": [3, 5]}]}, "重叠"),
+                     ({"sections": [{"bars": [0, 3], "ln": {"kind": "weird"}}]}, "ln")]:
+        with pytest.raises(brief.BriefError, match=msg):
+            brief.parse(bad)
+    assert brief.parse({"sections": [{"bars": [0, 3], "technique": "rc_stamina"}]}).sections[0].pattern == "chordstream"
+    assert brief.parse({"sections": [{"bars": [0, 3], "technique": "ln_inverse"}]}).holds() == {0: (1.0, "inverse")}
+
+
+def test_a_brief_sets_each_sections_density_and_key_pattern(song):
+    from proj7k.generator.brief import PATTERNS
+
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    timing = [TimingPoint(time=500.0, beat_length=beat)]
+    result = generate(audio, GeneratorOptions(target_stars=3.5, timing=timing, brief=_brief()))
+    rows = sorted(_rows(result.beatmap).items())
+    split = 500.0 + 12 * 4 * beat
+    verse = [r for r in rows if r[0] < split]
+    chorus = [r for r in rows if r[0] >= split]
+    assert len(chorus) / 14 > 1.5 * len(verse) / 12   # rows per measure follow the intensities
+
+    def share(part, name):
+        masks = [sum(1 << c for c in cols) for _, cols in part]
+        test = PATTERNS[name][1]
+        hits = [test(m, r1, r2) for r2, r1, m in zip(masks, masks[1:], masks[2:])]
+        return sum(hits) / max(len(hits), 1)
+
+    # The primary pattern holds at least seven rows in ten (ADR-0033 decision 5).
+    assert share(verse, "stairs") >= 0.7
+    assert share(chorus, "chordjack") >= 0.7
+
+
+def test_a_briefs_intensity_wins_over_what_the_model_hears(verse_chorus):
+    # The brief turns the song around: the quiet kick-and-snare verse is to be the dense part. A section
+    # the model rates sparse still gets the rows its intensity asks for and doesn't hand them to the rest.
+    from proj7k.generator import brief
+
+    audio, offset, beat = verse_chorus
+    b = brief.parse({"sections": [
+        {"bars": [0, 15], "role": "drop", "intensity": 0.9, "technique": "rc_speed", "pattern": "stairs"},
+        {"bars": [16, 31], "role": "verse", "intensity": 0.3, "technique": "rc_speed", "pattern": "stairs"}]})
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=[TimingPoint(time=offset, beat_length=beat)],
+                                              brief=b))
+    split = offset + 16 * 4 * beat
+    rows = sorted(_rows(result.beatmap))
+    first = sum(1 for t in rows if offset <= t < split)
+    second = sum(1 for t in rows if split <= t < split + 16 * 4 * beat)
+    assert first > 1.5 * second
+
+
+def test_analysis_lists_sections_layers_and_a_brief_to_fill(two_layers, tmp_path, monkeypatch):
+    from proj7k.generator import analyze, brief, stems
+
+    monkeypatch.setattr(stems, "CACHE_DIR", tmp_path)
+    audio, parts, offset, beat = two_layers
+    result = analyze.analyze(audio, [TimingPoint(time=offset, beat_length=beat)], use_stems=True,
+                             separator=lambda a: parts, log=lambda m: None)
+    analyze.picture(audio, result, tmp_path / "a.png")
+    assert (tmp_path / "a.png").stat().st_size > 1000
+    result.pop("_envs")
+    json.dumps(result)
+    assert result["sections"] and all("lead" in s and "stem_scores" in s for s in result["sections"])
+    assert len(result["bars"]) >= 32 and "stems" in result["bars"][0]
+    leads = {s["lead"] for s in result["sections"]}
+    assert {"drums", "other"} <= leads
+    template = analyze.brief_template(result)
+    b = brief.parse(template)
+    assert len(b.sections) == len(result["sections"])
+
+
+def test_the_review_checks_a_chart_against_its_brief(song, tmp_path):
+    from proj7k.generator import review
+
+    audio, _ = song
+    beat = 60000.0 / 170.0
+    b = _brief()
+    result = generate(audio, GeneratorOptions(target_stars=3.5, timing=[TimingPoint(time=500.0, beat_length=beat)], brief=b))
+    r = review.review(result.beatmap, b, target=3.5)
+    assert [c["id"] for c in r["checks"]] == [1, 2, 3, 4, 5, 6]
+    verse, chorus = r["sections"]
+    assert verse["primary_share"] >= 0.7 and chorus["primary_share"] >= 0.7
+    assert chorus["rows_per_bar"] > verse["rows_per_bar"]
+    assert r["checks"][4]["ok"] and r["checks"][0]["ok"]
+    assert "六项检查" in review.markdown(r)
+    review.preview(result.beatmap, b, tmp_path / "p.png")
+    assert (tmp_path / "p.png").stat().st_size > 1000
+
+
+_PRIOR = {"charts": 10, "bands": {"low": {
+    "stars": [0, 4], "charts": 10, "techniques_per_chart": {"2": 1.0},
+    "primary_share": {"rc_jack": 0.4, "rc_speed": 0.6},
+    "used_with": {"rc_jack": {"rc_speed": 1.0}, "rc_speed": {"rc_jack": 1.0}},
+    "by_energy": {"quiet": {"rc_speed": 1.0}, "middle": {"rc_speed": 0.5, "rc_jack": 0.5}, "loud": {"rc_jack": 1.0}},
+    "ln_share_quartiles": [0, 0, 0]}}}
+
+
+def test_without_a_brief_the_sections_get_techniques_from_peoples_charts(song, monkeypatch):
+    from proj7k.generator import brief
+
+    monkeypatch.setattr(brief, "load_prior", lambda: _PRIOR)
+    audio, _ = song
+    timing = [TimingPoint(time=500.0, beat_length=60000.0 / 170.0)]
+    result = generate(audio, GeneratorOptions(target_stars=3.0, timing=timing, auto_design=True))
+    techs = {s.technique for s in result.design.sections}
+    assert techs <= {"rc_jack", "rc_speed"} and techs
+    assert all(s.pattern for s in result.design.sections)
+    assert abs(result.stars - 3.0) <= 0.3

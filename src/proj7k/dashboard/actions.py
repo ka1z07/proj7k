@@ -290,7 +290,16 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         seed=_int(params, "seed") or 0,
         title=_text(params, "title"),
         artist=_text(params, "artist"),
+        stems=_flag(params, "stems"),
+        log=logger.info,
+        ln_ratio=_float(params, "ln_ratio") or 0.0,
+        whole_inverse=_flag(params, "inverse"),
+        auto_design=_flag(params, "auto_design"),
     )
+    if options.stems:
+        from proj7k.generator import stems
+
+        stems.install(logger.info)
     output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.generated_dir
     run = run_generate(options, output_dir, audio=audio, reference=reference,
                        auto_timing=_flag(params, "auto_timing"), package=_flag(params, "package", True))
