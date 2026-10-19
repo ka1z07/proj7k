@@ -71,6 +71,9 @@ PAGES = {
 #: Uploads ride the WebSocket base64-encoded, so this caps an upload at about 190 MB (a long lossless audio file fits).
 MAX_MESSAGE_BYTES = 256 * 2**20
 
+#: How long one HTTP request may take; the first read of a large library takes several seconds.
+PLAYER_API_TIMEOUT_S = 120.0
+
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
 _PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar)(?:/([\w.-]+))?$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
@@ -78,6 +81,17 @@ _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 def _safe_filename(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]+', "_", name).strip() or "file"
+
+
+def _image_type(body: bytes) -> str:
+    """An image's media type by its leading bytes: osu!'s avatar host serves JPEG, PNG and GIF alike."""
+    if body.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if body.startswith(b"GIF8"):
+        return "image/gif"
+    if body[:4] == b"RIFF" and body[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
 
 
 def open_with_system(path: Path) -> None:
@@ -102,7 +116,10 @@ class DashboardServer(LiveServer):
         static_dir: Optional[Path] = None,
         opener=open_with_system,
     ):
-        super().__init__(host=host, port=port, engine=engine, no_watch=no_watch, max_size=MAX_MESSAGE_BYTES)
+        # The player API answers inside websockets' handshake, and the first read of the library (every DT/HT play's
+        # stars recomputed) can outlast its 10 s default, which drops the connection with no response.
+        super().__init__(host=host, port=port, engine=engine, no_watch=no_watch, max_size=MAX_MESSAGE_BYTES,
+                         open_timeout=PLAYER_API_TIMEOUT_S)
         self.config = config or DashboardConfig()
         self.dashboard_static_dir = static_dir or DASHBOARD_STATIC_DIR
         self.jobs = jobs or JobManager(build_actions(self.config), self.config.jobs_dir)
@@ -278,7 +295,7 @@ class DashboardServer(LiveServer):
                 body = self._avatar(arg)
                 if body is None:
                     return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
-                return self._response(200, "OK", body, "image/png", [("Cache-Control", "max-age=86400")])
+                return self._response(200, "OK", body, _image_type(body), [("Cache-Control", "max-age=86400")])
             if what == "replay":
                 play = snapshot.play(arg)
                 target = player_api.store_path(self.config.lazer_files_dir, play["replay_hash"]) if play and play["replay_hash"] else None
