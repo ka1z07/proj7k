@@ -178,3 +178,61 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   body { padding: 10px; }
   .grid { grid-template-columns: 1fr; }
 }
+
+/* --- player pages (ADR-0034): home, history, library, chart and play details --------------------------------- */
+a.plain { color: inherit; text-decoration: none; }
+a.plain:hover { color: var(--accent-blue); }
+.clickable { cursor: pointer; }
+tr.clickable:hover td { background: rgba(56, 189, 248, 0.07); }
+
+.rank { display: inline-block; min-width: 2.2em; text-align: center; font-weight: 900; font-style: italic; letter-spacing: 0.02em; }
+.rank-ss { color: #fde68a; } .rank-s { color: #fbbf24; } .rank-a { color: #4ade80; } .rank-b { color: #60a5fa; }
+.rank-c { color: #c084fc; } .rank-d { color: #f87171; } .rank-f { color: var(--text-muted); }
+.rank.silver { color: #e2e8f0; text-shadow: 0 0 6px rgba(226, 232, 240, 0.5); }
+.mod { display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 0 6px; margin-right: 3px; border-radius: 4px; background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+
+.cover { background: #0b1120 linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(124, 58, 237, 0.25)); border-radius: 8px; overflow: hidden; flex: none; }
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover.thumb { width: 72px; height: 40px; border-radius: 6px; }
+.cover.card-cover { width: 100%; aspect-ratio: 16 / 7; border-radius: 10px 10px 0 0; }
+
+.hero { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color); min-height: 150px; }
+.hero .cover { position: absolute; inset: 0; border-radius: 0; }
+.hero .cover img { filter: brightness(0.38) blur(1px); transform: scale(1.03); }
+.hero .hero-body { position: relative; padding: 18px 20px; display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; min-height: 150px; }
+.hero .hero-title { font-size: 1.4rem; font-weight: 800; line-height: 1.25; word-break: break-word; }
+.hero .hero-sub { color: #cbd5e1; font-size: 0.88rem; }
+.avatar { width: 88px; height: 88px; border-radius: 18px; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.15); background: #18223a; }
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chart-title { font-weight: 700; }
+.muted { color: var(--text-muted); }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row { display: flex; gap: 10px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+.list-row:hover { background: rgba(56, 189, 248, 0.07); }
+.list-row .grow { flex: 1; min-width: 0; }
+.list-row .side { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toolbar input[type=text] { flex: 1 1 220px; width: auto; }
+.toolbar select { width: auto; }
+
+.chart-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.chart-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
+.chart-card:hover { border-color: var(--accent-blue); transform: translateY(-1px); }
+.chart-card .body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.chart-card .meta { display: flex; justify-content: space-between; gap: 6px; font-size: 0.8rem; color: var(--text-muted); }
+
+.judge-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: #0b1120; }
+.judge-bar div { height: 100%; }
+.j-perfect { background: #e0f2fe; } .j-great { background: #fbbf24; } .j-good { background: #4ade80; }
+.j-ok { background: #60a5fa; } .j-meh { background: #a78bfa; } .j-miss { background: #ef4444; }
+.judge-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.8rem; margin-top: 6px; }
+.judge-legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+
+.heatmap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.heatmap div { width: 11px; height: 11px; border-radius: 2px; background: #111a2e; }
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-svg text { fill: var(--text-muted); font-size: 11px; }
+.tooltip { position: fixed; pointer-events: none; background: #0b1120; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 9px; font-size: 0.78rem; z-index: 50; white-space: nowrap; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+.empty { padding: 30px; text-align: center; color: var(--text-muted); }

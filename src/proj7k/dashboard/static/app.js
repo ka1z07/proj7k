@@ -281,7 +281,8 @@ const P7 = (() => {
       const c = state.chart;
       return el("div", { class: "now-playing" },
         el("span", { class: "badge done", text: "游戏当前谱面" }),
-        el("span", { class: "np-title", title: c.osu_path || "", text: chartName(c) }),
+        el("a", { href: "#", class: "np-title plain", title: "打开谱面详情", text: chartName(c),
+          onclick: (e) => { e.preventDefault(); openChart(c.md5_hash); } }),
         el("span", { class: "np-meta", text: `${Number(c.star_rating).toFixed(2)}★ · ${c.dan_tier || "—"} · 主技法 ${skillName(c.dominant_technique)}` }));
     }
     if (state.unresolved) {
@@ -296,9 +297,117 @@ const P7 = (() => {
       el("span", { class: "np-meta", text: "打开 osu!lazer 并选一张 7K 谱，这里会自动跟上。" }));
   }
 
+  // --- moving between pages ---------------------------------------------------------------------------------
+  // Pages live in the shell's iframes (and the chart / play details in its side panel). A page asks the shell to
+  // show another page, optionally with parameters that page acts on (P7.onNav); opened alone, it navigates itself.
+  function toShell(msg) {
+    if (embedded) window.top.postMessage({ p7: true, ...msg }, location.origin);
+    else if (msg.kind === "detail") location.href = `/${msg.page}?${new URLSearchParams(msg.params)}`;
+    else location.href = `/#${msg.page}`;
+  }
+  const navigate = (page, params) => toShell({ kind: "nav", page, params: params || {} });
+  const openChart = (md5) => md5 && toShell({ kind: "detail", page: "chart", params: { md5 } });
+  const openPlay = (id) => id && toShell({ kind: "detail", page: "play", params: { id } });
+  const navFollowers = [], shownFollowers = [];
+  function onNav(fn) { navFollowers.push(fn); }
+  // Runs each time the shell brings this page back to the front (pages stay loaded while hidden).
+  function onShown(fn) { shownFollowers.push(fn); }
+  window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin || !e.data || !e.data.p7) return;
+    const fns = e.data.kind === "params" ? navFollowers : e.data.kind === "shown" ? shownFollowers : [];
+    fns.forEach((fn) => { try { fn(e.data.params || {}); } catch (err) { console.error(err); } });
+  });
+  // Tell the shell this page is ready for parameters held back while it loaded.
+  if (embedded) window.addEventListener("load", () => window.top.postMessage({ p7: true, kind: "ready" }, location.origin));
+
+  // --- the player's data ------------------------------------------------------------------------------------
+  const query = new URLSearchParams(location.search);
+  let playerName = query.get("player") || "";
+  function playerParam() { return playerName ? `player=${encodeURIComponent(playerName)}` : ""; }
+  const api = (path) => getJSON(`/api/me/${path}${path.includes("?") ? "&" : "?"}${playerParam()}`);
+  const coverUrl = (md5, w) => `/api/me/cover/${md5}?w=${w || 480}`;
+
+  const RANK_CLASS = { SS: "rank-ss", S: "rank-s", A: "rank-a", B: "rank-b", C: "rank-c", D: "rank-d", F: "rank-f" };
+  function rankBadge(p) {
+    const label = p.rank_label || p;
+    const silver = p.rank === "XH" || p.rank === "SH";
+    return el("span", { class: `rank ${RANK_CLASS[label] || ""}${silver ? " silver" : ""}`, text: label, title: silver ? `${label}（带 HD/FL 的银色评级）` : label });
+  }
+  function cover(md5, has, w, cls) {
+    return el("div", { class: `cover ${cls || ""}` }, has ? el("img", { src: coverUrl(md5, w), loading: "lazy", alt: "" }) : null);
+  }
+  const acc = (x) => (x === null || x === undefined ? "—" : `${(x * 100).toFixed(2)}%`);
+  const stars = (x) => (x === null || x === undefined || x < 0 ? "—" : `${Number(x).toFixed(2)}★`);
+  const num = (x) => (x === null || x === undefined ? "—" : Number(x).toLocaleString("zh-CN"));
+  function ago(iso) {
+    if (!iso) return "—";
+    const t = new Date(iso).getTime();
+    const d = (Date.now() - t) / 1000;
+    if (d < 60) return "刚刚";
+    if (d < 3600) return `${Math.floor(d / 60)} 分钟前`;
+    if (d < 86400) return `${Math.floor(d / 3600)} 小时前`;
+    if (d < 86400 * 30) return `${Math.floor(d / 86400)} 天前`;
+    return new Date(t).toLocaleDateString("zh-CN");
+  }
+  const fullDate = (iso) => (iso ? new Date(iso).toLocaleString("zh-CN", { hour12: false }) : "—");
+  function duration(s) {
+    s = Math.round(s || 0);
+    if (s >= 3600) return `${Math.floor(s / 3600)} 小时 ${Math.floor((s % 3600) / 60)} 分`;
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  function modBadges(mods) { return (mods || []).map((m) => el("span", { class: "mod", text: m })); }
+  // A chart's name: the original-language title when it has one, the romanised one in the tooltip.
+  function chartTitle(c) {
+    const t = c.title_unicode || c.title || "（无标题）";
+    return el("span", { class: "chart-title", title: `${c.artist} - ${c.title} [${c.version}]`, text: t });
+  }
+  // Clicking anything that names a chart or a play opens it.
+  function chartLink(c, ...children) {
+    return el("a", { href: "#", class: "plain", onclick: (e) => { e.preventDefault(); e.stopPropagation(); openChart(c.md5); } }, ...children);
+  }
+
+  // One play as a list row: cover, chart, mods, rank, accuracy, stars and when. Clicking it opens the play.
+  function playRow(p, { showChart = true } = {}) {
+    return el("div", { class: "list-row", onclick: () => openPlay(p.id), title: "查看这局" },
+      showChart ? cover(p.md5, p.has_cover, 160, "thumb") : null,
+      el("div", { class: "grow" },
+        showChart ? el("div", { class: "ellipsis" }, chartLink(p, chartTitle(p)), el("span", { class: "muted", text: ` [${p.version}]` })) : null,
+        el("div", { class: "hint ellipsis" }, modBadges(p.mods), `${num(p.score)} · ${p.max_combo}x`,
+          p.ur !== null && p.ur !== undefined ? ` · UR ${p.ur}` : "", showChart ? "" : ` · ${fullDate(p.date)}`)),
+      el("div", { class: "side" }, rankBadge(p)),
+      el("div", { class: "side" }, el("div", { text: acc(p.accuracy) }), el("div", { class: "hint", text: `${stars(p.stars)} ${p.dan || ""}` })),
+      showChart ? el("div", { class: "side hint", style: "width:74px", text: ago(p.date) }) : null);
+  }
+
+  // A floating tooltip for SVG charts: show(evt, lines) / hide().
+  const tip = (() => {
+    let node = null;
+    return {
+      show(evt, lines) {
+        if (!node) { node = el("div", { class: "tooltip" }); document.body.appendChild(node); }
+        node.replaceChildren(...lines.map((l, i) => el("div", { class: i ? "hint" : "", text: l })));
+        node.style.display = "block";
+        const x = Math.min(evt.clientX + 14, window.innerWidth - node.offsetWidth - 8);
+        node.style.left = `${x}px`; node.style.top = `${evt.clientY + 14}px`;
+      },
+      hide() { if (node) node.style.display = "none"; },
+    };
+  })();
+  // The SVG namespace, derived from the page's own (XHTML) one: the static files carry no URLs at all.
+  const SVG_NS = document.documentElement.namespaceURI.replace("1999/xhtml", "2000/svg");
+  const svg = (tag, attrs, ...children) => {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) if (v !== null && v !== undefined) node.setAttribute(k, v);
+    children.flat().forEach((c) => c && node.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+    return node;
+  };
+
   connect();
   return {
     el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS,
     onGameChart, gameChartLine, chartName,
+    navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
+    modBadges, chartTitle, chartLink, query, playRow, tip, svg,
+    get player() { return playerName; }, set player(v) { playerName = v || ""; },
   };
 })();

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 谱面</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page" id="page"><div class="empty">正在读取谱面…</div></div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const md5 = P7.query.get("md5") || "";
+    const STATUS = { "-4": "本地", "-3": "未提交", "-2": "坟图", "-1": "制作中", 0: "待定", 1: "Ranked", 2: "Approved", 3: "Qualified", 4: "Loved" };
+    let audio = null;
+
+    function preview(c) {
+      if (!c.has_audio) return null;
+      const btn = el("button", { class: "small", text: "▶ 试听" });
+      btn.onclick = () => {
+        if (!audio) {
+          audio = new Audio(`/api/me/audio/${c.md5}`);
+          audio.volume = 0.6;
+          audio.addEventListener("loadedmetadata", () => { if (c.preview_ms > 0) audio.currentTime = c.preview_ms / 1000; });
+          audio.addEventListener("ended", () => { btn.textContent = "▶ 试听"; });
+        }
+        if (audio.paused) { audio.play(); btn.textContent = "❚❚ 暂停"; } else { audio.pause(); btn.textContent = "▶ 试听"; }
+      };
+      return btn;
+    }
+
+    function hero(c, e) {
+      const s = e ? e.stars : c.stars, dan = e ? e.dan : c.dan;
+      return el("div", { class: "hero" }, P7.cover(c.md5, c.has_cover, 1280),
+        el("div", { class: "hero-body" },
+          el("div", { style: "flex:1;min-width:240px" },
+            el("div", { class: "hero-title", text: c.title_unicode || c.title }),
+            c.title_unicode && c.title_unicode !== c.title ? el("div", { class: "hero-sub", text: c.title }) : null,
+            el("div", { class: "hero-sub", text: `${c.artist_unicode || c.artist} · 谱师 ${c.creator || "—"}` }),
+            el("div", { style: "margin-top:6px;font-weight:700", text: `[${c.version}]` }),
+            el("div", { class: "hero-sub", text: `${STATUS[c.status] || ""}${c.missing ? " · 已不在曲库里" : ""}` })),
+          el("div", { style: "text-align:right" },
+            el("div", { class: "big", text: `${P7.stars(s)}` }),
+            el("div", { style: "font-weight:700", text: `${dan || "—"} · 主技法 ${P7.skillName(e ? e.dominant : c.dominant)}` }),
+            c.stars_source === "lazer" && !e ? el("div", { class: "warn", text: "osu! 自己的星级，引擎还没读过" }) : null)));
+    }
+
+    function actions(c, d) {
+      const best = d.best;
+      return el("div", { class: "card" }, el("h2", { text: "拿这张谱做什么" }),
+        el("div", { class: "actions" },
+          preview(c),
+          el("button", { class: "small primary", text: "降阶练习", title: "做一张同一首歌、低一些段位、保留技法的练习谱",
+            onclick: () => P7.navigate("downscaler", { md5: c.md5, title: `${c.title} [${c.version}]`, dan: c.dan }) }),
+          el("button", { class: "small", text: "用这首歌生成新谱", onclick: () => P7.navigate("generator", { md5: c.md5, title: `${c.title} [${c.version}]` }) }),
+          d.plays.some((p) => p.replay_hash) ? el("button", { class: "small", text: "诊断最近一局", title: "对齐这张谱最近一局的回放，看哪里崩、哪项技法吃力",
+            onclick: () => P7.navigate("profiler", { tab: "replay", replay_hash: d.plays.find((p) => p.replay_hash).replay_hash, title: c.title }) }) : null,
+          d.plays.length ? el("button", { class: "small", text: `全部 ${d.plays.length} 局记录`, onclick: () => P7.navigate("history", { md5: c.md5, title: c.title_unicode || c.title }) }) : null,
+          c.links.catalog ? el("a", { href: c.links.catalog, target: "_blank", rel: "noopener" }, el("button", { class: "small", text: "线上 7K 曲库" })) : null,
+          c.links.osu ? el("a", { href: c.links.osu, target: "_blank", rel: "noopener" }, el("button", { class: "small", text: "osu! 官网" })) : null),
+        best ? el("p", { class: "hint", style: "margin-top:8px", text: `你的最好成绩：${best.rank_label} · ${P7.acc(best.accuracy)} · ${P7.num(best.score)}（${P7.ago(best.date)}）` }) : null);
+    }
+
+    function facts(c, e) {
+      return el("div", { class: "card" }, el("h2", { text: "谱面信息" }),
+        el("div", { class: "stats" },
+          P7.stat("时长", P7.duration(e && e.duration_s ? e.duration_s : c.length_s)), P7.stat("BPM", c.bpm || "—"),
+          P7.stat("物件", e ? P7.num(e.notes) : "—"), P7.stat("长条比例", e && e.hold_pct !== undefined ? P7.pct(e.hold_pct > 1 ? e.hold_pct / 100 : e.hold_pct) : "—"),
+          P7.stat("平均密度", e && e.avg_nps ? `${e.avg_nps.toFixed(1)} 键/秒` : "—"),
+          P7.stat("OD", c.od ?? "—"), P7.stat("HP", c.hp ?? "—"),
+          P7.stat("加入曲库", c.date_added ? new Date(c.date_added).toLocaleDateString("zh-CN") : "—")));
+    }
+
+    function skillCard(e) {
+      if (!e) return null;
+      return el("div", { class: "card" }, el("h2", { text: "八项技法" }), P7.skillBars(e.skills),
+        el("p", { class: "hint", style: "margin-top:6px", text: "每项是这张谱在该技法上的难度（引擎星级）；最高的一项是主技法。" }));
+    }
+
+    // The difficulty over the song: one bar per second, as hard as the chart's own level at 1.0.
+    function timeline(e) {
+      const tl = e && e.timeline;
+      if (!tl || !tl.load || !tl.load.length) return null;
+      const W = 900, H = 120, B = 18, n = tl.load.length;
+      const max = Math.max(1, ...tl.load);
+      const bw = W / n;
+      const node = P7.svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart-svg", role: "img", "aria-label": "难度随时间变化" });
+      node.append(P7.svg("line", { x1: 0, x2: W, y1: (H - B) * (1 - 1 / max), y2: (H - B) * (1 - 1 / max), stroke: "#334155", "stroke-dasharray": "4 4" }));
+      tl.load.forEach((v, i) => {
+        const h = (H - B) * (v / max);
+        const r = P7.svg("rect", { x: i * bw, y: H - B - h, width: Math.max(1, bw - (bw > 3 ? 1 : 0)), height: h,
+          fill: v >= 1 ? "#c084fc" : "#38bdf8", "fill-opacity": (0.35 + 0.65 * Math.min(1, v)).toFixed(2), rx: bw > 4 ? 2 : 0 });
+        const skill = tl.skill[i] >= 0 ? P7.skillName(tl.skills[tl.skill[i]]) : "—";
+        r.addEventListener("mousemove", (ev) => P7.tip.show(ev, [`${P7.duration(tl.start_s + i * tl.bin_s)} · 难度 ${(v * 100).toFixed(0)}%`, `主要是 ${skill} · ${tl.events[i]} 个音`]));
+        r.addEventListener("mouseleave", P7.tip.hide);
+        node.append(r);
+      });
+      for (let k = 0; k <= 4; k++) {
+        const t = (n * tl.bin_s * k) / 4;
+        node.append(P7.svg("text", { x: (W * k) / 4, y: H - 4, "text-anchor": k === 0 ? "start" : k === 4 ? "end" : "middle" }, P7.duration(tl.start_s + t)));
+      }
+      return el("div", { class: "card" }, el("h2", { text: "难度随时间" }), node,
+        el("p", { class: "hint", text: "每根柱是一秒里最难的一下，相对整张谱的难度；虚线是整张谱的水平，紫色是超过它的段落。" }));
+    }
+
+    function plays(d) {
+      return el("div", { class: "card" }, el("h2", { text: d.plays.length ? `你在这张谱上的 ${d.plays.length} 局` : "你还没玩过这张谱" }),
+        d.plays.length ? d.plays.slice(0, 30).map((p) => P7.playRow(p, { showChart: false }))
+          : el("p", { class: "hint", text: "打一局之后，这里会列出每一局的评级、准确率和回放分析。" }));
+    }
+
+    async function load() {
+      if (!md5) { $("#page").replaceChildren(el("div", { class: "empty", text: "没有指定谱面" })); return; }
+      const res = await fetch(`/api/me/chart/${md5}${P7.player ? `?player=${encodeURIComponent(P7.player)}` : ""}`, { cache: "no-store" });
+      if (!res.ok) { $("#page").replaceChildren(el("div", { class: "empty", text: "曲库里没有这张谱（可能刚导入，稍等几秒再打开）" })); return; }
+      const d = await res.json();
+      const c = d.chart, e = d.engine;
+      document.title = `${c.title} [${c.version}]`;
+      $("#page").replaceChildren(hero(c, e), actions(c, d),
+        el("div", { class: "grid" }, facts(c, e), skillCard(e)),
+        timeline(e), plays(d),
+        d.engine_error ? el("p", { class: "warn", text: `引擎读这张谱出错：${d.engine_error}` }) : null);
+    }
+    load();
+  </script>
+</body>
+</html>

@@ -15,8 +15,14 @@ could not find (not 7K, or not in the library yet). The pages preselect it as th
 replay source. `/api/current` answers the same.
 
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
-`/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its pages, `/api/*` is read-only state, and
-`/files/<job>/<index>/<name>` serves a job's registered outputs.
+`/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its tools, `/home`, `/history`, `/library`, `/chart`
+and `/play` its player pages (ADR-0034), `/api/*` is read-only state, and `/files/<job>/<index>/<name>` serves a
+job's registered outputs.
+
+The player pages read `/api/me/*` (`proj7k.dashboard.player`): `players`, `overview`, `history`, `library`,
+`chart/<md5>`, `play/<id>`, and from osu!lazer's file store a chart's `cover/<md5>` and `audio/<md5>` and a play's
+`replay/<id>` (.osr). They are answered off the event loop: the first one reads the library through the Node bridge.
+`open_replay {play}` hands a play's replay to osu!lazer, which shows it.
 """
 
 import asyncio
@@ -28,6 +34,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from typing import Any, Dict, Optional, Tuple
@@ -37,6 +44,7 @@ from websockets.asyncio.server import ServerConnection
 from websockets.http11 import Request, Response
 
 from proj7k.dashboard.actions import DashboardConfig, build_actions
+from proj7k.dashboard import player as player_api
 from proj7k.dashboard.jobs import JobManager
 from proj7k.live.engine import LiveEngine
 from proj7k.live.server import LiveServer
@@ -53,13 +61,23 @@ PAGES = {
     "/downscaler": "downscaler.html",
     "/generator": "generator.html",
     "/profiler": "profiler.html",
+    "/home": "home.html",
+    "/history": "history.html",
+    "/library": "library.html",
+    "/chart": "chart.html",
+    "/play": "play.html",
 }
 
 #: Uploads ride the WebSocket base64-encoded, so this caps an upload at about 190 MB (a long lossless audio file fits).
 MAX_MESSAGE_BYTES = 256 * 2**20
 
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
+_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar)(?:/([\w.-]+))?$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def _safe_filename(name: str) -> str:
+    return re.sub(r'[\\/:*?"<>|]+', "_", name).strip() or "file"
 
 
 def open_with_system(path: Path) -> None:
@@ -90,6 +108,13 @@ class DashboardServer(LiveServer):
         self.jobs = jobs or JobManager(build_actions(self.config), self.config.jobs_dir)
         self.jobs.notify = self._notify_from_thread
         self.opener = opener
+        self.library = player_api.PlayerLibrary(
+            self.config.realm_path, self.config.lazer_files_dir, db_path=self.config.db_path,
+            cache_dir=self.config.output_dir,
+        )
+        # The chart pages' own engine: the live radar's is used from the event loop, these from worker threads.
+        self._chart_engine = LiveEngine(max_mem_entries=64)
+        self._profiles: Dict[Tuple[str, float], Dict[str, Any]] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._game_chart: Dict[str, Any] = {"type": "game_chart", "chart": None, "unresolved": None}
         # Every page and asset is read once: the set of servable static paths is fixed at start.
@@ -166,12 +191,143 @@ class DashboardServer(LiveServer):
         with ProfilerStorage(db_path=self.config.db_path) as storage:
             return {"players": storage.list_players()}
 
-    def _process_request(self, connection: ServerConnection, request: Request) -> Optional[Response]:
-        path = request.path.partition("?")[0]
+    def _process_request(self, connection: ServerConnection, request: Request):
+        path, _, query = request.path.partition("?")
         match = _FILES_PATH.match(path)
         if match:
             return self._serve_artifact(match.group(1), int(match.group(2)), unquote(match.group(3)), request)
+        match = _PLAYER_API.match(path)
+        if match:
+            # websockets awaits a coroutine here; the work runs on a thread so the live radar keeps its frames.
+            return asyncio.to_thread(self._player_route, match.group(1), unquote(match.group(2) or ""), query, request)
         return super()._process_request(connection, request)
+
+    # --- the player pages (ADR-0034) ----------------------------------------------------------------------------
+
+    def _profile_summary(self, player: str) -> Optional[Dict[str, Any]]:
+        """The profiler's all-time and 30-day levels for the home page, recomputed when its database changes."""
+        from proj7k.profiler.aggregate import aggregate_macro_profile
+        from proj7k.profiler.storage import ProfilerStorage
+
+        db = self.config.db_path or ProfilerStorage().db_path
+        try:
+            mtime = Path(db).stat().st_mtime
+        except OSError:
+            return None
+        key = (player.lower(), mtime)
+        if key not in self._profiles:
+            out: Dict[str, Any] = {}
+            with ProfilerStorage(db_path=self.config.db_path) as storage:
+                for name, horizon in (("all_time", None), ("recent", 30.0)):
+                    p = aggregate_macro_profile(storage=storage, player_name=player, horizon_days=horizon)
+                    if p.total_matches:
+                        out[name] = {
+                            "matches": p.total_matches,
+                            "overall_dan": p.overall_dan,
+                            "overall_stars": round(p.overall_star_rating, 2),
+                            "dominant": p.dominant_technique,
+                            "bottleneck": p.bottleneck_technique,
+                            "average_ur": p.average_ur,
+                            "skills": {k: round(d.star_rating, 2) for k, d in p.dimensions.items()},
+                        }
+            self._profiles = {key: out}
+        return self._profiles[key] or None
+
+    def _player_route(self, what: str, arg: str, query: str, request: Request) -> Response:
+        params = {k: v[-1] for k, v in parse_qs(query).items()}
+        try:
+            snapshot = self.library.snapshot(force=what == "refresh")
+            player = params.get("player") or snapshot.default_player() or ""
+            not_found = self._json_response({"error": "没有找到"}, 404, "Not Found")
+            if what in ("players", "refresh"):
+                return self._json_response({
+                    "players": snapshot.players(), "default": snapshot.default_player(), "error": snapshot.error,
+                    "charts": len(snapshot.charts), "plays": len(snapshot.plays),
+                })
+            profile = None
+            if what in ("overview", "library") and player:
+                try:
+                    profile = self._profile_summary(player)
+                except Exception as e:
+                    logger.info(f"Profiler summary unavailable: {e}")
+            if what == "overview":
+                return self._json_response({**player_api.overview(snapshot, player, profile=profile), "error": snapshot.error})
+            if what == "history":
+                return self._json_response({**player_api.history(snapshot, player), "error": snapshot.error})
+            if what == "library":
+                level = profile["all_time"]["overall_stars"] if profile and "all_time" in profile else None
+                return self._json_response({**player_api.library(snapshot, player), "level": level, "error": snapshot.error})
+            if what == "chart":
+                detail = player_api.chart_detail(snapshot, arg, player, self.config.lazer_files_dir, self._chart_engine)
+                return self._json_response(detail) if detail else not_found
+            if what == "play":
+                detail = player_api.play_detail(snapshot, arg)
+                return self._json_response(detail) if detail else not_found
+            if what in ("cover", "audio"):
+                chart = snapshot.charts.get(arg)
+                file_hash = chart and chart["background_hash" if what == "cover" else "audio_hash"]
+                target = player_api.store_path(self.config.lazer_files_dir, file_hash) if file_hash else None
+                if target is None or not target.is_file():
+                    return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
+                if what == "cover":
+                    width = max(64, min(1920, int(params.get("w") or 480)))
+                    body, ctype = player_api.thumbnail(target, width)
+                    return self._response(200, "OK", body, ctype, [("Cache-Control", "max-age=86400")])
+                return self._file_response(target, request, "audio/mpeg")
+            if what == "avatar":
+                body = self._avatar(arg)
+                if body is None:
+                    return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
+                return self._response(200, "OK", body, "image/png", [("Cache-Control", "max-age=86400")])
+            if what == "replay":
+                play = snapshot.play(arg)
+                target = player_api.store_path(self.config.lazer_files_dir, play["replay_hash"]) if play and play["replay_hash"] else None
+                if target is None or not target.is_file():
+                    return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
+                name = _safe_filename(f"{play['player_name']} - {(snapshot.charts.get(play['md5']) or {}).get('title', 'replay')} ({play['date'][:10]}).osr")
+                return self._response(200, "OK", target.read_bytes(), "application/octet-stream", [
+                    ("Content-Disposition", f"attachment; filename*=UTF-8''{quote(name, safe='')}"),
+                ])
+        except Exception as e:
+            logger.warning(f"/api/me/{what} failed: {e}", exc_info=True)
+            return self._json_response({"error": str(e)}, 500, "Internal Server Error")
+        return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
+
+    def _avatar(self, user_id: str) -> Optional[bytes]:
+        """The player's osu! avatar, fetched once from osu!'s public avatar host and kept beside the outputs."""
+        if not user_id.isdigit() or int(user_id) <= 0:
+            return None
+        cached = self.config.output_dir / "avatars" / f"{user_id}.img"
+        if cached.is_file() and cached.stat().st_size:
+            return cached.read_bytes()
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(f"{player_api.AVATAR_WEB}/{user_id}", timeout=5) as res:
+                body = res.read(4 * 2**20)
+        except Exception as e:
+            logger.info(f"No avatar for user {user_id}: {e}")
+            return None
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_bytes(body)
+        return body
+
+    def _open_replay(self, play_id: str) -> Path:
+        """A play's replay copied out of lazer's store as an .osr (the store's files have no extension), then opened."""
+        snapshot = self.library.snapshot()
+        play = snapshot.play(play_id)
+        if play is None or not play["replay_hash"]:
+            raise LookupError("这局没有保存回放")
+        source = player_api.store_path(self.config.lazer_files_dir, play["replay_hash"])
+        if not source.is_file():
+            raise FileNotFoundError(f"osu!lazer 的文件里找不到这局的回放：{source}")
+        out_dir = self.config.output_dir / "replays"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = out_dir / _safe_filename(f"{play['replay_hash'][:12]}.osr")
+        if not target.exists():
+            shutil.copyfile(source, target)
+        self.opener(target)
+        return target
 
     def _route(self, path: str, query: str) -> Optional[Response]:
         if path in ("/", "/index.html") and parse_qs(query).get("mode") == ["overlay"]:
@@ -215,15 +371,21 @@ class DashboardServer(LiveServer):
         if target is None or not target.is_file():
             return self._response(404, "Not Found", b"Not Found", "text/plain; charset=utf-8")
 
-        ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        extra = []
+        if target.suffix.lower() in (".osz", ".osu"):
+            extra.append(("Content-Disposition", f"attachment; filename*=UTF-8''{quote(target.name, safe='')}"))
+        return self._file_response(target, request, extra_headers=extra)
+
+    def _file_response(
+        self, target: Path, request: Request, default_type: str = "application/octet-stream", extra_headers=(),
+    ) -> Response:
+        """A file, with byte ranges: audio seeking needs them."""
+        ctype = mimetypes.guess_type(target.name)[0] or default_type
         if ctype.startswith("text/"):
             ctype += "; charset=utf-8"
-        headers = [("Accept-Ranges", "bytes"), ("Cache-Control", "no-cache")]
-        if target.suffix.lower() in (".osz", ".osu"):
-            headers.append(("Content-Disposition", f"attachment; filename*=UTF-8''{quote(target.name, safe='')}"))
+        headers = [("Accept-Ranges", "bytes"), ("Cache-Control", "no-cache"), *extra_headers]
         data = target.read_bytes()
 
-        # Audio seeking needs byte ranges.
         range_header = request.headers.get("Range")
         m = _RANGE.match(range_header or "")
         if m and (m.group(1) or m.group(2)) and data:
@@ -283,6 +445,12 @@ class DashboardServer(LiveServer):
                 await asyncio.to_thread(self.opener, target)
             except Exception as e:
                 await connection.send(json.dumps({"type": "error", "message": f"无法打开 {target}: {e}"}, ensure_ascii=False))
+
+        elif msg_type == "open_replay":
+            try:
+                await asyncio.to_thread(self._open_replay, str(data.get("play") or ""))
+            except Exception as e:
+                await connection.send(json.dumps({"type": "error", "message": f"无法在 osu! 里打开回放：{e}"}, ensure_ascii=False))
 
         else:
             await super()._handle_message(connection, data)

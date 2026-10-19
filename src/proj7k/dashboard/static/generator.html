@@ -158,6 +158,17 @@
       if (f) { sourceTouched = true; setSource("manual"); drop.set(f); }
     });
 
+    // A chart picked on the library or chart pages: its song, its timing borrowed.
+    P7.onNav((params) => {
+      if (!params.md5) return;
+      sourceTouched = true;
+      $("#reference").value = params.md5;
+      setSource("manual");
+      document.querySelector("input[name=timing][value=borrow]").checked = true;
+      refresh();
+      $("#reference").title = params.title || "";
+    });
+
     P7.onGameChart((state) => {
       gameChart = state.chart;
       $("#gameLine").replaceChildren(P7.gameChartLine(state));
