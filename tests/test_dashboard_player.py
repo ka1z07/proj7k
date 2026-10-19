@@ -19,7 +19,7 @@ from proj7k.engine.evaluate import evaluate_osu
 from proj7k.lazer.annotator import current_engine_version
 from proj7k.profiler.storage import MatchSnapshot, ProfilerStorage
 
-from tests.test_dashboard import _Server
+from test_dashboard import _Server
 
 REPO = Path(__file__).resolve().parents[1]
 SAMPLE_OSU = REPO / "docs" / "sample_7k.osu"
@@ -263,7 +263,7 @@ def test_desktop_reuses_a_running_dashboard_and_opens_its_window(lazer, monkeypa
 
 def test_desktop_starts_a_dashboard_when_none_runs(tmp_path, monkeypatch):
     from proj7k.desktop import app
-    from tests.test_dashboard import _free_port
+    from test_dashboard import _free_port
 
     port = _free_port()
     assert not app.dashboard_running(port)
