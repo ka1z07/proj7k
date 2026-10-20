@@ -28,6 +28,7 @@ import numpy as np
 from proj7k.generator.audio import SAMPLE_RATE, Audio, resample
 from proj7k.generator.grid import GridPoint
 from proj7k.generator.onset import FRAME_S, OnsetEnvelope, onset_envelope
+from proj7k.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,8 @@ def install(log: Callable[[str], None] = logger.info) -> None:
     """pip-install Demucs (and PyTorch with it) into the running interpreter."""
     if available():
         return
-    log("首次使用分轨：正在安装 Demucs 与 PyTorch（数 GB，只需一次）……")
+    log(tr("首次使用分轨：正在安装 Demucs 与 PyTorch（数 GB，只需一次）……",
+           "First use of stems: installing Demucs and PyTorch (several GB, only once)…"))
     cmds = [[sys.executable, "-m", "pip", "install", "demucs"]]
     uv = shutil.which("uv")
     if uv:
@@ -70,10 +72,10 @@ def install(log: Callable[[str], None] = logger.info) -> None:
         if proc.returncode == 0:
             importlib.invalidate_caches()
             if available():
-                log("Demucs 安装完成。")
+                log(tr("Demucs 安装完成。", "Demucs installed."))
                 return
         errors.append((proc.stderr or proc.stdout).strip()[-400:])
-    raise StemsUnavailable("安装 Demucs 失败：" + " | ".join(errors))
+    raise StemsUnavailable(tr("安装 Demucs 失败：", "Failed to install Demucs: ") + " | ".join(errors))
 
 
 def separate(audio: Audio, cache_dir: Optional[Path] = None, separator: Optional[Separator] = None,
@@ -90,16 +92,19 @@ def separate(audio: Audio, cache_dir: Optional[Path] = None, separator: Optional
             pass
     if separator is None:
         if not available():
-            raise StemsUnavailable("没有安装 Demucs：在面板勾选「实验：Demucs 分轨」会自动安装，"
-                                   "或运行 python -m pip install demucs")
+            raise StemsUnavailable(tr("没有安装 Demucs：在面板勾选「实验：Demucs 分轨」会自动安装，"
+                                      "或运行 python -m pip install demucs",
+                                      "Demucs isn't installed: ticking \"Experimental: Demucs stems\" in the dashboard "
+                                      "installs it, or run python -m pip install demucs"))
         separator = _demucs
-    log("正在分轨（鼓 / 贝斯 / 人声 / 其他），CPU 上每首约 1–3 分钟……")
+    log(tr("正在分轨（鼓 / 贝斯 / 人声 / 其他），CPU 上每首约 1–3 分钟……",
+           "Splitting stems (drums / bass / vocals / other), about 1–3 minutes per song on CPU…"))
     stems = separator(audio)
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(path, **{s: stems[s].astype(np.float16) for s in STEMS})
     except OSError as e:
-        log(f"分轨结果没能写进缓存：{e}")
+        log(tr(f"分轨结果没能写进缓存：{e}", f"Couldn't cache the stems: {e}"))
     return {s: Audio(stems[s].astype(np.float32), SAMPLE_RATE, audio.source) for s in STEMS}
 
 

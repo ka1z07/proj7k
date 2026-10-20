@@ -55,7 +55,7 @@ const P7 = (() => {
       for (const [id, w] of Object.entries(requestWatchers)) {
         if (!w.sent) continue;
         delete requestWatchers[id];
-        w.resolve(lostJob("连接中断，任务没有送达看板（看板重启了，或上传的文件太大），请重新运行"));
+        w.resolve(lostJob(tr("连接中断，任务没有送达看板（看板重启了，或上传的文件太大），请重新运行")));
       }
       setTimeout(connect, 2000);
     };
@@ -87,7 +87,7 @@ const P7 = (() => {
           const job = known[id];
           if (job && !["done", "failed", "cancelled"].includes(job.status)) continue;
           delete jobWatchers[id];
-          const final = job || lostJob("看板重启了，这个任务随之中断，请重新运行", id);
+          const final = job || lostJob(tr("看板重启了，这个任务随之中断，请重新运行"), id);
           w.onUpdate(final);
           w.resolve(final);
         }
@@ -121,7 +121,7 @@ const P7 = (() => {
     // The server closes the connection on a message over MAX_MESSAGE_BYTES (server.py) instead of answering.
     const size = Object.values(encoded).reduce((n, u) => n + u.data.length, 0);
     if (size > MAX_UPLOAD_BASE64) {
-      return lostJob(`上传的文件太大（${(size * 3 / 4 / 2 ** 20).toFixed(0)} MB），看板最多收 ${(MAX_UPLOAD_BASE64 * 3 / 4 / 2 ** 20).toFixed(0)} MB`);
+      return lostJob(tr("上传的文件太大（{size} MB），看板最多收 {max} MB", { size: (size * 3 / 4 / 2 ** 20).toFixed(0), max: (MAX_UPLOAD_BASE64 * 3 / 4 / 2 ** 20).toFixed(0) }));
     }
     const request_id = `r${Date.now()}-${++requestSeq}`;
     return new Promise((resolve) => {
@@ -146,19 +146,19 @@ const P7 = (() => {
   }
 
   // --- widgets ----------------------------------------------------------------------------------------------
-  const STATUS_TEXT = { queued: "排队中", running: "运行中", done: "完成", failed: "失败", cancelled: "已取消" };
+  const STATUS_TEXT = { queued: tr("排队中"), running: tr("运行中"), done: tr("完成"), failed: tr("失败"), cancelled: tr("已取消") };
 
   // A card that follows one job: status, log, error and output files. Returns {update(job), log(line), reset()}.
   function jobPanel(container) {
     const badge = el("span", { class: "badge queued", text: "" });
     const title = el("span", { class: "hint" });
-    const cancel = el("button", { class: "small hidden", text: "取消", onclick: () => current && send({ type: "job_cancel", id: current.id }) });
+    const cancel = el("button", { class: "small hidden", text: tr("取消"), onclick: () => current && send({ type: "job_cancel", id: current.id }) });
     const error = el("div", { class: "job-error hidden" });
     const files = el("div", { class: "artifacts" });
     const logBox = el("div", { class: "log hidden" });
-    const toggle = el("button", { class: "small", text: "显示日志", onclick: () => {
+    const toggle = el("button", { class: "small", text: tr("显示日志"), onclick: () => {
       logBox.classList.toggle("hidden");
-      toggle.textContent = logBox.classList.contains("hidden") ? "显示日志" : "隐藏日志";
+      toggle.textContent = logBox.classList.contains("hidden") ? tr("显示日志") : tr("隐藏日志");
     } });
     const root = el("div", { class: "hidden" },
       el("div", { class: "job-head" }, el("div", { class: "row" }, badge, title), el("div", { class: "row" }, cancel, toggle)),
@@ -170,14 +170,14 @@ const P7 = (() => {
       reset() {
         current = null; root.classList.remove("hidden");
         logBox.textContent = ""; files.innerHTML = ""; error.classList.add("hidden");
-        badge.className = "badge queued"; badge.textContent = "提交中"; title.textContent = "";
+        badge.className = "badge queued"; badge.textContent = tr("提交中"); title.textContent = "";
       },
       update(job) {
         current = job;
         badge.className = `badge ${job.status}`;
         badge.textContent = STATUS_TEXT[job.status] || job.status;
         const secs = job.started_at ? ((job.finished_at || Date.now() / 1000) - job.started_at) : 0;
-        title.textContent = job.id ? `任务 ${job.id}${secs ? ` · ${secs.toFixed(1)}s` : ""}` : "";
+        title.textContent = job.id ? `${tr("任务 {id}", { id: job.id })}${secs ? ` · ${secs.toFixed(1)}s` : ""}` : "";
         cancel.classList.toggle("hidden", job.status !== "queued");
         if (job.error) { error.textContent = job.error; error.classList.remove("hidden"); }
         files.innerHTML = "";
@@ -187,29 +187,30 @@ const P7 = (() => {
         logBox.textContent += line + "\n";
         logBox.scrollTop = logBox.scrollHeight;
       },
-      showLog() { logBox.classList.remove("hidden"); toggle.textContent = "隐藏日志"; },
+      showLog() { logBox.classList.remove("hidden"); toggle.textContent = tr("隐藏日志"); },
     };
   }
 
   function artifactRow(jobId, index, a) {
     const buttons = [];
     if (a.kind === "html") {
-      buttons.push(el("a", { href: a.url, target: "_blank", rel: "noopener" }, el("button", { class: "small primary", text: "打开" })));
+      buttons.push(el("a", { href: a.url, target: "_blank", rel: "noopener" }, el("button", { class: "small primary", text: tr("打开") })));
     } else {
-      buttons.push(el("a", { href: a.url, download: a.name }, el("button", { class: "small", text: "下载" })));
+      buttons.push(el("a", { href: a.url, download: a.name }, el("button", { class: "small", text: tr("下载") })));
     }
     if (a.kind === "osz") {
-      buttons.push(el("button", { class: "small primary", text: "导入 osu!", title: "用系统关联程序（osu!lazer）打开这个 .osz",
+      buttons.push(el("button", { class: "small primary", text: tr("导入 osu!"), title: tr("用系统关联程序（osu!lazer）打开这个 .osz"),
         onclick: () => send({ type: "open_artifact", id: jobId, index }) }));
     }
-    buttons.push(el("button", { class: "small", text: "打开文件夹", onclick: () => send({ type: "open_artifact", id: jobId, index, reveal: true }) }));
+    buttons.push(el("button", { class: "small", text: tr("打开文件夹"), onclick: () => send({ type: "open_artifact", id: jobId, index, reveal: true }) }));
     return el("div", { class: "artifact" },
       el("span", { class: "badge", text: a.label }), el("span", { class: "name", title: a.path, text: a.name }), ...buttons);
   }
 
   // A drop zone that also opens a file picker. Returns {get file(), set(file), clear()}.
   function dropZone(node, accept, onChange) {
-    const idle = node.textContent.trim();
+    // Read before the page's static text is swapped for English, so looked up here.
+    const idle = tr(node.textContent.trim().replace(/\s+/g, " "));
     const label = el("span", { text: idle });
     const input = el("input", { type: "file", accept, class: "hidden" });
     node.textContent = "";
@@ -219,7 +220,7 @@ const P7 = (() => {
     const set = (f) => {
       file = f || null;
       node.classList.toggle("has-file", !!file);
-      label.textContent = file ? `已选择：${file.name}（点击更换，右键清除）` : idle;
+      label.textContent = file ? tr("已选择：{name}（点击更换，右键清除）", { name: file.name }) : idle;
       if (onChange) onChange(file);
     };
     node.addEventListener("click", () => input.click());
@@ -280,21 +281,21 @@ const P7 = (() => {
     if (state.chart) {
       const c = state.chart;
       return el("div", { class: "now-playing" },
-        el("span", { class: "badge done", text: "游戏当前谱面" }),
-        el("a", { href: "#", class: "np-title plain", title: "打开谱面详情", text: chartName(c),
+        el("span", { class: "badge done", text: tr("游戏当前谱面") }),
+        el("a", { href: "#", class: "np-title plain", title: tr("打开谱面详情"), text: chartName(c),
           onclick: (e) => { e.preventDefault(); openChart(c.md5_hash); } }),
-        el("span", { class: "np-meta", text: `${Number(c.star_rating).toFixed(2)}★ · ${c.dan_tier || "—"} · 主技法 ${skillName(c.dominant_technique)}` }));
+        el("span", { class: "np-meta", text: `${Number(c.star_rating).toFixed(2)}★ · ${c.dan_tier || "—"} · ${tr("主技法 {skill}", { skill: skillName(c.dominant_technique) })}` }));
     }
     if (state.unresolved) {
       const u = state.unresolved;
       return el("div", { class: "now-playing" },
-        el("span", { class: "badge failed", text: "不是 7K / 未入库" }),
+        el("span", { class: "badge failed", text: tr("不是 7K / 未入库") }),
         el("span", { class: "np-title", text: `${u.artist} - ${u.title} [${u.difficulty}]` }),
-        el("span", { class: "np-meta", text: "游戏里选中的这张不在 7K 曲库索引里；换一张 7K 谱，或先在「曲库同步」里同步。" }));
+        el("span", { class: "np-meta", text: tr("游戏里选中的这张不在 7K 曲库索引里；换一张 7K 谱，或先在「曲库同步」里同步。") }));
     }
     return el("div", { class: "now-playing" },
-      el("span", { class: "badge queued", text: "未检测到" }),
-      el("span", { class: "np-meta", text: "打开 osu!lazer 并选一张 7K 谱，这里会自动跟上。" }));
+      el("span", { class: "badge queued", text: tr("未检测到") }),
+      el("span", { class: "np-meta", text: tr("打开 osu!lazer 并选一张 7K 谱，这里会自动跟上。") }));
   }
 
   // --- moving between pages ---------------------------------------------------------------------------------
@@ -331,34 +332,34 @@ const P7 = (() => {
   function rankBadge(p) {
     const label = p.rank_label || p;
     const silver = p.rank === "XH" || p.rank === "SH";
-    return el("span", { class: `rank ${RANK_CLASS[label] || ""}${silver ? " silver" : ""}`, text: label, title: silver ? `${label}（带 HD/FL 的银色评级）` : label });
+    return el("span", { class: `rank ${RANK_CLASS[label] || ""}${silver ? " silver" : ""}`, text: label, title: silver ? tr("{rank}（带 HD/FL 的银色评级）", { rank: label }) : label });
   }
   function cover(md5, has, w, cls) {
     return el("div", { class: `cover ${cls || ""}` }, has ? el("img", { src: coverUrl(md5, w), loading: "lazy", alt: "" }) : null);
   }
   const acc = (x) => (x === null || x === undefined ? "—" : `${(x * 100).toFixed(2)}%`);
   const stars = (x) => (x === null || x === undefined || x < 0 ? "—" : `${Number(x).toFixed(2)}★`);
-  const num = (x) => (x === null || x === undefined ? "—" : Number(x).toLocaleString("zh-CN"));
+  const num = (x) => (x === null || x === undefined ? "—" : Number(x).toLocaleString(P7I18N.locale));
   function ago(iso) {
     if (!iso) return "—";
     const t = new Date(iso).getTime();
     const d = (Date.now() - t) / 1000;
-    if (d < 60) return "刚刚";
-    if (d < 3600) return `${Math.floor(d / 60)} 分钟前`;
-    if (d < 86400) return `${Math.floor(d / 3600)} 小时前`;
-    if (d < 86400 * 30) return `${Math.floor(d / 86400)} 天前`;
-    return new Date(t).toLocaleDateString("zh-CN");
+    if (d < 60) return tr("刚刚");
+    if (d < 3600) return tr("{n} 分钟前", { n: Math.floor(d / 60) });
+    if (d < 86400) return tr("{n} 小时前", { n: Math.floor(d / 3600) });
+    if (d < 86400 * 30) return tr("{n} 天前", { n: Math.floor(d / 86400) });
+    return new Date(t).toLocaleDateString(P7I18N.locale);
   }
-  const fullDate = (iso) => (iso ? new Date(iso).toLocaleString("zh-CN", { hour12: false }) : "—");
+  const fullDate = (iso) => (iso ? new Date(iso).toLocaleString(P7I18N.locale, { hour12: false }) : "—");
   function duration(s) {
     s = Math.round(s || 0);
-    if (s >= 3600) return `${Math.floor(s / 3600)} 小时 ${Math.floor((s % 3600) / 60)} 分`;
+    if (s >= 3600) return tr("{h} 小时 {m} 分", { h: Math.floor(s / 3600), m: Math.floor((s % 3600) / 60) });
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }
   function modBadges(mods) { return (mods || []).map((m) => el("span", { class: "mod", text: m })); }
   // A chart's name: the original-language title when it has one, the romanised one in the tooltip.
   function chartTitle(c) {
-    const t = c.title_unicode || c.title || "（无标题）";
+    const t = c.title_unicode || c.title || tr("（无标题）");
     return el("span", { class: "chart-title", title: `${c.artist} - ${c.title} [${c.version}]`, text: t });
   }
   // Clicking anything that names a chart or a play opens it.
@@ -368,7 +369,7 @@ const P7 = (() => {
 
   // One play as a list row: cover, chart, mods, rank, accuracy, stars and when. Clicking it opens the play.
   function playRow(p, { showChart = true } = {}) {
-    return el("div", { class: "list-row", onclick: () => openPlay(p.id), title: "查看这局" },
+    return el("div", { class: "list-row", onclick: () => openPlay(p.id), title: tr("查看这局") },
       showChart ? cover(p.md5, p.has_cover, 160, "thumb") : null,
       el("div", { class: "grow" },
         showChart ? el("div", { class: "ellipsis" }, chartLink(p, chartTitle(p)), el("span", { class: "muted", text: ` [${p.version}]` })) : null,

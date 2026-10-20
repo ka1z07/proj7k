@@ -22,6 +22,8 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
+from proj7k import i18n
+
 logger = logging.getLogger("proj7k.dashboard.jobs")
 
 #: Log lines kept per job; older lines are dropped from the front.
@@ -82,6 +84,8 @@ class Job:
     #: Files the page uploaded with the job, by parameter: (file name, content). Written into the job's folder
     #: when it starts, and the parameter becomes the written path.
     uploads: Dict[str, Tuple[str, bytes]] = field(default_factory=dict, repr=False)
+    #: The language of the page that started it, for its messages (ADR-0035).
+    lang: str = "zh"
 
     @property
     def finished(self) -> bool:
@@ -182,11 +186,13 @@ class JobManager:
         kind: str,
         params: Optional[Dict[str, Any]] = None,
         uploads: Optional[Dict[str, Tuple[str, bytes]]] = None,
+        lang: str = "zh",
     ) -> Job:
         if kind not in self.actions:
             raise ValueError(f"Unknown job kind: {kind!r}")
         job = Job(id=f"{self._prefix}-{next(self._ids):03d}", kind=kind, params=dict(params or {}))
         job.uploads = dict(uploads or {})
+        job.lang = lang
         for key, (name, _) in job.uploads.items():
             job.params[key] = name
         job.workdir = self.root_dir / job.id
@@ -215,6 +221,7 @@ class JobManager:
         job.started_at = time.time()
         self._publish(job)
         self._local.job = job
+        language = i18n.enter(job.lang)
         try:
             assert job.workdir is not None
             job.workdir.mkdir(parents=True, exist_ok=True)
@@ -234,6 +241,7 @@ class JobManager:
             logger.debug("Job %s failed", job.id, exc_info=True)
             self.append_log(job, "".join(traceback.format_exception_only(type(e), e)).strip())
         finally:
+            i18n.leave(language)
             self._local.job = None
             job.finished_at = time.time()
             self._publish(job)

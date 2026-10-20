@@ -27,6 +27,7 @@ from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
 from proj7k.generator import brief, stems
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
 from proj7k.generator.stems import STEM_NAMES
+from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
 
 logger = logging.getLogger("proj7k.generator")
@@ -88,12 +89,12 @@ def resolve_target(target_dan: Optional[str], target_sr: Optional[float]) -> tup
     """(stars, label) from a dan name or a star value."""
     if target_sr is not None:
         if target_sr <= 0:
-            raise ValueError("目标星级必须大于 0")
+            raise ValueError(tr("目标星级必须大于 0", "Target stars must be above 0"))
         return float(target_sr), f"{target_sr:.2f}"
     if target_dan:
         dan = parse_dan_tier(target_dan)
         return CANONICAL_DAN_SR[dan], dan
-    raise ValueError("请指定 --target-dan 或 --target-sr")
+    raise ValueError(tr("请指定 --target-dan 或 --target-sr", "Give --target-dan or --target-sr"))
 
 
 def resolve_reference(spec: str, realm_path: Optional[Path] = None, files_dir: Optional[Path] = None) -> Reference:
@@ -116,7 +117,8 @@ def resolve_reference(spec: str, realm_path: Optional[Path] = None, files_dir: O
         kwargs["files_dir"] = files_dir
     asset = locate_beatmap_in_lazer(spec, **kwargs)
     if asset is None:
-        raise FileNotFoundError(f"找不到参考谱面：{spec}（既不是 .osu 文件，也不在 osu!lazer 曲库里）")
+        raise FileNotFoundError(tr(f"找不到参考谱面：{spec}（既不是 .osu 文件，也不在 osu!lazer 曲库里）",
+                                   f"Reference chart not found: {spec} (neither an .osu file nor in the osu!lazer library)"))
     bm = parse_osu_7k(Path(asset.osu_path).read_text(encoding="utf-8", errors="replace"))
     if asset.audio_filename:
         bm.audio_filename = asset.audio_filename
@@ -151,7 +153,8 @@ def run_generate(
             options.timing = [tp for tp in reference.beatmap.timing_points if tp.uninherited]
     audio_path = audio or (reference.audio_path if reference else None)
     if audio_path is None:
-        raise ValueError("缺少音频：请用 --audio 指定，或用 --timing-from 指向一张带音频的谱面")
+        raise ValueError(tr("缺少音频：请用 --audio 指定，或用 --timing-from 指向一张带音频的谱面",
+                            "Missing audio: give --audio, or point --timing-from at a chart with audio"))
     audio_path = Path(audio_path)
 
     logger.info(f"Generating from {audio_path.name} toward {options.target_stars:.2f} stars...")

@@ -44,6 +44,7 @@
     <div style="text-align:center;margin:10px 0"><button class="hidden" id="more">显示更多</button></div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -89,26 +90,26 @@
           el("div", { class: "hint ellipsis", text: `${c.artist_unicode || c.artist} · ${c.version}` }),
           el("div", { class: "meta" },
             el("span", {}, el("b", { style: "color:var(--text-main)", text: P7.stars(c.stars) }), ` ${c.dan || ""}`,
-              c.stars_source === "lazer" ? el("span", { class: "warn", title: "还没用引擎读过：这是 osu! 自己的星级，后台正在换算", text: " *" }) : null),
+              c.stars_source === "lazer" ? el("span", { class: "warn", title: tr("还没用引擎读过：这是 osu! 自己的星级，后台正在换算"), text: " *" }) : null),
             el("span", { text: c.dominant ? P7.skillName(c.dominant) : "" })),
           el("div", { class: "meta" },
-            el("span", { text: c.plays ? `玩过 ${c.plays} 次` : "没玩过" }),
-            c.best_rank ? el("span", {}, P7.rankBadge(c.best_rank), ` ${P7.acc(c.best_accuracy)}`) : el("span", { text: c.creator ? `谱师 ${c.creator}` : "" }))));
+            el("span", { text: c.plays ? tr("玩过 {n} 次", { n: c.plays }) : tr("没玩过") }),
+            c.best_rank ? el("span", {}, P7.rankBadge(c.best_rank), ` ${P7.acc(c.best_accuracy)}`) : el("span", { text: c.creator ? tr("谱师 {name}", { name: c.creator }) : "" }))));
     }
 
     function render() {
       const rows = filtered();
-      $("#count").textContent = `${rows.length} 张谱${nearLevel ? `（画像实力 ${level === null ? "未知" : level.toFixed(2) + "★"} ±0.5★、没玩过的）` : ""}`;
-      $("#grid").replaceChildren(...(rows.length ? rows.slice(0, shown).map(card) : [el("div", { class: "empty", text: charts.length ? "没有符合条件的谱。" : "曲库里还没有 7K 谱。" })]));
+      $("#count").textContent = tr("{n} 张谱", { n: rows.length }) + (nearLevel ? tr("（画像实力 {level} ±0.5★、没玩过的）", { level: level === null ? tr("未知") : level.toFixed(2) + "★" }) : "");
+      $("#grid").replaceChildren(...(rows.length ? rows.slice(0, shown).map(card) : [el("div", { class: "empty", text: charts.length ? tr("没有符合条件的谱。") : tr("曲库里还没有 7K 谱。") })]));
       $("#more").classList.toggle("hidden", rows.length <= shown);
-      $("#more").textContent = `显示更多（还有 ${rows.length - shown} 张）`;
+      $("#more").textContent = tr("显示更多（还有 {n} 张）", { n: rows.length - shown });
       $("#forMe").classList.toggle("primary", nearLevel);
     }
 
     ["#q", "#sort", "#dan", "#skill", "#played"].forEach((s) => $(s).addEventListener("input", () => { shown = 120; render(); }));
     $("#more").onclick = () => { shown += 240; render(); };
     $("#forMe").onclick = () => {
-      if (level === null) { alert("还没有画像：先在「回放与画像」里导入回放。"); return; }
+      if (level === null) { alert(tr("还没有画像：先在「回放与画像」里导入回放。")); return; }
       nearLevel = !nearLevel; shown = 120; render();
     };
 
@@ -117,7 +118,7 @@
       charts = d.charts || [];
       level = d.level;
       $("#sub").textContent = d.error && !charts.length ? d.error
-        : `osu!lazer 里的 ${charts.length} 张 7K 谱，按引擎星级、段位和主技法。${d.pending_stars ? `${d.pending_stars} 张还没同步过，后台正在用引擎换算（标 *）。` : ""}`;
+        : tr("osu!lazer 里的 {n} 张 7K 谱，按引擎星级、段位和主技法。", { n: charts.length }) + (d.pending_stars ? tr("{n} 张还没同步过，后台正在用引擎换算（标 *）。", { n: d.pending_stars }) : "");
       render();
     }
     P7.onNav((params) => {

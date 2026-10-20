@@ -28,6 +28,8 @@ from typing import List, Optional, Sequence
 import urllib.request
 import webbrowser
 
+from proj7k.i18n import language, system_language, tr
+
 logger = logging.getLogger("proj7k.desktop")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -179,7 +181,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", handlers=handlers)
 
     if not ensure_dashboard(args.port, args.timeout):
-        message = f"proj7k 控制台没有启动起来，日志在 {LOG_DIR}"
+        with language(system_language()):
+            message = tr(f"proj7k 控制台没有启动起来，日志在 {LOG_DIR}", f"The proj7k console didn't start; logs are in {LOG_DIR}")
         logger.error(message)
         _alert(message)
         return 1

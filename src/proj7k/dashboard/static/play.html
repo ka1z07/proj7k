@@ -9,6 +9,7 @@
 <body>
   <div class="page" id="page"><div class="empty">正在读取这一局…</div></div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -21,62 +22,62 @@
           el("div", { style: "font-size:4rem;line-height:1" }, P7.rankBadge(p)),
           el("div", { style: "flex:1;min-width:220px" },
             el("div", { class: "hero-title" }, c ? P7.chartLink(c, c.title_unicode || c.title) : p.title),
-            el("div", { class: "hero-sub", text: `${p.artist} · [${p.version}] · 谱师 ${p.creator || "—"}` }),
+            el("div", { class: "hero-sub", text: `${p.artist} · [${p.version}] · ${tr("谱师 {name}", { name: p.creator || "—" })}` }),
             el("div", { class: "hero-sub", style: "margin-top:4px" }, P7.modBadges(p.mods), `${p.player_name} · ${P7.fullDate(p.date)}`)),
           el("div", { style: "text-align:right" },
             el("div", { class: "big", text: P7.acc(p.accuracy) }),
             el("div", { style: "font-weight:700", text: P7.num(p.score) }),
-            el("div", { class: "hero-sub", text: `${P7.stars(p.stars)} ${p.dan || ""}${Math.abs(p.clock_rate - 1) > 1e-3 ? `（${p.clock_rate}x，原谱 ${P7.stars(p.chart_stars)}）` : ""}` }))));
+            el("div", { class: "hero-sub", text: `${P7.stars(p.stars)} ${p.dan || ""}${Math.abs(p.clock_rate - 1) > 1e-3 ? tr("（{rate}x，原谱 {stars}）", { rate: p.clock_rate, stars: P7.stars(p.chart_stars) }) : ""}` }))));
     }
 
     function judgements(p, labels) {
       const j = p.judgements, total = Math.max(1, p.notes);
       const keys = Object.keys(labels);
       const ratio = j.great ? (j.perfect / j.great).toFixed(2) : "∞";
-      return el("div", { class: "card" }, el("h2", { text: "判定" }),
-        el("div", { class: "judge-bar", role: "img", "aria-label": "各判定的比例" },
-          keys.filter((k) => j[k]).map((k) => el("div", { class: `j-${k}`, style: `flex:${j[k] / total}`, title: `${labels[k]}：${j[k]}` }))),
+      return el("div", { class: "card" }, el("h2", { text: tr("判定") }),
+        el("div", { class: "judge-bar", role: "img", "aria-label": tr("各判定的比例") },
+          keys.filter((k) => j[k]).map((k) => el("div", { class: `j-${k}`, style: `flex:${j[k] / total}`, title: tr("{label}：{n}", { label: labels[k], n: j[k] }) }))),
         el("div", { class: "judge-legend" }, keys.map((k) => el("span", {}, el("span", { class: `sw j-${k}` }), `${labels[k]} ${P7.num(j[k])}`))),
         el("div", { class: "stats", style: "margin-top:10px" },
-          P7.stat("最大连击", `${P7.num(p.max_combo)}x`), P7.stat("MAX : 300", ratio), P7.stat("物件", P7.num(p.notes)),
+          P7.stat(tr("最大连击"), `${P7.num(p.max_combo)}x`), P7.stat("MAX : 300", ratio), P7.stat(tr("物件"), P7.num(p.notes)),
           p.pp !== null && p.pp !== undefined ? P7.stat("pp", p.pp.toFixed(1)) : null));
     }
 
     function analysis(prof) {
       if (!prof) {
-        return el("div", { class: "card" }, el("h2", { text: "回放分析" }),
-          el("p", { class: "hint", text: "这局的回放还没分析过。点「诊断这局」会对齐回放和谱面，看 UR、崩盘点和八项技法的承压，并存进画像。" }));
+        return el("div", { class: "card" }, el("h2", { text: tr("回放分析") }),
+          el("p", { class: "hint", text: tr("这局的回放还没分析过。点「诊断这局」会对齐回放和谱面，看 UR、崩盘点和八项技法的承压，并存进画像。") }));
       }
       const skills = Object.entries(prof.skills || {}).filter(([k]) => prof.tested && prof.tested[k]);
-      return el("div", { class: "card" }, el("h2", { text: "回放分析" }),
+      return el("div", { class: "card" }, el("h2", { text: tr("回放分析") }),
         el("div", { class: "stats" },
-          P7.stat("UR", prof.ur ?? "—"), P7.stat("完成度", P7.pct(prof.completion)),
-          P7.stat("这局测出的实力", prof.level_stars ? `${prof.level_stars.toFixed(2)}★` : "—"),
-          P7.stat("崩盘点", prof.fatal_time_ms !== null && prof.fatal_time_ms !== undefined ? `${P7.duration(prof.fatal_time_ms / 1000)} · ${P7.skillName(prof.break_skill)}` : "没有")),
-        skills.length ? [el("h3", { text: "这局各技法测出的实力" }),
-          el("table", {}, el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "实力" }), el("th", { text: "" })),
+          P7.stat("UR", prof.ur ?? "—"), P7.stat(tr("完成度"), P7.pct(prof.completion)),
+          P7.stat(tr("这局测出的实力"), prof.level_stars ? `${prof.level_stars.toFixed(2)}★` : "—"),
+          P7.stat(tr("崩盘点"), prof.fatal_time_ms !== null && prof.fatal_time_ms !== undefined ? `${P7.duration(prof.fatal_time_ms / 1000)} · ${P7.skillName(prof.break_skill)}` : tr("没有"))),
+        skills.length ? [el("h3", { text: tr("这局各技法测出的实力") }),
+          el("table", {}, el("tr", {}, el("th", { text: tr("技法") }), el("th", { class: "num", text: tr("实力") }), el("th", { text: "" })),
             skills.map(([k, v]) => el("tr", {}, el("td", { text: P7.skillName(k) }), el("td", { class: "num", text: P7.stars(v) }),
-              el("td", { class: prof.broke[k] ? "bad" : "hint", text: prof.broke[k] ? "在这项上崩了" : "" }))))] : null);
+              el("td", { class: prof.broke[k] ? "bad" : "hint", text: prof.broke[k] ? tr("在这项上崩了") : "" }))))] : null);
     }
 
     function actions(d) {
       const p = d.play, c = d.chart;
       const has = !!p.replay_hash;
       const busy = el("span", { class: "hint" });
-      return el("div", { class: "card" }, el("h2", { text: "拿这局做什么" }),
+      return el("div", { class: "card" }, el("h2", { text: tr("拿这局做什么") }),
         el("div", { class: "actions" },
-          has ? el("button", { class: "small primary", text: "诊断这局", title: "对齐回放，生成回放查看器，存进画像",
+          has ? el("button", { class: "small primary", text: tr("诊断这局"), title: tr("对齐回放，生成回放查看器，存进画像"),
             onclick: () => P7.navigate("profiler", { tab: "replay", replay_hash: p.replay_hash, run: true }) }) : null,
-          has ? el("button", { class: "small", text: "在 osu! 里重看", title: "交给 osu!lazer 播放这局回放",
-            onclick: () => { P7.send({ type: "open_replay", play: p.id }); busy.textContent = "已交给 osu!lazer"; } }) : null,
-          has ? el("a", { href: `/api/me/replay/${encodeURIComponent(p.id)}`, download: "" }, el("button", { class: "small", text: "下载回放 .osr" })) : null,
-          has ? el("button", { class: "small", text: "在崩盘点切练习包", title: "从这局崩掉的地方切一段，做三阶练习包",
+          has ? el("button", { class: "small", text: tr("在 osu! 里重看"), title: tr("交给 osu!lazer 播放这局回放"),
+            onclick: () => { P7.send({ type: "open_replay", play: p.id }); busy.textContent = tr("已交给 osu!lazer"); } }) : null,
+          has ? el("a", { href: `/api/me/replay/${encodeURIComponent(p.id)}`, download: "" }, el("button", { class: "small", text: tr("下载回放 .osr") })) : null,
+          has ? el("button", { class: "small", text: tr("在崩盘点切练习包"), title: tr("从这局崩掉的地方切一段，做三阶练习包"),
             onclick: () => P7.navigate("profiler", { tab: "replay", replay_hash: p.replay_hash, bundle: true, run: true }) }) : null,
-          c ? el("button", { class: "small", text: "降阶练习这张谱", onclick: () => P7.navigate("downscaler", { md5: c.md5, title: `${c.title} [${c.version}]`, dan: c.dan }) }) : null,
-          c ? el("button", { class: "small", text: "谱面详情", onclick: () => P7.openChart(c.md5) }) : null,
+          c ? el("button", { class: "small", text: tr("降阶练习这张谱"), onclick: () => P7.navigate("downscaler", { md5: c.md5, title: `${c.title} [${c.version}]`, dan: c.dan }) }) : null,
+          c ? el("button", { class: "small", text: tr("谱面详情"), onclick: () => P7.openChart(c.md5) }) : null,
           busy),
-        has ? null : el("p", { class: "hint", style: "margin-top:6px", text: "这局 osu!lazer 没有保存回放，只能看成绩。" }),
-        p.unsupported_mods.length ? el("p", { class: "warn", style: "margin-top:6px", text: `这局开了 ${p.unsupported_mods.join(" ")}：回放和谱面对不齐，诊断结果不可信，也不会计入画像。` }) : null);
+        has ? null : el("p", { class: "hint", style: "margin-top:6px", text: tr("这局 osu!lazer 没有保存回放，只能看成绩。") }),
+        p.unsupported_mods.length ? el("p", { class: "warn", style: "margin-top:6px", text: tr("这局开了 {mods}：回放和谱面对不齐，诊断结果不可信，也不会计入画像。", { mods: p.unsupported_mods.join(" ") }) }) : null);
     }
 
     function attempts(d) {
@@ -84,9 +85,9 @@
       const best = d.attempts.reduce((a, b) => (b.score > a.score ? b : a));
       const p = d.play;
       return el("div", { class: "card" },
-        el("h2", { text: `这张谱的 ${d.attempts.length} 局` }),
-        el("p", { class: "hint", style: "margin-bottom:6px" }, d.personal_best ? el("span", { class: "good", text: "这是你在这张谱上的最好成绩。" })
-          : `这局排第 ${d.attempt_rank}；最好一局 ${P7.acc(best.accuracy)}，差 ${((best.accuracy - p.accuracy) * 100).toFixed(2)}%。`),
+        el("h2", { text: tr("这张谱的 {n} 局", { n: d.attempts.length }) }),
+        el("p", { class: "hint", style: "margin-bottom:6px" }, d.personal_best ? el("span", { class: "good", text: tr("这是你在这张谱上的最好成绩。") })
+          : tr("这局排第 {rank}；最好一局 {best}，差 {gap}%。", { rank: d.attempt_rank, best: P7.acc(best.accuracy), gap: ((best.accuracy - p.accuracy) * 100).toFixed(2) })),
         d.attempts.slice(0, 20).map((q) => {
           const row = P7.playRow(q, { showChart: false });
           if (q.id === p.id) row.style.background = "rgba(56, 189, 248, 0.10)";
@@ -96,7 +97,7 @@
 
     async function load() {
       const res = await fetch(`/api/me/play/${encodeURIComponent(id)}`, { cache: "no-store" });
-      if (!res.ok) { $("#page").replaceChildren(el("div", { class: "empty", text: "找不到这一局（osu!lazer 里删掉了？）" })); return; }
+      if (!res.ok) { $("#page").replaceChildren(el("div", { class: "empty", text: tr("找不到这一局（osu!lazer 里删掉了？）") })); return; }
       const d = await res.json();
       document.title = `${d.play.title} · ${d.play.rank_label} ${P7.acc(d.play.accuracy)}`;
       $("#page").replaceChildren(hero(d.play, d.chart), actions(d), judgements(d.play, d.judgement_labels), analysis(d.play.profiler), attempts(d));

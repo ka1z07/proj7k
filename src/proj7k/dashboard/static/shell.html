@@ -23,6 +23,7 @@
       border: 1px solid transparent;
     }
     .nav a:hover { color: var(--text-main); }
+    html[lang="en-US"] .nav a { padding: 6px 10px; }  /* English labels run longer: keep the bar on one line */
     .nav a.active { color: var(--text-main); border-color: var(--accent-blue); background: rgba(56, 189, 248, 0.12); }
     .status { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: var(--text-muted); }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); display: inline-block; margin-right: 6px; }
@@ -55,10 +56,10 @@
       <a href="#library" data-page="library">曲库</a>
       <span class="sep"></span>
       <a href="#live" data-page="live">实时雷达</a>
-      <a href="#profiler" data-page="profiler">回放与画像</a>
+      <a href="#profiler" data-page="profiler" data-en="Replays">回放与画像</a>
       <a href="#downscaler" data-page="downscaler">降阶练习</a>
-      <a href="#generator" data-page="generator">谱面生成</a>
-      <a href="#sync" data-page="sync">曲库同步</a>
+      <a href="#generator" data-page="generator" data-en="Generator">谱面生成</a>
+      <a href="#sync" data-page="sync" data-en="Sync">曲库同步</a>
     </nav>
     <div class="status">
       <select id="playerSel" class="hidden" title="看哪位玩家的主页和记录"></select>
@@ -67,6 +68,7 @@
       <button class="small" id="lazerBtn" title="关闭 osu!lazer（和点窗口的 ✕ 一样，游戏会正常保存后退出）再重新打开；没在运行就直接打开">重启 osu!</button>
       <span id="jobState"></span>
       <span><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
+      <button class="small" id="langBtn" title="切换语言 / Switch language"></button>
     </div>
   </div>
   <div class="frames" id="frames">
@@ -81,6 +83,7 @@
     </div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -107,7 +110,7 @@
       }
       for (const [k, f] of Object.entries(frames)) f.style.visibility = k === name ? "visible" : "hidden";
       document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === name));
-      document.title = `proj7k · ${document.querySelector(`#nav a[data-page="${name}"]`).textContent}`;
+      document.title = `proj7k · ${tr(document.querySelector(`#nav a[data-page="${name}"]`).textContent)}`;
       if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "shown" }, location.origin);
       if (params && Object.keys(params).length) {
         if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "params", params }, location.origin);
@@ -126,7 +129,7 @@
     const drawer = document.getElementById("drawer");
     const drawerFrame = document.getElementById("drawerFrame");
     const stack = [];
-    const DETAIL_TITLE = { chart: "谱面", play: "单局成绩" };
+    const DETAIL_TITLE = { chart: tr("谱面"), play: tr("单局成绩") };
     function openDetail(page, params) {
       const src = `/${page}?${new URLSearchParams({ ...params, ...(player ? { player } : {}) })}`;
       if (stack[stack.length - 1] !== src) stack.push(src);
@@ -176,7 +179,7 @@
       try { data = await P7.getJSON("/api/me/players"); } catch (e) { return; }
       const sel = document.getElementById("playerSel");
       const players = data.players || [];
-      sel.replaceChildren(...players.map((p) => P7.el("option", { value: p.name, text: `${p.name}（${p.plays} 局）` })));
+      sel.replaceChildren(...players.map((p) => P7.el("option", { value: p.name, text: tr("{name}（{n} 局）", { name: p.name, n: p.plays }) })));
       sel.classList.toggle("hidden", players.length < 2);
       player = data.default || "";
       sel.value = player;
@@ -189,7 +192,7 @@
 
     P7.on("connection", (up) => {
       document.getElementById("connDot").classList.toggle("on", up);
-      document.getElementById("connText").textContent = up ? "已连接" : "未连接";
+      document.getElementById("connText").textContent = up ? tr("已连接") : tr("未连接");
       if (up) P7.send({ type: "jobs_list" });
     });
 
@@ -198,7 +201,7 @@
       const running = [...active.values()].filter((j) => j.status === "running").length;
       const queued = [...active.values()].filter((j) => j.status === "queued").length;
       document.getElementById("jobState").textContent =
-        running || queued ? `任务：${running} 运行中${queued ? `，${queued} 排队` : ""}` : "";
+        running || queued ? tr("任务：{n} 运行中", { n: running }) + (queued ? tr("，{n} 排队", { n: queued }) : "") : "";
     }
     P7.on("jobs", (msg) => { active.clear(); msg.jobs.forEach((j) => { if (j.status === "queued" || j.status === "running") active.set(j.id, j); }); renderJobs(); });
     P7.on("job_update", (msg) => {
@@ -215,15 +218,15 @@
       const c = state.chart;
       gameMd5 = c ? c.md5_hash : null;
       node.textContent = c ? `♪ ${c.title} [${c.version}] · ${Number(c.star_rating).toFixed(2)}★ ${c.dan_tier || ""}` : "";
-      node.title = c ? `osu!lazer 当前谱面：${P7.chartName(c)}（点击查看详情）` : "osu!lazer 里当前选中的谱面";
+      node.title = c ? tr("osu!lazer 当前谱面：{chart}（点击查看详情）", { chart: P7.chartName(c) }) : tr("osu!lazer 里当前选中的谱面");
     });
 
     async function refreshLazer() {
       const node = document.getElementById("lazerState");
       try {
         const cfg = await P7.getJSON("/api/config");
-        node.textContent = !cfg.realm_exists ? "未找到 osu!lazer 数据库"
-          : cfg.lazer_running ? "osu!lazer 运行中（数据库锁定）" : "osu!lazer 未运行";
+        node.textContent = !cfg.realm_exists ? tr("未找到 osu!lazer 数据库")
+          : cfg.lazer_running ? tr("osu!lazer 运行中（数据库锁定）") : tr("osu!lazer 未运行");
         node.className = !cfg.realm_exists ? "warn" : "";
       } catch (e) { node.textContent = ""; }
     }
@@ -231,11 +234,20 @@
       const btn = document.getElementById("lazerBtn");
       const node = document.getElementById("lazerState");
       btn.disabled = true;
-      node.textContent = "正在重启 osu!lazer…";
+      node.textContent = tr("正在重启 osu!lazer…");
       const job = await P7.startJob("lazer_control", { mode: "restart" });
       btn.disabled = false;
-      if (job.status === "failed") alert(`重启 osu!lazer 失败：${job.error}`);
+      if (job.status === "failed") alert(tr("重启 osu!lazer 失败：{error}", { error: job.error }));
       refreshLazer();
+    };
+
+    // The other language, named in itself; switching reloads the shell and every page in it.
+    const langBtn = document.getElementById("langBtn");
+    langBtn.textContent = P7I18N.lang === "en" ? "\u4e2d\u6587" : "English";
+    langBtn.onclick = () => {
+      if (active.size && !confirm(tr("切换语言会重新载入所有页面：正在运行的任务会在后台继续跑完，但页面上不再显示它的进度。继续吗？"))) return;
+      P7I18N.remember(P7I18N.lang === "en" ? "zh" : "en");
+      location.reload();
     };
 
     // Probed on load and after each sync job only: the probe takes osu!lazer's lock for an instant.

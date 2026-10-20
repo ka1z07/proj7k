@@ -26,6 +26,8 @@ import sys
 import time
 from typing import Callable, List, Mapping, Optional, Sequence
 
+from proj7k.i18n import tr
+
 logger = logging.getLogger("proj7k.lazer.client")
 
 #: How long a polite close may take before we give up (the game may be waiting on its own "are you sure?" dialog).
@@ -156,16 +158,20 @@ class LazerClient:
                 logger.info("osu!lazer has exited.")
                 return True
         raise TimeoutError(
-            f"osu!lazer 在 {timeout_s:.0f} 秒内没有退出：它可能弹出了确认窗口（例如有下载在进行），请在游戏里确认后再试"
+            tr(f"osu!lazer 在 {timeout_s:.0f} 秒内没有退出：它可能弹出了确认窗口（例如有下载在进行），请在游戏里确认后再试",
+               f"osu!lazer didn't exit within {timeout_s:.0f} s: it may be showing a confirmation (a download in progress, "
+               "for example); confirm it in the game and try again")
         )
 
     def start(self) -> None:
         """Start osu!lazer, detached from this process."""
         exe = self.executable
         if exe is None:
-            raise FileNotFoundError("不知道 osu!lazer 装在哪里：启动 dashboard 时用 --lazer-exe 指定")
+            raise FileNotFoundError(tr("不知道 osu!lazer 装在哪里：启动 dashboard 时用 --lazer-exe 指定",
+                                       "Don't know where osu!lazer is installed: start the dashboard with --lazer-exe"))
         if not exe.exists():
-            raise FileNotFoundError(f"找不到 osu!lazer：{exe}（用 --lazer-exe 指定实际位置）")
+            raise FileNotFoundError(tr(f"找不到 osu!lazer：{exe}（用 --lazer-exe 指定实际位置）",
+                                       f"osu!lazer not found: {exe} (pass its location with --lazer-exe)"))
         logger.info(f"Starting osu!lazer from '{exe}'...")
         if self.launcher is not None:
             self.launcher(exe)

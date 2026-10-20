@@ -48,6 +48,7 @@
     </div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -92,13 +93,13 @@
       const rows = filtered();
       const accs = rows.map((p) => p.accuracy).sort((a, b) => a - b);
       $("#summary").replaceChildren(...[
-        chartFilter ? el("div", { class: "stat" }, el("div", { class: "k", text: "只看这张谱" }),
+        chartFilter ? el("div", { class: "stat" }, el("div", { class: "k", text: tr("只看这张谱") }),
           el("div", { class: "v ellipsis" }, chartFilter.title, " ", el("button", { class: "small", text: "✕", onclick: () => { chartFilter = null; render(); } }))) : null,
-        P7.stat("局数", rows.length), P7.stat("准确率中位数", P7.acc(accs[accs.length >> 1])),
-        P7.stat("通关", rows.filter((p) => p.passed).length), P7.stat("已分析回放", rows.filter((p) => p.analyzed).length)].filter(Boolean));
-      $("#list").replaceChildren(...(rows.length ? rows.slice(0, shown).map((p) => P7.playRow(p)) : [el("div", { class: "empty", text: plays.length ? "没有符合条件的成绩。" : "还没有 7K 成绩。去 osu!lazer 打一局吧。" })]));
+        P7.stat(tr("局数"), rows.length), P7.stat(tr("准确率中位数"), P7.acc(accs[accs.length >> 1])),
+        P7.stat(tr("通关"), rows.filter((p) => p.passed).length), P7.stat(tr("已分析回放"), rows.filter((p) => p.analyzed).length)].filter(Boolean));
+      $("#list").replaceChildren(...(rows.length ? rows.slice(0, shown).map((p) => P7.playRow(p)) : [el("div", { class: "empty", text: plays.length ? tr("没有符合条件的成绩。") : tr("还没有 7K 成绩。去 osu!lazer 打一局吧。") })]));
       $("#more").classList.toggle("hidden", rows.length <= shown);
-      $("#more").textContent = `显示更多（还有 ${rows.length - shown} 局）`;
+      $("#more").textContent = tr("显示更多（还有 {n} 局）", { n: rows.length - shown });
     }
 
     ["#q", "#sort", "#rank", "#dan", "#mods", "#best"].forEach((s) => $(s).addEventListener("input", () => { shown = 100; render(); }));
@@ -108,11 +109,11 @@
       const d = await P7.api("history");
       plays = d.plays || [];
       $("#sub").textContent = d.error && !plays.length ? d.error
-        : `${d.player.name} 在 osu!lazer 里保存的 ${plays.length} 局 7K 成绩。点一局看详情、诊断回放、在游戏里重看。`;
+        : tr("{player} 在 osu!lazer 里保存的 {n} 局 7K 成绩。点一局看详情、诊断回放、在游戏里重看。", { player: d.player.name, n: plays.length });
       render();
     }
     P7.onNav((params) => {
-      if (params.md5) chartFilter = { md5: params.md5, title: params.title || "这张谱" };
+      if (params.md5) chartFilter = { md5: params.md5, title: params.title || tr("这张谱") };
       if (params.q !== undefined) $("#q").value = params.q;
       shown = 100;
       render();

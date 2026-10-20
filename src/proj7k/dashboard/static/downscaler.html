@@ -83,6 +83,7 @@
     <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -132,12 +133,12 @@
       const suggested = danTiers[Math.max(0, i - 1)].name;
       if (!danTouched) $("#dan").value = suggested;
       if (!srTouched) $("#sr").value = danTiers[Math.max(0, i - 1)].stars.toFixed(1);
-      $("#danHint").textContent = `（当前谱 ${dan}，建议 ${suggested}）`;
+      $("#danHint").textContent = tr("（当前谱 {dan}，建议 {suggested}）", { dan, suggested });
     }
     P7.onNav((params) => {
       if (!params.md5) return;
       picked = params;
-      $("#pickedName").textContent = `选中的谱：${params.title || params.md5}`;
+      $("#pickedName").textContent = tr("选中的谱：{name}", { name: params.title || params.md5 });
       $("#pickedOpt").classList.remove("hidden");
       sourceTouched = true;
       danTouched = false; srTouched = false;
@@ -172,46 +173,46 @@
 
     P7.getJSON("/api/config").then((cfg) => {
       danTiers = cfg.dan_tiers;
-      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: `${t.name}（${t.stars.toFixed(2)}★）` })));
+      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: tr("{dan}（{stars}★）", { dan: t.name, stars: t.stars.toFixed(2) }) })));
       $("#dan").value = "7th";
       cfg.skills.forEach((k) => $("#skill").appendChild(el("option", { value: k, text: P7.skillName(k) })));
-      $("#outDir").placeholder = `默认：${cfg.practice_dir}`;
+      $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.practice_dir });
       suggestDan();
     });
 
     // The technique-keeping run stopped above the target: offer the same run in free mode, one click away.
     function freeModeOffer(c) {
       return el("div", { class: "warn", style: "margin-top:8px" },
-        el("div", { text: `保留主技法时只能降到 ${c.downscaled_stars.toFixed(2)}★，没到目标 ${Number(c.target.target_sr).toFixed(2)}★：再删就会改变这张谱的主技法。` +
-          "改用「只追难度」可以继续往下降，练习谱仍然保持节奏骨架与左右手平衡。" }),
-        el("button", { class: "small", style: "margin-top:6px", text: "改用只追难度重新降阶", disabled: running,
+        el("div", { text: tr("保留主技法时只能降到 {stars}★，没到目标 {target}★：再删就会改变这张谱的主技法。", { stars: c.downscaled_stars.toFixed(2), target: Number(c.target.target_sr).toFixed(2) }) +
+          tr("改用「只追难度」可以继续往下降，练习谱仍然保持节奏骨架与左右手平衡。") }),
+        el("button", { class: "small", style: "margin-top:6px", text: tr("改用只追难度重新降阶"), disabled: running,
           onclick: () => { document.querySelector("input[name=keep][value=free]").checked = true; showKeepMode(); run(); } }));
     }
 
     function chartCard(c) {
       const v = c.validation || {};
       const free = c.mode === "free";
-      const check = free ? "可玩性校验" : "技法保留校验";
+      const check = free ? tr("可玩性校验") : tr("技法保留校验");
       return el("div", { class: "card" },
         el("h2", { text: c.title }),
         el("div", { class: "row" },
           el("span", { class: "big", text: `${c.original_stars.toFixed(2)}★ → ${c.downscaled_stars.toFixed(2)}★` }),
-          el("span", { class: `badge ${v.passed ? "done" : "failed"}`, text: v.passed ? `${check}通过` : `${check}未通过` }),
-          free ? el("span", { class: "badge", text: "只追难度" }) : null),
+          el("span", { class: `badge ${v.passed ? "done" : "failed"}`, text: v.passed ? tr("{check}通过", { check }) : tr("{check}未通过", { check }) }),
+          free ? el("span", { class: "badge", text: tr("只追难度") }) : null),
         el("div", { class: "stats" },
-          P7.stat("目标", `${c.target.target_dan || ""} ${Number(c.target.target_sr).toFixed(2)}★`.trim()),
-          P7.stat("物件数", `${c.original_notes} → ${c.downscaled_notes}`),
-          P7.stat("删除比例", P7.pct(c.removal_ratio)),
-          P7.stat("左右手负荷", `${P7.pct(c.bimanual_flux_ratio[0])} : ${P7.pct(c.bimanual_flux_ratio[1])}`),
-          P7.stat("技法向量相似度", Number(v.cosine_similarity).toFixed(3)),
-          P7.stat("主技法", `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`),
+          P7.stat(tr("目标"), `${c.target.target_dan || ""} ${Number(c.target.target_sr).toFixed(2)}★`.trim()),
+          P7.stat(tr("物件数"), `${c.original_notes} → ${c.downscaled_notes}`),
+          P7.stat(tr("删除比例"), P7.pct(c.removal_ratio)),
+          P7.stat(tr("左右手负荷"), `${P7.pct(c.bimanual_flux_ratio[0])} : ${P7.pct(c.bimanual_flux_ratio[1])}`),
+          P7.stat(tr("技法向量相似度"), Number(v.cosine_similarity).toFixed(3)),
+          P7.stat(tr("主技法"), `${P7.skillName(v.dominant_technique_orig)} → ${P7.skillName(v.dominant_technique_downscaled)}`),
           c.bursts && c.bursts.hand !== undefined
-            ? P7.stat("爆发 / 单轨负荷", `${Number(c.bursts.hand).toFixed(2)} / ${Number(c.bursts.column).toFixed(2)}（≤1 为同级正常）`)
+            ? P7.stat(tr("爆发 / 单轨负荷"), tr("{hand} / {column}（≤1 为同级正常）", { hand: Number(c.bursts.hand).toFixed(2), column: Number(c.bursts.column).toFixed(2) }))
             : null),
-        el("h3", { text: "八项技法星级（灰：原谱，彩：练习谱）" }),
+        el("h3", { text: tr("八项技法星级（灰：原谱，彩：练习谱）") }),
         P7.skillBars(c.skills_original, c.skills_downscaled),
         c.suggest_free_mode ? freeModeOffer(c) : null,
-        (c.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, c.warnings.join("；")) : null);
+        (c.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, c.warnings.join(tr("；"))) : null);
     }
 
     $("#runBtn").onclick = () => run();
@@ -244,9 +245,9 @@
       if (job.status !== "done") { panel.showLog(); return; }
       const r = job.result;
       const nodes = r.charts.map(chartCard);
-      if (r.failed_count) nodes.push(el("div", { class: "warn", text: `${r.failed_count} 张谱面降阶失败，详见日志。` }));
+      if (r.failed_count) nodes.push(el("div", { class: "warn", text: tr("{n} 张谱面降阶失败，详见日志。", { n: r.failed_count }) }));
       if (r.sync) nodes.push(el("div", { class: r.sync.success ? "good" : "bad",
-        text: r.sync.success ? `已加入 osu!lazer「${r.sync.collection}」收藏夹（${r.sync.synced_hashes.length} 张）。` : "osu!lazer 同步失败。" }));
+        text: r.sync.success ? tr("已加入 osu!lazer「{name}」收藏夹（{n} 张）。", { name: r.sync.collection, n: r.sync.synced_hashes.length }) : tr("osu!lazer 同步失败。") }));
       $("#results").replaceChildren(...nodes);
     }
   </script>
