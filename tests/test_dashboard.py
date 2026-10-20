@@ -302,6 +302,30 @@ def test_job_protocol_downloads_ranges_and_open(tmp_path):
     asyncio.run(_run())
 
 
+def test_messages_follow_the_pages_language_cookie(tmp_path):
+    """ADR-0035: a page in English gets the server's messages and its jobs' errors in English; others stay Chinese."""
+    async def _run():
+        s = _Server(tmp_path)
+        await s.server.start()
+        try:
+            for cookie, error, missing in (("p7lang=en", "Choose a target dan", "No such output file"),
+                                           ("p7lang=zh", "请选择目标段位", "没有这个输出文件"),
+                                           (None, "请选择目标段位", "没有这个输出文件")):
+                headers = {"Cookie": cookie} if cookie else None
+                async with s.ws(additional_headers=headers) as ws:
+                    await ws.recv()
+                    job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU)})
+                    assert job["status"] == "failed" and error in job["error"], job["error"]
+                    await ws.send(json.dumps({"type": "open_artifact", "id": job["id"], "index": 5}))
+                    while (msg := json.loads(await asyncio.wait_for(ws.recv(), timeout=5)))["type"] != "error":
+                        pass
+                    assert msg["message"] == missing
+        finally:
+            await s.server.stop()
+
+    asyncio.run(_run())
+
+
 # --- real actions ----------------------------------------------------------------------------------------------
 
 

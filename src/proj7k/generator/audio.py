@@ -21,6 +21,8 @@ from typing import Union
 
 import numpy as np
 
+from proj7k.i18n import tr
+
 #: Every analysis runs at this rate. 24 kHz keeps the band an onset lives in (up to 12 kHz) and makes
 #: the 240-sample hop exactly 10 ms.
 SAMPLE_RATE = 24000
@@ -45,7 +47,7 @@ def load_audio(path: Union[str, Path]) -> Audio:
     """Decode `path` to mono float32 at `SAMPLE_RATE`."""
     path = Path(path)
     if not path.is_file():
-        raise AudioDecodeError(f"音频文件不存在：{path}")
+        raise AudioDecodeError(tr(f"音频文件不存在：{path}", f"Audio file not found: {path}"))
     errors = []
     if path.suffix.lower() == ".wav":
         try:
@@ -77,9 +79,10 @@ def load_audio(path: Union[str, Path]) -> Audio:
         errors.append(f"ffmpeg: {proc.stderr.decode('utf-8', 'replace').strip()[:200]}")
     if not errors:
         raise AudioDecodeError(
-            f"读不了 {path.suffix or '这种'} 音频：请安装 miniaudio（pip install miniaudio）或把 ffmpeg 加进 PATH。"
+            tr(f"读不了 {path.suffix or '这种'} 音频：请安装 miniaudio（pip install miniaudio）或把 ffmpeg 加进 PATH。",
+               f"Can't read {path.suffix or 'this'} audio: install miniaudio (pip install miniaudio) or put ffmpeg on PATH.")
         )
-    raise AudioDecodeError(f"解码 {path.name} 失败：" + "；".join(errors))
+    raise AudioDecodeError(tr(f"解码 {path.name} 失败：", f"Failed to decode {path.name}: ") + tr("；", "; ").join(errors))
 
 
 def _read_wav(path: Path) -> np.ndarray:

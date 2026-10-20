@@ -39,6 +39,7 @@ from proj7k.generator.patterns import PatternSampler, default_model, mask_column
 from proj7k.generator.phrases import group_measures, harmonize
 from proj7k.generator.structure import Section, find_sections, section_energy, section_styles
 from proj7k.generator.tempo import TempoEstimate, estimate_tempo
+from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
 GENERATOR_VERSION = "gen-5"
@@ -134,8 +135,10 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         timing, source = [TimingPoint(time=float(offset), beat_length=tempo.beat_ms)], "auto"
         if not tempo.steady:
             warnings.append(
-                f"自动测得 {tempo.bpm:g} BPM，但歌曲前后段的拍点相差 {tempo.drift_ms:g} ms，可能有变速；"
-                "节奏不对时请用 --timing-from 借用已有谱面的 timing，或用 --bpm/--offset 指定。"
+                tr(f"自动测得 {tempo.bpm:g} BPM，但歌曲前后段的拍点相差 {tempo.drift_ms:g} ms，可能有变速；"
+                   "节奏不对时请用 --timing-from 借用已有谱面的 timing，或用 --bpm/--offset 指定。",
+                   f"Detected {tempo.bpm:g} BPM, but the beats drift {tempo.drift_ms:g} ms between the start and end of "
+                   "the song, so the tempo may change. If the rhythm is off, borrow a chart's timing or set BPM/offset by hand.")
             )
 
     # A chart's beats sit a little before the envelope's reading of them (tempo.CHART_SYNC_MS for an
@@ -145,7 +148,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
     model = rhythm.default_model()
     leads: List[stems_mod.Lead] = []
     if options.stems and model is None:
-        warnings.append("分轨需要节奏模型（rhythm_model.json.gz），这次没有分轨。")
+        warnings.append(tr("分轨需要节奏模型（rhythm_model.json.gz），这次没有分轨。",
+                           "Stems need the rhythm model (rhythm_model.json.gz); no stems this time."))
     env_read = env
     if model is not None:
         places = rhythm.places(timing, env.duration_s * 1000.0)
@@ -176,7 +180,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
                               or (design is not None and any(r > 0 or k == "inverse"
                                                              for r, k in design.holds().values()))):
         if hold_model is None:
-            warnings.append("没有长条模型（hold_model.json.gz），这次只出米键。")
+            warnings.append(tr("没有长条模型（hold_model.json.gz），这次只出米键。",
+                               "No LN model (hold_model.json.gz); rice only this time."))
         else:
             sustain = holds.sustain_by_section(env, sections, stems_mod.bar_spans(grid))
             override = dict(design.holds() if design else {})
@@ -271,14 +276,18 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
         if top.total_stars < options.target_stars - options.tolerance:
             x, objs, prof = x_top, top_objs, top
             warnings.append(
-                f"这首歌的起音不够密，最高只能生成 {top.total_stars:.2f}★（目标 {options.target_stars:.2f}★）。"
+                tr(f"这首歌的起音不够密，最高只能生成 {top.total_stars:.2f}★（目标 {options.target_stars:.2f}★）。",
+                   f"This song's onsets aren't dense enough: {top.total_stars:.2f}★ is the most it can make "
+                   f"(target {options.target_stars:.2f}★).")
             )
         else:
             warnings.append(
-                f"没能落到目标 ±{options.tolerance:.2f}★ 以内，最接近的是 {prof.total_stars:.2f}★。"
+                tr(f"没能落到目标 ±{options.tolerance:.2f}★ 以内，最接近的是 {prof.total_stars:.2f}★。",
+                   f"Couldn't land within ±{options.tolerance:.2f}★ of the target; the closest is {prof.total_stars:.2f}★.")
             )
     if len(objs) < 5:
-        raise ValueError("生成的谱面少于 5 个音符：音频里几乎找不到起音，或者 timing 与音乐对不上。")
+        raise ValueError(tr("生成的谱面少于 5 个音符：音频里几乎找不到起音，或者 timing 与音乐对不上。",
+                            "The generated chart has fewer than 5 notes: the audio has almost no onsets, or the timing doesn't match the music."))
 
     beatmap = _beatmap(objs, timing, options, prof.total_stars)
     return GenerationResult(beatmap=beatmap, profile=prof, target_stars=options.target_stars, intensity=x,

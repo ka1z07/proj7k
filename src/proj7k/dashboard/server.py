@@ -46,6 +46,7 @@ from websockets.http11 import Request, Response
 from proj7k.dashboard.actions import DashboardConfig, build_actions
 from proj7k.dashboard import player as player_api
 from proj7k.dashboard.jobs import JobManager
+from proj7k.i18n import current as current_language, from_cookie, set_language, tr
 from proj7k.live.engine import LiveEngine
 from proj7k.live.server import LiveServer
 
@@ -252,10 +253,11 @@ class DashboardServer(LiveServer):
 
     def _player_route(self, what: str, arg: str, query: str, request: Request) -> Response:
         params = {k: v[-1] for k, v in parse_qs(query).items()}
+        set_language(from_cookie(request.headers.get("Cookie")))  # this thread's copy of the context only
         try:
             snapshot = self.library.snapshot(force=what == "refresh")
             player = params.get("player") or snapshot.default_player() or ""
-            not_found = self._json_response({"error": "没有找到"}, 404, "Not Found")
+            not_found = self._json_response({"error": tr("没有找到", "Not found")}, 404, "Not Found")
             if what in ("players", "refresh"):
                 return self._json_response({
                     "players": snapshot.players(), "default": snapshot.default_player(), "error": snapshot.error,
@@ -334,10 +336,10 @@ class DashboardServer(LiveServer):
         snapshot = self.library.snapshot()
         play = snapshot.play(play_id)
         if play is None or not play["replay_hash"]:
-            raise LookupError("这局没有保存回放")
+            raise LookupError(tr("这局没有保存回放", "This play has no saved replay"))
         source = player_api.store_path(self.config.lazer_files_dir, play["replay_hash"])
         if not source.is_file():
-            raise FileNotFoundError(f"osu!lazer 的文件里找不到这局的回放：{source}")
+            raise FileNotFoundError(tr(f"osu!lazer 的文件里找不到这局的回放：{source}", f"This play's replay isn't in osu!lazer's files: {source}"))
         out_dir = self.config.output_dir / "replays"
         out_dir.mkdir(parents=True, exist_ok=True)
         target = out_dir / _safe_filename(f"{play['replay_hash'][:12]}.osr")
@@ -422,13 +424,16 @@ class DashboardServer(LiveServer):
 
     async def _handle_message(self, connection: ServerConnection, data: Dict[str, Any]) -> None:
         msg_type = data.get("type")
+        # The page's language, for the messages below and the jobs it starts (each connection is its own task).
+        request = getattr(connection, "request", None)
+        set_language(from_cookie(request.headers.get("Cookie") if request is not None else None))
 
         if msg_type == "job_start":
             uploads: Dict[str, Tuple[str, bytes]] = {}
             for key, item in (data.get("uploads") or {}).items():
                 uploads[str(key)] = (str(item.get("name") or key), base64.b64decode(item.get("data") or ""))
             try:
-                job = self.jobs.submit(str(data.get("kind")), data.get("params") or {}, uploads)
+                job = self.jobs.submit(str(data.get("kind")), data.get("params") or {}, uploads, lang=current_language())
             except ValueError as e:
                 await connection.send(json.dumps({"type": "error", "request_id": data.get("request_id"), "message": str(e)}))
                 return
@@ -454,20 +459,20 @@ class DashboardServer(LiveServer):
             job = self.jobs.get(str(data.get("id")))
             index = data.get("index")
             if job is None or not isinstance(index, int) or not 0 <= index < len(job.artifacts):
-                await connection.send(json.dumps({"type": "error", "message": "没有这个输出文件"}, ensure_ascii=False))
+                await connection.send(json.dumps({"type": "error", "message": tr("没有这个输出文件", "No such output file")}, ensure_ascii=False))
                 return
             path = job.artifacts[index].path
             target = path.parent if data.get("reveal") else path
             try:
                 await asyncio.to_thread(self.opener, target)
             except Exception as e:
-                await connection.send(json.dumps({"type": "error", "message": f"无法打开 {target}: {e}"}, ensure_ascii=False))
+                await connection.send(json.dumps({"type": "error", "message": tr(f"无法打开 {target}: {e}", f"Can't open {target}: {e}")}, ensure_ascii=False))
 
         elif msg_type == "open_replay":
             try:
                 await asyncio.to_thread(self._open_replay, str(data.get("play") or ""))
             except Exception as e:
-                await connection.send(json.dumps({"type": "error", "message": f"无法在 osu! 里打开回放：{e}"}, ensure_ascii=False))
+                await connection.send(json.dumps({"type": "error", "message": tr(f"无法在 osu! 里打开回放：{e}", f"Can't open the replay in osu!: {e}")}, ensure_ascii=False))
 
         else:
             await super()._handle_message(connection, data)

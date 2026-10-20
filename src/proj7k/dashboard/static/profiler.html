@@ -113,6 +113,7 @@
     <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -178,7 +179,7 @@
     // --- 渲染 -------------------------------------------------------------------------------------------
     function dimsTable(dims, extraCols) {
       return el("table", {},
-        el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "星级" }), el("th", { text: "段位" }),
+        el("tr", {}, el("th", { text: tr("技法") }), el("th", { class: "num", text: tr("星级") }), el("th", { text: tr("段位") }),
           ...extraCols.map(([h]) => el("th", { class: "num", text: h }))),
         Object.entries(dims).map(([k, d]) => el("tr", {},
           el("td", { text: P7.skillName(k) }), el("td", { class: "num", text: `${d.star_rating.toFixed(2)}★` }), el("td", { text: d.dan_tier }),
@@ -187,15 +188,15 @@
 
     function recommendations(recs) {
       if (!recs || !recs.length) return null;
-      return el("div", { class: "card" }, el("h2", { text: "练习推荐" }), recs.map((r) => el("div", { style: "margin-bottom:12px" },
-        el("h3", { text: `${r.strategy === "bottleneck" ? "短板突破" : "长板专精"}：${P7.skillName(r.target_technique)}（${r.current_dan_tier} ${r.current_star_rating.toFixed(2)}★ → ${r.target_dan_tier} ${r.target_star_rating.toFixed(2)}★）` }),
+      return el("div", { class: "card" }, el("h2", { text: tr("练习推荐") }), recs.map((r) => el("div", { style: "margin-bottom:12px" },
+        el("h3", { text: tr("{strategy}：{skill}（{from} {fromStars}★ → {to} {toStars}★）", { strategy: r.strategy === "bottleneck" ? tr("短板突破") : tr("长板专精"), skill: P7.skillName(r.target_technique), from: r.current_dan_tier, fromStars: r.current_star_rating.toFixed(2), to: r.target_dan_tier, toStars: r.target_star_rating.toFixed(2) }) }),
         el("p", { class: "hint", text: r.rationale }),
         r.candidates.length ? el("table", {},
-          el("tr", {}, el("th", { text: "谱面" }), el("th", { class: "num", text: "星级" }), el("th", { text: "段位" })),
-          r.candidates.map((c) => el("tr", { class: c.md5_hash ? "clickable" : "", title: c.md5_hash ? "打开谱面详情" : "", onclick: () => P7.openChart(c.md5_hash) },
+          el("tr", {}, el("th", { text: tr("谱面") }), el("th", { class: "num", text: tr("星级") }), el("th", { text: tr("段位") })),
+          r.candidates.map((c) => el("tr", { class: c.md5_hash ? "clickable" : "", title: c.md5_hash ? tr("打开谱面详情") : "", onclick: () => P7.openChart(c.md5_hash) },
             el("td", { text: `${c.artist} - ${c.title} [${c.difficulty_name}]` }),
             el("td", { class: "num", text: `${c.star_rating.toFixed(2)}★` }), el("td", { text: c.dan_tier }))))
-          : el("div", { class: "hint", text: "曲库里没有找到合适的谱面（需要 osu!lazer 曲库）。" }))));
+          : el("div", { class: "hint", text: tr("曲库里没有找到合适的谱面（需要 osu!lazer 曲库）。") }))));
     }
 
     function replayResult(r) {
@@ -205,32 +206,32 @@
       const path = rep.pathology || {};
       const cascade = path.cascade_precursor;
       const nodes = [el("div", { class: "card" },
-        el("h2", { text: r.title || "回放" }),
+        el("h2", { text: r.title || tr("回放") }),
         el("div", { class: "row" }, el("span", { class: "big", text: radar ? radar.overall_dan : "—" }),
-          el("span", { class: "hint", text: `玩家 ${rep.player_name} · ${rep.play_mods.acronyms.length ? `${rep.play_mods.acronyms.join(" ")} · ` : ""}${rep.clock_rate !== 1 ? `${rep.clock_rate}x · ` : ""}${rep.is_valid_play ? "有效对局" : "无效对局（过短或完成度过低）"}${r.saved ? " · 已存档" : ""}` })),
-        rep.play_mods.unsupported.length ? el("div", { class: "warn", text: `这局开了 ${rep.play_mods.unsupported.join(" ")}，回放无法和谱面文件对齐，结果不可信，也不会计入画像。` }) : null,
-        rep.hash_matched ? null : el("div", { class: "warn", text: "回放记录的谱面与给的谱面文件不一致（MD5 不匹配），结果可能不可信。" }),
+          el("span", { class: "hint", text: `${tr("玩家 {name}", { name: rep.player_name })} · ${rep.play_mods.acronyms.length ? `${rep.play_mods.acronyms.join(" ")} · ` : ""}${rep.clock_rate !== 1 ? `${rep.clock_rate}x · ` : ""}${rep.is_valid_play ? tr("有效对局") : tr("无效对局（过短或完成度过低）")}${r.saved ? tr(" · 已存档") : ""}` })),
+        rep.play_mods.unsupported.length ? el("div", { class: "warn", text: tr("这局开了 {mods}，回放无法和谱面文件对齐，结果不可信，也不会计入画像。", { mods: rep.play_mods.unsupported.join(" ") }) }) : null,
+        rep.hash_matched ? null : el("div", { class: "warn", text: tr("回放记录的谱面与给的谱面文件不一致（MD5 不匹配），结果可能不可信。") }),
         el("div", { class: "stats" },
-          P7.stat("完成度", P7.pct(rep.completion_rate)), P7.stat("时长", `${rep.play_duration_s.toFixed(0)}s`),
-          P7.stat("物件", `${rep.total_hits}/${rep.total_notes}`), P7.stat("Miss", rep.miss_count), P7.stat("空敲", rep.ghost_tap_count),
+          P7.stat(tr("完成度"), P7.pct(rep.completion_rate)), P7.stat(tr("时长"), `${rep.play_duration_s.toFixed(0)}s`),
+          P7.stat(tr("物件"), `${rep.total_hits}/${rep.total_notes}`), P7.stat("Miss", rep.miss_count), P7.stat(tr("空敲"), rep.ghost_tap_count),
           ...Object.entries(j).map(([k, v]) => P7.stat(k, v))),
-        radar ? [el("h3", { text: `八项技法承压（主技法 ${P7.skillName(radar.dominant_technique)}，短板 ${P7.skillName(radar.bottleneck_technique)}）` }),
-          dimsTable(radar.dimensions, [["谱面要求", (d) => d.chart_level.toFixed(2)], ["崩了", (d) => (d.broke_down ? "是" : "")]])] : null,
-        el("h3", { text: "手法诊断" }),
+        radar ? [el("h3", { text: tr("八项技法承压（主技法 {a}，短板 {b}）", { a: P7.skillName(radar.dominant_technique), b: P7.skillName(radar.bottleneck_technique) }) }),
+          dimsTable(radar.dimensions, [[tr("谱面要求"), (d) => d.chart_level.toFixed(2)], [tr("崩了"), (d) => (d.broke_down ? tr("是") : "")]])] : null,
+        el("h3", { text: tr("手法诊断") }),
         P7.kv([
-          path.bimanual ? ["左 / 右手 UR", `${path.bimanual.left_ur} / ${path.bimanual.right_ur}（负荷不对称 ${path.bimanual.load_asymmetry_ratio}）`] : null,
-          path.jack_drift ? ["Jack 漂移", `${path.jack_drift.slope_ms_per_s} ms/s${path.jack_drift.fatigue_alert ? "（疲劳预警）" : ""}`] : null,
-          path.ln_release && path.ln_release.total_lns ? ["LN 尾判", `粘手 ${P7.pct(path.ln_release.sticky_rate)} · 慌松 ${P7.pct(path.ln_release.panic_release_rate)}`] : null,
-          cascade && cascade.fatal_time_ms !== null ? ["崩盘点", `${(cascade.fatal_time_ms / 1000).toFixed(2)}s · ${cascade.fatal_lane || ""} · ${P7.skillName(cascade.skill)}`] : null,
+          path.bimanual ? [tr("左 / 右手 UR"), tr("{left} / {right}（负荷不对称 {ratio}）", { left: path.bimanual.left_ur, right: path.bimanual.right_ur, ratio: path.bimanual.load_asymmetry_ratio })] : null,
+          path.jack_drift ? [tr("Jack 漂移"), `${path.jack_drift.slope_ms_per_s} ms/s${path.jack_drift.fatigue_alert ? tr("（疲劳预警）") : ""}`] : null,
+          path.ln_release && path.ln_release.total_lns ? [tr("LN 尾判"), tr("粘手 {sticky} · 慌松 {panic}", { sticky: P7.pct(path.ln_release.sticky_rate), panic: P7.pct(path.ln_release.panic_release_rate) })] : null,
+          cascade && cascade.fatal_time_ms !== null ? [tr("崩盘点"), `${(cascade.fatal_time_ms / 1000).toFixed(2)}s · ${cascade.fatal_lane || ""} · ${P7.skillName(cascade.skill)}`] : null,
         ]))];
       const rec = recommendations(r.recommendations);
       if (rec) nodes.push(rec);
       if (r.bundle) {
-        nodes.push(el("div", { class: "card" }, el("h2", { text: "三阶练习包" }),
-          el("table", {}, el("tr", {}, el("th", { text: "阶" }), el("th", { class: "num", text: "星级" })),
+        nodes.push(el("div", { class: "card" }, el("h2", { text: tr("三阶练习包") }),
+          el("table", {}, el("tr", {}, el("th", { text: tr("阶") }), el("th", { class: "num", text: tr("星级") })),
             Object.entries(r.bundle.tiers).map(([k, t]) => el("tr", {}, el("td", { text: k }),
               el("td", { class: "num", text: t.star_rating !== undefined ? `${Number(t.star_rating).toFixed(2)}★` : "" })))),
-          el("p", { class: "hint", text: "文件在下方任务输出里，可直接导入 osu!。" })));
+          el("p", { class: "hint", text: tr("文件在下方任务输出里，可直接导入 osu!。") })));
       }
       if (r.bundle_notice) nodes.push(el("div", { class: "warn", text: r.bundle_notice }));
       return nodes;
@@ -240,27 +241,37 @@
       const p = r.profile;
       const tc = p.trend_comparison;
       const nodes = [el("div", { class: "card" },
-        el("h2", { text: `${p.player_name} · ${p.window_mode === "all_time" ? "全历史" : `近 ${p.horizon_days} 天`}` }),
-        el("div", { class: "row" }, el("span", { class: "big", text: p.total_matches ? `${p.overall_dan} ${p.overall_star_rating.toFixed(2)}★` : "暂无数据" }),
-          p.total_matches ? el("span", { class: "hint", text: `主技法 ${P7.skillName(p.dominant_technique)} · 短板 ${P7.skillName(p.bottleneck_technique)}` }) : null),
+        el("h2", { text: `${p.player_name} · ${p.window_mode === "all_time" ? tr("全历史") : tr("近 {n} 天", { n: p.horizon_days })}` }),
+        el("div", { class: "row" }, el("span", { class: "big", text: p.total_matches ? `${p.overall_dan} ${p.overall_star_rating.toFixed(2)}★` : tr("暂无数据") }),
+          p.total_matches ? el("span", { class: "hint", text: tr("主技法 {a} · 短板 {b}", { a: P7.skillName(p.dominant_technique), b: P7.skillName(p.bottleneck_technique) }) }) : null),
         el("div", { class: "stats" },
-          P7.stat("对局", p.total_matches), P7.stat("通关", p.cleared_matches), P7.stat("失败（保留）", p.failed_matches),
-          P7.stat("稳定 UR", p.average_ur === null ? "—" : p.average_ur.toFixed(1))),
-        p.total_matches ? P7.skillBars(Object.fromEntries(Object.entries(p.dimensions).map(([k, d]) => [k, d.star_rating]))) : el("div", { class: "hint", text: "这个时间窗里没有对局。先导入回放或诊断几局。" }),
-        p.total_matches ? dimsTable(p.dimensions, [["对局", (d) => d.match_count]]) : null,
-        tc ? [el("h3", { text: `与全历史对比（全历史 ${tc.all_time_overall_dan} ${tc.all_time_overall_sr.toFixed(2)}★）` }),
-          el("table", {}, el("tr", {}, el("th", { text: "技法" }), el("th", { class: "num", text: "近期" }), el("th", { class: "num", text: "全历史" }), el("th", { class: "num", text: "差值" }), el("th", { text: "状态" })),
+          P7.stat(tr("对局"), p.total_matches), P7.stat(tr("通关"), p.cleared_matches), P7.stat(tr("失败（保留）"), p.failed_matches),
+          P7.stat(tr("稳定 UR"), p.average_ur === null ? "—" : p.average_ur.toFixed(1))),
+        p.total_matches ? P7.skillBars(Object.fromEntries(Object.entries(p.dimensions).map(([k, d]) => [k, d.star_rating]))) : el("div", { class: "hint", text: tr("这个时间窗里没有对局。先导入回放或诊断几局。") }),
+        p.total_matches ? dimsTable(p.dimensions, [[tr("对局"), (d) => d.match_count]]) : null,
+        tc ? [el("h3", { text: tr("与全历史对比（全历史 {dan} {stars}★）", { dan: tc.all_time_overall_dan, stars: tc.all_time_overall_sr.toFixed(2) }) }),
+          el("table", {}, el("tr", {}, el("th", { text: tr("技法") }), el("th", { class: "num", text: tr("近期") }), el("th", { class: "num", text: tr("全历史") }), el("th", { class: "num", text: tr("差值") }), el("th", { text: tr("状态") })),
             Object.entries(tc.dimension_deltas || {}).map(([k, d]) => el("tr", {}, el("td", { text: P7.skillName(k) }),
               el("td", { class: "num", text: d.recent_sr.toFixed(2) }), el("td", { class: "num", text: d.all_time_sr.toFixed(2) }),
               el("td", { class: "num", text: `${d.delta_sr >= 0 ? "+" : ""}${d.delta_sr.toFixed(2)}` }), el("td", { text: d.status }))))] : null,
-        p.legacy_excluded ? el("p", { class: "hint", text: `${p.legacy_excluded} 条旧引擎写入的快照未计入。` }) : null,
-        p.stale_excluded ? el("p", { class: "warn", text: `${p.stale_excluded} 局开了变速 / Mirror 等 mod 的对局是按旧方式读的，暂未计入；重新「导入回放」即可按 mod 重新计算。` }) : null)];
+        p.legacy_excluded ? el("p", { class: "hint", text: tr("{n} 条旧引擎写入的快照未计入。", { n: p.legacy_excluded }) }) : null,
+        p.stale_excluded ? el("p", { class: "warn", text: tr("{n} 局开了变速 / Mirror 等 mod 的对局是按旧方式读的，暂未计入；重新「导入回放」即可按 mod 重新计算。", { n: p.stale_excluded }) }) : null)];
       const rec = recommendations(r.recommendations);
       if (rec) nodes.push(rec);
       return nodes;
     }
 
-    const HAND = { L: "左手", R: "右手" };
+    const HAND = { L: tr("左手"), R: tr("右手") };
+    function middleHand(hd) {
+      const right = hd.middle_hand === "R";
+      const v = {
+        own: right ? hd.middle_right_corr : hd.middle_left_corr, other: right ? hd.middle_left_corr : hd.middle_right_corr,
+        ownMs: right ? hd.middle_right_diff_ms : hd.middle_left_diff_ms, otherMs: right ? hd.middle_left_diff_ms : hd.middle_right_diff_ms,
+      };
+      return right
+        ? tr("中键由右手按：和右手的键一起按时误差更同步（相关 {own} 对 {other}），按下时间差也更小（{ownMs}ms 对 {otherMs}ms）。", v)
+        : tr("中键由左手按：和左手的键一起按时误差更同步（相关 {own} 对 {other}），按下时间差也更小（{ownMs}ms 对 {otherMs}ms）。", v);
+    }
     const ms = (x, signed) => (x === null || x === undefined ? "—" : `${signed && x > 0 ? "+" : ""}${x}ms`);
     const pctOr = (x) => (x === null || x === undefined ? "—" : P7.pct(x));
     const gapLabel = (b) => (b.hi === null ? `≥${b.lo}ms` : `${b.lo}–${b.hi}ms`);
@@ -275,7 +286,7 @@
           const p = corr[`${a}-${b}`];
           if (a === b || !p || p.corr === null) return el("td", { class: "num hint", text: a === b ? "·" : "—" });
           const alpha = Math.max(0, Math.min(1, p.corr / 0.6));
-          return el("td", { class: "num", text: p.corr.toFixed(2), title: `${p.lanes}：${p.chords} 个和弦，按下时间差中位 ${p.median_diff_ms}ms`,
+          return el("td", { class: "num", text: p.corr.toFixed(2), title: tr("{lanes}：{n} 个和弦，按下时间差中位 {ms}ms", { lanes: p.lanes, n: p.chords, ms: p.median_diff_ms }),
             style: `background: rgba(56, 189, 248, ${(0.08 + 0.6 * alpha).toFixed(2)})` });
         }))));
     }
@@ -283,50 +294,50 @@
     function habitsResult(r) {
       const h = r.habits;
       const head = el("div", { class: "card" },
-        el("h2", { text: `${h.player_name} · ${h.window_mode === "all_time" ? "全历史" : `近 ${h.horizon_days} 天`}` }),
-        el("div", { class: "stats" }, P7.stat("回放", h.plays), P7.stat("音符", h.notes),
-          P7.stat("中键归属", h.hands.middle_hand ? HAND[h.hands.middle_hand] : "不确定"),
-          P7.stat("滚奏阈值", h.roll_threshold_ms === null ? "—" : `${h.roll_threshold_ms}ms`)),
-        h.stale_plays ? el("p", { class: "warn", text: `${h.stale_plays} 局是旧版本存的，没有习惯数据；重新「导入回放」即可补上。` }) : null);
-      if (!h.plays) return [head, el("div", { class: "card hint", text: "这个时间窗里没有带习惯数据的回放。先导入回放。" })];
+        el("h2", { text: `${h.player_name} · ${h.window_mode === "all_time" ? tr("全历史") : tr("近 {n} 天", { n: h.horizon_days })}` }),
+        el("div", { class: "stats" }, P7.stat(tr("回放"), h.plays), P7.stat(tr("音符"), h.notes),
+          P7.stat(tr("中键归属"), h.hands.middle_hand ? HAND[h.hands.middle_hand] : tr("不确定")),
+          P7.stat(tr("滚奏阈值"), h.roll_threshold_ms === null ? "—" : `${h.roll_threshold_ms}ms`)),
+        h.stale_plays ? el("p", { class: "warn", text: tr("{n} 局是旧版本存的，没有习惯数据；重新「导入回放」即可补上。", { n: h.stale_plays }) }) : null);
+      if (!h.plays) return [head, el("div", { class: "card hint", text: tr("这个时间窗里没有带习惯数据的回放。先导入回放。") })];
 
       const hd = h.hands;
-      const hands = el("div", { class: "card" }, el("h2", { text: "手的分工" }),
+      const hands = el("div", { class: "card" }, el("h2", { text: tr("手的分工") }),
         el("p", { text: hd.middle_hand
-          ? `中键由${HAND[hd.middle_hand]}按：和${HAND[hd.middle_hand]}的键一起按时误差更同步（相关 ${hd.middle_hand === "R" ? hd.middle_right_corr : hd.middle_left_corr} 对 ${hd.middle_hand === "R" ? hd.middle_left_corr : hd.middle_right_corr}），按下时间差也更小（${hd.middle_hand === "R" ? hd.middle_right_diff_ms : hd.middle_left_diff_ms}ms 对 ${hd.middle_hand === "R" ? hd.middle_left_diff_ms : hd.middle_right_diff_ms}ms）。`
-          : "中键和两只手的同步程度差不多，看不出由哪只手按（可能两只手都按，或者数据还不够）。" }),
+          ? middleHand(hd)
+          : tr("中键和两只手的同步程度差不多，看不出由哪只手按（可能两只手都按，或者数据还不够）。") }),
         el("p", { class: "hint", text: hd.hands_separable
-          ? `同一只手的键误差相关平均 ${hd.within_hand_corr}，跨手 ${hd.cross_hand_corr}：两只手在时间上分得很清楚。下表是和弦里两列按键误差的相关系数，越亮越像同一只手一起动。`
-          : `同手相关 ${hd.within_hand_corr ?? "—"}，跨手 ${hd.cross_hand_corr ?? "—"}：两只手在时间上分不太开，下面的推断要谨慎看。` }),
+          ? tr("同一只手的键误差相关平均 {within}，跨手 {cross}：两只手在时间上分得很清楚。下表是和弦里两列按键误差的相关系数，越亮越像同一只手一起动。", { within: hd.within_hand_corr, cross: hd.cross_hand_corr })
+          : tr("同手相关 {within}，跨手 {cross}：两只手在时间上分不太开，下面的推断要谨慎看。", { within: hd.within_hand_corr ?? "—", cross: hd.cross_hand_corr ?? "—" }) }),
         corrGrid(h),
-        el("h3", { text: "和弦里谁先按（同一只手内，这个键先按下的比例）" }),
+        el("h3", { text: tr("和弦里谁先按（同一只手内，这个键先按下的比例）") }),
         P7.kv(Object.entries(h.hand_lead).map(([hand, rows]) => [HAND[hand],
           rows.map((x) => `${x.lane} ${pctOr(x.first_rate)}`).join(" · ")])));
 
-      const cols = el("div", { class: "card" }, el("h2", { text: "每列" }),
-        el("table", {}, el("tr", {}, el("th", { text: "列" }), el("th", { class: "num", text: "平均偏移" }), el("th", { class: "num", text: "偏移标准差" }),
-          el("th", { class: "num", text: "米键按住（中位，p10–p90）" }), el("th", { class: "num", text: "LN 尾平均" }),
-          el("th", { class: "num", text: "LN 早松" }), el("th", { class: "num", text: "LN 晚松" }), el("th", { class: "num", text: "空按" })),
+      const cols = el("div", { class: "card" }, el("h2", { text: tr("每列") }),
+        el("table", {}, el("tr", {}, el("th", { text: tr("列") }), el("th", { class: "num", text: tr("平均偏移") }), el("th", { class: "num", text: tr("偏移标准差") }),
+          el("th", { class: "num", text: tr("米键按住（中位，p10–p90）") }), el("th", { class: "num", text: tr("LN 尾平均") }),
+          el("th", { class: "num", text: tr("LN 早松") }), el("th", { class: "num", text: tr("LN 晚松") }), el("th", { class: "num", text: tr("空按") })),
           h.columns.map((c) => el("tr", {}, el("td", { text: c.lane }), el("td", { class: "num", text: ms(c.mean_offset_ms, true) }),
             el("td", { class: "num", text: ms(c.sd_offset_ms) }),
-            el("td", { class: "num", text: c.hold_median_ms === null ? "—" : `${c.hold_median_ms}ms（${c.hold_p10_ms}–${c.hold_p90_ms}）` }),
+            el("td", { class: "num", text: c.hold_median_ms === null ? "—" : tr("{median}ms（{p10}–{p90}）", { median: c.hold_median_ms, p10: c.hold_p10_ms, p90: c.hold_p90_ms }) }),
             el("td", { class: "num", text: ms(c.ln_tail_mean_ms, true) }), el("td", { class: "num", text: pctOr(c.ln_early_rate) }),
             el("td", { class: "num", text: pctOr(c.ln_late_rate) }), el("td", { class: "num", text: c.ghost_taps })))),
-        el("p", { class: "hint", text: "偏移为负是按早。LN 早松 / 晚松指松手离尾判超过 50ms。" }));
+        el("p", { class: "hint", text: tr("偏移为负是按早。LN 早松 / 晚松指松手离尾判超过 50ms。") }));
 
-      const motion = el("div", { class: "card" }, el("h2", { text: "按键方式" }),
-        el("h3", { text: "米键按住多久（按同一列到下一个音的间隔分）" }),
-        el("table", {}, el("tr", {}, el("th", { text: "同列间隔" }), el("th", { class: "num", text: "音符" }), el("th", { class: "num", text: "按住中位" })),
+      const motion = el("div", { class: "card" }, el("h2", { text: tr("按键方式") }),
+        el("h3", { text: tr("米键按住多久（按同一列到下一个音的间隔分）") }),
+        el("table", {}, el("tr", {}, el("th", { text: tr("同列间隔") }), el("th", { class: "num", text: tr("音符") }), el("th", { class: "num", text: tr("按住中位") })),
           h.hold_by_gap.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.notes }), el("td", { class: "num", text: ms(b.hold_median_ms) })))),
-        el("p", { class: "hint", text: "间隔变大而按住时长不变，说明是固定的「点一下」；随间隔变长，说明习惯按住到下一个音附近。" }),
-        el("h3", { text: `滚奏：同一只手换键时，前一个键还没松开的比例${h.roll_threshold_ms === null ? "" : `（约 ${h.roll_threshold_ms}ms 以下是滚着打）`}` }),
-        el("table", {}, el("tr", {}, el("th", { text: "间隔" }), el("th", { class: "num", text: "音符对" }), el("th", { class: "num", text: "前键未松" })),
+        el("p", { class: "hint", text: tr("间隔变大而按住时长不变，说明是固定的「点一下」；随间隔变长，说明习惯按住到下一个音附近。") }),
+        el("h3", { text: tr("滚奏：同一只手换键时，前一个键还没松开的比例") + (h.roll_threshold_ms === null ? "" : tr("（约 {ms}ms 以下是滚着打）", { ms: h.roll_threshold_ms })) }),
+        el("table", {}, el("tr", {}, el("th", { text: tr("间隔") }), el("th", { class: "num", text: tr("音符对") }), el("th", { class: "num", text: tr("前键未松") })),
           h.roll.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.pairs }), el("td", { class: "num", text: pctOr(b.overlap_rate) })))),
-        el("h3", { text: "叠键：同列连打两下的平均偏移" }),
-        el("table", {}, el("tr", {}, el("th", { text: "间隔" }), el("th", { class: "num", text: "叠键对" }), el("th", { class: "num", text: "第一下" }), el("th", { class: "num", text: "第二下" })),
+        el("h3", { text: tr("叠键：同列连打两下的平均偏移") }),
+        el("table", {}, el("tr", {}, el("th", { text: tr("间隔") }), el("th", { class: "num", text: tr("叠键对") }), el("th", { class: "num", text: tr("第一下") }), el("th", { class: "num", text: tr("第二下") })),
           h.jack.map((b) => el("tr", {}, el("td", { text: gapLabel(b) }), el("td", { class: "num", text: b.pairs }),
             el("td", { class: "num", text: ms(b.first_offset_ms, true) }), el("td", { class: "num", text: ms(b.second_offset_ms, true) })))),
-        el("p", { class: "hint", text: "第一下偏早、第二下偏晚，说明这个速度的叠键被压缩、手跟不上。" }));
+        el("p", { class: "hint", text: tr("第一下偏早、第二下偏晚，说明这个速度的叠键被压缩、手跟不上。") }));
       return [head, hands, cols, motion];
     }
 
@@ -354,7 +365,7 @@
       if (params.tab) showTab(params.tab);
       if (params.replay_hash) {
         pickedReplay = params.replay_hash;
-        $("#playName").textContent = params.title ? `选中的一局：${params.title}` : "选中的一局";
+        $("#playName").textContent = params.title ? tr("选中的一局：{name}", { name: params.title }) : tr("选中的一局");
         $("#playOpt").classList.remove("hidden");
         sourceTouched = true;
         document.querySelector("input[name=src][value=play]").checked = true;
@@ -385,11 +396,11 @@
       const job = await run("import_replays", { player: $("#imPlayer").value, limit: $("#imLimit").value });
       if (!job) return;
       const s = job.result;
-      $("#results").replaceChildren(el("div", { class: "card" }, el("h2", { text: "导入完成" }), el("div", { class: "stats" },
-        P7.stat("发现回放", s.replays_discovered), P7.stat("新入库", s.saved), P7.stat("重新计算", s.reingested), P7.stat("已在库中", s.already_exists),
-        P7.stat("不支持的 mod（未入库）", s.unsupported_mods),
-        P7.stat("过滤（过短 / 完成度低）", s.noise_filtered), P7.stat("失败局（保留）", s.failed_preserved),
-        P7.stat("缺文件", s.missing_files), P7.stat("出错", s.errors))));
+      $("#results").replaceChildren(el("div", { class: "card" }, el("h2", { text: tr("导入完成") }), el("div", { class: "stats" },
+        P7.stat(tr("发现回放"), s.replays_discovered), P7.stat(tr("新入库"), s.saved), P7.stat(tr("重新计算"), s.reingested), P7.stat(tr("已在库中"), s.already_exists),
+        P7.stat(tr("不支持的 mod（未入库）"), s.unsupported_mods),
+        P7.stat(tr("过滤（过短 / 完成度低）"), s.noise_filtered), P7.stat(tr("失败局（保留）"), s.failed_preserved),
+        P7.stat(tr("缺文件"), s.missing_files), P7.stat(tr("出错"), s.errors))));
       loadPlayers();
     };
   </script>

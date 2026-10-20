@@ -119,6 +119,8 @@ powershell -ExecutionPolicy Bypass -File deploy\desktop\install-shortcut.ps1
 
 顶栏的 **「重启 osu!」** 按钮会正常关掉 osu!lazer（和点窗口右上角 ✕ 一样，会保存）再重新打开，导入新谱面后用得到。
 
+界面有中文和英文两种：第一次打开跟随系统语言，顶栏最右边的 **「English / 中文」** 按钮随时切换，会记住你的选择。
+
 > [!NOTE]
 > 控制台只在你自己电脑上运行，不会上传任何东西。osu!lazer 装在默认位置时会自动找到，不需要设置。
 

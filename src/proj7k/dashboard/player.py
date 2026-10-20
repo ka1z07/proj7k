@@ -28,6 +28,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from proj7k.dan import CANONICAL_DAN_SR, CANONICAL_DAN_TIERS, estimate_canonical_dan
+from proj7k.i18n import tr
 from proj7k.lazer.annotator import (
     _normalize_tech_key,
     current_engine_version,
@@ -358,12 +359,12 @@ class PlayerLibrary:
 
     def _load(self) -> LibrarySnapshot:
         if self._loader is self._bridge_loader and not self.realm_path.exists():
-            return LibrarySnapshot(loaded_at=time.time(), error=f"没有找到 osu!lazer 数据库：{self.realm_path}")
+            return LibrarySnapshot(loaded_at=time.time(), error=tr(f"没有找到 osu!lazer 数据库：{self.realm_path}", f"osu!lazer database not found: {self.realm_path}"))
         try:
             data = self._loader()
         except Exception as e:
             logger.warning(f"Could not read the osu!lazer library: {e}")
-            return LibrarySnapshot(loaded_at=time.time(), error=f"读取 osu!lazer 数据库失败：{e}")
+            return LibrarySnapshot(loaded_at=time.time(), error=tr(f"读取 osu!lazer 数据库失败：{e}", f"Failed to read the osu!lazer database: {e}"))
 
         charts: Dict[str, Dict[str, Any]] = {}
         for raw in data.get("beatmaps") or []:

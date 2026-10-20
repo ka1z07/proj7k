@@ -110,6 +110,7 @@
     <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
   </div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
   <script>
     "use strict";
@@ -135,9 +136,9 @@
       if (borrow.disabled && borrow.checked) document.querySelector("input[name=timing][value=auto]").checked = true;
       $("#bpmField").classList.toggle("hidden", timingMode() !== "manual");
       $("#timingHint").textContent = {
-        borrow: "借用参考谱面的全部 timing（包括变速），只重新放音符。",
-        auto: "从音乐自动测一个恒定 BPM 与第一个强拍。变速歌、或者节奏明显不对时，改用借用或手动。",
-        manual: "恒定 BPM；offset 填第一个强拍出现的时间（毫秒）。",
+        borrow: tr("借用参考谱面的全部 timing（包括变速），只重新放音符。"),
+        auto: tr("从音乐自动测一个恒定 BPM 与第一个强拍。变速歌、或者节奏明显不对时，改用借用或手动。"),
+        manual: tr("恒定 BPM；offset 填第一个强拍出现的时间（毫秒）。"),
       }[timingMode()];
       $("#srField").classList.toggle("hidden", targetMode() !== "sr");
       $("#danField").classList.toggle("hidden", targetMode() === "sr");
@@ -177,13 +178,14 @@
     });
 
     P7.getJSON("/api/config").then((cfg) => {
-      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: `${t.name}（${t.stars.toFixed(2)}★）` })));
+      cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: tr("{dan}（{stars}★）", { dan: t.name, stars: t.stars.toFixed(2) }) })));
       $("#dan").value = "2nd";
-      $("#outDir").placeholder = `默认：${cfg.generated_dir}`;
+      $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.generated_dir });
     });
 
-    const PATTERN_NAME = { stairs: "楼梯", split: "切", trill: "颤", jumptrill: "跳颤", jack: "单叠", chordjack: "跳叠",
-      chordstream: "和弦串", handstream: "手流", free: "随意" };
+    const PATTERN_NAME = { stairs: tr("楼梯"), split: tr("切"), trill: tr("颤"), jumptrill: tr("跳颤"), jack: tr("单叠"), chordjack: tr("跳叠"),
+      chordstream: tr("和弦串"), handstream: tr("手流"), free: tr("随意") };
+    const STEM_NAME = { drums: tr("鼓"), bass: tr("贝斯"), vocals: tr("人声"), other: tr("其他") };
     function leadRuns(leads) {
       const runs = [];
       for (const l of leads) {
@@ -193,28 +195,28 @@
       }
       return runs;
     }
-    const TIMING_SOURCE = { reference: "借用参考谱面", manual: "手动指定", auto: "自动测得" };
+    const TIMING_SOURCE = { reference: tr("借用参考谱面"), manual: tr("手动指定"), auto: tr("自动测得") };
     function resultCard(r) {
       return el("div", { class: "card" },
         el("h2", { text: r.title }),
         el("div", { class: "row" },
           el("span", { class: "big", text: `${r.stars.toFixed(2)}★` }),
-          el("span", { class: "hint", text: `目标 ${r.target_stars.toFixed(2)}★` })),
+          el("span", { class: "hint", text: tr("目标 {stars}★", { stars: r.target_stars.toFixed(2) }) })),
         el("div", { class: "stats" },
-          P7.stat("音符 / 行", `${r.notes} / ${r.rows}`),
-          r.ln_share ? P7.stat("长条", `${Math.round(r.ln_share * 100)}%`) : null,
-          P7.stat("主技能", P7.skillName(r.dominant_skill)),
+          P7.stat(tr("音符 / 行"), `${r.notes} / ${r.rows}`),
+          r.ln_share ? P7.stat(tr("长条"), `${Math.round(r.ln_share * 100)}%`) : null,
+          P7.stat(tr("主技能"), P7.skillName(r.dominant_skill)),
           P7.stat("BPM", Number(r.bpm).toFixed(2)),
           P7.stat("Timing", TIMING_SOURCE[r.timing_source] || r.timing_source),
-          r.tempo ? P7.stat("测速置信度", `${r.tempo.confidence.toFixed(2)}（前后差 ${r.tempo.drift_ms} ms）`) : null),
+          r.tempo ? P7.stat(tr("测速置信度"), tr("{confidence}（前后差 {drift} ms）", { confidence: r.tempo.confidence.toFixed(2), drift: r.tempo.drift_ms })) : null),
         (r.leads || []).length ? el("div", { class: "hint", style: "margin-top:6px",
-          text: "主跟层：" + leadRuns(r.leads).map((l) => `${l.first_bar + 1}–${l.last_bar + 1} 小节${l.name}`).join("，") }) : null,
+          text: tr("主跟层：") + leadRuns(r.leads).map((l) => tr("{first}–{last} 小节{stem}", { first: l.first_bar + 1, last: l.last_bar + 1, stem: STEM_NAME[l.stem] || l.name })).join(tr("，")) }) : null,
         (r.design || []).length ? el("div", { class: "hint", style: "margin-top:6px",
-          text: "段落设计：" + r.design.map((d) => `${d.bars[0] + 1}–${d.bars[1] + 1} 小节 ${P7.skillName(d.technique.replace("rc_", "").replace("stamina", "stream"))}/${PATTERN_NAME[d.pattern] || d.pattern}`).join("，") }) : null,
-        el("h3", { text: "八项技法星级" }),
+          text: tr("段落设计：") + r.design.map((d) => tr("{first}–{last} 小节 {technique}/{pattern}", { first: d.bars[0] + 1, last: d.bars[1] + 1, technique: P7.skillName(d.technique.replace("rc_", "").replace("stamina", "stream")), pattern: PATTERN_NAME[d.pattern] || d.pattern })).join(tr("，")) }) : null,
+        el("h3", { text: tr("八项技法星级") }),
         P7.skillBars(r.skills),
-        (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join("；")) : null,
-        el("button", { class: "small", style: "margin-top:8px", text: "换一种配键（种子 +1）", disabled: running,
+        (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join(tr("；"))) : null,
+        el("button", { class: "small", style: "margin-top:8px", text: tr("换一种配键（种子 +1）"), disabled: running,
           onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
     }
 

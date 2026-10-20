@@ -18,6 +18,7 @@ from proj7k.lazer.backup import DEFAULT_CACHE_DIR
 from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
 
 from proj7k.dashboard.jobs import Action, JobContext
+from proj7k.i18n import tr
 
 logger = logging.getLogger("proj7k.dashboard")
 
@@ -76,10 +77,10 @@ def _text(params: Dict[str, Any], key: str) -> str:
 def _path(params: Dict[str, Any], key: str, what: str) -> Path:
     raw = _text(params, key).strip('"')
     if not raw:
-        raise ValueError(f"缺少{what}")
+        raise ValueError(tr(f"缺少{what}", f"Missing {what}"))
     path = Path(raw).expanduser()
     if not path.exists():
-        raise FileNotFoundError(f"{what}不存在：{path}")
+        raise FileNotFoundError(tr(f"{what}不存在：{path}", f"{what[:1].upper()}{what[1:]} not found: {path}"))
     return path
 
 
@@ -139,7 +140,7 @@ def sync_once(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
         if was_running:
             client.start()
     if not summary.success:
-        raise RuntimeError(summary.error or "同步失败")
+        raise RuntimeError(summary.error or tr("同步失败", "Sync failed"))
     return {**asdict(summary), "restarted_lazer": was_running}
 
 
@@ -147,7 +148,7 @@ def sync_revert(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext
     logger.info(f"Reverting all proj7k modifications on '{config.realm_path}'...")
     res = _sync_manager(config).revert_all()
     if not res.success:
-        raise RuntimeError(res.error or "还原失败")
+        raise RuntimeError(res.error or tr("还原失败", "Restore failed"))
     return {"restored": res.updated_count}
 
 
@@ -174,7 +175,7 @@ def lazer_control(config: DashboardConfig, params: Dict[str, Any], ctx: JobConte
             return {"mode": mode, "was_running": True}
         client.start()
         return {"mode": mode, "was_running": False}
-    raise ValueError(f"未知的操作：{mode}")
+    raise ValueError(tr(f"未知的操作：{mode}", f"Unknown action: {mode}"))
 
 
 # --- downscaler ------------------------------------------------------------------------------------------------
@@ -199,14 +200,15 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
 
     source = _text(params, "input").strip('"')
     if not source:
-        raise ValueError("缺少输入谱面（游戏当前谱面、.osu 路径、文件夹、谱面 ID 或链接）")
+        raise ValueError(tr("缺少输入谱面（游戏当前谱面、.osu 路径、文件夹、谱面 ID 或链接）",
+                            "Missing input chart (the game's current chart, an .osu path, a folder, a beatmap ID or link)"))
     target_dan = _text(params, "target_dan") or None
     target_sr = _float(params, "target_sr")
     if target_dan is None and target_sr is None:
-        raise ValueError("请选择目标段位或填写目标星级")
+        raise ValueError(tr("请选择目标段位或填写目标星级", "Choose a target dan or enter target stars"))
     mode = _text(params, "mode") or "technique"
     if mode not in ("technique", "free"):
-        raise ValueError(f"未知的降阶方式：{mode}")
+        raise ValueError(tr(f"未知的降阶方式：{mode}", f"Unknown downscale mode: {mode}"))
     options = DownscaleOptions(
         target_dan=target_dan,
         target_sr=target_sr,
@@ -231,9 +233,9 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
         bm = res.original_beatmap
         osz = run.osz_map.get(out_path) if out_path else None
         if osz is not None:
-            ctx.add_artifact(osz, "练习包 .osz")
+            ctx.add_artifact(osz, tr("练习包 .osz", "Practice pack .osz"))
         if out_path is not None:
-            ctx.add_artifact(out_path, "练习谱 .osu")
+            ctx.add_artifact(out_path, tr("练习谱 .osu", "Practice chart .osu"))
         report = res.to_dict()
         validation = report["validation"]
         for key in ("dominant_technique_orig", "dominant_technique_downscaled"):
@@ -279,9 +281,10 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     ref_spec = _text(params, "reference").strip('"')
     if ref_spec:
         reference = resolve_reference(ref_spec, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
-    audio = _path(params, "audio", "音频文件") if _text(params, "audio") else None
+    audio = _path(params, "audio", tr("音频文件", "audio file")) if _text(params, "audio") else None
     if reference is None and audio is None:
-        raise ValueError("请选择游戏当前谱面、一张参考谱面，或一个音频文件")
+        raise ValueError(tr("请选择游戏当前谱面、一张参考谱面，或一个音频文件",
+                            "Choose the game's current chart, a reference chart, or an audio file"))
     options = GeneratorOptions(
         target_stars=stars,
         target_label=label,
@@ -306,8 +309,8 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     for w in run.result.warnings:
         logger.info(w)
     if run.osz_path is not None:
-        ctx.add_artifact(run.osz_path, "生成谱 .osz")
-    ctx.add_artifact(run.osu_path, "生成谱 .osu")
+        ctx.add_artifact(run.osz_path, tr("生成谱 .osz", "Generated chart .osz"))
+    ctx.add_artifact(run.osu_path, tr("生成谱 .osu", "Generated chart .osu"))
     out = run.to_dict()
     out["skills"] = _profile_skills(run.result.profile)
     out["dominant_skill"] = _tech_key(run.result.profile.dominant_skill)
@@ -382,7 +385,8 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         # `replay_hash`: one play the player picked (from the history or chart pages).
         chart_hash = _text(params, "beatmap_hash") if source == "current" else ""
         if source == "current" and not chart_hash:
-            raise ValueError("还没有检测到游戏里的当前谱面：在 osu!lazer 里选一张 7K 谱")
+            raise ValueError(tr("还没有检测到游戏里的当前谱面：在 osu!lazer 里选一张 7K 谱",
+                                "No current chart detected in game yet: select a 7K chart in osu!lazer"))
         try:
             found = resolve_lazer_replay(
                 _text(params, "player") or None, realm_path=config.realm_path, files_dir=config.lazer_files_dir,
@@ -391,7 +395,8 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
             )
         except LookupError as e:
             if chart_hash:
-                raise LookupError(f"osu!lazer 里还没有这张谱面的回放，先打一局再来（{e}）") from e
+                raise LookupError(tr(f"osu!lazer 里还没有这张谱面的回放，先打一局再来（{e}）",
+                                     f"osu!lazer has no replay of this chart yet; play it first ({e})")) from e
             raise
         replay_path, beatmap_path = found["replay"], found["beatmap"]
         label = _safe_label(f"{found['title']}_{found['difficulty_name']}_{found['date'][:10]}")
@@ -399,8 +404,8 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
             f"Latest lazer replay of {found['player_name']}: {found['title']} [{found['difficulty_name']}] {found['date'][:19]}"
         )
     else:
-        replay_path = _path(params, "replay", "回放文件")
-        beatmap_path = _path(params, "beatmap", "谱面文件")
+        replay_path = _path(params, "replay", tr("回放文件", "replay file"))
+        beatmap_path = _path(params, "beatmap", tr("谱面文件", "chart file"))
         label = _safe_label(Path(replay_path).stem)
 
     logger.info("Aligning the replay against the chart and running the diagnosis...")
@@ -441,9 +446,9 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         view = write_replay_view(
             report, view_dir / f"{label}.html", audio_path=view_audio, replay_path=replay_path, beatmap_path=beatmap_path,
         )
-        ctx.add_artifact(view, "回放查看器")
+        ctx.add_artifact(view, tr("回放查看器", "Replay viewer"))
         if view_audio is not None:
-            ctx.add_artifact(view_audio, "音频")
+            ctx.add_artifact(view_audio, tr("音频", "Audio"))
         result["replay_view"] = str(view)
 
     strategy = _text(params, "recommend")
@@ -458,13 +463,14 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
             report, beatmap_path, fatal_time_ms=_float(params, "fatal_time"), bundle_dir=config.bundles_dir / label,
         )
         if bundle is None:
-            result["bundle_notice"] = "回放里没有找到崩盘点；填写「切片时间」可以指定一段来生成练习包。"
+            result["bundle_notice"] = tr("回放里没有找到崩盘点；填写「切片时间」可以指定一段来生成练习包。",
+                                         "No breakdown point found in the replay; fill in the slice time to cut a practice pack from a section.")
         else:
             if bundle.combined_osz_path is not None:
-                ctx.add_artifact(bundle.combined_osz_path, "三阶练习包 .osz")
+                ctx.add_artifact(bundle.combined_osz_path, tr("三阶练习包 .osz", "Three-tier practice pack .osz"))
             for name, tier in bundle.tiers.items():
                 if tier.osz_path is not None:
-                    ctx.add_artifact(tier.osz_path, f"{name} 阶 .osz")
+                    ctx.add_artifact(tier.osz_path, tr(f"{name} 阶 .osz", f"Tier {name} .osz"))
             result["bundle"] = bundle.to_dict()
     return result
 
@@ -476,7 +482,7 @@ def profile_player(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
     player = _text(params, "player")
     if not player:
-        raise ValueError("请填写玩家名")
+        raise ValueError(tr("请填写玩家名", "Enter a player name"))
     all_time = _flag(params, "all_time")
     horizon = None if all_time else (_float(params, "horizon_days") or 30.0)
     with ProfilerStorage(db_path=config.db_path) as storage:
@@ -499,7 +505,7 @@ def profile_habits(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
     player = _text(params, "player")
     if not player:
-        raise ValueError("请填写玩家名")
+        raise ValueError(tr("请填写玩家名", "Enter a player name"))
     horizon = None if _flag(params, "all_time") else (_float(params, "horizon_days") or 30.0)
     with ProfilerStorage(db_path=config.db_path) as storage:
         habits = aggregate_habits(storage, player, horizon_days=horizon)
@@ -511,7 +517,7 @@ def import_replays(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
     player = _text(params, "player")
     if not player:
-        raise ValueError("请填写玩家名")
+        raise ValueError(tr("请填写玩家名", "Enter a player name"))
     logger.info(f"Importing {player}'s 7K replays from the osu!lazer library...")
     stats = run_replay_import(
         player_name=player,
