@@ -159,8 +159,17 @@
       if (f) { sourceTouched = true; setSource("manual"); drop.set(f); }
     });
 
+    // A target dan asked for by another page (the home page's next dan); the list fills in once the config loads.
+    let wantedDan = null;
+    function applyDan() {
+      if (!wantedDan || ![...$("#dan").options].some((o) => o.value === wantedDan)) return;
+      $("#dan").value = wantedDan;
+      document.querySelector("input[name=mode][value=dan]").checked = true;
+      refresh();
+    }
     // A chart picked on the library or chart pages: its song, its timing borrowed.
     P7.onNav((params) => {
+      if (params.dan) { wantedDan = params.dan; applyDan(); }
       if (!params.md5) return;
       sourceTouched = true;
       $("#reference").value = params.md5;
@@ -180,6 +189,7 @@
     P7.getJSON("/api/config").then((cfg) => {
       cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: tr("{dan}（{stars}★）", { dan: t.name, stars: t.stars.toFixed(2) }) })));
       $("#dan").value = "2nd";
+      applyDan();
       $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.generated_dir });
     });
 

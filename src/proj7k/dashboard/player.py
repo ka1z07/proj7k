@@ -533,8 +533,21 @@ def overview(snapshot: LibrarySnapshot, player: str, now: Optional[float] = None
             "best_stars": max((p["stars"] for p in cleared), default=None),
         }
 
+    # Where the player stands: the profiler's fitted level when replays were read, else the median of the hardest
+    # clears (a rough stand-in that only sees what was passed).
+    level: Optional[Dict[str, Any]] = None
+    all_time = (profile or {}).get("all_time")
+    if all_time and all_time.get("overall_stars"):
+        level = {"stars": all_time["overall_stars"], "source": "profile"}
+    elif len(top_plays) >= 3:
+        level = {"stars": round(median([p["stars"] for p in top_plays]) or 0.0, 2), "source": "clears"}
+    if level is not None:
+        level["dan"] = estimate_canonical_dan(level["stars"])
+
     return {
         "player": _player_info(snapshot, player),
+        "level": level,
+        "next": _next_steps(snapshot, plays, best, level, now),
         "totals": {
             "plays": len(plays),
             "passed": len(passed),
@@ -562,6 +575,34 @@ def overview(snapshot: LibrarySnapshot, player: str, now: Optional[float] = None
         "dan_stars": [{"name": k, "stars": round(v, 2)} for k, v in CANONICAL_DAN_SR.items()],
         "library_charts": len(snapshot.charts),
     }
+
+
+def _next_steps(snapshot: LibrarySnapshot, plays: List[Dict[str, Any]], best: Dict[str, Dict[str, Any]],
+                level: Optional[Dict[str, Any]], now: float) -> Dict[str, Any]:
+    """What to play next around the player's level: charts close to it not yet cleared at A, and the dan above."""
+    if level is None:
+        return {"almost": [], "next_dan": None}
+    stars = level["stars"]
+    recent = {p["md5"] for p in plays if now - p["timestamp"] <= 90 * 86400.0}
+    almost = [
+        b for md5, b in best.items()
+        if md5 in recent and b["rank"] in ("F", "D", "C", "B") and stars - 0.75 <= b["stars"] <= stars + 0.5
+        and not (snapshot.charts.get(md5) or {}).get("missing")
+    ]
+    almost.sort(key=lambda b: (abs(b["stars"] - stars), -b["accuracy"]))
+    tiers = list(CANONICAL_DAN_TIERS)
+    next_dan = None
+    if level["dan"] in tiers and tiers.index(level["dan"]) + 1 < len(tiers):
+        name = tiers[tiers.index(level["dan"]) + 1]
+        charts = [c for c in snapshot.charts.values() if c["dan"] == name and not c.get("missing")]
+        next_dan = {
+            "dan": name,
+            "stars": round(CANONICAL_DAN_SR[name], 2),
+            "charts": len(charts),
+            "unplayed": sum(1 for c in charts if c["md5"] not in best),
+            "cleared": sum(1 for c in charts if c["md5"] in best and best[c["md5"]]["passed"]),
+        }
+    return {"almost": [play_row(snapshot, b) for b in almost[:4]], "next_dan": next_dan}
 
 
 def play_row(snapshot: LibrarySnapshot, p: Dict[str, Any]) -> Dict[str, Any]:

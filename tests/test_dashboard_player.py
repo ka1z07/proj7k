@@ -156,6 +156,22 @@ def test_overview_history_library_and_play_detail(lazer):
     assert player_api.play_detail(snap, "nope") is None
 
 
+def test_overview_level_and_next_steps(lazer):
+    snap = _library(lazer).snapshot()
+    now = player_api._parse_date("2026-10-05T00:00:00Z")
+    # One clear is too few to estimate a level from; without replays the home page shows none.
+    o = player_api.overview(snap, "inawah", now=now)
+    assert o["level"] is None and o["next"] == {"almost": [], "next_dan": None}
+
+    profile = {"all_time": {"overall_stars": 4.3, "overall_dan": "x", "skills": {}}}
+    o = player_api.overview(snap, "inawah", now=now, profile=profile)
+    assert o["level"]["source"] == "profile" and o["level"]["dan"] == player_api.estimate_canonical_dan(4.3)
+    # md5b (4.2★) was failed within 90 days, near the level: worth another go. md5a was cleared at S.
+    assert [p["md5"] for p in o["next"]["almost"]] == ["md5b"]
+    tiers = list(player_api.CANONICAL_DAN_TIERS)
+    assert o["next"]["next_dan"]["dan"] == tiers[tiers.index(o["level"]["dan"]) + 1]
+
+
 def test_player_api_over_http(lazer):
     async def _run():
         s = _Server(lazer["tmp"])

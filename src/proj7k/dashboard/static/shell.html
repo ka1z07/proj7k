@@ -7,36 +7,64 @@
   <link rel="stylesheet" href="/static/app.css">
   <style>
     html, body { height: 100%; }
-    body { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
-    .topbar {
-      display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-      padding: 10px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border-color);
+    body { padding: 0; display: flex; overflow: hidden; }
+    /* The side bar: the player's pages, then the tools, then the game's state at the foot. */
+    .side {
+      width: 224px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 12px;
+      background: var(--bg-side); border-right: 1px solid var(--border-color); overflow-y: auto;
     }
-    .brand {
-      font-size: 1.15rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; }
+    .brand .logo {
+      width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center;
+      background: var(--accent); color: #fff; font-size: 0.8rem; font-weight: 900;
     }
-    .nav { display: flex; gap: 6px; flex-wrap: wrap; }
+    .nav { display: flex; flex-direction: column; gap: 2px; }
+    .nav .group { font-size: 0.7rem; font-weight: 700; color: var(--text-dim); letter-spacing: 0.08em; padding: 12px 10px 4px; }
     .nav a {
-      text-decoration: none; color: var(--text-muted); font-weight: 600; padding: 6px 14px; border-radius: 8px;
-      border: 1px solid transparent;
+      position: relative; display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-muted);
+      font-weight: 600; padding: 8px 10px; border-radius: 8px;
     }
-    .nav a:hover { color: var(--text-main); }
-    html[lang="en-US"] .nav a { padding: 6px 10px; }  /* English labels run longer: keep the bar on one line */
-    .nav a.active { color: var(--text-main); border-color: var(--accent-blue); background: rgba(56, 189, 248, 0.12); }
-    .status { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 0.8rem; color: var(--text-muted); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); display: inline-block; margin-right: 6px; }
-    .dot.on { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-    .game-state { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
-    .frames { flex: 1; position: relative; }
-    .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-dark); }
-    .nav .sep { width: 1px; background: var(--border-color); margin: 4px 6px; }
-    #playerSel { width: auto; padding: 3px 8px; font-size: 0.8rem; }
+    .nav a svg { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .nav a:hover { color: var(--text-main); background: var(--bg-hover); }
+    .nav a.active { color: var(--text-main); background: var(--accent-soft); }
+    .nav a.active::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+    .nav a.active svg { color: var(--accent); }
+    .nav .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+    .game {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem;
+    }
+    .game-head { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+    .game-head .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); display: inline-block; flex: none; }
+    .dot.on { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+    .dot.warn { background: var(--accent-gold); }
+    .dot.off { background: var(--accent-red); }
+    .game-state { color: var(--text-main); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+    .game-state:empty { display: none; }
     #gameState { cursor: pointer; }
-    #gameState:hover { color: var(--accent-blue); }
+    #gameState:hover { color: var(--accent); }
+    #jobState:empty { display: none; }
+    #jobState { color: var(--accent-blue); }
+    .foot-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-muted); padding: 0 4px; }
+    .foot-row .grow { flex: 1; }
+    #playerSel { padding: 4px 8px; font-size: 0.8rem; }
+    .frames { flex: 1; position: relative; min-width: 0; }
+    .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-dark); }
+    /* A narrow window keeps the icons only; their names show on hover. */
+    @media (max-width: 1080px) {
+      .side { width: 64px; padding: 14px 8px 10px; align-items: center; }
+      .brand { padding: 2px 0 12px; }
+      .brand .name, .nav .label, .nav .group, .game, .foot-row .grow, #connText, #playerSel { display: none !important; }
+      .nav .group + a { margin-top: 14px; }
+      .nav a { padding: 9px; justify-content: center; }
+      .nav a.active::before { left: -8px; }
+      .foot-row { flex-direction: column; padding: 0; }
+      #langBtn { padding: 3px 6px; font-size: 0.7rem; }
+    }
     /* Chart and play details open in a panel over the page that opened them, so the list stays where it was. */
-    .drawer-shade { position: absolute; inset: 0; background: rgba(2, 6, 14, 0.55); z-index: 10; }
+    .drawer-shade { position: absolute; inset: 0; background: rgba(4, 6, 10, 0.6); z-index: 10; }
     .drawer {
       position: absolute; top: 0; right: 0; bottom: 0; width: min(880px, 100%); z-index: 11;
       background: var(--bg-dark); border-left: 1px solid var(--border-color); box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
@@ -48,29 +76,35 @@
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="brand">proj7k // 控制台</div>
+  <aside class="side">
+    <div class="brand"><span class="logo">7K</span><span class="name">proj7k</span></div>
     <nav class="nav" id="nav">
-      <a href="#home" data-page="home">主页</a>
-      <a href="#history" data-page="history">游玩记录</a>
-      <a href="#library" data-page="library">曲库</a>
-      <span class="sep"></span>
-      <a href="#live" data-page="live">实时雷达</a>
-      <a href="#profiler" data-page="profiler" data-en="Replays">回放与画像</a>
-      <a href="#downscaler" data-page="downscaler">降阶练习</a>
-      <a href="#generator" data-page="generator" data-en="Generator">谱面生成</a>
-      <a href="#sync" data-page="sync" data-en="Sync">曲库同步</a>
+      <span class="group">玩家</span>
+      <a href="#home" data-page="home" title="主页"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span class="label">主页</span></a>
+      <a href="#history" data-page="history" title="游玩记录"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="label">游玩记录</span></a>
+      <a href="#library" data-page="library" title="曲库"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span class="label">曲库</span></a>
+      <span class="group">工具</span>
+      <a href="#live" data-page="live" title="实时雷达"><svg viewBox="0 0 24 24"><path d="M12 3 21 9.5 17.5 20h-11L3 9.5z"/><path d="M12 8l4 3-1.5 5h-5L8 11z"/></svg><span class="label">实时雷达</span></a>
+      <a href="#profiler" data-page="profiler" title="回放与画像"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="label" data-en="Replays">回放与画像</span></a>
+      <a href="#downscaler" data-page="downscaler" title="降阶练习"><svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h7M4 18h4"/><path d="M18 5v14m-3-3 3 3 3-3"/></svg><span class="label">降阶练习</span></a>
+      <a href="#generator" data-page="generator" title="谱面生成"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg><span class="label" data-en="Generator">谱面生成</span></a>
+      <span class="group">设置</span>
+      <a href="#sync" data-page="sync" title="曲库同步"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3"/><path d="M4 4v4h4M20 20v-4h-4"/></svg><span class="label" data-en="Sync">曲库同步</span></a>
     </nav>
-    <div class="status">
+    <div class="side-foot">
       <select id="playerSel" class="hidden" title="看哪位玩家的主页和记录"></select>
-      <span id="gameState" class="game-state" title="osu!lazer 里当前选中的谱面"></span>
-      <span id="lazerState" title="osu!lazer 数据库状态"></span>
-      <button class="small" id="lazerBtn" title="关闭 osu!lazer（和点窗口的 ✕ 一样，游戏会正常保存后退出）再重新打开；没在运行就直接打开">重启 osu!</button>
-      <span id="jobState"></span>
-      <span><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
-      <button class="small" id="langBtn" title="切换语言 / Switch language"></button>
+      <div class="game">
+        <div class="game-head"><span class="dot" id="lazerDot"></span><span class="grow" id="lazerState" title="osu!lazer 数据库状态"></span></div>
+        <span id="gameState" class="game-state" title="osu!lazer 里当前选中的谱面"></span>
+        <span id="jobState"></span>
+        <button class="small" id="lazerBtn" title="关闭 osu!lazer（和点窗口的 ✕ 一样，游戏会正常保存后退出）再重新打开；没在运行就直接打开">重启 osu!</button>
+      </div>
+      <div class="foot-row">
+        <span class="dot" id="connDot" title="和看板的连接"></span><span class="grow" id="connText">未连接</span>
+        <button class="small" id="langBtn" title="切换语言 / Switch language"></button>
+      </div>
     </div>
-  </div>
+  </aside>
   <div class="frames" id="frames">
     <div class="drawer-shade hidden" id="shade"></div>
     <div class="drawer hidden" id="drawer">
@@ -110,7 +144,7 @@
       }
       for (const [k, f] of Object.entries(frames)) f.style.visibility = k === name ? "visible" : "hidden";
       document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === name));
-      document.title = `proj7k · ${tr(document.querySelector(`#nav a[data-page="${name}"]`).textContent)}`;
+      document.title = `proj7k · ${document.querySelector(`#nav a[data-page="${name}"] .label`).textContent}`;
       if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "shown" }, location.origin);
       if (params && Object.keys(params).length) {
         if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "params", params }, location.origin);
@@ -191,7 +225,7 @@
     loadPlayers();
 
     P7.on("connection", (up) => {
-      document.getElementById("connDot").classList.toggle("on", up);
+      document.getElementById("connDot").className = `dot ${up ? "on" : "off"}`;
       document.getElementById("connText").textContent = up ? tr("已连接") : tr("未连接");
       if (up) P7.send({ type: "jobs_list" });
     });
@@ -227,7 +261,7 @@
         const cfg = await P7.getJSON("/api/config");
         node.textContent = !cfg.realm_exists ? tr("未找到 osu!lazer 数据库")
           : cfg.lazer_running ? tr("osu!lazer 运行中（数据库锁定）") : tr("osu!lazer 未运行");
-        node.className = !cfg.realm_exists ? "warn" : "";
+        document.getElementById("lazerDot").className = `dot ${!cfg.realm_exists ? "warn" : cfg.lazer_running ? "on" : ""}`;
       } catch (e) { node.textContent = ""; }
     }
     document.getElementById("lazerBtn").onclick = async () => {
