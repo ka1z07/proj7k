@@ -182,7 +182,7 @@ def test_pages_apis_and_the_overlay_url(tmp_path):
         s = _Server(tmp_path)
         await s.server.start()
         try:
-            for path, marker in (("/", "proj7k // 控制台"), ("/sync", "曲库同步"), ("/downscaler", "降阶练习"),
+            for path, marker in (("/", '<aside class="side">'), ("/sync", "曲库同步"), ("/downscaler", "降阶练习"),
                                  ("/generator", "谱面生成"), ("/profiler", "回放与画像"), ("/live", 'id="radarCanvas"')):
                 status, headers, body = await s.get(path)
                 assert status == 200, path
