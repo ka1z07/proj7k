@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Questions and ideas / 提问与讨论
+    url: https://github.com/ka1z07/proj7k/discussions
+    about: How do I…, is this a bug, or an idea to talk over first. 用法问题和想法先来这里。
   - name: Report a security vulnerability / 报告安全问题
     url: https://github.com/ka1z07/proj7k/security/advisories/new
     about: Please report security problems privately, not as an issue.
