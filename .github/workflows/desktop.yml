@@ -50,7 +50,8 @@ jobs:
         shell: bash
         run: |
           pip install pillow
-          PYTHONPATH=src python -m proj7k.desktop.icon desktop/tauri/app-icon.png
+          # Run as a plain script: importing the proj7k package would pull in the engine (numpy, scipy).
+          python src/proj7k/desktop/icon.py desktop/tauri/app-icon.png
           cd desktop/tauri && npx --yes @tauri-apps/cli@2 icon app-icon.png
 
       - name: Build (Windows)
