@@ -196,7 +196,7 @@ Replaces the stars of the 7K charts in your game with proj7k stars, so sorting a
 
 ## Online chart catalog
 
-Open <https://7k.kaiz.dev/> and click into the catalog. Nothing to install. (The catalog's interface is in Chinese for now.)
+Open <https://7k.kaiz.dev/> and click into the catalog. Nothing to install. The site is in English, Simplified Chinese and Traditional Chinese: switch with 简 / 繁 / EN at the top right (the first visit follows your browser's language).
 
 - **Both star ratings side by side**: every difficulty shows the official osu! stars (yellow) and proj7k stars (blue), with the matching dan. Sort by the difference to find the charts where the two disagree most.
 - **Find charts by technique**: the main-skill buttons filter to charts built mainly on jacks, streams, inverse, releases and so on.

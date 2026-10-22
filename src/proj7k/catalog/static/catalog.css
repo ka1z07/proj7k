@@ -28,6 +28,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .nav .links { white-space: nowrap; display: flex; gap: 18px; color: var(--text-2); font-weight: 600; }
 .nav .links a.active, .nav .links a:hover { color: var(--text); }
 .nav .meta { margin-left: auto; color: var(--text-3); font-size: 12px; }
+.nav .lang { display: flex; gap: 2px; background: var(--bg-2); border-radius: 999px; padding: 2px; }
+.nav .lang button { color: var(--text-3); font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 9px; }
+.nav .lang button:hover { color: var(--text); }
+.nav .lang button.cur { background: var(--bg-4); color: var(--text); }
 
 .container { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
 .header-band { background: linear-gradient(180deg, hsl(var(--hue), 30%, 18%), var(--bg-1)); padding: 22px 0 0; }
@@ -119,7 +123,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .set-body { background: var(--bg-2); border-radius: 0 0 10px 10px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
 @media (max-width: 860px) { .set-body { grid-template-columns: 1fr; } .card .cover { flex-basis: 84px; } .filters { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
-  .nav { padding: 0 16px; gap: 14px; } .nav .meta { display: none; }
+  .nav { padding: 8px 16px; gap: 6px 14px; height: auto; flex-wrap: wrap; } .nav .meta { display: none; }
+  .nav .lang { margin-left: auto; } .nav .links { order: 3; flex-basis: 100%; }
   .search { padding: 14px 12px 10px; } .results-head, .results { padding-left: 10px; padding-right: 10px; }
   .card .cover { flex-basis: 44px; } .card .cover .keys { display: none; }
   .diffs { grid-template-columns: 1fr auto auto; } .diffs .dan, .diffs .head:nth-child(4) { display: none; }

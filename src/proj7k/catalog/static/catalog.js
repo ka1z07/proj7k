@@ -1,5 +1,5 @@
 // proj7k catalog: the listing and the beatmapset page. No external scripts; covers come from osu!'s CDN
-// when the set has an osu! id and fall back to a gradient.
+// when the set has an osu! id and fall back to a gradient. Text goes through tr() (i18n.js, loaded first).
 "use strict";
 
 const Catalog = (() => {
@@ -24,10 +24,10 @@ const Catalog = (() => {
     ln_general: "LN Gen", ln_tech: "LN Tech", ln_inverse: "LN Inv", ln_release: "LN Rel",
   };
   const SKILL_ZH = {
-    rc_jack: "叠键", rc_tech: "技巧", rc_speed: "速度", rc_stamina: "耐力切",
-    ln_general: "LN 综合", ln_tech: "LN 技巧", ln_inverse: "反键", ln_release: "放手",
+    rc_jack: tr("叠键"), rc_tech: tr("技巧"), rc_speed: tr("速度"), rc_stamina: tr("耐力切"),
+    ln_general: tr("LN 综合"), ln_tech: tr("LN 技巧"), ln_inverse: tr("反键"), ln_release: tr("放手"),
   };
-  const STATUS_ZH = { ranked: "Ranked", approved: "Approved", qualified: "Qualified", loved: "Loved", pending: "Pending", wip: "WIP", graveyard: "Graveyard", unknown: "未知" };
+  const STATUS_ZH = { ranked: "Ranked", approved: "Approved", qualified: "Qualified", loved: "Loved", pending: "Pending", wip: "WIP", graveyard: "Graveyard", unknown: tr("未知") };
 
   const mapperHref = (id, name) => `/mappers/${id ? id : encodeURIComponent("@" + name)}`;
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -36,8 +36,9 @@ const Catalog = (() => {
   const hue = (id) => Math.abs(id * 47) % 360;
 
   function starPill(sr, kind) {
-    if (sr == null) return `<span class="star na" title="${kind === "o" ? "暂无官方星级" : ""}"><span class="k">${kind === "o" ? "官" : "引"}</span>—</span>`;
-    return `<span class="star" style="background:${starColour(sr)};color:${starText(sr)}"><span class="k">${kind === "o" ? "官" : "引"}</span>${fmt(sr)}</span>`;
+    const k = kind === "o" ? tr("官") : tr("引");
+    if (sr == null) return `<span class="star na" title="${kind === "o" ? tr("暂无官方星级") : ""}"><span class="k">${k}</span>—</span>`;
+    return `<span class="star" style="background:${starColour(sr)};color:${starText(sr)}"><span class="k">${k}</span>${fmt(sr)}</span>`;
   }
 
   function cover(el, setId, size) {
@@ -59,22 +60,23 @@ const Catalog = (() => {
   async function navMeta() {
     const foot = document.createElement("footer");
     foot.className = "site-foot";
-    foot.innerHTML = `谱面信息、官方星级与封面来自 <a href="https://osu.ppy.sh/" rel="noopener">osu!</a>，`
-      + `引擎星级由 proj7k 计算。本站与 osu! 官方无关。`;
+    foot.innerHTML = tr("谱面信息、官方星级与封面来自 {osu}，引擎星级由 proj7k 计算。本站与 osu! 官方无关。",
+      { osu: `<a href="https://osu.ppy.sh/" rel="noopener">osu!</a>` });
     document.body.appendChild(foot);
     try {
       const s = await getJSON("/api/stats");
       document.getElementById("meta").textContent =
-        `${s.beatmapsets} 组 · ${s.beatmaps} 个难度 · 引擎 ${s.engine_version}` + (s.stale ? ` · ${s.stale} 个待重算` : "");
+        tr("{sets} 组 · {maps} 个难度 · 引擎 {version}", { sets: s.beatmapsets, maps: s.beatmaps, version: s.engine_version })
+        + (s.stale ? tr(" · {n} 个待重算", { n: s.stale }) : "");
     } catch (e) { /* the page works without it */ }
   }
 
   // ---- listing ------------------------------------------------------------------------------------
 
   const SORTS = [
-    ["newest", "最新"], ["official", "官方 SR"], ["engine", "引擎 SR"], ["delta", "偏差"],
-    ["title", "标题"], ["artist", "艺术家"], ["bpm", "BPM"], ["length", "长度"], ["ranked", "上架日期"],
-    ["random", "随机"],
+    ["newest", tr("最新")], ["official", tr("官方 SR")], ["engine", tr("引擎 SR")], ["delta", tr("偏差")],
+    ["title", tr("标题")], ["artist", tr("艺术家")], ["bpm", "BPM"], ["length", tr("长度")], ["ranked", tr("上架日期")],
+    ["random", tr("随机")],
   ];
   const newSeed = () => Math.floor(Math.random() * 2147483647);
   const STATUSES = ["any", "ranked", "loved", "qualified", "pending", "graveyard", "unknown"];
@@ -109,7 +111,7 @@ const Catalog = (() => {
     const rows = shown.map((b) => `
       <a class="name${b.matched ? " match" : ""}" href="/beatmapsets/${set.id}#${b.id}" title="${esc(b.version)}">${esc(b.version)}</a>
       ${starPill(b.official_sr, "o")}${starPill(b.engine_sr, "e")}
-      <span class="dan" title="主技能：${esc(SKILL_ZH[b.dominant_skill] || b.dominant_skill)}">${esc(b.dan)} · ${esc(SKILL_LABELS[b.dominant_skill] || "")}</span>`).join("");
+      <span class="dan" title="${esc(tr("主技能：{skill}", { skill: SKILL_ZH[b.dominant_skill] || b.dominant_skill }))}">${esc(b.dan)} · ${esc(SKILL_LABELS[b.dominant_skill] || "")}</span>`).join("");
     const rest = set.beatmaps.length - shown.length;
     const el = document.createElement("div");
     el.className = "card";
@@ -118,9 +120,9 @@ const Catalog = (() => {
       <div class="body">
         <a class="title" href="/beatmapsets/${set.id}" title="${esc(set.title_unicode)}">${esc(set.title_unicode || set.title)}</a>
         <div class="artist">${esc(set.artist_unicode || set.artist)}</div>
-        <div class="mapper"><span>谱师 <a href="${mapperHref(set.creator_id, set.creator)}"><b>${esc(set.creator)}</b></a></span><span class="status ${esc(set.status)}">${esc(STATUS_ZH[set.status] || set.status)}</span></div>
-        <div class="diffs"><span class="head">难度</span><span class="head">官方</span><span class="head">引擎</span><span class="head" style="text-align:right">段位 · 技能</span>${rows}</div>
-        ${rest > 0 ? `<a class="more" href="/beatmapsets/${set.id}">还有 ${rest} 个难度 →</a>` : ""}
+        <div class="mapper"><span>${tr("谱师 {name}", { name: `<a href="${mapperHref(set.creator_id, set.creator)}"><b>${esc(set.creator)}</b></a>` })}</span><span class="status ${esc(set.status)}">${esc(STATUS_ZH[set.status] || set.status)}</span></div>
+        <div class="diffs"><span class="head">${tr("难度")}</span><span class="head">${tr("官方")}</span><span class="head">${tr("引擎")}</span><span class="head" style="text-align:right">${tr("段位 · 技能")}</span>${rows}</div>
+        ${rest > 0 ? `<a class="more" href="/beatmapsets/${set.id}">${tr("还有 {n} 个难度 →", { n: rest })}</a>` : ""}
       </div>`;
     cover(el.querySelector(".cover"), set.id, "list@2x.jpg");
     return el;
@@ -152,12 +154,12 @@ const Catalog = (() => {
       if (st.sort === "random" && !st.seed) st.seed = String(newSeed());
       writeState(st, push);
       input.value = st.q;
-      pills(document.getElementById("status"), STATUSES.map((s) => [s, s === "any" ? "全部" : STATUS_ZH[s]]), st.status, (v) => { st.status = v; st.page = 1; load(true); });
-      pills(document.getElementById("skill"), [["any", "全部"], ...Object.keys(SKILL_LABELS).map((k) => [k, `${SKILL_ZH[k]}`])], st.skill, (v) => { st.skill = v; st.page = 1; load(true); });
+      pills(document.getElementById("status"), STATUSES.map((s) => [s, s === "any" ? tr("全部") : STATUS_ZH[s]]), st.status, (v) => { st.status = v; st.page = 1; load(true); });
+      pills(document.getElementById("skill"), [["any", tr("全部")], ...Object.keys(SKILL_LABELS).map((k) => [k, `${SKILL_ZH[k]}`])], st.skill, (v) => { st.skill = v; st.page = 1; load(true); });
       const [sortKey, sortDir] = st.sort.split(/_(?=asc$|desc$)/);
       const sortNode = document.getElementById("sort");
       const mark = (k) => k !== sortKey ? "" : k === "random" ? `<span class="dir">↻</span>` : `<span class="dir">${sortDir === "desc" ? "▼" : "▲"}</span>`;
-      sortNode.innerHTML = SORTS.map(([k, label]) => `<button class="pill${k === sortKey ? " active" : ""}" data-v="${k}"${k === "random" ? ` title="${k === sortKey ? "换一批" : "按当前筛选随机推一页"}"` : ""}>${label}${mark(k)}</button>`).join("");
+      sortNode.innerHTML = SORTS.map(([k, label]) => `<button class="pill${k === sortKey ? " active" : ""}" data-v="${k}"${k === "random" ? ` title="${k === sortKey ? tr("换一批") : tr("按当前筛选随机推一页")}"` : ""}>${label}${mark(k)}</button>`).join("");
       sortNode.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
         const k = b.dataset.v;
         if (k === "random") { st.sort = "random"; st.seed = String(newSeed()); st.page = 1; load(true); return; }
@@ -169,12 +171,12 @@ const Catalog = (() => {
       const p = new URLSearchParams({ q: st.q, status: st.status, skill: st.skill, sort: st.sort, page: st.page });
       if (st.sort === "random") p.set("seed", st.seed);
       let data;
-      try { data = await getJSON(`/api/beatmapsets/search?${p}`); } catch (e) { grid.innerHTML = `<div class="empty">搜索失败（${esc(e.message)}）</div>`; return; }
+      try { data = await getJSON(`/api/beatmapsets/search?${p}`); } catch (e) { grid.innerHTML = `<div class="empty">${tr("搜索失败（{error}）", { error: esc(e.message) })}</div>`; return; }
       if (mine !== seq) return;
       document.getElementById("chips").innerHTML = data.filters.map((f) => `<span class="chip">${esc(f)}</span>`).join("");
-      document.getElementById("count").textContent = `${data.total} 组谱面`;
+      document.getElementById("count").textContent = tr("{n} 组谱面", { n: data.total });
       grid.innerHTML = "";
-      if (!data.beatmapsets.length) grid.innerHTML = `<div class="empty">没有符合条件的谱面</div>`;
+      if (!data.beatmapsets.length) grid.innerHTML = `<div class="empty">${tr("没有符合条件的谱面")}</div>`;
       data.beatmapsets.forEach((s) => grid.appendChild(card(s)));
       pager(document.getElementById("pager"), data.page, data.pages, (n) => { st.page = n; load(true); window.scrollTo({ top: 0, behavior: "smooth" }); });
     }
@@ -199,39 +201,39 @@ const Catalog = (() => {
     navMeta();
     const setId = parseInt(location.pathname.split("/").filter(Boolean)[1], 10);
     getJSON(`/api/beatmapsets/${setId}`).then((set) => {
-      document.title = `${set.artist} - ${set.title} · proj7k 7K 谱面库`;
+      document.title = `${set.artist} - ${set.title} · ${tr("proj7k 7K 谱面库")}`;
       const header = document.getElementById("header");
       cover(header, set.id, "cover@2x.jpg");
       const pick = (id) => render(set, set.beatmaps.find((b) => String(b.id) === String(id)) || set.beatmaps[set.beatmaps.length - 1]);
       window.addEventListener("hashchange", () => pick(location.hash.slice(1)));
       pick(location.hash.slice(1));
-    }).catch(() => { document.getElementById("main").innerHTML = `<div class="empty">找不到这组谱面</div>`; });
+    }).catch(() => { document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这组谱面")}</div>`; });
   }
 
   function render(set, cur) {
     const picker = document.getElementById("picker");
-    picker.innerHTML = set.beatmaps.map((b) => `<button class="${b.id === cur.id ? "cur" : ""}" data-id="${b.id}" title="${esc(b.version)} · 官方 ${fmt(b.official_sr)} / 引擎 ${fmt(b.engine_sr)}"><span class="dot" style="background:${starColour(b.official_sr ?? b.engine_sr)}"></span></button>`).join("");
+    picker.innerHTML = set.beatmaps.map((b) => `<button class="${b.id === cur.id ? "cur" : ""}" data-id="${b.id}" title="${esc(b.version)} · ${tr("官方 {o} / 引擎 {e}", { o: fmt(b.official_sr), e: fmt(b.engine_sr) })}"><span class="dot" style="background:${starColour(b.official_sr ?? b.engine_sr)}"></span></button>`).join("");
     picker.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { history.replaceState(null, "", `#${b.dataset.id}`); render(set, set.beatmaps.find((x) => String(x.id) === b.dataset.id)); }));
     const owner = cur.mapper_name || set.creator;
-    document.getElementById("diff-name").innerHTML = `${esc(cur.version)} <small>谱师 <a href="${mapperHref(cur.mapper_id, owner)}">${esc(owner)}</a></small>`;
+    document.getElementById("diff-name").innerHTML = `${esc(cur.version)} <small>${tr("谱师 {name}", { name: `<a href="${mapperHref(cur.mapper_id, owner)}">${esc(owner)}</a>` })}</small>`;
     document.getElementById("t").textContent = set.title_unicode || set.title;
     document.getElementById("a").textContent = set.artist_unicode || set.artist;
     document.getElementById("m").innerHTML = `<span class="status ${esc(set.status)}">${esc(STATUS_ZH[set.status] || set.status)}</span>${set.ranked_date ? `<span>${esc(set.ranked_date.slice(0, 10))}</span>` : ""}`;
     document.getElementById("actions").innerHTML = cur.id > 0
-      ? `<a class="btn primary" href="https://osu.ppy.sh/beatmapsets/${set.id}#mania/${cur.id}" target="_blank" rel="noopener">在 osu! 官网打开</a><a class="btn" href="osu://b/${cur.id}">osu!direct</a>`
-      : `<span class="btn" title="这张谱没有 osu! 的谱面 id（未上传）">本地谱面</span>`;
+      ? `<a class="btn primary" href="https://osu.ppy.sh/beatmapsets/${set.id}#mania/${cur.id}" target="_blank" rel="noopener">${tr("在 osu! 官网打开")}</a><a class="btn" href="osu://b/${cur.id}">osu!direct</a>`
+      : `<span class="btn" title="${tr("这张谱没有 osu! 的谱面 id（未上传）")}">${tr("本地谱面")}</span>`;
 
     const delta = cur.official_sr == null ? null : cur.engine_sr - cur.official_sr;
     document.getElementById("sr").innerHTML = `
       <div class="sr-compare">
-        <div class="sr-box o"><div class="lbl">官方 SR</div><div class="num">${fmt(cur.official_sr)}</div><div class="sub">${cur.official_sr_source ? `来源：${esc({ "osu-api": "osu! API", manifest: "标杆清单", lazer: "osu!lazer 曲库" }[cur.official_sr_source] || cur.official_sr_source)}` : "暂无"}</div></div>
-        <div class="sr-box e"><div class="lbl">引擎 SR</div><div class="num">${fmt(cur.engine_sr)}</div><div class="sub">段位 ${esc(cur.dan)}${delta == null ? "" : ` · 偏差 <span class="delta ${delta >= 0 ? "pos" : "neg"}">${delta >= 0 ? "+" : ""}${fmt(delta)}</span>`}</div></div>
+        <div class="sr-box o"><div class="lbl">${tr("官方 SR")}</div><div class="num">${fmt(cur.official_sr)}</div><div class="sub">${cur.official_sr_source ? tr("来源：{source}", { source: esc({ "osu-api": "osu! API", manifest: tr("标杆清单"), lazer: tr("osu!lazer 曲库") }[cur.official_sr_source] || cur.official_sr_source) }) : tr("暂无")}</div></div>
+        <div class="sr-box e"><div class="lbl">${tr("引擎 SR")}</div><div class="num">${fmt(cur.engine_sr)}</div><div class="sub">${tr("段位 {dan}", { dan: esc(cur.dan) })}${delta == null ? "" : ` · ${tr("偏差")} <span class="delta ${delta >= 0 ? "pos" : "neg"}">${delta >= 0 ? "+" : ""}${fmt(delta)}</span>`}</div></div>
       </div>
       <div class="stats">
-        <div><span>长度</span><b>${mmss(cur.length_s)}</b></div>
+        <div><span>${tr("长度")}</span><b>${mmss(cur.length_s)}</b></div>
         <div><span>BPM</span><b>${fmt(cur.bpm, 0)}</b></div>
-        <div><span>物件</span><b>${cur.note_count}</b></div>
-        <div><span>长条</span><b>${cur.ln_count} <small>(${fmt((100 * cur.ln_count) / Math.max(1, cur.note_count), 0)}%)</small></b></div>
+        <div><span>${tr("物件")}</span><b>${cur.note_count}</b></div>
+        <div><span>${tr("长条")}</span><b>${cur.ln_count} <small>(${fmt((100 * cur.ln_count) / Math.max(1, cur.note_count), 0)}%)</small></b></div>
         <div><span>OD</span><b>${fmt(cur.od, 1)}</b></div>
         <div><span>HP</span><b>${fmt(cur.hp, 1)}</b></div>
       </div>`;
@@ -241,11 +243,11 @@ const Catalog = (() => {
     document.getElementById("skills").innerHTML = skills.map(([k, s]) => `
       <span class="n${k === cur.dominant_skill ? " dom" : ""}" title="${esc(SKILL_ZH[k])}">${esc(SKILL_LABELS[k])}</span>
       <div class="track"><div class="fill" style="width:${(100 * s.stars) / top}%;background:${k === cur.dominant_skill ? "var(--accent)" : "var(--engine)"}"></div></div>
-      <span class="v">${fmt(s.stars)}</span><span class="p" title="主导度">${fmt(100 * s.dominance, 0)}%</span>`).join("");
+      <span class="v">${fmt(s.stars)}</span><span class="p" title="${tr("主导度")}">${fmt(100 * s.dominance, 0)}%</span>`).join("");
     document.getElementById("density").innerHTML = densitySvg(cur.density, "var(--engine)");
 
     const table = document.getElementById("all");
-    table.innerHTML = `<tr><th>难度</th><th class="num">官方</th><th class="num">引擎</th><th class="num">偏差</th><th>段位</th><th>主技能</th><th>谱师</th></tr>` +
+    table.innerHTML = `<tr><th>${tr("难度")}</th><th class="num">${tr("官方")}</th><th class="num">${tr("引擎")}</th><th class="num">${tr("偏差")}</th><th>${tr("段位")}</th><th>${tr("主技能")}</th><th>${tr("作者")}</th></tr>` +
       set.beatmaps.map((b) => {
         const d = b.official_sr == null ? null : b.engine_sr - b.official_sr;
         return `<tr data-id="${b.id}" class="${b.id === cur.id ? "cur" : ""}"><td>${esc(b.version)}</td><td class="num">${starPill(b.official_sr, "o")}</td><td class="num">${starPill(b.engine_sr, "e")}</td>
@@ -254,20 +256,26 @@ const Catalog = (() => {
     table.querySelectorAll("tr[data-id]").forEach((tr) => tr.addEventListener("click", () => { history.replaceState(null, "", `#${tr.dataset.id}`); render(set, set.beatmaps.find((x) => String(x.id) === tr.dataset.id)); window.scrollTo({ top: 0, behavior: "smooth" }); }));
 
     document.getElementById("info").innerHTML = `
-      <span>来源</span><b>${esc(set.source) || "—"}</b>
-      <span>标签</span><b>${esc(set.tags) || "—"}</b>
-      <span>谱面 id</span><b>${cur.id > 0 ? cur.id : "—（本地）"}</b>
+      <span>${tr("来源")}</span><b>${esc(set.source) || "—"}</b>
+      <span>${tr("标签")}</span><b>${esc(set.tags) || "—"}</b>
+      <span>${tr("谱面 id")}</span><b>${cur.id > 0 ? cur.id : tr("—（本地）")}</b>
       <span>MD5</span><b style="font-family:var(--mono)">${esc(cur.checksum)}</b>
-      <span>引擎版本</span><b style="font-family:var(--mono)">${esc(cur.engine_version)}</b>`;
+      <span>${tr("引擎版本")}</span><b style="font-family:var(--mono)">${esc(cur.engine_version)}</b>`;
   }
 
   // ---- mappers ------------------------------------------------------------------------------------
 
   const avatar = (id) => (id ? `<img class="avatar" src="https://a.ppy.sh/${id}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'avatar none'}))">` : `<span class="avatar none"></span>`);
   const pctText = (x) => (x == null ? "—" : `${Math.round(100 * x)}%`);
-  const tagChips = (tags) => tags.map((t) => `<span class="tag" title="${esc(t.why)}">${esc(t.label)}</span>`).join("");
+  // A style tag's text comes from the server as Chinese templates and values (mappers.TAG_TEXT); translate both.
+  const tagText = (t, which) => {
+    if (!t[`${which}_t`]) return t[which];
+    const vars = Object.fromEntries(Object.entries(t.vars || {}).map(([k, v]) => [k, tr(String(v))]));
+    return tr(t[`${which}_t`], vars);
+  };
+  const tagChips = (tags) => tags.map((t) => `<span class="tag" title="${esc(tagText(t, "why"))}">${esc(tagText(t, "label"))}</span>`).join("");
 
-  const MAPPER_SORTS = [["diffs", "难度数"], ["sets", "谱面组数"], ["engine", "引擎 SR"], ["ln", "长条占比"], ["delta", "引擎−官方"], ["name", "名字"]];
+  const MAPPER_SORTS = [["diffs", tr("难度数")], ["sets", tr("谱面组数")], ["engine", tr("引擎 SR")], ["ln", tr("长条占比")], ["delta", tr("引擎−官方")], ["name", tr("名字")]];
 
   function mappersPage() {
     navMeta();
@@ -286,22 +294,22 @@ const Catalog = (() => {
         const k = b.dataset.v;
         st.sort = `${k}_${k === sortKey ? (sortDir === "desc" ? "asc" : "desc") : (k === "name" ? "asc" : "desc")}`; st.page = 1; load(true);
       }));
-      pills(document.getElementById("min"), [["1", "全部"], ["3", "≥3 个难度"], ["10", "≥10"], ["30", "≥30"]], String(st.min), (v) => { st.min = parseInt(v, 10); st.page = 1; load(true); });
+      pills(document.getElementById("min"), [["1", tr("全部")], ["3", tr("≥3 个难度")], ["10", "≥10"], ["30", "≥30"]], String(st.min), (v) => { st.min = parseInt(v, 10); st.page = 1; load(true); });
       const mine = ++seq;
       const data = await getJSON(`/api/mappers?${p}`);
       if (mine !== seq) return;
-      document.getElementById("count").textContent = `${data.total} 位谱师`;
+      document.getElementById("count").textContent = tr("{n} 位谱师", { n: data.total });
       const rows = data.mappers.map((m) => `
         <a class="mrow" href="${mapperHref(m.user_id, m.name)}">
           ${avatar(m.user_id)}
-          <span class="mname"><b>${esc(m.name)}</b><small>${m.sets} 组 · ${m.diffs} 个难度</small></span>
+          <span class="mname"><b>${esc(m.name)}</b><small>${tr("{sets} 组 · {diffs} 个难度", { sets: m.sets, diffs: m.diffs })}</small></span>
           <span class="mstar">${starPill(m.engine_median, "e")}</span>
-          <span class="mnum">${pctText(m.ln_ratio)}<small>长条</small></span>
-          <span class="mnum">${m.delta == null ? "—" : (m.delta >= 0 ? "+" : "") + fmt(m.delta)}<small>引擎−官方</small></span>
+          <span class="mnum">${pctText(m.ln_ratio)}<small>${tr("长条")}</small></span>
+          <span class="mnum">${m.delta == null ? "—" : (m.delta >= 0 ? "+" : "") + fmt(m.delta)}<small>${tr("引擎−官方")}</small></span>
           <span class="mskill">${esc(SKILL_ZH[m.top_skill] || "")}</span>
           <span class="mtags">${tagChips(m.tags)}</span>
         </a>`).join("");
-      document.getElementById("list").innerHTML = rows || `<div class="empty">没有符合条件的谱师</div>`;
+      document.getElementById("list").innerHTML = rows || `<div class="empty">${tr("没有符合条件的谱师")}</div>`;
       pager(document.getElementById("pager"), data.page, data.pages, (n) => { st.page = n; load(true); window.scrollTo({ top: 0, behavior: "smooth" }); });
     }
     let timer = null;
@@ -310,67 +318,68 @@ const Catalog = (() => {
   }
 
   const FEATURE_ROWS = [
-    ["ln_ratio", "长条占比", (v) => pctText(v)],
-    ["chord", "平均每行音符", (v) => fmt(v)],
-    ["jack", "叠键比例", (v) => pctText(v)],
-    ["nps", "密度 NPS", (v) => fmt(v, 1)],
-    ["mid", "中键占比", (v) => pctText(v)],
-    ["hand", "左右手偏向", (v) => (Math.abs(v) < 0.005 ? "均衡" : `偏${v > 0 ? "右" : "左"} ${pctText(Math.abs(v))}`)],
-    ["bpm", "BPM 中位数", (v) => fmt(v, 0)],
-    ["length", "长度中位数", (v) => mmss(v)],
-    ["engine", "引擎 SR 中位数", (v) => fmt(v)],
-    ["delta", "引擎 − 官方", (v) => (v >= 0 ? "+" : "") + fmt(v)],
+    ["ln_ratio", tr("长条占比"), (v) => pctText(v)],
+    ["chord", tr("平均每行音符"), (v) => fmt(v)],
+    ["jack", tr("叠键比例"), (v) => pctText(v)],
+    ["nps", tr("密度 NPS"), (v) => fmt(v, 1)],
+    ["mid", tr("中键占比"), (v) => pctText(v)],
+    ["hand", tr("左右手偏向"), (v) => (Math.abs(v) < 0.005 ? tr("均衡") : v > 0 ? tr("偏右 {p}", { p: pctText(v) }) : tr("偏左 {p}", { p: pctText(-v) }))],
+    ["bpm", tr("BPM 中位数"), (v) => fmt(v, 0)],
+    ["length", tr("长度中位数"), (v) => mmss(v)],
+    ["engine", tr("引擎 SR 中位数"), (v) => fmt(v)],
+    ["delta", tr("引擎 − 官方"), (v) => (v >= 0 ? "+" : "") + fmt(v)],
   ];
 
   async function mapperPage() {
     navMeta();
     const key = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1]);
     let m;
-    try { m = await getJSON(`/api/mappers/${encodeURIComponent(key)}`); } catch (e) { document.getElementById("main").innerHTML = `<div class="empty">找不到这位谱师</div>`; return; }
-    document.title = `${m.name} · 谱师 · proj7k 7K 谱面库`;
+    try { m = await getJSON(`/api/mappers/${encodeURIComponent(key)}`); } catch (e) { document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这位谱师")}</div>`; return; }
+    document.title = `${m.name} · ${tr("谱师")} · ${tr("proj7k 7K 谱面库")}`;
     const years = m.years[0] ? (m.years[0] === m.years[1] ? `${m.years[0]}` : `${m.years[0]}–${m.years[1]}`) : "";
     document.getElementById("head").innerHTML = `
       ${avatar(m.user_id)}
       <div class="who">
         <h1>${esc(m.name)}</h1>
-        <div class="sub">${m.sets} 组谱面 · ${m.diffs} 个 7K 难度${years ? ` · ${years}` : ""}</div>
+        <div class="sub">${tr("{sets} 组谱面 · {diffs} 个 7K 难度", { sets: m.sets, diffs: m.diffs })}${years ? ` · ${years}` : ""}</div>
         <div class="statuses">${Object.entries(m.statuses).sort((a, b) => b[1] - a[1]).map(([s, n]) => `<span class="status ${esc(s)}">${esc(STATUS_ZH[s] || s)} ${n}</span>`).join("")}</div>
-        <div class="tags">${m.styled ? tagChips(m.tags) || `<span class="note">没有特别突出的特征</span>` : `<span class="note">难度少于 3 个，样本太少，不做风格分析</span>`}</div>
-        ${m.user_id ? `<div class="actions"><a class="btn" href="https://osu.ppy.sh/users/${m.user_id}" target="_blank" rel="noopener">osu! 个人页</a></div>` : ""}
+        <div class="tags">${m.styled ? tagChips(m.tags) || `<span class="note">${tr("没有特别突出的特征")}</span>` : `<span class="note">${tr("难度少于 3 个，样本太少，不做风格分析")}</span>`}</div>
+        ${m.user_id ? `<div class="actions"><a class="btn" href="https://osu.ppy.sh/users/${m.user_id}" target="_blank" rel="noopener">${tr("osu! 个人页")}</a></div>` : ""}
       </div>`;
-    document.getElementById("why").innerHTML = m.tags.length ? m.tags.map((t) => `<div><b>${esc(t.label)}</b>：${esc(t.why)}</div>`).join("") : `<div class="note">—</div>`;
+    document.getElementById("why").innerHTML = m.tags.length ? m.tags.map((t) => `<div>${tr("{label}：{why}", { label: `<b>${esc(tagText(t, "label"))}</b>`, why: esc(tagText(t, "why")) })}</div>`).join("") : `<div class="note">—</div>`;
 
     const mix = Object.entries(m.skill_mix);
     const topMix = Math.max(...mix.map(([, v]) => v), 0.01);
     document.getElementById("mix").innerHTML = mix.map(([k, v]) => `
       <span class="n${k === m.top_skill ? " dom" : ""}">${esc(SKILL_ZH[k])}</span>
       <div class="track"><div class="fill" style="width:${(100 * v) / topMix}%;background:${k === m.top_skill ? "var(--accent)" : "var(--engine)"}"></div></div>
-      <span class="v">${pctText(v)}</span><span class="p" title="与谱师平均的比值；以它为主技能的难度 ${m.dominant[k] || 0} 张">×${fmt(m.skill_lift[k] ?? 1, 1)}</span>`).join("");
+      <span class="v">${pctText(v)}</span><span class="p" title="${tr("与谱师平均的比值；以它为主技能的难度 {n} 张", { n: m.dominant[k] || 0 })}">×${fmt(m.skill_lift[k] ?? 1, 1)}</span>`).join("");
 
     document.getElementById("features").innerHTML = FEATURE_ROWS.filter(([k]) => m.features[k] != null).map(([k, label, show]) => {
       const pc = m.percentiles[k];
-      return `<div class="feat"><span>${label}</span><b>${show(m.features[k])}</b>${pc == null ? "" : `<div class="ptrack" title="在可分析的谱师中排在 ${Math.round(100 * pc)}%"><div class="pfill" style="left:${100 * pc}%"></div></div>`}</div>`;
+      return `<div class="feat"><span>${label}</span><b>${show(m.features[k])}</b>${pc == null ? "" : `<div class="ptrack" title="${tr("在可分析的谱师中排在 {p}%", { p: Math.round(100 * pc) })}"><div class="pfill" style="left:${100 * pc}%"></div></div>`}</div>`;
     }).join("");
 
     const hist = Object.entries(m.dan_hist), hmax = Math.max(1, ...hist.map(([, n]) => n));
-    document.getElementById("dan").innerHTML = hist.map(([tier, n]) => `<div class="hbar" title="${esc(tier)}：${n} 个难度"><div class="hfill" style="height:${(100 * n) / hmax}%"></div><span>${esc(tier.replace(/(st|nd|rd|th)$/, ""))}</span></div>`).join("");
+    document.getElementById("dan").innerHTML = hist.map(([tier, n]) => `<div class="hbar" title="${tr("{tier}：{n} 个难度", { tier: esc(tier), n })}"><div class="hfill" style="height:${(100 * n) / hmax}%"></div><span>${esc(tier.replace(/(st|nd|rd|th)$/, ""))}</span></div>`).join("");
     const er = m.engine_range, orr = m.official_range;
-    document.getElementById("dan-note").textContent = `引擎 SR 中位数 ${fmt(er && er[2])}（中间一半 ${fmt(er && er[1])}–${fmt(er && er[3])}）；官方 SR 中位数 ${fmt(orr && orr[2])}`;
+    document.getElementById("dan-note").textContent = tr("引擎 SR 中位数 {median}（中间一半 {lo}–{hi}）；官方 SR 中位数 {official}",
+      { median: fmt(er && er[2]), lo: fmt(er && er[1]), hi: fmt(er && er[3]), official: fmt(orr && orr[2]) });
 
     if (m.columns) {
       const cmax = Math.max(...m.columns);
       document.getElementById("columns").innerHTML = m.columns.map((c, i) => `<div class="hbar col"><div class="hfill" style="height:${(100 * c) / cmax}%"></div><span>${["L3", "L2", "L1", "S", "R1", "R2", "R3"][i]} ${pctText(c)}</span></div>`).join("");
-    } else document.getElementById("columns").innerHTML = `<div class="note">尚未分析（需要运行 refresh）</div>`;
+    } else document.getElementById("columns").innerHTML = `<div class="note">${tr("尚未分析（需要运行 refresh）")}</div>`;
 
     document.getElementById("similar").innerHTML = m.similar.length ? m.similar.map((o) => `
-      <a class="mrow small" href="${mapperHref(o.user_id, o.name)}">${avatar(o.user_id)}<span class="mname"><b>${esc(o.name)}</b><small>${o.diffs} 个难度</small></span><span class="mnum">${pctText(Math.max(0, o.similarity))}<small>相似度</small></span></a>`).join("") : `<div class="note">样本不足</div>`;
+      <a class="mrow small" href="${mapperHref(o.user_id, o.name)}">${avatar(o.user_id)}<span class="mname"><b>${esc(o.name)}</b><small>${tr("{n} 个难度", { n: o.diffs })}</small></span><span class="mnum">${pctText(Math.max(0, o.similarity))}<small>${tr("相似度")}</small></span></a>`).join("") : `<div class="note">${tr("样本不足")}</div>`;
 
     const q = m.user_id ? `mapperid=${m.user_id}` : `mapper="${m.name}"`;
     const data = await getJSON(`/api/beatmapsets/search?${new URLSearchParams({ q, sort: "engine_desc", size: 100 })}`);
-    document.getElementById("maps-count").textContent = `${data.total} 组`;
+    document.getElementById("maps-count").textContent = tr("{n} 组", { n: data.total });
     const grid = document.getElementById("grid");
     data.beatmapsets.forEach((s) => grid.appendChild(card(s)));
-    if (data.total > data.beatmapsets.length) grid.insertAdjacentHTML("afterend", `<a class="more" href="/beatmapsets?q=${encodeURIComponent(q)}&sort=engine_desc">在谱面列表里查看全部 ${data.total} 组 →</a>`);
+    if (data.total > data.beatmapsets.length) grid.insertAdjacentHTML("afterend", `<a class="more" href="/beatmapsets?q=${encodeURIComponent(q)}&sort=engine_desc">${tr("在谱面列表里查看全部 {n} 组 →", { n: data.total })}</a>`);
   }
 
   // ---- home -------------------------------------------------------------------------------------
@@ -381,7 +390,7 @@ const Catalog = (() => {
       const s = await getJSON("/api/stats");
       document.querySelectorAll("#homeStats [data-k]").forEach((dd) => {
         const v = s[dd.dataset.k];
-        if (typeof v === "number") dd.textContent = v.toLocaleString("zh-CN");
+        if (typeof v === "number") dd.textContent = v.toLocaleString(P7K.locale);
       });
     } catch (e) { /* the numbers stay as dashes */ }
   }
