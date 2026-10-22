@@ -262,6 +262,8 @@ class DashboardServer(LiveServer):
                 return self._json_response({
                     "players": snapshot.players(), "default": snapshot.default_player(), "error": snapshot.error,
                     "charts": len(snapshot.charts), "plays": len(snapshot.plays),
+                    # The shell's backdrop when the game has no chart selected: the cover of the last play.
+                    "last_md5": snapshot.plays[0]["md5"] if snapshot.plays else None,
                 })
             profile = None
             if what in ("overview", "library") and player:

@@ -590,7 +590,11 @@ const P7I18N = (() => {
     "生成一张": "Generate one",
     "段位进度": "Dan progress",
     "{dan}：玩过 {n} 张，通关 {p} 张，A 以上 {a} 张，最好 {acc}（点击在曲库里看）": "{dan}: {n} played, {p} cleared, {a} at A or better, best {acc} (click to see them in the library)",
-    "数字是通关/玩过的谱数；变速局按变速后的星级。": "Cleared / played charts; rate-changed plays count at their changed stars."
+    "数字是通关/玩过的谱数；变速局按变速后的星级。": "Cleared / played charts; rate-changed plays count at their changed stars.",
+    "最小化": "Minimize",
+    "最大化": "Maximize",
+    "还原": "Restore",
+    "关闭": "Close"
   }/* EN-END */;
 
   // The text in the page's language, with {name} filled from `vars`.

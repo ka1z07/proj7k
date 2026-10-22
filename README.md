@@ -111,7 +111,13 @@ PYTHONPATH=src python3 -m proj7k.dashboard
 powershell -ExecutionPolicy Bypass -File deploy\desktop\install-shortcut.ps1
 ```
 
-桌面端会沿用已经在跑的控制台；没在跑就先在后台把它启动起来。关掉窗口不会打断正在跑的任务。窗口默认用 Windows 自带的 Edge 打开；装了 `pywebview`（`.venv\Scripts\pip install pywebview`）时用它的原生窗口。
+桌面端会沿用已经在跑的控制台；没在跑就先在后台把它启动起来。关掉窗口不会打断正在跑的任务。装了 proj7k 自己的窗口时用它：无边框、自绘标题栏、osu!lazer 风格的背景。安装或更新只要运行一次（需要已登录的 `gh`，Mac 上用 `sh deploy/desktop/install-tauri.sh`）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\desktop\install-tauri.ps1
+```
+
+没装时退回 `pywebview`（`.venv\Scripts\pip install pywebview`）的原生窗口，再不行就用 Windows 自带的 Edge 打开。
 
 **也可以用浏览器**：双击 `dashboard.cmd`，稍等几秒浏览器会自动打开 <http://127.0.0.1:7770/>。用的时候不要关掉那个黑色窗口，关掉它控制台就停了。
 
