@@ -1,0 +1,21 @@
+name: Feature request / 功能建议
+description: An idea for something new or better. / 新功能或改进建议。
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve? / 想解决什么问题
+      description: Describe what you are trying to do and what gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea / 你的想法
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Contributing / 参与
+      options:
+        - label: I'd like to implement this myself. / 我愿意自己来实现。

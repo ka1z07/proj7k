@@ -29,6 +29,7 @@ Difficulty is proj7k's own star rating, calibrated to the [Jinjin 7K dan courses
 - [Reading stars and dans](#reading-stars-and-dans)
 - [FAQ](#faq)
 - [Command line (advanced)](#command-line-advanced)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -262,6 +263,10 @@ Everything is also available on the command line, which is handy for batch work.
 Add `--help` to any command for all its options.
 
 Developer documentation (difficulty model, design decisions, tests) is in [`CONTEXT.md`](CONTEXT.md), [`docs/adr/`](docs/adr/) and [`CLAUDE.md`](CLAUDE.md), mostly in Chinese. Progress and devlog: <https://kaiz.dev/projects/proj7k/>.
+
+## Contributing
+
+Bug reports, star rating feedback and pull requests are welcome, in English or Chinese. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the checks every change must pass, and how to report security problems privately.
 
 ---
 

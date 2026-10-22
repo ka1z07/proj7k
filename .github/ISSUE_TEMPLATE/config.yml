@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability / 报告安全问题
+    url: https://github.com/ka1z07/proj7k/security/advisories/new
+    about: Please report security problems privately, not as an issue.
+  - name: Online 7K chart catalog / 线上 7K 谱面库
+    url: https://7k.kaiz.dev/
+    about: Browse and search 7K charts with their proj7k stars.
