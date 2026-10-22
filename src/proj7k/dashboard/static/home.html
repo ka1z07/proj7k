@@ -49,6 +49,9 @@
     "use strict";
     const { el, $ } = P7;
     let data = null;
+    // Numbers count up the first time the page is drawn; a refresh (back from the game) shows them as they are.
+    let drawn = false;
+    const num = (value, fmt) => (drawn ? el("span", { text: fmt(value) }) : P7.counter(value, fmt));
 
     // --- pieces -----------------------------------------------------------------------------------------------
     function hero(d) {
@@ -59,7 +62,7 @@
       const level = el("div", { class: "level" },
         el("div", { class: "hint", text: lv && lv.source === "profile" ? tr("当前水平（回放画像）") : tr("当前水平（按通关估算）") }),
         el("div", { class: "dan", text: lv ? lv.dan : "—" }),
-        lv ? el("div", { class: "sr", text: `${lv.stars.toFixed(2)}★` }) : null,
+        lv ? el("div", { class: "sr" }, num(lv.stars, (x) => `${x.toFixed(2)}★`)) : null,
         prof ? el("div", { class: "why", text: tr("擅长 {a} · 短板 {b}", { a: P7.skillName(prof.dominant), b: P7.skillName(prof.bottleneck) }) })
           : el("div", { class: "why", text: tr("导入回放后按八项技法细算") }));
       return el("div", { class: "hero" },
@@ -92,13 +95,13 @@
         return el("span", { class: x * better > 0 ? "good" : "bad", text: ` ${x > 0 ? "+" : "−"}${fmt(Math.abs(x))}` });
       }
       const pct = (x) => `${(x * 100).toFixed(2)}%`, st = (x) => `${x.toFixed(2)}★`;
-      const tile = (k, v, ...sub) => el("div", { class: "tile" }, el("div", { class: "k", text: k }), el("div", { class: "v", text: v }), el("div", { class: "s" }, ...sub));
+      const tile = (k, v, ...sub) => el("div", { class: "tile" }, el("div", { class: "k", text: k }), el("div", { class: "v" }, v), el("div", { class: "s" }, ...sub));
       return el("div", { class: "strip" },
-        tile(tr("游玩次数"), P7.num(t.plays), tr("近 30 天 {n} 局", { n: r.plays }), delta(r.plays, p.plays, (x) => String(Math.round(x)))),
+        tile(tr("游玩次数"), num(t.plays, (x) => P7.num(Math.round(x))), tr("近 30 天 {n} 局", { n: r.plays }), delta(r.plays, p.plays, (x) => String(Math.round(x)))),
         tile(tr("游玩时长"), P7.duration(t.play_time_s), tr("{n} 张谱 · 最高 {combo}x", { n: P7.num(t.charts), combo: P7.num(t.max_combo) })),
-        tile(tr("准确率（近 30 天）"), r.median_accuracy === null ? "—" : pct(r.median_accuracy), tr("中位数"), delta(r.median_accuracy, p.median_accuracy, pct)),
-        tile(tr("常打星级（近 30 天）"), r.median_stars === null ? "—" : st(r.median_stars), tr("中位数"), delta(r.median_stars, p.median_stars, st)),
-        tile(tr("通关最高（近 30 天）"), r.best_stars === null ? "—" : st(r.best_stars), tr("比前 30 天"), delta(r.best_stars, p.best_stars, st)),
+        tile(tr("准确率（近 30 天）"), r.median_accuracy === null ? "—" : num(r.median_accuracy, pct), tr("中位数"), delta(r.median_accuracy, p.median_accuracy, pct)),
+        tile(tr("常打星级（近 30 天）"), r.median_stars === null ? "—" : num(r.median_stars, st), tr("中位数"), delta(r.median_stars, p.median_stars, st)),
+        tile(tr("通关最高（近 30 天）"), r.best_stars === null ? "—" : num(r.best_stars, st), tr("比前 30 天"), delta(r.best_stars, p.best_stars, st)),
         el("div", { class: "tile" }, el("div", { class: "k", text: tr("评级（每张谱最好一局）") }),
           el("div", { class: "ranks" }, Object.entries(t.ranks).filter(([, v]) => v).map(([k, v]) => el("span", {}, P7.rankBadge(k), v)))));
     }
@@ -186,7 +189,7 @@
         svgNode.append(dot);
       });
       // The trend on top of the dots it summarises.
-      svgNode.append(P7.svg("polyline", { points: pts.map((p, i) => `${x(p.t)},${y(med[i])}`).join(" "), fill: "none", stroke: "#ff5fa2", "stroke-width": 2.5, "stroke-linejoin": "round" }));
+      svgNode.append(P7.svg("polyline", { points: pts.map((p, i) => `${x(p.t)},${y(med[i])}`).join(" "), fill: "none", stroke: "#ff5fa2", "stroke-width": 2.5, "stroke-linejoin": "round", pathLength: 1, class: drawn ? "" : "draw-in" }));
       card.append(svgNode, el("div", { class: "judge-legend" },
         el("span", {}, el("span", { class: "sw", style: "background:#4cb3ff" }), tr("一局（点击查看）")),
         el("span", {}, el("span", { class: "sw", style: "background:#ff5fa2" }), tr("最近 15 局的中位数")),
@@ -267,6 +270,7 @@
       try {
         data = await P7.api("overview");
         render(data);
+        drawn = true;
       } catch (e) {
         $("#page").replaceChildren(el("div", { class: "empty", text: tr("读取失败：{error}", { error: e }) }));
       }
