@@ -117,11 +117,18 @@ function mutateBeatmaps(realm, items) {
     for (const item of items) {
         let beatmap = null;
         const uuid = parseUuid(item.id);
+        // lazer's Beatmap.ID is a UUID: an id that isn't one can't match anything, and comparing it in a query
+        // throws, which would abort the whole write transaction (and with it every other item in the batch).
+        if (typeof uuid === 'string') continue;
         try {
             beatmap = realm.objectForPrimaryKey('Beatmap', uuid);
         } catch (e) {
-            const matches = realm.objects('Beatmap').filtered('ID == $0', uuid);
-            if (matches.length > 0) beatmap = matches[0];
+            try {
+                const matches = realm.objects('Beatmap').filtered('ID == $0', uuid);
+                if (matches.length > 0) beatmap = matches[0];
+            } catch (e2) {
+                beatmap = null;
+            }
         }
 
         if (beatmap) {

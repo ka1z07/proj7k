@@ -21,6 +21,21 @@ BENCHMARK_MANIFEST_PATH = REPO_ROOT / "docs" / "research" / "structured_index.js
 BENCHMARK_CORPUS_PATH = REPO_ROOT / "tests" / "fixtures" / "benchmark_corpus.json.gz"
 
 
+@pytest.fixture(autouse=True)
+def _isolated_lazer_cache(tmp_path_factory, monkeypatch):
+    """Keep sync tests that don't pass a cache_dir out of the real ~/.cache/proj7k.
+
+    A test once left fake beatmap IDs in a player's lazer_backup_state.json, and the revert then failed on them.
+    """
+    import proj7k.lazer.backup as backup
+    import proj7k.lazer.daemon as daemon
+    import proj7k.sync as sync
+
+    cache_dir = tmp_path_factory.mktemp("proj7k-cache")
+    for module in (backup, daemon, sync):
+        monkeypatch.setattr(module, "DEFAULT_CACHE_DIR", cache_dir)
+
+
 @pytest.fixture(scope="session")
 def benchmark_manifest_path() -> Path:
     return BENCHMARK_MANIFEST_PATH
