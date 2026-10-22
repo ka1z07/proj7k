@@ -3,6 +3,7 @@ name = "proj7k-desktop"
 version = "0.1.0"
 description = "proj7k's desktop window over the local dashboard"
 edition = "2021"
+license = "MIT"
 publish = false
 
 [[bin]]
