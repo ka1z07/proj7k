@@ -85,6 +85,7 @@ class GeneratorOptions:
     whole_inverse: bool = False               # every section written as inverse long notes
     brief: Optional[brief_mod.Brief] = None   # a chart design brief (ADR-0033): sections, leads, patterns, long notes
     auto_design: bool = False                 # without a brief, give each section a technique from people's charts
+    contrast: Optional[float] = None          # density swing kept between 4-measure stretches (rhythm.CONTRAST)
     log: Optional[Callable[[str], None]] = None
 
 
@@ -230,7 +231,8 @@ def generate(audio: Audio, options: GeneratorOptions) -> GenerationResult:
             sizes = rhythm.pick(model.predict(feats), places, u, v,
                                 np.array([p.silent for p in grid]), rows_per_s=2.0 ** d,
                                 chords=max(0.0, x - rhythm.D_MAX), gain=row_gain,
-                                section=row_section)
+                                section=row_section,
+                                contrast=rhythm.CONTRAST if options.contrast is None else options.contrast)
             sizes = harmonize(grid, groups, list(sizes))
             if shape_name is not None:
                 sizes = [brief_mod.sized(int(n), sh) for n, sh in zip(sizes, shape_name)]
