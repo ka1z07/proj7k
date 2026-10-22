@@ -77,7 +77,7 @@ class Profile:
     raw: Dict[str, List[float]] = field(default_factory=dict)
     features: Dict[str, float] = field(default_factory=dict)
     percentiles: Dict[str, float] = field(default_factory=dict)
-    tags: List[Dict[str, str]] = field(default_factory=list)
+    tags: List[Dict[str, Any]] = field(default_factory=list)
     # Each skill's share against the average mapper's: speed dominates most 7K charts, so what sets a mapper
     # apart is the skill they lean on more than others do, not the skill that is largest.
     skill_lift: Dict[str, float] = field(default_factory=dict)
@@ -232,10 +232,36 @@ def _compare(profiles: Dict[str, Profile]) -> None:
                                  for sim, o in scored[:SIMILAR]]
 
 
-def _tags(p: Profile) -> List[Dict[str, str]]:
+#: Style tags: id -> (label, why), Chinese templates whose `{name}`s are filled from the tag's values. A tag
+#: carries its templates and values too, so the website shows it in the reader's language (catalog/static/i18n.js).
+TAG_TEXT: Dict[str, Tuple[str, str]] = {
+    "signature": ("{skill}型", "{share} 的难度来自{skill}，是谱师平均的 {lift} 倍"),
+    "ln_main": ("LN 为主", "平均 {share} 的音符是长条"),
+    "rice": ("纯米", "几乎不写长条"),
+    "chord_high": ("多押密集", "平均每行 {value} 个音符，高于 {pct} 的谱师"),
+    "chord_low": ("单点为主", "平均每行 {value} 个音符，低于 {pct} 的谱师"),
+    "jack_high": ("叠键多", "叠键比例 {value}，高于 {pct} 的谱师"),
+    "jack_low": ("少叠键", "叠键比例 {value}，低于 {pct} 的谱师"),
+    "nps_high": ("高密度", "平均 {value} NPS，高于 {pct} 的谱师"),
+    "nps_low": ("低密度", "平均 {value} NPS，低于 {pct} 的谱师"),
+    "mid_high": ("重中键", "中键占 {value}，高于 {pct} 的谱师"),
+    "bpm_high": ("高 BPM", "BPM 中位数 {value}，高于 {pct} 的谱师"),
+    "bpm_low": ("慢歌", "BPM 中位数 {value}，低于 {pct} 的谱师"),
+    "length_high": ("长图", "长度中位数 {value} 秒，高于 {pct} 的谱师"),
+    "length_low": ("短图", "长度中位数 {value} 秒，低于 {pct} 的谱师"),
+    "hand_right": ("偏右手", "右手多打 {share} 的音符"),
+    "hand_left": ("偏左手", "左手多打 {share} 的音符"),
+    "engine_harder": ("引擎判定更难", "引擎星级比官方平均高 {delta}，差距大于 {pct} 的谱师"),
+    "engine_easier": ("引擎判定更易", "引擎星级比官方平均 {delta}，差距小于 {pct} 的谱师"),
+    "narrow": ("难度集中", "一半的难度落在引擎 {lo}–{hi} 星之间"),
+    "wide": ("难度跨度大", "中间一半的难度从 {lo} 星到 {hi} 星"),
+}
+
+
+def _tags(p: Profile) -> List[Dict[str, Any]]:
     """Plain-language style tags, strongest first. Each says why."""
     pc, f = p.percentiles, p.features
-    tags: List[Tuple[float, str, str]] = []
+    tags: List[Tuple[float, str, Dict[str, str]]] = []
 
     def pct(x: float) -> str:
         return f"{100 * x:.0f}%"
@@ -243,46 +269,50 @@ def _tags(p: Profile) -> List[Dict[str, str]]:
     mix, sig = p.skill_mix, p.signature
     if sig and p.skill_lift.get(sig, 0) >= 1.3:
         lift = p.skill_lift[sig]
-        tags.append((min(1.0, 0.4 + lift / 4), f"{SKILL_ZH[sig]}型",
-                     f"{pct(mix[sig])} 的难度来自{SKILL_ZH[sig]}，是谱师平均的 {lift:.1f} 倍"))
+        tags.append((min(1.0, 0.4 + lift / 4), "signature",
+                     {"skill": SKILL_ZH[sig], "share": pct(mix[sig]), "lift": f"{lift:.1f}"}))
     if "ln_ratio" in f:
         if f["ln_ratio"] >= 0.5:
-            tags.append((f["ln_ratio"], "LN 为主", f"平均 {pct(f['ln_ratio'])} 的音符是长条"))
+            tags.append((f["ln_ratio"], "ln_main", {"share": pct(f["ln_ratio"])}))
         elif f["ln_ratio"] <= 0.03:
-            tags.append((0.6, "纯米", "几乎不写长条"))
+            tags.append((0.6, "rice", {}))
     rules = (
-        ("chord", "多押密集", "单点为主", "平均每行 {:.2f} 个音符"),
-        ("jack", "叠键多", "少叠键", "叠键比例 {:.0%}"),
-        ("nps", "高密度", "低密度", "平均 {:.1f} NPS"),
-        ("mid", "重中键", None, "中键占 {:.0%}"),
-        ("bpm", "高 BPM", "慢歌", "BPM 中位数 {:.0f}"),
-        ("length", "长图", "短图", "长度中位数 {:.0f} 秒"),
+        ("chord", True, "{:.2f}"),
+        ("jack", True, "{:.0%}"),
+        ("nps", True, "{:.1f}"),
+        ("mid", False, "{:.0%}"),
+        ("bpm", True, "{:.0f}"),
+        ("length", True, "{:.0f}"),
     )
-    for key, high, low, text in rules:
+    for key, has_low, shown in rules:
         if key not in pc:
             continue
         if pc[key] >= 0.8:
-            tags.append((pc[key], high, f"{text.format(f[key])}，高于 {pct(pc[key])} 的谱师"))
-        elif low and pc[key] <= 0.2:
-            tags.append((1 - pc[key], low, f"{text.format(f[key])}，低于 {pct(1 - pc[key])} 的谱师"))
+            tags.append((pc[key], f"{key}_high", {"value": shown.format(f[key]), "pct": pct(pc[key])}))
+        elif has_low and pc[key] <= 0.2:
+            tags.append((1 - pc[key], f"{key}_low", {"value": shown.format(f[key]), "pct": pct(1 - pc[key])}))
     if "hand" in f and abs(f["hand"]) >= 0.06:
-        side = "右" if f["hand"] > 0 else "左"
-        tags.append((0.5 + abs(f["hand"]), f"偏{side}手", f"{side}手多打 {pct(abs(f['hand']))} 的音符"))
+        tags.append((0.5 + abs(f["hand"]), "hand_right" if f["hand"] > 0 else "hand_left", {"share": pct(abs(f["hand"]))}))
     # The two scales differ (the engine's top tiers sit above osu!'s), so the gap is judged against other mappers.
     if len(p.deltas) >= MIN_DIFFS_FOR_STYLE and "delta" in pc:
         if pc["delta"] >= 0.8:
-            tags.append((pc["delta"], "引擎判定更难", f"引擎星级比官方平均高 {f['delta']:+.2f}，差距大于 {pct(pc['delta'])} 的谱师"))
+            tags.append((pc["delta"], "engine_harder", {"delta": f"{f['delta']:+.2f}", "pct": pct(pc["delta"])}))
         elif pc["delta"] <= 0.2:
-            tags.append((1 - pc["delta"], "引擎判定更易", f"引擎星级比官方平均 {f['delta']:+.2f}，差距小于 {pct(1 - pc['delta'])} 的谱师"))
+            tags.append((1 - pc["delta"], "engine_easier", {"delta": f"{f['delta']:+.2f}", "pct": pct(1 - pc["delta"])}))
     if p.diffs >= 5:
         q = _quantiles(p.engine)
         spread = q[3] - q[1]
         if spread <= 0.6:
-            tags.append((0.55, "难度集中", f"一半的难度落在引擎 {q[1]:.1f}–{q[3]:.1f} 星之间"))
+            tags.append((0.55, "narrow", {"lo": f"{q[1]:.1f}", "hi": f"{q[3]:.1f}"}))
         elif spread >= 3.0:
-            tags.append((0.55, "难度跨度大", f"中间一半的难度从 {q[1]:.1f} 星到 {q[3]:.1f} 星"))
+            tags.append((0.55, "wide", {"lo": f"{q[1]:.1f}", "hi": f"{q[3]:.1f}"}))
     tags.sort(key=lambda t: -t[0])
-    return [{"label": label, "why": why} for _, label, why in tags]
+    out = []
+    for _, tag_id, values in tags:
+        label, why = TAG_TEXT[tag_id]
+        out.append({"id": tag_id, "label": label.format(**values), "why": why.format(**values),
+                    "label_t": label, "why_t": why, "vars": values})
+    return out
 
 
 class MapperIndex:

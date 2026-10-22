@@ -12,6 +12,7 @@
   <a class="logo" href="/">proj<b>7k</b> 谱面库</a>
   <div class="links"><a class="active" href="/">首页</a><a href="/beatmapsets">谱面</a><a href="/mappers">谱师</a></div>
   <div class="meta" id="meta"></div>
+  <div class="lang" id="lang"></div>
 </nav>
 
 <header class="home-hero">
@@ -58,7 +59,7 @@
 
   <section>
     <h2>装在自己电脑上的工具</h2>
-    <p class="sub">下载后双击 <code>dashboard.cmd</code>，所有工具都在同一个网页里，点按钮就行，不用记命令。配合 osu!lazer 使用。</p>
+    <p class="sub">一个桌面窗口装下所有工具，点按钮就行，不用记命令。配合 osu!lazer 使用，支持 Windows 和 macOS。</p>
     <div class="tool-grid">
       <article class="tool">
         <span class="tag">实时雷达</span>
@@ -96,11 +97,11 @@
   <section>
     <h2>三步开始</h2>
     <ol class="steps">
-      <li><b>下载</b> 从 <a href="https://github.com/ka1z07/proj7k" rel="noopener">GitHub</a> 下载 proj7k（绿色 Code 按钮 → Download ZIP），解压到任意文件夹。</li>
-      <li><b>安装 Python</b> 装好 Python 3.14，在文件夹里运行一次 <code>pip install -r requirements.txt</code>。</li>
-      <li><b>打开面板</b> 双击 <code>dashboard.cmd</code>，浏览器会自动打开控制台。</li>
+      <li><b>下载</b> 在 GitHub 的最新版本页面下载 Source code (zip)，解压到一个以后不会挪的文件夹。 <a href="https://github.com/ka1z07/proj7k/releases/latest" rel="noopener">最新版本 ↗</a></li>
+      <li><b>安装</b> 双击文件夹里的 install.cmd（Mac 上在终端运行 sh install.sh），它会装好需要的一切，并放一个 proj7k 快捷方式。</li>
+      <li><b>打开</b> 从开始菜单或桌面上的 proj7k 快捷方式打开（Mac 上双击 proj7k.command）。</li>
     </ol>
-    <p class="sub">每一步的详细说明见 <a href="https://github.com/ka1z07/proj7k#readme" rel="noopener">使用说明</a>。</p>
+    <p class="sub"><a href="https://github.com/ka1z07/proj7k#readme" rel="noopener">每一步的详细说明 ↗</a></p>
   </section>
 
   <section class="home-links">
@@ -108,6 +109,7 @@
     <a href="https://kaiz.dev/projects/proj7k/" rel="noopener">开发进度与日志 ↗</a>
   </section>
 </main>
+<script src="/static/i18n.js"></script>
 <script src="/static/catalog.js"></script>
 <script>Catalog.homePage();</script>
 </body>
