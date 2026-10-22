@@ -1,270 +1,272 @@
 # proj7k
 
-给 osu!mania 7K 玩家的桌面工具：看自己的水平和进步、知道一张图难在哪、把打不过的图降到能练的难度、从一首歌生成谱面、从回放里找出短板。
+**English** · [简体中文](README.zh-CN.md)
 
-难度用的是 proj7k 自己的星级，按 [Jinjin 7K 段位](#星级和段位怎么看)标定：同样是 5 星，不管是叠键图还是长条图，难度应该差不多。
+A desktop companion for osu!mania 7K players: see your level and how it is moving, find out what makes a chart hard, turn a chart you can't pass into one you can practise, generate a chart from a song, and find your weak spots from your own replays.
 
-**⬇️ 下载桌面端：[最新版本](https://github.com/ka1z07/proj7k/releases/latest)**　·　**🌐 在线谱面库：<https://7k.kaiz.dev/>**（不用安装，打开就能用）
+Difficulty is proj7k's own star rating, calibrated to the [Jinjin 7K dan courses](#reading-stars-and-dans): a 5★ chart should be about as hard whether it is a jack chart or an LN chart.
+
+**⬇️ Download the desktop app: [latest release](https://github.com/ka1z07/proj7k/releases/latest)**　·　**🌐 Online chart catalog: <https://7k.kaiz.dev/>** (nothing to install)
 
 ---
 
-## 目录
+## Contents
 
-- [安装](#安装)
+- [Install](#install)
   - [Windows](#windows)
   - [macOS](#macos)
-  - [更新与卸载](#更新与卸载)
-- [第一次打开](#第一次打开)
-- [界面一览](#界面一览)
-- [玩家：主页、游玩记录、曲库](#玩家主页游玩记录曲库)
-- [工具](#工具)
-  - [实时雷达](#实时雷达)
-  - [回放与画像](#回放与画像)
-  - [降阶练习](#降阶练习)
-  - [谱面生成](#谱面生成)
-  - [曲库同步](#曲库同步)
-- [在线谱面库](#在线谱面库)
-- [星级和段位怎么看](#星级和段位怎么看)
-- [常见问题](#常见问题)
-- [命令行用法（进阶）](#命令行用法进阶)
-- [许可](#许可)
+  - [Update and uninstall](#update-and-uninstall)
+- [First launch](#first-launch)
+- [A tour of the window](#a-tour-of-the-window)
+- [Player: Home, History, Library](#player-home-history-library)
+- [Tools](#tools)
+  - [Live radar](#live-radar)
+  - [Replays & profile](#replays--profile)
+  - [Downscale](#downscale)
+  - [Chart generator](#chart-generator)
+  - [Library sync](#library-sync)
+- [Online chart catalog](#online-chart-catalog)
+- [Reading stars and dans](#reading-stars-and-dans)
+- [FAQ](#faq)
+- [Command line (advanced)](#command-line-advanced)
+- [License](#license)
 
 ---
 
-## 安装
+## Install
 
-需要：**osu!lazer**（proj7k 读的是 lazer 的数据库和回放，stable 版不支持），Windows 10 / 11 或 macOS。所有东西都在你自己电脑上运行，不需要登录，也不会上传任何东西。
+You need **osu!lazer** (proj7k reads lazer's database and replays; osu!stable is not supported) and Windows 10 / 11 or macOS. Everything runs on your own computer: no login, nothing is uploaded.
 
 ### Windows
 
-1. 打开 **[最新版本](https://github.com/ka1z07/proj7k/releases/latest)**，在页面最下面的 Assets 里下载 **Source code (zip)**。
-2. 解压到一个你找得到、以后不会挪的地方，比如 `文档\proj7k`。
-3. 双击文件夹里的 **`install.cmd`**。
+1. Open the **[latest release](https://github.com/ka1z07/proj7k/releases/latest)** and, under Assets at the bottom, download **Source code (zip)**.
+2. Unzip it somewhere you will keep it, e.g. `Documents\proj7k`.
+3. Double-click **`install.cmd`** in that folder.
 
    > [!NOTE]
-   > 如果弹出「Windows 已保护你的电脑」，点「更多信息」→「仍要运行」。proj7k 没有买代码签名证书，所以 Windows 不认识它。
+   > If Windows says "Windows protected your PC", click "More info" → "Run anyway". proj7k is not code-signed, so Windows doesn't recognise it.
 
-4. 等黑色窗口跑完（第一次大约 3–10 分钟，看网速）。它会依次：
-   - 没有 Python 3.14 和 Node.js 的话，用 Windows 自带的 winget 装上（可能弹出一次管理员确认）；
-   - 在 proj7k 文件夹里建一个独立的 Python 环境（`.venv`），装好依赖，不影响你电脑上别的 Python；
-   - 下载 proj7k 的窗口程序，在**开始菜单和桌面**放一个 proj7k 快捷方式；
-   - 最后直接打开 proj7k。
+4. Wait for the console window to finish (3–10 minutes the first time, depending on your connection). It:
+   - installs Python 3.14 and Node.js with Windows' built-in winget if they are missing (you may get one administrator prompt);
+   - creates a private Python environment (`.venv`) inside the proj7k folder with everything proj7k needs, without touching any other Python on your computer;
+   - downloads the proj7k window and puts a proj7k shortcut in the **Start menu and on the desktop**;
+   - opens proj7k.
 
-以后从开始菜单或桌面上的 **proj7k** 打开就行。
+From then on, open **proj7k** from the Start menu or the desktop.
 
 > [!TIP]
-> 装到一半提示「装好了 Python / Node.js 但这个窗口还找不到它」，关掉窗口再双击一次 `install.cmd` 即可，已经做完的步骤会跳过。
+> If it stops with "Python / Node.js was installed but this window cannot see it yet", close the window and double-click `install.cmd` again. Steps already done are skipped.
 
 ### macOS
 
-1. 同样在 **[最新版本](https://github.com/ka1z07/proj7k/releases/latest)** 下载 **Source code (zip)**，解压到比如 `~/Documents/proj7k`。
-2. 打开「终端」，输入 `sh `（后面有空格），把解压出来的文件夹里的 `install.sh` 拖进终端窗口，回车。
-   - 没有 Python 3.14 或 Node.js 时会用 [Homebrew](https://brew.sh) 安装；没有 Homebrew 的话先按它主页上的那一行命令装好。
-   - proj7k 的窗口装在 `~/Applications/proj7k.app`。
-3. 以后双击文件夹里的 **`proj7k.command`** 打开。
+1. Download **Source code (zip)** from the **[latest release](https://github.com/ka1z07/proj7k/releases/latest)** too, and unzip it, e.g. to `~/Documents/proj7k`.
+2. Open Terminal, type `sh ` (with a trailing space), drag `install.sh` from the unzipped folder into the Terminal window, and press Return.
+   - Python 3.14 and Node.js are installed with [Homebrew](https://brew.sh) if missing; install Homebrew first with the one-line command on its home page if you don't have it.
+   - The proj7k window goes to `~/Applications/proj7k.app`.
+3. From then on, double-click **`proj7k.command`** in the folder to open proj7k.
 
-### 更新与卸载
+### Update and uninstall
 
-**更新**：下载新版本的 zip，解压后**覆盖**原来的文件夹，再运行一次 `install.cmd`（Mac 上 `install.sh`）。用 git 的话 `git pull` 后同样再运行一次。你的画像、回放分析和设置存在用户目录里（`~/.proj7k`、`~/.cache/proj7k`），更新不会丢。
+**Update**: download the new release's zip, unzip it **over** the old folder, and run `install.cmd` (`install.sh` on a Mac) again. With git, `git pull` and then run it again. Your profile, replay analysis and settings live in your user folder (`~/.proj7k`, `~/.cache/proj7k`) and survive updates.
 
 > [!TIP]
-> 更新之后到「回放与画像 → 导入 lazer 回放」再导入一次，旧的回放会按新版本重新计算。
+> After an update, run "Replays & profile → Import lazer replays" again so your old replays are recalculated by the new version.
 
-**卸载**：删掉 proj7k 文件夹、开始菜单和桌面上的快捷方式，以及 `%LOCALAPPDATA%\proj7k`（Mac 上是 `~/Applications/proj7k.app`）。想连数据一起删，再删掉用户目录下的 `.proj7k` 和 `.cache\proj7k`。用过「曲库同步」的话，卸载前先点「还原为官方星级」。
-
----
-
-## 第一次打开
-
-1. **打开 osu!lazer**（开着关着都行，proj7k 只读它的数据库，游戏开着也能读）。lazer 装在默认位置时会自动找到；在游戏设置里挪过数据目录也能找到。
-2. 打开 proj7k，首页就是你的**玩家主页**：游玩次数、评级、星级进步曲线、各段位通关情况，全部来自 lazer 里保存的成绩，不需要登录或 API。
-3. 点主页「下一步练什么」里的 **「去导入回放」**（或侧边栏「回放与画像 → 导入 lazer 回放」），填你的玩家名，点「开始导入」。读完回放后，主页才会显示你的**整体水平**、**八项技法实力**和**最该补的短板**。
-4. 左下角 **「English / 中文」** 切换界面语言（第一次跟随系统语言）。
-
-proj7k 的窗口没有浏览器的标签栏和地址栏，右上角是自己画的最小化、最大化、关闭按钮，拖标题栏可以移动窗口。关掉窗口不会打断正在跑的任务（降阶、生成、导入回放都在后台继续）。
+**Uninstall**: delete the proj7k folder, the Start-menu and desktop shortcuts, and `%LOCALAPPDATA%\proj7k` (`~/Applications/proj7k.app` on a Mac). To remove your data too, delete `.proj7k` and `.cache\proj7k` in your user folder. If you used Library sync, click "Restore official stars" before uninstalling.
 
 ---
 
-## 界面一览
+## First launch
 
-左边是侧边栏，分三组：
+1. **osu!lazer** can be open or closed: proj7k only reads its database, and can read it while the game runs. A default lazer install is found automatically, and so is a data folder you moved in the game's settings.
+2. Open proj7k. It starts on your **Home** page: play count, ranks, your star progress, which dans you have cleared, all from the scores lazer keeps. No login or API key.
+3. Under "What to practise next" on Home, click **"Import replays"** (or go to "Replays & profile → Import lazer replays"), enter your player name and click "Start import". Once your replays are read, Home shows your **overall level**, your **eight technique levels** and the **weakness worth fixing first**.
+4. The **English / 中文** button at the bottom left switches the interface language (it follows your system language the first time).
 
-| 分组 | 页面 | 做什么 |
+The proj7k window has no browser tabs or address bar: it draws its own minimise, maximise and close buttons at the top right, and you move it by dragging the title bar. Closing the window doesn't stop running jobs (downscaling, generating and importing carry on in the background).
+
+---
+
+## A tour of the window
+
+The sidebar on the left has three groups:
+
+| Group | Page | What it does |
 | :--- | :--- | :--- |
-| **玩家** | 主页 | 你现在的水平、近 30 天的变化、下一步练什么 |
-| | 游玩记录 | lazer 里保存的每一局，点开能诊断、重看、切练习包 |
-| | 曲库 | 本机全部 7K 谱，按 proj7k 星级、段位、技法筛，找「适合我练的」 |
-| **工具** | 实时雷达 | 在游戏里选歌时，实时显示这张图的星级、段位和八项技法 |
-| | 回放与画像 | 分析回放、导入 lazer 回放、玩家画像、发力习惯 |
-| | 降阶练习 | 把一张图降到你选的段位或星级，生成练习谱并导入游戏 |
-| | 谱面生成 | 给一首歌，按目标难度生成一张 7K 谱 |
-| **设置** | 曲库同步 | 把 osu!lazer 里的星级换成 proj7k 星级，随时可以还原 |
+| **Player** | Home | Your current level, the last 30 days' change, what to practise next |
+| | History | Every play lazer saved; open one to diagnose it, watch it, or cut a practice pack |
+| | Library | Every 7K chart on your computer, filtered by proj7k stars, dan and technique, including "Good for me to practise" |
+| **Tools** | Live radar | Stars, dan and the eight techniques of the chart you select in game, live |
+| | Replays & profile | Replay diagnosis, importing lazer replays, your player profile and habits |
+| | Downscale | Brings a chart down to the dan or stars you choose and imports the practice chart into the game |
+| | Chart generator | Generates a 7K chart for a song at a target difficulty |
+| **Settings** | Library sync | Replaces the stars in osu!lazer with proj7k stars; can be restored at any time |
 
-侧边栏底部：
+At the bottom of the sidebar:
 
-- **游戏状态**：osu!lazer 有没有在运行，以及你在游戏里**当前选中的谱面**（点它打开谱面详情）。大部分工具默认就用「游戏当前谱面」，所以通常的用法是：**先在游戏里选好图，再到 proj7k 点按钮。**
-- **「重启 osu!」**：正常关掉 osu!lazer（和点窗口的 ✕ 一样，会保存）再打开，导入新谱面后用得到。
-- **连接状态**和**语言切换**。
+- **Game status**: whether osu!lazer is running, and the **chart currently selected in the game** (click it for the chart's details). Most tools default to "Current chart in game", so the usual flow is: **pick the chart in the game, then click the button in proj7k.**
+- **Restart osu!**: closes osu!lazer properly (like clicking its ✕, so it saves) and opens it again; handy after importing new charts.
+- The **connection status** and the **language switch**.
 
-窗口窄的时候侧边栏只显示图标。任何列表里的谱名、成绩都能点开，详情从右侧滑出，`Esc` 关闭；回放查看器在窗口里打开，「在浏览器中打开」可以放到浏览器里看。`.osu`、`.osr` 文件可以直接拖进页面。
-
----
-
-## 玩家：主页、游玩记录、曲库
-
-- **主页**：大字显示你现在的水平（段位和星级）；游玩次数、时长、准确率等六项和近 30 天对比；「下一步练什么」给出最弱的一项技法（一键出短板练习谱）、你水平附近还没打好的谱、下一个段位曲库里有几张、通关了几张；下面是星级进步曲线（点一个点打开那一局）、八项技法实力、各段位通关情况、近半年活跃度、最难的通关和最近游玩。
-- **游玩记录**：每一局的评级、准确率、分数、连击、Mod、星级（开了 DT/HT 按变速后的星级算）。可以搜索、按评级 / 段位 / Mod 筛选、按星级或准确率排序、每张谱只看最好一局。
-- **曲库**：本机全部 7K 谱的封面、星级、段位、主技法和你的最好成绩；「适合我练的」列出和你画像实力相近、还没玩过的谱。
-
-**点开一局**：判定分布、MAX:300、这局在这张谱上排第几；能「诊断这局」（回放查看器 + 存进画像）、「在 osu! 里重看」、下载 `.osr`、「在崩盘点切练习包」、「降阶练习这张谱」。
-
-**点开一张谱**：引擎星级、八项技法、难度随时间、你在这张谱上的每一局、试听；能直接去降阶、用这首歌生成新谱、诊断最近一局，或打开线上 7K 谱面库 / osu! 官网的页面。
+When the window is narrow the sidebar shows icons only. Any chart name or play in a list can be opened: details slide in from the right and `Esc` closes them. The replay viewer opens inside the window; "Open in browser" moves it to your browser. You can drop `.osu` and `.osr` files straight onto a page.
 
 ---
 
-## 工具
+## Player: Home, History, Library
 
-### 实时雷达
+- **Home**: your current level in big type (dan and stars); six stats such as play count, play time and accuracy, against the previous 30 days; "What to practise next" names your weakest technique (with one click to a practice chart for it), charts near your level you haven't played well yet, and how many charts of the next dan you have and have cleared. Below: your star progress over time (click a point to open that play), the eight technique levels, dan clears, activity over the last six months, your hardest clears and recent plays.
+- **History**: every play with rank, accuracy, score, combo, mods and stars (DT/HT plays use the stars at that rate). Search, filter by rank / dan / mod, sort by stars or accuracy, or show only the best play per chart.
+- **Library**: every 7K chart on your computer with cover, stars, dan, main technique and your best score. "Good for me to practise" lists charts close to your profile's level that you haven't played.
 
-在 osu!lazer 里换一张 7K 谱面，页面马上跟着刷新：
+**Open a play** for its judgement breakdown, MAX:300 count and where it ranks among your plays on that chart. From there: "Diagnose this play" (replay viewer + saved to your profile), "Watch in osu!", download the `.osr`, "Practice pack from the breakdown", "Downscale this chart".
 
-- **星级与段位**：这张图的 proj7k 星级和对应的段位。
-- **八项技法雷达**：米键四项（叠键 Jack、技巧 Tech、速度 Speed、耐力切 Stream）和长条四项（LN 综合、LN 技巧、反键、放手）。哪一项最突出，这张图就主要考什么。
-- **难度时间线**：整首歌每一段有多难、由哪项技法撑起来。最高的几段就是最容易断连的地方。
+**Open a chart** for its engine stars, eight techniques, difficulty over time, each of your plays on it and an audio preview. From there you can downscale it, generate a new chart from its song, diagnose your latest play, or open its page in the online 7K catalog or on the osu! website.
 
-适合放在第二个屏幕上，一边选歌一边看。直播时在 OBS 里加一个浏览器源，地址填 `http://127.0.0.1:7770/?mode=overlay`，就是透明背景的叠加层。
+---
 
-### 回放与画像
+## Tools
 
-这一页有四个标签：
+### Live radar
 
-**导入 lazer 回放**：第一次用时先来这里。填你的玩家名，点「开始导入」，会把 osu!lazer 里你所有的 7K 回放读进画像档案。重复导入是安全的，不会重复计数；太短或明显是重开的局会被过滤掉。
+Select a 7K chart in osu!lazer and the page follows at once:
 
-**回放诊断**：分析一局回放。默认取你在游戏里当前选中的那张图上最近一次游玩，也可以选任意一局或自己拖 `.osr` 和 `.osu` 进来。可以勾选：
+- **Stars and dan**: the chart's proj7k stars and the dan they match.
+- **Eight-technique radar**: four rice techniques (Jack, Tech, Speed, Stream) and four LN ones (LN general, LN tech, Inverse, Release). Whichever sticks out is what the chart mainly tests.
+- **Difficulty timeline**: how hard each part of the song is and which technique carries it. The highest peaks are where you are most likely to break combo.
 
-- **生成回放查看器**：下落式回放，判定线上方是谱面、下方是你实际的按键，失误、漏按、多按、长条早放一眼能看出来。底部的难度时间线可以拖动，能在失误和最难的段落之间跳转。
-- **存入画像档案库**：把这一局计入你的玩家画像。
-- **在崩盘点切三阶练习包**：自动找到你断掉的那一段，切出来做成由易到难的三张练习谱（Recovery 在你当前水平、Push 是原图片段、Bridge 在中间），打包成 `.osz`。
-- **练习推荐**：从你本地曲库里挑图，「短板突破」补弱项，「长板专精」继续拉强项（不会推荐段位考试的图）。
+It works well on a second screen while you pick songs. For streaming, add a Browser source in OBS with `http://127.0.0.1:7770/?mode=overlay` for a see-through overlay.
 
-**玩家画像**：你在八项技法上各自对应的段位，以及整体水平。可以只看最近 N 天，也可以看全历史。
+### Replays & profile
 
-**发力习惯**：从所有回放里统计你的按键习惯，例如每一列偏早还是偏晚、按住多久、和弦里哪根手指先按、滚键还是齐按、长条怎么松手，以及中间那一列你习惯用哪只手。
+This page has four tabs:
 
-### 降阶练习
+**Import lazer replays**: start here. Enter your player name and click "Start import" to read all your 7K replays in osu!lazer into your profile. Importing again is safe and doesn't double-count; very short plays and obvious restarts are skipped.
 
-打不过的图，降成一张同样的歌、同样风格、但更简单的练习谱。
+**Replay diagnosis**: analyses one play. By default it takes your latest play on the chart selected in the game; you can also pick any play or drop in an `.osr` and `.osu`. Options:
 
-1. 在游戏里选中这张图（或者选「指定谱面」，填文件路径、谱面 ID 或 osu! 谱面链接，或直接拖 `.osu` 进来）。
-2. 选目标：**段位**（比如 3rd）或 **星级**（比如 4.5）。
-3. 选降阶方式：
-   - **保留主技法**：原图是叠键图，练习谱也还是叠键图，只是更简单。默认用这个。
-   - **只追难度**：不强求保留主技法，只要难度降到目标附近。「保留主技法」降不到你要的难度时，结果里会提示你改用这个。
-4. 点 **「开始降阶」**。
+- **Build replay viewer**: a falling-notes replay with the chart above the judgement line and what you actually pressed below it, so misses, ghost taps, extra presses and early LN releases stand out. Drag along the difficulty timeline at the bottom to jump between mistakes and the hardest sections.
+- **Save to profile archive**: counts this play towards your player profile.
+- **Cut a three-tier practice pack at the breakdown**: finds the stretch where you broke, cuts it out and builds three practice charts from easy to hard (Recovery at your current level, Push is the original section, Bridge in between), packed as an `.osz`.
+- **Practice recommendations**: picks charts from your local library: "Fix the weakness" for your weak techniques, "Sharpen the strength" to push your strong ones (dan course charts are never recommended).
 
-练习谱只删音符、不加音符，强拍和和弦的骨架、左右手的平衡都会保留。勾上「打包 .osz」会带上原曲音频和背景；在结果里点 **「导入 osu!」** 就进游戏了，勾选导入选项的话还会自动放进「7K Practice」收藏夹。
+**Player profile**: the dan you play at in each of the eight techniques, and your overall level, over the last N days or all time.
 
-### 谱面生成
+**Habits**: your key-press habits across all replays: whether each column is early or late, how long you hold, which finger lands first in a chord, rolling vs. pressing together, how you release LNs, and which hand you use for the middle column.
 
-给一首歌，自动生成一张 7K 谱。
+### Downscale
 
-1. 选歌：用「游戏当前谱面的歌」（会借用那张谱的 BPM 和 offset，节奏最准），或「指定音频」（mp3 / ogg / wav / flac，可以直接拖进来）。
-2. 选目标段位或星级。
-3. Timing（节奏）：有参考谱面时默认借用；没有就选「自动测」；自动测得不对时选「手动」自己填 BPM 和第一个强拍的时间。
-4. 选长条多少：不出长条（米谱）、少量长条、米长混、长条为主；可以再勾「反键」。
-5. 点 **「生成」**。生成后会自动微调，让难度落在目标附近，并打包成 `.osz`，可以一键导入游戏。
+A chart you can't pass becomes a practice chart with the same song and style, but easier.
 
-生成器会先把歌切成段落（前奏、主歌、副歌、间奏……），按每段的响度和节奏分配密度和写法，副歌回来时写法也跟着重复。同样的设置换一个「配键种子」数字，就会得到另一种配法。生成的谱是独立的新谱面，不会覆盖原来那张。
+1. Select the chart in the game (or choose "Specify a chart" and give a file path, beatmap ID or osu! beatmap link, or drop the `.osu` in).
+2. Choose the target: a **dan** (e.g. 3rd) or **stars** (e.g. 4.5).
+3. Choose how:
+   - **Keep main technique**: a jack chart stays a jack chart, just easier. This is the default.
+   - **Difficulty only**: gets to the target difficulty without insisting on the main technique. If "Keep main technique" can't get as low as you asked, the result tells you to use this.
+4. Click **"Start downscaling"**.
+
+Practice charts only remove notes, never add them, and keep the strong beats, chord skeleton and left/right balance. Tick "Pack .osz" to bring the song and background along; click **"Import to osu!"** in the result to put it in the game, and with the import option ticked it also goes into a "7K Practice" collection.
+
+### Chart generator
+
+Give it a song and it generates a 7K chart.
+
+1. Pick the song: "Song of the current chart in game" (borrows that chart's BPM and offset, for the most accurate timing) or "Specify audio" (mp3 / ogg / wav / flac; you can drop the file in).
+2. Choose a target dan or stars.
+3. Timing: borrowed from the reference chart when there is one; otherwise "Auto-detect"; if auto-detect gets it wrong, choose "Manual" and enter the BPM and the time of the first downbeat.
+4. Choose how much LN: No LN (rice only), A few LN, Rice and LN mixed, Mostly LN; optionally tick "Inverse".
+5. Click **"Generate"**. It fine-tunes the chart until its difficulty lands near the target, packs it as an `.osz`, and can import it into the game in one click.
+
+The generator first splits the song into sections (intro, verse, chorus, break…) and sets each section's density and patterns from its loudness and rhythm, so when the chorus comes back, so does its writing. Change the "Key layout seed" number to get another layout with the same settings. The result is a new chart of its own and never overwrites the original.
 
 > [!NOTE]
-> 「实验：Demucs 分轨」会把歌拆成鼓、贝斯、人声、其他，每段只跟一层写。第一次勾选会下载安装 Demucs 和 PyTorch（数 GB），每首歌第一次分轨约 1–3 分钟。不勾就不会下载。
+> "Experimental: Demucs stems" splits the song into drums, bass, vocals and other, and has each section follow one layer. Ticking it the first time downloads and installs Demucs and PyTorch (several GB), and the first split of each song takes about 1–3 minutes. Nothing is downloaded unless you tick it.
 
-### 曲库同步
+### Library sync
 
-把游戏里 7K 图的星级换成 proj7k 星级，这样在 osu!lazer 里按星级排序、筛选时用的就是 proj7k 的难度。同时会给每张图打上段位和主技法标签，在游戏里搜标签就能找到对应的图。
+Replaces the stars of the 7K charts in your game with proj7k stars, so sorting and filtering by stars in osu!lazer uses proj7k's difficulty. It also tags every chart with its dan and main technique, so you can find them by searching tags in the game.
 
-1. 点 **「预演（不写入）」** 看看会改多少张图，这一步什么都不会改。
-2. 点 **「立即同步」**。osu!lazer 开着的话，默认会先帮你关掉，写完再打开。
+1. Click **"Dry run (no writes)"** to see how many charts would change; nothing is written.
+2. Click **"Sync now"**. If osu!lazer is open, it is closed first by default and reopened afterwards.
 
-- **写入前会自动备份**。想换回官方星级，点 **「还原为官方星级」** 即可。
-- 只改你电脑上的游戏数据库，不影响线上成绩和排名。
-
----
-
-## 在线谱面库
-
-打开 <https://7k.kaiz.dev/>，点「进入谱面库」。不用安装。
-
-- **两个星级并排**：每个难度都显示 osu! 官方星级（黄色）和 proj7k 星级（蓝色），以及对应的段位。排序选「偏差」可以找到两边差得最多的图。
-- **按技法找图**：用「主技能」按钮筛出以叠键、切、反键、放手等为主的图。
-- **搜索条件**：搜索框里除了歌名、谱师，还可以写条件，例如 `engine>5 engine<6`（proj7k 星级在 5 到 6 之间）。点搜索框旁边的「搜索语法」可以看全部写法。
-- **随机**：排序选「随机」，每次刷新换一批图。
-- **谱师**：顶栏「谱师」页可以看每位谱师写过哪些 7K 图、擅长什么技法。
-- 除了 Ranked、Loved、Qualified，Pending、WIP 和坟图里的 7K 图也收录了。谱面详情页可以一键跳到 osu! 官网下载，或用 osu!direct 直接打开。
+- **A backup is made before writing.** To go back to the official stars, click **"Restore official stars"**.
+- Only your computer's game database changes; online scores and rankings are not affected.
 
 ---
 
-## 星级和段位怎么看
+## Online chart catalog
 
-proj7k 的星级按 Jinjin 7K 段位考试标定，一共 15 级：
+Open <https://7k.kaiz.dev/> and click into the catalog. Nothing to install. (The catalog's interface is in Chinese for now.)
+
+- **Both star ratings side by side**: every difficulty shows the official osu! stars (yellow) and proj7k stars (blue), with the matching dan. Sort by the difference to find the charts where the two disagree most.
+- **Find charts by technique**: the main-skill buttons filter to charts built mainly on jacks, streams, inverse, releases and so on.
+- **Search conditions**: besides song title and mapper, the search box takes conditions such as `engine>5 engine<6` (proj7k stars between 5 and 6). The search syntax link next to the box lists them all.
+- **Random**: random order shows a new set of charts on every refresh.
+- **Mappers**: the mappers page shows which 7K charts each mapper made and the techniques they favour.
+- Pending, WIP and graveyard 7K charts are included as well as Ranked, Loved and Qualified. A chart's page links to the osu! website for download, or opens it with osu!direct.
+
+---
+
+## Reading stars and dans
+
+proj7k's stars are calibrated to the Jinjin 7K dan courses, 15 levels in all:
 
 `0th` → `1st` → … → `10th` → `Gamma` → `Azimuth` → `Zenith` → `Stellium`
 
-- 星级越高越难；每个段位对应一段星级区间，proj7k 和谱面库会同时显示两者。
-- proj7k 星级和 osu! 官方星级不是一把尺子，同一张图两边数字不同是正常的。
-- 八项技法各自也有星级，代表「这张图在这一项上有多难」；对整张图难度贡献最大的那一项就是它的主技法。
+- More stars means harder; each dan covers a band of stars, and proj7k and the catalog show both.
+- proj7k stars and official osu! stars are different rulers; a chart having two different numbers is normal.
+- Each of the eight techniques has its own stars too, meaning "how hard this chart is on that technique"; the one that contributes most to the chart's difficulty is its main technique.
 
 ---
 
-## 常见问题
+## FAQ
 
-**会不会被封号？**
-不会。proj7k 只读你的回放和谱面文件；「曲库同步」只改你本机游戏数据库里显示的星级，不碰成绩，也不上传任何东西。
+**Can this get me banned?**
+No. proj7k only reads your replays and chart files; Library sync only changes the stars shown in your local game database, never your scores, and nothing is uploaded.
 
-**主页一直是空的 / 提示「未找到 osu!lazer 数据库」？**
-先确认用的是 osu!lazer 而不是 stable。数据目录挪到了特别的地方时，可以在 proj7k 文件夹里运行 `dashboard.cmd --lazer-dir "数据目录"`（里面有 `client.realm` 的那个文件夹）。还不行请提 [Issue](https://github.com/ka1z07/proj7k/issues)。
+**Home stays empty / says "No osu!lazer database"?**
+Make sure you are using osu!lazer, not stable. If your data folder is somewhere unusual, run `dashboard.cmd --lazer-dir "data folder"` in the proj7k folder (the folder that contains `client.realm`). If that doesn't help, please open an [issue](https://github.com/ka1z07/proj7k/issues).
 
-**主页能看，但没有水平和八项技法？**
-还没导入回放。见[第一次打开](#第一次打开)第 3 步。
+**Home works but shows no level or eight techniques?**
+You haven't imported replays yet. See step 3 of [First launch](#first-launch).
 
-**点快捷方式没反应 / 窗口一闪就没了？**
-在 proj7k 文件夹里再双击一次 `install.cmd`，它会补上缺的东西。还不行的话双击 `dashboard.cmd`，用浏览器打开（地址 <http://127.0.0.1:7770/>），黑色窗口里会显示出错信息，把它贴到 Issue 里。
+**The shortcut does nothing / the window flashes and closes?**
+Double-click `install.cmd` in the proj7k folder again; it fills in whatever is missing. If that doesn't help, double-click `dashboard.cmd` to use proj7k in your browser (<http://127.0.0.1:7770/>); its console window shows the error. Please paste it into an issue.
 
-**不想用 proj7k 的窗口，想在浏览器里用？**
-双击 `dashboard.cmd`，浏览器会自动打开 <http://127.0.0.1:7770/>。用的时候不要关那个黑色窗口。
+**I'd rather use it in my browser than in the proj7k window.**
+Double-click `dashboard.cmd` and your browser opens <http://127.0.0.1:7770/>. Keep its console window open while you use it.
 
-**端口 7770 被占用？**
-通常是之前开的 proj7k 还没关。或者用 `dashboard.cmd --port 7771` 换一个端口。
+**Port 7770 is already in use?**
+Usually an earlier proj7k is still running. Or pick another port with `dashboard.cmd --port 7771`.
 
-**曲库同步后想换回官方星级？**
-「曲库同步」页点「还原为官方星级」。
+**How do I go back to the official stars after Library sync?**
+Click "Restore official stars" on the Library sync page.
 
 ---
 
-## 命令行用法（进阶）
+## Command line (advanced)
 
-每个功能也都能在命令行里用，适合批量处理。在 proj7k 文件夹里运行（Windows 上先执行 `set PYTHONPATH=src`，macOS / Linux 在命令前加 `PYTHONPATH=src`；用安装脚本建好的环境时，把 `python3` 换成 `.venv\Scripts\python`，Mac 上 `.venv/bin/python`）：
+Everything is also available on the command line, which is handy for batch work. Run these in the proj7k folder (on Windows run `set PYTHONPATH=src` first; on macOS / Linux put `PYTHONPATH=src` in front of the command; with the environment the installer made, use `.venv\Scripts\python` (`.venv/bin/python` on a Mac) instead of `python3`):
 
-| 用途 | 命令 |
+| What | Command |
 | :--- | :--- |
-| 打开桌面端 | `python3 -m proj7k.desktop` |
-| 只开控制台（浏览器） | `python3 -m proj7k.dashboard` |
-| 看一张图的星级和技法 | `python3 -m proj7k.difficulty "谱面.osu"` |
-| 降阶到段位 / 星级 | `python3 -m proj7k.downscaler -i "谱面.osu" -d 3rd -o ./out`（`-s 4.5` 指定星级） |
-| 生成谱面 | `python3 -m proj7k.generator --audio 歌.mp3 --target-dan 2nd` |
-| 同步曲库星级 / 还原 | `python3 -m proj7k.sync` / `python3 -m proj7k.sync --revert` |
-| 诊断回放并打开查看器 | `python3 -m proj7k.profiler -r "回放.osr" -b "谱面.osu" --view --open` |
-| 导入 lazer 回放 | `python3 -m proj7k.profiler --import-replays --player "玩家名"` |
-| 查看玩家画像 | `python3 -m proj7k.profiler -p "玩家名" --horizon-days 30` |
+| Open the desktop app | `python3 -m proj7k.desktop` |
+| Dashboard only (browser) | `python3 -m proj7k.dashboard` |
+| Stars and techniques of a chart | `python3 -m proj7k.difficulty "chart.osu"` |
+| Downscale to a dan / stars | `python3 -m proj7k.downscaler -i "chart.osu" -d 3rd -o ./out` (`-s 4.5` for stars) |
+| Generate a chart | `python3 -m proj7k.generator --audio song.mp3 --target-dan 2nd` |
+| Sync library stars / restore | `python3 -m proj7k.sync` / `python3 -m proj7k.sync --revert` |
+| Diagnose a replay and open the viewer | `python3 -m proj7k.profiler -r "replay.osr" -b "chart.osu" --view --open` |
+| Import lazer replays | `python3 -m proj7k.profiler --import-replays --player "name"` |
+| Show a player profile | `python3 -m proj7k.profiler -p "name" --horizon-days 30` |
 
-每个命令加 `--help` 可以看全部选项。
+Add `--help` to any command for all its options.
 
-开发相关的文档（难度模型、设计决策、测试）在 [`CONTEXT.md`](CONTEXT.md)、[`docs/adr/`](docs/adr/) 和 [`CLAUDE.md`](CLAUDE.md)。开发进度与日志见 <https://kaiz.dev/projects/proj7k/>。
+Developer documentation (difficulty model, design decisions, tests) is in [`CONTEXT.md`](CONTEXT.md), [`docs/adr/`](docs/adr/) and [`CLAUDE.md`](CLAUDE.md), mostly in Chinese. Progress and devlog: <https://kaiz.dev/projects/proj7k/>.
 
 ---
 
-## 许可
+## License
 
-proj7k 的代码以 [MIT 许可证](LICENSE) 开源。仓库里收录的谱面内容（测试用的标杆谱面等）版权归原谱师所有，不在 MIT 范围内，详见 [NOTICE](NOTICE.md)。
+proj7k's code is open source under the [MIT License](LICENSE). Chart content included in the repository (the benchmark charts used in tests and so on) belongs to its mappers and is not covered by the MIT License; see [NOTICE](NOTICE.md).
 
-proj7k 是玩家自制的第三方工具，与 ppy Pty Ltd 无关，也没有得到其认可。osu! 是 ppy Pty Ltd 的商标。
+proj7k is an unofficial third-party tool, not affiliated with or endorsed by ppy Pty Ltd. osu! is a trademark of ppy Pty Ltd.
