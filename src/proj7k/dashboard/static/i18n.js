@@ -594,7 +594,12 @@ const P7I18N = (() => {
     "最小化": "Minimize",
     "最大化": "Maximize",
     "还原": "Restore",
-    "关闭": "Close"
+    "关闭": "Close",
+    "← 返回": "← Back",
+    "返回（Esc）": "Back (Esc)",
+    "在浏览器中打开": "Open in browser",
+    "在系统浏览器里打开这一页": "Open this page in the system browser",
+    "查看器": "Viewer"
   }/* EN-END */;
 
   // The text in the page's language, with {name} filled from `vars`.
