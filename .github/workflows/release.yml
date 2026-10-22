@@ -1,0 +1,56 @@
+name: Release
+
+# A versioned release, by hand: Actions → Release → Run workflow, with the version (e.g. 0.1.0). It checks that the
+# version matches desktop/tauri and has notes in docs/releases/v<version>.md, builds the window for Windows and
+# macOS (desktop.yml), and leaves a *draft* release v<version> on this commit with those notes and both builds.
+# Publishing the draft on GitHub creates the tag; GitHub adds the source zip, which is what players download.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the v, e.g. 0.1.0"
+        required: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version and notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "version must look like 0.1.0" >&2; exit 1; }
+          conf=$(python3 -c "import json; print(json.load(open('desktop/tauri/src-tauri/tauri.conf.json'))['version'])")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' desktop/tauri/src-tauri/Cargo.toml | head -1)
+          [ "$conf" = "$VERSION" ] && [ "$cargo" = "$VERSION" ] || { echo "tauri.conf.json ($conf) / Cargo.toml ($cargo) are not $VERSION" >&2; exit 1; }
+          test -s "docs/releases/v$VERSION.md" || { echo "docs/releases/v$VERSION.md is missing" >&2; exit 1; }
+
+  build:
+    needs: check
+    uses: ./.github/workflows/desktop.yml
+
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: proj7k v${{ inputs.version }}
+          body_path: docs/releases/v${{ inputs.version }}.md
+          draft: true
+          prerelease: false
+          files: |
+            proj7k-windows.exe
+            proj7k-macos.zip
