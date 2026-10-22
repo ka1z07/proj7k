@@ -1,523 +1,231 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>proj7k Live Radar Dashboard</title>
+  <title>proj7k 实时雷达</title>
   <style>
+    /* The dashboard's look (app.css, ADR-0037), inlined: this page is also served on its own by `python -m proj7k.live`
+       and as the OBS overlay, where /static/app.css does not exist. */
     :root {
-      --bg-dark: #090d16;
-      --bg-card: rgba(18, 24, 38, 0.85);
-      --bg-card-solid: #121826;
-      --border-color: #242f48;
-      --border-highlight: #3b82f6;
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
-      --accent-blue: #38bdf8;
-      --accent-cyan: #06b6d4;
-      --accent-purple: #c084fc;
-      --accent-gold: #f59e0b;
-      --accent-green: #10b981;
-      --accent-red: #ef4444;
-      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, monospace;
+      color-scheme: dark;
+      --bg-dark: #18141d;
+      --bg-card: rgba(38, 32, 47, 0.74);
+      --bg-raised: rgba(255, 255, 255, 0.06);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f5f1fa;
+      --text-muted: #b1a8c0;
+      --text-dim: #7a7089;
+      --accent: #ff66ab;
+      --accent-soft: rgba(255, 102, 171, 0.16);
+      --accent-blue: #66ccff;
+      --accent-purple: #aa88ff;
+      --accent-gold: #ffcc22;
+      --accent-green: #8fd44f;
+      --accent-red: #ff6680;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: Consolas, "Cascadia Mono", Menlo, monospace;
     }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg-dark); color: var(--text-main); font-family: var(--font-stack); font-size: 14px; line-height: 1.5; padding: 24px 28px; }
+    /* Inside the dashboard shell the page is see-through: the shell's cover and triangles show behind the cards. */
+    html.embedded body { background: transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-track { background: transparent; }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      font-family: var(--font-stack);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      overflow-x: hidden;
-    }
-
-    /* OBS Overlay Mode Overrides */
-    body.overlay-mode {
-      background: transparent !important;
-      background-color: transparent !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      overflow: hidden !important;
-      min-height: auto !important;
-      display: block !important;
-    }
-
-    body.overlay-mode header,
-    body.overlay-mode .drop-zone,
-    body.overlay-mode .no-overlay {
-      display: none !important;
-    }
-
-    body.overlay-mode .dashboard-container {
-      max-width: none !important;
-      gap: 12px !important;
-      padding: 10px !important;
-      grid-template-columns: auto auto auto !important;
-      align-items: start !important;
-    }
-
-    body.overlay-mode .card {
-      background: transparent !important;
-      background-color: transparent !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      border: 1px solid rgba(56, 189, 248, 0.25) !important;
-      box-shadow: none !important;
-    }
-
-    /* Header */
-    header {
-      width: 100%;
-      max-width: 1400px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding: 12px 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    }
-
-    .brand-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-transform: uppercase;
-    }
-
-    .brand-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border-color);
-      transition: all 0.3s ease;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--accent-red);
-    }
-
-    .status-badge.connected .status-dot {
-      background-color: var(--accent-green);
-      box-shadow: 0 0 10px var(--accent-green);
-    }
-
-    .status-badge.connected {
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
-    }
-
-    .status-badge.disconnected {
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #f87171;
-    }
-
-    /* Main Container (Three Columns Layout) */
-    .dashboard-container {
-      width: 100%;
-      max-width: 1400px;
-      display: grid;
-      grid-template-columns: 340px 440px 1fr;
-      gap: 20px;
-      align-items: stretch;
-    }
-
-    @media (max-width: 1200px) {
-      .dashboard-container {
-        grid-template-columns: 1fr 1fr;
-      }
-      .col-strain {
-        grid-column: span 2;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-container {
-        grid-template-columns: 1fr;
-      }
-      .col-strain {
-        grid-column: span 1;
-      }
-    }
-
-    /* Cards */
+    .page { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .page-title { font-size: 1.45rem; font-weight: 800; letter-spacing: 0.01em; }
+    .page-sub { color: var(--text-muted); font-size: 0.85rem; }
     .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px 18px; min-width: 0;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.22);
     }
+    .card h2 { font-size: 0.95rem; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .card h2::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: var(--accent); flex: none; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .hint { color: var(--text-muted); font-size: 0.8rem; }
+    .hidden { display: none !important; }
 
-    .card-title {
-      font-size: 0.95rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+    .pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+      background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); color: var(--text-muted); white-space: nowrap; transition: color 0.2s, border-color 0.2s; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex: none; transition: background 0.2s, box-shadow 0.2s; }
+    .pill.on { color: var(--text-main); }
+    .pill.on .dot { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .pill.off .dot { background: var(--accent-red); }
+    .pill.playing { color: var(--text-main); border-color: rgba(255, 102, 171, 0.5); }
+    .pill.playing .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: p7-beat 1.2s ease-in-out infinite; }
 
-    /* Column 1: Info Panel */
-    .song-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      color: #ffffff;
-      line-height: 1.25;
-      word-break: break-word;
-    }
+    /* The chart in the game: lazer's beatmap panel, its cover behind a dark fade. */
+    .hero { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+      background: #1d1824 linear-gradient(135deg, rgba(102, 204, 255, 0.14), rgba(255, 102, 171, 0.16)); }
+    .hero-cover { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transform: scale(1.06);
+      filter: brightness(0.45) saturate(1.15); transition: opacity 0.6s ease, transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .hero-cover.on { opacity: 1; transform: scale(1.02); }
+    .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(24, 20, 30, 0.85), rgba(24, 20, 30, 0.2) 55%, rgba(24, 20, 30, 0.7)); }
+    .hero-body { position: relative; z-index: 1; padding: 20px 22px; display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; min-height: 168px; }
+    .hero-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .hero-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+    .song-title { font-size: 1.5rem; font-weight: 800; line-height: 1.2; word-break: break-word; }
+    .song-artist { color: #d8d0e4; font-size: 0.95rem; font-weight: 600; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+    .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color); color: var(--text-main); }
+    .chip.version { border-color: rgba(102, 204, 255, 0.45); color: var(--accent-blue); }
+    .chip.muted { color: var(--text-muted); font-weight: 600; }
+    .level { text-align: right; min-width: 190px; }
+    .level .dan { font-size: 2.6rem; font-weight: 900; line-height: 1; letter-spacing: -0.01em; }
+    .level .sr { font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-top: 6px; font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255, 102, 171, 0.35); }
+    .level .dom { color: #d8d0e4; font-size: 0.85rem; margin-top: 4px; }
+    .level .dom b { color: var(--accent); }
+    .error-line { color: var(--accent-red); font-size: 0.82rem; }
 
-    .song-artist {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
+    .strip { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tile { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+    .tile .k { color: var(--text-muted); font-size: 0.76rem; }
+    .tile .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .diff-badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      background: rgba(56, 189, 248, 0.12);
-      color: var(--accent-blue);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-    }
+    .cols { display: grid; gap: 16px; grid-template-columns: 400px minmax(0, 1fr); align-items: stretch; }
+    .radar-box { display: flex; justify-content: center; }
+    #radarCanvas { width: 100%; max-width: 360px; aspect-ratio: 1 / 1; display: block; }
+    .timeline-card { display: flex; flex-direction: column; }
+    .playhead-time { font-family: var(--mono); font-size: 0.95rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+    #strainCanvas { width: 100%; flex: 1; min-height: 260px; display: block; border-radius: 10px; background: rgba(0, 0, 0, 0.22); }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 0.76rem; color: var(--text-muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    .legend i.level-line { height: 0; border-radius: 0; border-top: 2px dashed rgba(255, 255, 255, 0.5); }
+    .legend i.risk-line { height: 0; border-radius: 0; border-top: 2px solid rgba(255, 255, 255, 0.85); }
 
-    .mapper-text {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-top: 8px;
-    }
+    .drop { border: 1px dashed var(--border-color); border-radius: 10px; padding: 10px 12px; color: var(--text-muted); font-size: 0.82rem; cursor: pointer; text-align: center;
+      background: rgba(0, 0, 0, 0.12); transition: border-color 0.18s, color 0.18s, background 0.18s; }
+    .drop:hover, .drop.over { border-color: var(--accent); color: var(--text-main); background: var(--accent-soft); }
 
-    .rating-row {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: rgba(0, 0, 0, 0.35);
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
+    @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { body { padding: 12px; } .level { text-align: left; } }
 
-    .sr-number {
-      font-size: 2.2rem;
-      font-weight: 900;
-      color: var(--accent-gold);
-      letter-spacing: -0.02em;
-      text-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
-    }
+    /* motion: the page rises in once; a new chart fades its text in */
+    @keyframes p7-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes p7-swap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @keyframes p7-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+    html:not(.settled) .page > * { animation: p7-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+    html:not(.settled) .page > *:nth-child(2) { animation-delay: 0.05s; }
+    html:not(.settled) .page > *:nth-child(3) { animation-delay: 0.1s; }
+    html:not(.settled) .page > *:nth-child(n+4) { animation-delay: 0.15s; }
+    .swap { animation: p7-swap 0.4s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-    .dan-badge {
-      display: inline-flex;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.88rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      background: rgba(192, 132, 252, 0.18);
-      color: var(--accent-purple);
-      border: 1px solid rgba(192, 132, 252, 0.4);
-      box-shadow: 0 0 12px rgba(192, 132, 252, 0.2);
-    }
-
-    .dominant-container {
-      margin-top: 14px;
-      padding: 10px 14px;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .dominant-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .dominant-badge {
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: var(--accent-cyan);
-      text-shadow: 0 0 10px var(--accent-cyan);
-      text-transform: uppercase;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .stat-box {
-      padding: 8px 10px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 6px;
-    }
-
-    .stat-label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-
-    .stat-value {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-main);
-      margin-top: 2px;
-    }
-
-    .drop-zone {
-      margin-top: 16px;
-      border: 2px dashed var(--border-color);
-      border-radius: 8px;
-      padding: 16px 12px;
-      text-align: center;
-      cursor: pointer;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      transition: all 0.25s ease;
-      background: rgba(0, 0, 0, 0.15);
-    }
-
-    .drop-zone:hover {
-      border-color: var(--accent-blue);
-      color: var(--accent-blue);
-      background: rgba(56, 189, 248, 0.05);
-    }
-
-    /* Column 2: Radar Chart */
-    .radar-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-    }
-
-    #radarCanvas {
-      width: 100%;
-      max-width: 400px;
-      aspect-ratio: 1 / 1;
-    }
-
-    /* Column 3: Difficulty Timeline */
-    .strain-wrapper {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .strain-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .strain-legend {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px 14px;
-      font-size: 0.78rem;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .legend-color {
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
-    }
-
-    .legend-level { background: none; border-top: 2px dashed rgba(255, 255, 255, 0.45); height: 0; }
-    .legend-risk { background: none; border-top: 2px solid rgba(255, 255, 255, 0.85); height: 0; }
-
-    .playhead-time {
-      font-family: monospace;
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--accent-blue);
-    }
-
-    #strainCanvas {
-      width: 100%;
-      height: 280px;
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
+    /* OBS overlay (ADR-0010): no page chrome, see-through cards side by side, sized by ?scale= */
+    body.overlay-mode { background: transparent !important; padding: 0 !important; margin: 0 !important; overflow: hidden !important; }
+    body.overlay-mode .page-header, body.overlay-mode .no-overlay { display: none !important; }
+    body.overlay-mode .page { max-width: none; display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 10px; }
+    body.overlay-mode .page > * { animation: none !important; }
+    body.overlay-mode #cardInfo { width: 380px; }
+    body.overlay-mode #cardInfo .hero-body { min-height: 0; padding: 14px 16px; }
+    body.overlay-mode #cardInfo .level { text-align: left; }
+    body.overlay-mode .cols { display: contents; }
+    body.overlay-mode #cardRadar { width: 340px; }
+    body.overlay-mode #cardStrain { width: 560px; }
+    body.overlay-mode .card, body.overlay-mode .hero { background: rgba(24, 20, 30, 0.35) !important; box-shadow: none !important; border-color: rgba(255, 102, 171, 0.25) !important; }
+    body.overlay-mode .hero-cover, body.overlay-mode .hero::after { display: none; }
   </style>
 </head>
 <body>
-
-  <!-- Header Banner -->
-  <header>
-    <div class="brand-group">
+  <div class="page" id="dashboardContainer">
+    <div class="page-header">
       <div>
-        <div class="brand-title">proj7k // Live Radar</div>
-        <div class="brand-subtitle">Intrinsic 7K Difficulty & Real-time Technique Profile</div>
+        <div class="page-title" data-i18n="实时雷达">实时雷达</div>
+        <div class="page-sub" data-i18n="跟着 osu!lazer 里选中的谱面：星级、八项技法与整首的难度走势">跟着 osu!lazer 里选中的谱面：星级、八项技法与整首的难度走势</div>
       </div>
+      <span id="statusBadge" class="pill off"><span class="dot"></span><span id="statusText" data-i18n="未连接">未连接</span></span>
     </div>
-    <div id="statusBadge" class="status-badge disconnected">
-      <span class="status-dot"></span>
-      <span id="statusText">Disconnected</span>
-    </div>
-  </header>
 
-  <!-- 3-Column Dashboard Container -->
-  <div class="dashboard-container" id="dashboardContainer">
-
-    <!-- Column 1: Beatmap Info & Drop Zone -->
-    <div class="card col-info" id="cardInfo">
-      <div class="card-title">
-        <span>Beatmap Overview</span>
-        <span id="syncStatusTag" style="font-size: 0.75rem; color: var(--accent-green);">IDLE</span>
-      </div>
-
-      <div class="song-title" id="bmTitle">Waiting for chart...</div>
-      <div class="song-artist" id="bmArtist">Start playing in osu!lazer or drop an .osu file</div>
-      <div>
-        <span class="diff-badge" id="bmDiff">7K Standard</span>
-      </div>
-      <div class="mapper-text" id="bmCreator">Mapped by Unknown</div>
-
-      <div class="rating-row">
-        <div>
-          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Intrinsic SR</div>
-          <div class="sr-number" id="srValue">0.00★</div>
+    <div class="hero" id="cardInfo">
+      <div class="hero-cover" id="coverA"></div><div class="hero-cover" id="coverB"></div>
+      <div class="hero-body">
+        <div class="hero-main" id="heroMain">
+          <div class="hero-top">
+            <span id="syncStatusTag" class="pill"><span class="dot"></span><span id="syncText" data-i18n="待机">待机</span></span>
+          </div>
+          <div class="song-title" id="bmTitle" data-i18n="等待谱面…">等待谱面…</div>
+          <div class="song-artist" id="bmArtist" data-i18n="在 osu!lazer 里选一张 7K 谱面，或把 .osu 文件拖到下面">在 osu!lazer 里选一张 7K 谱面，或把 .osu 文件拖到下面</div>
+          <div class="chips">
+            <span class="chip version hidden" id="bmDiff"></span>
+            <span class="chip muted hidden" id="bmCreator"></span>
+          </div>
+          <div class="error-line hidden" id="errorLine"></div>
         </div>
-        <div style="margin-left: auto;">
-          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Dan Tier</div>
-          <div class="dan-badge" id="danTierBadge">0th Dan</div>
+        <div class="level" id="heroLevel">
+          <div class="dan" id="danTierBadge">—</div>
+          <div class="sr" id="srValue">0.00★</div>
+          <div class="dom"><span data-i18n="主技法">主技法</span> <b id="dominantBadge">—</b></div>
         </div>
-      </div>
-
-      <div class="dominant-container">
-        <span class="dominant-label">Dominant Technique</span>
-        <span class="dominant-badge" id="dominantBadge">None</span>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Total Notes</div>
-          <div class="stat-value" id="statNotes">0</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Hold Ratio</div>
-          <div class="stat-value" id="statHold">0.0%</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Duration</div>
-          <div class="stat-value" id="statDuration">0:00</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Avg NPS</div>
-          <div class="stat-value" id="statNps">0.00</div>
-        </div>
-      </div>
-
-      <div class="drop-zone no-overlay" id="dropZone">
-        <span id="dropZh">拖拽 .osu 谱面至此即可离线深度解析<br></span>
-        <span style="font-size: 0.75rem; opacity: 0.7;">(Drag & Drop .osu File)</span>
       </div>
     </div>
 
-    <!-- Column 2: 8-Axis Radar Chart -->
-    <div class="card col-radar" id="cardRadar">
-      <div class="card-title">
-        <span>8-Axis Technique Radar</span>
-        <span style="font-size: 0.75rem; color: var(--accent-purple);">12.5★ Scale</span>
-      </div>
-      <div class="radar-wrapper">
-        <canvas id="radarCanvas" width="400" height="400"></canvas>
-      </div>
+    <div class="strip no-overlay">
+      <div class="tile"><div class="k" data-i18n="物件数">物件数</div><div class="v" id="statNotes">0</div></div>
+      <div class="tile"><div class="k" data-i18n="长条占比">长条占比</div><div class="v" id="statHold">0.0%</div></div>
+      <div class="tile"><div class="k" data-i18n="时长">时长</div><div class="v" id="statDuration">0:00</div></div>
+      <div class="tile"><div class="k" data-i18n="平均 NPS">平均 NPS</div><div class="v" id="statNps">0.00</div></div>
     </div>
 
-    <!-- Column 3: Dual-Hand Strain Profile & Playhead Cursor -->
-    <div class="card col-strain" id="cardStrain">
-      <div class="strain-header">
-        <div class="card-title" style="margin-bottom: 0;">Difficulty Timeline</div>
-        <div class="playhead-time" id="playheadTime">00:00.00</div>
+    <div class="cols">
+      <div class="card" id="cardRadar">
+        <div class="card-head"><h2 data-i18n="八项技法">八项技法</h2><span class="hint" data-i18n="满格 12.5★">满格 12.5★</span></div>
+        <div class="radar-box"><canvas id="radarCanvas" width="360" height="360"></canvas></div>
       </div>
-      <div class="strain-legend" id="timelineLegend" style="margin-bottom: 10px;">
-        <div class="legend-item">
-          <span class="legend-color legend-level"></span>
-          <span>Chart level</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-risk"></span>
-          <span>Expected misses</span>
-        </div>
-      </div>
-      <div class="strain-wrapper">
+      <div class="card timeline-card" id="cardStrain">
+        <div class="card-head"><h2 data-i18n="难度走势">难度走势</h2><span class="playhead-time" id="playheadTime">00:00.00</span></div>
         <canvas id="strainCanvas" width="560" height="280"></canvas>
+        <div class="legend" id="timelineLegend">
+          <span><i class="level-line"></i><span data-i18n="谱面等级">谱面等级</span></span>
+          <span><i class="risk-line"></i><span data-i18n="预计漏键">预计漏键</span></span>
+        </div>
       </div>
     </div>
 
+    <div class="drop no-overlay" id="dropZone" data-i18n="把 .osu 谱面拖到这里，离线分析它">把 .osu 谱面拖到这里，离线分析它</div>
   </div>
 
   <script>
-    // The dashboard's language choice (ADR-0035): this page is English apart from the drop hint's Chinese line.
-    try { if (localStorage.getItem("p7.lang") === "en") document.getElementById("dropZh").remove(); } catch (e) { /* no storage */ }
-    // 1. URL Query Parameter Handling & OBS Overlay Adaptation
+    "use strict";
+    // --- language: the dashboard's choice (ADR-0035), else the system's; the page is written in Chinese ------------
+    const EN = {
+      "实时雷达": "Live radar",
+      "跟着 osu!lazer 里选中的谱面：星级、八项技法与整首的难度走势": "Follows the chart selected in osu!lazer: star rating, the eight skills and the difficulty across the song",
+      "未连接": "Disconnected", "已连接": "Connected", "待机": "Idle", "游玩中": "Playing",
+      "等待谱面…": "Waiting for a chart…",
+      "在 osu!lazer 里选一张 7K 谱面，或把 .osu 文件拖到下面": "Select a 7K chart in osu!lazer, or drop an .osu file below",
+      "主技法": "Main skill", "物件数": "Notes", "长条占比": "LN ratio", "时长": "Length", "平均 NPS": "Avg NPS",
+      "八项技法": "Eight skills", "满格 12.5★": "Full scale 12.5★", "难度走势": "Difficulty timeline",
+      "谱面等级": "Chart level", "预计漏键": "Expected misses",
+      "把 .osu 谱面拖到这里，离线分析它": "Drop an .osu chart here to analyse it offline",
+      "谱师 {name}": "Mapped by {name}", "未知标题": "Unknown title", "未知艺术家": "Unknown artist",
+      "等待难度数据…": "Waiting for difficulty data…",
+    };
+    const LANG = (() => {
+      let saved = null;
+      try { saved = localStorage.getItem("p7.lang"); } catch (e) { /* storage blocked */ }
+      if (saved === "zh" || saved === "en") return saved;
+      const sys = String((navigator.languages && navigator.languages[0]) || navigator.language || "zh").toLowerCase();
+      return sys.startsWith("zh") ? "zh" : "en";
+    })();
+    const tr = (s, vars) => {
+      let out = LANG === "en" && EN[s] ? EN[s] : s;
+      for (const [k, v] of Object.entries(vars || {})) out = out.replace(`{${k}}`, v);
+      return out;
+    };
+    if (LANG === "en") {
+      document.documentElement.lang = "en";
+      document.title = "proj7k Live radar";
+      document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = tr(n.dataset.i18n); });
+    }
+    const MOTION = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    if (window.top !== window) document.documentElement.classList.add("embedded");
+    window.addEventListener("load", () => setTimeout(() => document.documentElement.classList.add("settled"), 1200));
+
+    // --- OBS overlay: ?mode=overlay[&radar=0][&strain=1][&meta=0][&scale=1.2] -----------------------------------
     const urlParams = new URLSearchParams(window.location.search);
     const isOverlay = urlParams.get("mode") === "overlay";
     const showRadar = urlParams.get("radar") !== "0";
@@ -525,479 +233,351 @@
     const showMeta = urlParams.get("meta") !== "0";
     const scaleVal = parseFloat(urlParams.get("scale")) || 1.0;
 
-    const dashboardContainer = document.getElementById("dashboardContainer");
-    const cardInfo = document.getElementById("cardInfo");
-    const cardRadar = document.getElementById("cardRadar");
-    const cardStrain = document.getElementById("cardStrain");
-
+    const $ = (id) => document.getElementById(id);
+    const dashboardContainer = $("dashboardContainer");
+    const cardInfo = $("cardInfo"), cardRadar = $("cardRadar"), cardStrain = $("cardStrain");
     if (isOverlay) {
       document.body.classList.add("overlay-mode");
-      if (!showRadar && cardRadar) cardRadar.style.display = "none";
-      if (!showStrain && cardStrain) cardStrain.style.display = "none";
-      if (!showMeta && cardInfo) cardInfo.style.display = "none";
-
+      if (!showRadar) cardRadar.style.display = "none";
+      if (!showStrain) cardStrain.style.display = "none";
+      if (!showMeta) cardInfo.style.display = "none";
       if (scaleVal !== 1.0) {
         dashboardContainer.style.transform = `scale(${scaleVal})`;
         dashboardContainer.style.transformOrigin = "top left";
       }
     }
 
-    // 2. UI Elements
-    const statusBadge = document.getElementById("statusBadge");
-    const statusText = document.getElementById("statusText");
-    const syncStatusTag = document.getElementById("syncStatusTag");
-    const bmTitle = document.getElementById("bmTitle");
-    const bmArtist = document.getElementById("bmArtist");
-    const bmDiff = document.getElementById("bmDiff");
-    const bmCreator = document.getElementById("bmCreator");
-    const srValue = document.getElementById("srValue");
-    const danTierBadge = document.getElementById("danTierBadge");
-    const dominantBadge = document.getElementById("dominantBadge");
-    const statNotes = document.getElementById("statNotes");
-    const statHold = document.getElementById("statHold");
-    const statDuration = document.getElementById("statDuration");
-    const statNps = document.getElementById("statNps");
-    const playheadTime = document.getElementById("playheadTime");
+    const statusBadge = $("statusBadge"), statusText = $("statusText");
+    const syncStatusTag = $("syncStatusTag"), syncText = $("syncText");
+    const bmTitle = $("bmTitle"), bmArtist = $("bmArtist"), bmDiff = $("bmDiff"), bmCreator = $("bmCreator");
+    const srValue = $("srValue"), danTierBadge = $("danTierBadge"), dominantBadge = $("dominantBadge");
+    const statNotes = $("statNotes"), statHold = $("statHold"), statDuration = $("statDuration"), statNps = $("statNps");
+    const playheadTime = $("playheadTime");
+    const radarCanvas = $("radarCanvas"), radarCtx = radarCanvas.getContext("2d");
+    const strainCanvas = $("strainCanvas"), strainCtx = strainCanvas.getContext("2d");
 
-    const radarCanvas = document.getElementById("radarCanvas");
-    const radarCtx = radarCanvas.getContext("2d");
-    const strainCanvas = document.getElementById("strainCanvas");
-    const strainCtx = strainCanvas.getContext("2d");
-
-    // 3. State
+    // --- state --------------------------------------------------------------------------------------------------
     let currentBeatmapData = null;
     let currentTimeline = null;
     let currentDurationMs = 0;
-    let currentClock = {
-      status: "idle",
-      start_ms: 0,
-      rate: 1.0,
-      sync_local_time: performance.now(),
-    };
+    let currentClock = { status: "idle", start_ms: 0, rate: 1.0, sync_local_time: performance.now() };
+    let chartAt = -1e9;                              // when the chart on screen arrived: the radar and bars grow in from it
 
     const TECHS = [
-      { key: "jack", label: "Jack" },
-      { key: "tech", label: "Tech" },
-      { key: "speed", label: "Speed" },
-      { key: "stream", label: "Stream" },
-      { key: "ln_general", label: "LN Gen" },
-      { key: "ln_tech", label: "LN Tech" },
-      { key: "ln_inverse", label: "LN Inv" },
-      { key: "ln_release", label: "LN Rel" }
+      { key: "jack", label: "Jack" }, { key: "tech", label: "Tech" }, { key: "speed", label: "Speed" }, { key: "stream", label: "Stream" },
+      { key: "ln_general", label: "LN Gen" }, { key: "ln_tech", label: "LN Tech" }, { key: "ln_inverse", label: "LN Inv" }, { key: "ln_release", label: "LN Rel" },
     ];
+    const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
+    const FONT = getComputedStyle(document.body).fontFamily;
+    const MONO = getComputedStyle(document.documentElement).getPropertyValue("--mono") || "monospace";
+    const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+    const easeOut = (p) => 1 - Math.pow(1 - clamp(p, 0, 1), 3);
 
     function formatTime(ms) {
       if (!ms || ms < 0) ms = 0;
       const totalSec = Math.floor(ms / 1000);
-      const minutes = Math.floor(totalSec / 60);
-      const seconds = totalSec % 60;
-      const centis = Math.floor((ms % 1000) / 10);
-      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(centis).padStart(2, "0")}`;
+      return `${String(Math.floor(totalSec / 60)).padStart(2, "0")}:${String(totalSec % 60).padStart(2, "0")}.${String(Math.floor((ms % 1000) / 10)).padStart(2, "0")}`;
     }
-
     function formatDuration(sec) {
       if (!sec || sec < 0) return "0:00";
-      const m = Math.floor(sec / 60);
-      const s = Math.floor(sec % 60);
-      return `${m}:${String(s).padStart(2, "0")}`;
+      return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
     }
+    const skillLabel = (k) => (TECHS.find((t) => t.key === k) || {}).label || "—";
+    function swap(node) { if (!MOTION) return; node.classList.remove("swap"); void node.offsetWidth; node.classList.add("swap"); }
 
-    // 4. WebSocket Connection
+    // --- WebSocket ----------------------------------------------------------------------------------------------
     let ws;
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${location.host}/ws`;
-
+    const wsUrl = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
     function connectWs() {
-      try {
-        ws = new WebSocket(wsUrl);
-      } catch (err) {
-        console.warn("WebSocket init error", err);
-        return;
-      }
-
-      ws.onopen = () => {
-        statusBadge.className = "status-badge connected";
-        statusText.textContent = "Live Stream Active";
-      };
-
-      ws.onclose = () => {
-        statusBadge.className = "status-badge disconnected";
-        statusText.textContent = "Disconnected";
-        setTimeout(connectWs, 2000);
-      };
-
+      try { ws = new WebSocket(wsUrl); } catch (err) { console.warn("WebSocket init error", err); return; }
+      ws.onopen = () => { statusBadge.className = "pill on"; statusText.textContent = tr("已连接"); };
+      ws.onclose = () => { statusBadge.className = "pill off"; statusText.textContent = tr("未连接"); setTimeout(connectWs, 2000); };
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === "beatmap_update") {
-            handleBeatmapUpdate(msg);
-          } else if (msg.type === "clock_sync") {
-            handleClockSync(msg);
-          }
-        } catch (e) {
-          console.error("Error parsing message", e);
-        }
+          if (msg.type === "beatmap_update") handleBeatmapUpdate(msg);
+          else if (msg.type === "clock_sync") handleClockSync(msg);
+          else if (msg.type === "error") showError(msg.message);
+        } catch (e) { console.error("Error parsing message", e); }
       };
     }
 
+    function showError(text) {
+      const node = $("errorLine");
+      node.textContent = text || "";
+      node.classList.toggle("hidden", !text);
+    }
+
+    // the chart's cover behind the hero, cross-faded; the dashboard serves it, a bare live server does not
+    let coverShown = null, coverFront = "coverA";
+    function setCover(md5) {
+      if (!md5 || md5 === coverShown) return;
+      coverShown = md5;
+      const img = new Image();
+      img.onload = () => {
+        const back = coverFront === "coverA" ? "coverB" : "coverA";
+        $(back).style.backgroundImage = `url("${img.src}")`;
+        $(back).classList.add("on");
+        $(coverFront).classList.remove("on");
+        coverFront = back;
+      };
+      img.src = `/api/me/cover/${md5}?w=1280`;
+    }
+
+    // numbers that count to their new value when a chart arrives
+    function countTo(node, value, fmt) {
+      const from = parseFloat(node.dataset.v || "0") || 0;
+      node.dataset.v = String(value);
+      if (!MOTION) { node.textContent = fmt(value); return; }
+      const t0 = performance.now();
+      const step = (t) => {
+        const k = easeOut((t - t0) / 600);
+        node.textContent = fmt(from + (value - from) * k);
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
     function handleBeatmapUpdate(data) {
+      const prevRadar = currentBeatmapData && currentBeatmapData.radar;
       currentBeatmapData = data;
+      radarFrom = TECHS.map(({ key }) => (prevRadar ? prevRadar[key] || 0 : 0));
+      chartAt = performance.now();
       const meta = data.metadata || {};
-      bmTitle.textContent = meta.title || "Unknown Title";
-      bmArtist.textContent = meta.artist || "Unknown Artist";
+      showError("");
+      bmTitle.textContent = meta.title || tr("未知标题");
+      bmArtist.textContent = meta.artist || tr("未知艺术家");
       bmDiff.textContent = meta.version || "7K";
-      bmCreator.textContent = `Mapped by ${meta.creator || "Unknown"}`;
-      srValue.textContent = `${(data.star_rating || 0).toFixed(2)}★`;
-      danTierBadge.textContent = data.dan_tier || meta.dan_tier || "0th Dan";
+      bmDiff.classList.remove("hidden");
+      bmCreator.textContent = tr("谱师 {name}", { name: meta.creator || "?" });
+      bmCreator.classList.remove("hidden");
+      [$("heroMain"), $("heroLevel")].forEach(swap);
+      countTo(srValue, data.star_rating || 0, (x) => `${x.toFixed(2)}★`);
+      danTierBadge.textContent = data.dan_tier || meta.dan_tier || "—";
+      const dom = (data.radar && data.radar.dominant_technique) || meta.dominant_technique;
+      dominantBadge.textContent = dom ? skillLabel(dom) : "—";
+      countTo(statNotes, meta.total_notes || 0, (x) => Math.round(x).toLocaleString());
+      countTo(statHold, meta.hold_pct || 0, (x) => `${x.toFixed(1)}%`);
+      countTo(statDuration, meta.duration_seconds || 0, formatDuration);
+      countTo(statNps, meta.avg_nps || 0, (x) => x.toFixed(2));
+      if (meta.lazer && meta.lazer.md5_hash) setCover(meta.lazer.md5_hash);
 
-      const dom = (data.radar && data.radar.dominant_technique) || meta.dominant_technique || "None";
-      dominantBadge.textContent = dom.replace("_", " ").toUpperCase();
-
-      statNotes.textContent = (meta.total_notes || 0).toLocaleString();
-      statHold.textContent = `${(meta.hold_pct || 0).toFixed(1)}%`;
-      statDuration.textContent = formatDuration(meta.duration_seconds || 0);
-      statNps.textContent = (meta.avg_nps || 0).toFixed(2);
-
-      // Difficulty timeline
+      // the difficulty timeline: data.timeline
       currentTimeline = data.timeline || null;
       if (currentTimeline && currentTimeline.load && currentTimeline.load.length > 0) {
         currentDurationMs = (currentTimeline.start_s + currentTimeline.load.length * currentTimeline.bin_s) * 1000;
       } else {
         currentDurationMs = (meta.duration_seconds || 0) * 1000;
       }
-
-      // Reset playhead clock on new beatmap
-      currentClock = {
-        status: "idle",
-        start_ms: 0,
-        rate: 1.0,
-        sync_local_time: performance.now(),
-      };
-      syncStatusTag.textContent = "IDLE";
-      syncStatusTag.style.color = "var(--text-muted)";
+      currentClock = { status: "idle", start_ms: 0, rate: 1.0, sync_local_time: performance.now() };
+      setPlaying(false);
     }
 
+    function setPlaying(on) {
+      syncStatusTag.className = on ? "pill playing" : "pill";
+      syncText.textContent = on ? tr("游玩中") : tr("待机");
+    }
     function handleClockSync(data) {
       currentClock.status = data.status || "idle";
       currentClock.start_ms = data.start_ms || 0;
       currentClock.rate = typeof data.rate === "number" ? data.rate : 1.0;
       currentClock.sync_local_time = performance.now();
-
-      if (currentClock.status === "playing") {
-        syncStatusTag.textContent = "PLAYING";
-        syncStatusTag.style.color = "var(--accent-green)";
-      } else {
-        syncStatusTag.textContent = "IDLE";
-        syncStatusTag.style.color = "var(--text-muted)";
-      }
+      setPlaying(currentClock.status === "playing");
     }
 
-    // 5. Canvas Drawing: 8-Axis Radar Chart
+    // --- canvases: sized to their box at the screen's pixel density ------------------------------------------------
+    const sizes = new Map();
+    function fit(cv) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2), r = cv.getBoundingClientRect();
+      const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      sizes.set(cv, { w: r.width, h: r.height, dpr });
+    }
+    const sizeOf = (cv) => sizes.get(cv) || (fit(cv), sizes.get(cv));
+    if (window.ResizeObserver) { const ro = new ResizeObserver((es) => es.forEach((e) => fit(e.target))); ro.observe(radarCanvas); ro.observe(strainCanvas); }
+    window.addEventListener("resize", () => { fit(radarCanvas); fit(strainCanvas); });
+
+    // --- the radar: eight skills on a 12.5★ scale; a new chart morphs from the last one ----------------------------
+    let radarFrom = TECHS.map(() => 0);
     function drawRadar(radar, dominantKey, animTime) {
-      const w = radarCanvas.width;
-      const h = radarCanvas.height;
-      const cx = w / 2;
-      const cy = h / 2;
-      const r = Math.min(cx, cy) - 48;
+      const { w, h, dpr } = sizeOf(radarCanvas);
+      const ctx = radarCtx;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const cx = w / 2, cy = h / 2, r = Math.min(cx, cy) - 44;
+      const ang = (i) => (Math.PI * 2 / 8) * i - Math.PI / 2;
+      const k = MOTION ? easeOut((animTime - chartAt) / 700) : 1;
 
-      radarCtx.clearRect(0, 0, w, h);
-
-      // Concentric 8-sided reference rings
-      const rings = 5;
-      for (let s = 1; s <= rings; s++) {
-        const curR = (r / rings) * s;
-        radarCtx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-          const x = cx + curR * Math.cos(angle);
-          const y = cy + curR * Math.sin(angle);
-          if (i === 0) radarCtx.moveTo(x, y);
-          else radarCtx.lineTo(x, y);
-        }
-        radarCtx.closePath();
-        radarCtx.strokeStyle = s === rings ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.06)";
-        radarCtx.lineWidth = 1;
-        radarCtx.stroke();
-
-        // Scale label along top axis
-        if (s % 2 === 1 || s === rings) {
-          const labelVal = ((12.5 / rings) * s).toFixed(1);
-          radarCtx.fillStyle = "rgba(148, 163, 184, 0.5)";
-          radarCtx.font = "9px monospace";
-          radarCtx.textAlign = "center";
-          radarCtx.fillText(`${labelVal}★`, cx + 14, cy - curR);
+      // rings, every 2.5★, the outer one in pink
+      for (let s = 1; s <= 5; s++) {
+        const cr = (r / 5) * s;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) { const x = cx + cr * Math.cos(ang(i)), y = cy + cr * Math.sin(ang(i)); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+        ctx.closePath();
+        if (s === 5) { ctx.fillStyle = "rgba(0, 0, 0, 0.18)"; ctx.fill(); }
+        ctx.strokeStyle = s === 5 ? "rgba(255, 102, 171, 0.35)" : "rgba(255, 255, 255, 0.07)";
+        ctx.lineWidth = 1; ctx.stroke();
+        if (s % 2 === 0 || s === 5) {
+          ctx.fillStyle = "rgba(177, 168, 192, 0.55)"; ctx.font = `10px ${MONO}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          ctx.fillText(`${(2.5 * s).toFixed(1)}`, cx + 4, cy - cr + 7);
         }
       }
-
-      // Spokes and labels
-      TECHS.forEach(({ key, label }, i) => {
-        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-        const x = cx + r * Math.cos(angle);
-        const y = cy + r * Math.sin(angle);
-
-        radarCtx.beginPath();
-        radarCtx.moveTo(cx, cy);
-        radarCtx.lineTo(x, y);
-        radarCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-        radarCtx.stroke();
-
-        // Label text positioning
-        const isDom = dominantKey === key;
-        const score = radar ? (radar[key] || 0) : 0;
-        const labelR = r + 24;
-        const lx = cx + labelR * Math.cos(angle);
-        const ly = cy + labelR * Math.sin(angle);
-
-        radarCtx.font = isDom ? "bold 11px sans-serif" : "10px sans-serif";
-        radarCtx.fillStyle = isDom ? "#06b6d4" : "#94a3b8";
-        radarCtx.textAlign = "center";
-        radarCtx.textBaseline = "middle";
-        radarCtx.fillText(label, lx, ly - 6);
-
-        radarCtx.font = "bold 10px monospace";
-        radarCtx.fillStyle = isDom ? "#38bdf8" : "#cbd5e1";
-        radarCtx.fillText(`${score.toFixed(1)}★`, lx, ly + 7);
+      const vals = TECHS.map(({ key }, i) => {
+        const to = radar ? clamp(radar[key] || 0, 0, 12.5) : 0;
+        return radarFrom[i] + (to - radarFrom[i]) * k;
       });
-
+      // spokes and labels: the skill in its timeline colour, its stars under it
+      TECHS.forEach(({ key, label }, i) => {
+        const a = ang(i), isDom = dominantKey === key;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.07)"; ctx.stroke();
+        const lr = r + 24, lx = cx + lr * Math.cos(a), ly = cy + lr * Math.sin(a);
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `${isDom ? 800 : 600} 11px ${FONT}`;
+        ctx.fillStyle = isDom ? "#ff66ab" : "#d8d0e4";
+        ctx.fillText(label, lx, ly - 7);
+        ctx.font = `700 10px ${MONO}`;
+        ctx.fillStyle = isDom ? "#ff99c8" : SKILL_COL[i];
+        ctx.fillText(radar ? `${(radar[key] || 0).toFixed(2)}★` : "—", lx, ly + 7);
+      });
       if (!radar) return;
 
-      // Data polygon
-      const points = [];
-      TECHS.forEach(({ key }, i) => {
-        const val = Math.min(12.5, Math.max(0, radar[key] || 0));
-        const norm = val / 12.5;
-        const curR = r * norm;
-        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-        const x = cx + curR * Math.cos(angle);
-        const y = cy + curR * Math.sin(angle);
-        points.push({ x, y, key, val });
+      const pts = vals.map((v, i) => ({ x: cx + r * (v / 12.5) * Math.cos(ang(i)), y: cy + r * (v / 12.5) * Math.sin(ang(i)), key: TECHS[i].key, i }));
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, "rgba(102, 204, 255, 0.35)");
+      grad.addColorStop(1, "rgba(255, 102, 171, 0.32)");
+      ctx.fillStyle = grad; ctx.fill();
+      ctx.strokeStyle = "#ff66ab"; ctx.lineWidth = 2; ctx.lineJoin = "round";
+      ctx.shadowColor = "rgba(255, 102, 171, 0.6)"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      pts.forEach((p) => {
+        const isDom = p.key === dominantKey;
+        ctx.beginPath(); ctx.arc(p.x, p.y, isDom ? 4.5 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = isDom ? "#ff66ab" : "#ffffff"; ctx.fill();
+        if (isDom && MOTION) {                       // the main skill breathes
+          const pulse = 8 + Math.sin(animTime / 300) * 2.5;
+          ctx.beginPath(); ctx.arc(p.x, p.y, pulse, 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(255, 102, 171, 0.55)"; ctx.lineWidth = 1.5; ctx.stroke();
+        }
       });
-
-      if (points.length > 0) {
-        radarCtx.beginPath();
-        points.forEach((pt, i) => {
-          if (i === 0) radarCtx.moveTo(pt.x, pt.y);
-          else radarCtx.lineTo(pt.x, pt.y);
-        });
-        radarCtx.closePath();
-
-        // Gradient fill
-        const grad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        grad.addColorStop(0, "rgba(56, 189, 248, 0.45)");
-        grad.addColorStop(1, "rgba(192, 132, 252, 0.15)");
-        radarCtx.fillStyle = grad;
-        radarCtx.fill();
-
-        radarCtx.strokeStyle = "#38bdf8";
-        radarCtx.lineWidth = 2.5;
-        radarCtx.stroke();
-
-        // Vertex points and Dominant Technique Glowing Halo
-        points.forEach((pt) => {
-          const isDom = pt.key === dominantKey;
-          radarCtx.beginPath();
-          radarCtx.arc(pt.x, pt.y, isDom ? 5 : 3.5, 0, Math.PI * 2);
-          radarCtx.fillStyle = isDom ? "#06b6d4" : "#ffffff";
-          radarCtx.fill();
-
-          if (isDom) {
-            // Pulsing halo
-            const pulse = 8 + Math.sin(animTime / 250) * 3;
-            radarCtx.beginPath();
-            radarCtx.arc(pt.x, pt.y, pulse, 0, Math.PI * 2);
-            radarCtx.strokeStyle = "rgba(6, 182, 212, 0.6)";
-            radarCtx.lineWidth = 1.5;
-            radarCtx.stroke();
-          }
-        });
-      }
     }
 
-    // 6. Canvas Drawing: Difficulty Timeline & 1.0x Playhead Cursor
-    // One bar per bin: the hardest reading in it against the chart's own level (1.0 = as hard as
-    // the chart), coloured by the skill that carries the bin's risk; the white line is the misses a
-    // player at the chart's level is expected to take there.
-    const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
-    // the bars' colour key, in the frame's skill order (`timeline.skills`, the same order as TECHS)
-    const timelineLegend = document.getElementById("timelineLegend");
+    // --- the difficulty timeline ------------------------------------------------------------------------------------
+    // One bar per bin: the hardest reading in it against the chart's own level (1.0 = as hard as the chart), coloured
+    // by the skill that carries the bin's risk; the white line is the misses a player at the chart's level is expected
+    // to take there. The bars grow in when a chart arrives; what has been played is brighter than what is to come.
+    const timelineLegend = $("timelineLegend");
     TECHS.forEach((t, i) => {
-      const item = document.createElement("div");
-      item.className = "legend-item";
-      item.innerHTML = `<span class="legend-color" style="background-color:${SKILL_COL[i]}"></span><span>${t.label}</span>`;
+      const item = document.createElement("span");
+      item.innerHTML = `<i style="background:${SKILL_COL[i]}"></i>${t.label}`;
       timelineLegend.appendChild(item);
     });
 
-    function drawStrain(tl, currentMs) {
-      const w = strainCanvas.width;
-      const h = strainCanvas.height;
-      strainCtx.clearRect(0, 0, w, h);
+    function rrectTop(ctx, x, y, w, h, r) {
+      r = Math.min(r, w / 2, h);
+      ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+      ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r); ctx.lineTo(x + w, y + h); ctx.closePath();
+    }
 
-      const padL = 40;
-      const padR = 15;
-      const padT = 20;
-      const padB = 25;
-      const plotW = w - padL - padR;
-      const plotH = h - padT - padB;
+    function drawStrain(tl, currentMs, animTime) {
+      const { w, h, dpr } = sizeOf(strainCanvas);
+      const ctx = strainCtx;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const padL = 40, padR = 14, padT = 18, padB = 24;
+      const plotW = w - padL - padR, plotH = h - padT - padB;
 
-      // Draw gridlines
-      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-      strainCtx.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) {
-        const y = padT + (plotH / 4) * i;
-        strainCtx.beginPath();
-        strainCtx.moveTo(padL, y);
-        strainCtx.lineTo(padL + plotW, y);
-        strainCtx.stroke();
-      }
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)"; ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) { const y = Math.round(padT + (plotH / 4) * i) + 0.5; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke(); }
 
       if (!tl || !tl.load || tl.load.length === 0) {
-        strainCtx.fillStyle = "rgba(148, 163, 184, 0.4)";
-        strainCtx.font = "12px sans-serif";
-        strainCtx.textAlign = "center";
-        strainCtx.fillText("Waiting for chart difficulty data...", padL + plotW / 2, padT + plotH / 2);
+        ctx.fillStyle = "rgba(177, 168, 192, 0.55)"; ctx.font = `13px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(tr("等待难度数据…"), padL + plotW / 2, padT + plotH / 2);
         return;
       }
-
-      const bins = tl.load.length;
-      const binMs = tl.bin_s * 1000;
-      const t0 = tl.start_s * 1000;
+      const bins = tl.load.length, binMs = tl.bin_s * 1000, t0 = tl.start_s * 1000;
       const tEnd = Math.max(1, t0 + bins * binMs);
       const X = (ms) => padL + (ms / tEnd) * plotW;
-      const loadMax = Math.max(1.15, ...tl.load);
-      const riskMax = Math.max(1e-6, ...tl.risk);
-      const bw = Math.max(1, (binMs / tEnd) * plotW);
+      const loadMax = Math.max(1.15, ...tl.load), riskMax = Math.max(1e-6, ...tl.risk);
+      const bw = Math.max(1, (binMs / tEnd) * plotW), gap = bw > 4 ? 1 : 0;
+      const grow = MOTION ? (animTime - chartAt) / 700 : 1;
 
-      // Demand bars: what has been played is a little brighter than what is to come
       for (let b = 0; b < bins; b++) {
         const start = t0 + b * binMs;
-        const barH = Math.min(1, tl.load[b] / loadMax) * plotH;
+        const g = easeOut(grow * 1.6 - (b / bins) * 0.6);          // a wave from left to right
+        const barH = Math.min(1, tl.load[b] / loadMax) * plotH * g;
+        if (barH <= 0) continue;
         const sk = tl.skill[b];
-        strainCtx.globalAlpha = start + binMs <= currentMs ? 1 : 0.6;
-        strainCtx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#475569";
-        strainCtx.fillRect(X(start), padT + plotH - barH, Math.ceil(bw) - (bw > 3 ? 1 : 0), barH);
+        ctx.globalAlpha = start + binMs <= currentMs ? 1 : 0.55;
+        ctx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#5d5470";
+        rrectTop(ctx, X(start), padT + plotH - barH, Math.max(1, bw - gap), barH, 2); ctx.fill();
       }
-      strainCtx.globalAlpha = 1;
+      ctx.globalAlpha = 1;
 
-      // The chart's own level: demand 1.0
       const yLevel = padT + plotH - (1 / loadMax) * plotH;
-      strainCtx.setLineDash([5, 4]);
-      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.45)";
-      strainCtx.lineWidth = 1.2;
-      strainCtx.beginPath();
-      strainCtx.moveTo(padL, yLevel);
-      strainCtx.lineTo(padL + plotW, yLevel);
-      strainCtx.stroke();
-      strainCtx.setLineDash([]);
-      strainCtx.fillStyle = "rgba(255, 255, 255, 0.6)";
-      strainCtx.font = "9px monospace";
-      strainCtx.textAlign = "right";
-      strainCtx.fillText("1.0×", padL - 4, yLevel + 3);
+      ctx.setLineDash([5, 4]); ctx.strokeStyle = "rgba(255, 255, 255, 0.45)"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(padL, yLevel); ctx.lineTo(padL + plotW, yLevel); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.6)"; ctx.font = `10px ${MONO}`; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText("1.0×", padL - 6, yLevel);
 
-      // Expected misses at the chart's level
-      strainCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-      strainCtx.lineWidth = 1.2;
-      strainCtx.beginPath();
-      for (let b = 0; b < bins; b++) {
-        const x = X(t0 + (b + 0.5) * binMs);
-        const y = padT + plotH - (tl.risk[b] / riskMax) * plotH * 0.9;
-        if (b === 0) strainCtx.moveTo(x, y); else strainCtx.lineTo(x, y);
+      // expected misses, drawn left to right as the bars grow
+      const shown = MOTION ? Math.ceil(bins * easeOut(grow)) : bins;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)"; ctx.lineWidth = 1.4; ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let b = 0; b < shown; b++) {
+        const x = X(t0 + (b + 0.5) * binMs), y = padT + plotH - (tl.risk[b] / riskMax) * plotH * 0.9;
+        b ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
-      strainCtx.stroke();
+      ctx.stroke();
 
-      // Bottom time ticks
-      strainCtx.fillStyle = "rgba(148, 163, 184, 0.6)";
-      strainCtx.font = "9px monospace";
-      strainCtx.textAlign = "center";
-      const tickCount = 5;
-      for (let i = 0; i <= tickCount; i++) {
-        const t = (tEnd / tickCount) * i;
-        const x = padL + (i / tickCount) * plotW;
-        strainCtx.fillText(formatDuration(t / 1000), x, padT + plotH + 16);
-      }
+      ctx.fillStyle = "rgba(177, 168, 192, 0.7)"; ctx.font = `10px ${MONO}`; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+      for (let i = 0; i <= 5; i++) ctx.fillText(formatDuration((tEnd / 5) * i / 1000), padL + (i / 5) * plotW, padT + plotH + 17);
 
-      // 1.0x Smooth Cursor Line
-      if (tEnd > 0 && currentMs >= 0) {
-        const normTime = Math.max(0, Math.min(1.0, currentMs / tEnd));
-        const cursorX = padL + normTime * plotW;
-
-        // Glowing cursor line
-        strainCtx.beginPath();
-        strainCtx.moveTo(cursorX, padT - 5);
-        strainCtx.lineTo(cursorX, padT + plotH);
-        strainCtx.strokeStyle = "#ffffff";
-        strainCtx.lineWidth = 2;
-        strainCtx.shadowColor = "#38bdf8";
-        strainCtx.shadowBlur = 8;
-        strainCtx.stroke();
-        strainCtx.shadowBlur = 0;
-
-        // Head dot
-        strainCtx.beginPath();
-        strainCtx.arc(cursorX, padT - 2, 4, 0, Math.PI * 2);
-        strainCtx.fillStyle = "#38bdf8";
-        strainCtx.fill();
+      // the playhead, in osu! pink
+      if (currentMs > 0) {
+        const x = padL + clamp(currentMs / tEnd, 0, 1) * plotW;
+        const fade = ctx.createLinearGradient(x - 40, 0, x, 0);
+        fade.addColorStop(0, "rgba(255, 102, 171, 0)"); fade.addColorStop(1, "rgba(255, 102, 171, 0.18)");
+        ctx.fillStyle = fade; ctx.fillRect(x - 40, padT, 40, plotH);
+        ctx.beginPath(); ctx.moveTo(x, padT - 6); ctx.lineTo(x, padT + plotH);
+        ctx.strokeStyle = "#ff66ab"; ctx.lineWidth = 2; ctx.shadowColor = "#ff66ab"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(x, padT - 4, 4, 0, Math.PI * 2); ctx.fillStyle = "#ff66ab"; ctx.fill();
       }
     }
 
-    // 7. Render Loop with requestAnimationFrame
+    // --- render loop with requestAnimationFrame -----------------------------------------------------------------
     function renderLoop(time) {
-      let playheadMs = 0;
+      let playheadMs;
       if (currentClock.status === "playing") {
-        const elapsed = (performance.now() - currentClock.sync_local_time) * currentClock.rate;
-        playheadMs = currentClock.start_ms + elapsed;
-        if (currentDurationMs > 0 && playheadMs > currentDurationMs) {
-          playheadMs = currentDurationMs;
-        }
+        playheadMs = currentClock.start_ms + (performance.now() - currentClock.sync_local_time) * currentClock.rate;
+        if (currentDurationMs > 0 && playheadMs > currentDurationMs) playheadMs = currentDurationMs;
       } else {
         playheadMs = currentClock.start_ms || 0;
       }
-
       playheadTime.textContent = formatTime(playheadMs);
-
-      // Draw radar
       const radar = currentBeatmapData ? currentBeatmapData.radar : null;
-      const dominantKey = radar ? radar.dominant_technique : "None";
-      drawRadar(radar, dominantKey, time);
-
-      // Draw difficulty timeline
-      drawStrain(currentTimeline, playheadMs);
-
+      drawRadar(radar, radar ? radar.dominant_technique : null, time);
+      drawStrain(currentTimeline, playheadMs, time);
       requestAnimationFrame(renderLoop);
     }
 
-    // 8. Drag and drop handler
-    const dropZone = document.getElementById("dropZone");
-    if (dropZone) {
-      dropZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropZone.style.borderColor = "var(--accent-blue)";
-        dropZone.style.background = "rgba(56, 189, 248, 0.08)";
-      });
-      dropZone.addEventListener("dragleave", () => {
-        dropZone.style.borderColor = "var(--border-color)";
-        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
-      });
-      dropZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropZone.style.borderColor = "var(--border-color)";
-        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
-        if (e.dataTransfer.files.length > 0) {
-          const file = e.dataTransfer.files[0];
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: "analyze_content",
-                content: reader.result
-              }));
-            }
-          };
-          reader.readAsText(file);
-        }
-      });
-    }
+    // --- drop an .osu to analyse it offline ---------------------------------------------------------------------
+    const dropZone = $("dropZone");
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("over"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("over");
+      if (!e.dataTransfer.files.length) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "analyze_content", content: reader.result }));
+      };
+      reader.readAsText(e.dataTransfer.files[0]);
+    });
 
-    // Initial kick-off
     connectWs();
     requestAnimationFrame(renderLoop);
   </script>
