@@ -140,6 +140,7 @@ def sync_once(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
         if was_running:
             client.start()
     if not summary.success:
+        logger.error(f"Sync failed: {summary.error}")
         raise RuntimeError(summary.error or tr("同步失败", "Sync failed"))
     return {**asdict(summary), "restarted_lazer": was_running}
 
@@ -148,6 +149,7 @@ def sync_revert(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext
     logger.info(f"Reverting all proj7k modifications on '{config.realm_path}'...")
     res = _sync_manager(config).revert_all()
     if not res.success:
+        logger.error(f"Revert failed: {res.error}")
         raise RuntimeError(res.error or tr("还原失败", "Restore failed"))
     return {"restored": res.updated_count}
 
