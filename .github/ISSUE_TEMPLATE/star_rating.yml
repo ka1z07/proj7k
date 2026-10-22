@@ -1,0 +1,38 @@
+name: Star rating feedback / 星级反馈
+description: A chart's stars, dan or main technique look wrong. / 某张谱的星级、段位或主技能不对。
+labels: ["star-rating", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The engine is calibrated to the Jinjin 7K dan ladder, so the most useful feedback compares the chart with
+        dan courses or charts you know. / 引擎按 Jinjin 7K 段位表标定，拿段位或熟悉的谱来对比最有用。
+  - type: input
+    id: chart
+    attributes:
+      label: Chart link / 谱面链接
+      description: osu! website or 7k.kaiz.dev link, including the difficulty.
+      placeholder: https://osu.ppy.sh/beatmapsets/123#mania/456
+    validations:
+      required: true
+  - type: input
+    id: shown
+    attributes:
+      label: What proj7k shows / proj7k 给出的结果
+      placeholder: "7.4★, 8th, main technique: stream"
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: What you expected / 你认为应该是
+      placeholder: "around 6.5★ (like 6th dan)"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / 理由
+      description: Which parts are harder or easier than the stars suggest, and which charts or dans you compare it with.
+    validations:
+      required: true

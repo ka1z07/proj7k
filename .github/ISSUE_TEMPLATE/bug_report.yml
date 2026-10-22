@@ -1,0 +1,62 @@
+name: Bug report / 问题反馈
+description: Something in proj7k doesn't work as it should. / 某个功能不正常。
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! English or Chinese are both fine. / 中英文都可以。
+        Security problems: please use the private report described in SECURITY.md instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / 发生了什么
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: |
+        1. Open the desktop app
+        2. Go to ...
+        3. ...
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where / 哪个部分
+      options:
+        - Desktop app / dashboard
+        - Live radar
+        - Replays & profile
+        - Downscaler
+        - Chart generator
+        - Library sync
+        - Online chart catalog (7k.kaiz.dev)
+        - Installer / update
+        - Command line
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: proj7k version or commit / 版本或提交
+      placeholder: "v0.1.0, or the output of: git rev-parse --short HEAD"
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system / 系统
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots / 日志或截图
+      description: Error messages, terminal output, or logs from ~/.cache/proj7k/logs (Windows %USERPROFILE%\.cache\proj7k\logs).
+      render: text
