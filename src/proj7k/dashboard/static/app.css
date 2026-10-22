@@ -1,23 +1,25 @@
-/* proj7k dashboard: the shared look of every page the shell shows (ADR-0036). */
+/* proj7k dashboard: the shared look of every page the shell shows (ADR-0036, ADR-0037). */
 :root {
-  /* One surface ladder (page < side bar < card < raised) and one accent; blue stays the colour of data. */
-  --bg-dark: #0b0e14;
-  --bg-side: #0f131b;
-  --bg-card: #141a24;
-  --bg-raised: #1a2230;
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --bg-input: #0f141d;
-  --border-color: #232b3a;
-  --text-main: #e9edf4;
-  --text-muted: #8f9aae;
-  --text-dim: #5d687c;
-  --accent: #ff5fa2;
-  --accent-soft: rgba(255, 95, 162, 0.12);
-  --accent-blue: #4cb3ff;
-  --accent-purple: #b18cff;
-  --accent-gold: #f5a524;
-  --accent-green: #22c55e;
-  --accent-red: #ef4444;
+  /* osu!lazer's look (ADR-0037): violet-tinted darks, translucent surfaces over the shell's blurred cover, osu! pink
+     as the one accent, its sky blue for data. The surface ladder: page < side bar < card < raised. */
+  color-scheme: dark;
+  --bg-dark: #18141d;
+  --bg-side: rgba(22, 18, 28, 0.80);
+  --bg-card: rgba(38, 32, 47, 0.74);
+  --bg-raised: rgba(255, 255, 255, 0.06);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-input: rgba(12, 10, 16, 0.6);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-main: #f5f1fa;
+  --text-muted: #b1a8c0;
+  --text-dim: #7a7089;
+  --accent: #ff66ab;
+  --accent-soft: rgba(255, 102, 171, 0.16);
+  --accent-blue: #66ccff;
+  --accent-purple: #aa88ff;
+  --accent-gold: #ffcc22;
+  --accent-green: #8fd44f;
+  --accent-red: #ff6680;
   --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: Consolas, "Cascadia Mono", Menlo, monospace;
 }
@@ -34,6 +36,12 @@ body {
 }
 
 a { color: var(--accent-blue); }
+/* Inside the shell a page is see-through: the shell's backdrop (cover + triangles) shows behind its cards. */
+html.embedded body { background: transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.22); }
+::-webkit-scrollbar-track { background: transparent; }
 
 .page { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 
@@ -47,11 +55,14 @@ a { color: var(--accent-blue); }
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 16px 18px;
   min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.22);
 }
-.card h2 { font-size: 0.95rem; font-weight: 700; margin-bottom: 12px; color: var(--text-main); }
+/* Section headings carry osu!'s pink tick, as lazer's overlays do. */
+.card h2 { font-size: 0.95rem; font-weight: 800; margin-bottom: 12px; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.card h2::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: var(--accent); flex: none; }
 .card h3 { font-size: 0.9rem; margin: 12px 0 6px; }
 
 .hint { color: var(--text-muted); font-size: 0.82rem; }
@@ -82,18 +93,18 @@ input[type=radio], input[type=checkbox] { accent-color: var(--accent); }
 button {
   font: inherit;
   font-weight: 600;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-raised);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-main);
   padding: 7px 14px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-button:hover:not(:disabled) { border-color: var(--text-dim); background: #212a3a; }
+button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.primary { background: var(--accent); border-color: transparent; color: #fff; }
-button.primary:hover:not(:disabled) { background: #ff77b0; border-color: transparent; }
+button.primary:hover:not(:disabled) { background: #ff7ab6; box-shadow: 0 0 18px rgba(255, 102, 171, 0.45); }
 button.danger { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.5); color: #fecaca; }
 button.small { padding: 3px 10px; font-size: 0.8rem; }
 
@@ -135,7 +146,7 @@ th { color: var(--text-muted); font-weight: 600; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .log {
-  background: #060a12;
+  background: rgba(8, 6, 12, 0.7);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 8px 10px;
@@ -156,10 +167,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .bars { display: flex; flex-direction: column; gap: 5px; }
 .bar-row { display: grid; grid-template-columns: 76px 1fr 92px; gap: 8px; align-items: center; font-size: 0.8rem; }
-.bar-track { position: relative; height: 10px; background: #0b1120; border-radius: 5px; overflow: hidden; }
+.bar-track { position: relative; height: 10px; background: rgba(0, 0, 0, 0.3); border-radius: 5px; overflow: hidden; }
 .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
 .bar-fill.a { background: rgba(148, 163, 184, 0.45); }
-.bar-fill.b { background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple)); height: 6px; top: 2px; }
+.bar-fill.b { background: linear-gradient(90deg, var(--accent-blue), var(--accent)); height: 6px; top: 2px; }
 .bar-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 
 .big { font-size: 1.6rem; font-weight: 800; }
@@ -199,15 +210,16 @@ tr.clickable:hover td { background: var(--bg-hover); }
 .rank.silver { color: #e2e8f0; text-shadow: 0 0 6px rgba(226, 232, 240, 0.5); }
 .mod { display: inline-block; font-size: 0.7rem; font-weight: 800; padding: 0 6px; margin-right: 3px; border-radius: 4px; background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
 
-.cover { background: #10151f linear-gradient(135deg, rgba(76, 179, 255, 0.18), rgba(255, 95, 162, 0.16)); border-radius: 8px; overflow: hidden; flex: none; }
+.cover { background: #1d1824 linear-gradient(135deg, rgba(102, 204, 255, 0.16), rgba(255, 102, 171, 0.18)); border-radius: 8px; overflow: hidden; flex: none; }
 .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .cover.thumb { width: 72px; height: 40px; border-radius: 6px; }
 .cover.card-cover { width: 100%; aspect-ratio: 16 / 7; border-radius: 10px 10px 0 0; }
 
-.hero { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--border-color); min-height: 150px; }
+.hero { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); min-height: 160px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3); }
+.hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(24, 20, 30, 0.75), transparent 55%, rgba(24, 20, 30, 0.55)); }
 .hero .cover { position: absolute; inset: 0; border-radius: 0; }
-.hero .cover img { filter: brightness(0.38) blur(1px); transform: scale(1.03); }
-.hero .hero-body { position: relative; padding: 18px 20px; display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; min-height: 150px; }
+.hero .cover img { filter: brightness(0.5) saturate(1.15); transform: scale(1.03); }
+.hero .hero-body { position: relative; z-index: 1; padding: 18px 20px; display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; min-height: 150px; }
 .hero .hero-title { font-size: 1.4rem; font-weight: 800; line-height: 1.25; word-break: break-word; }
 .hero .hero-sub { color: #cbd5e1; font-size: 0.88rem; }
 .avatar { width: 88px; height: 88px; border-radius: 18px; object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.15); background: var(--bg-raised); }
@@ -226,12 +238,17 @@ tr.clickable:hover td { background: var(--bg-hover); }
 .toolbar select { width: auto; }
 
 .chart-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-.chart-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.15s; }
-.chart-card:hover { border-color: var(--text-dim); transform: translateY(-1px); }
+/* A chart card is lazer's beatmap panel: the cover fills it, the text sits on a dark fade over its lower half. */
+.chart-card { position: relative; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; cursor: pointer; }
+.chart-card .cover.card-cover { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
+.chart-card .cover.card-cover img { filter: brightness(0.85); }
+.chart-card .body { position: relative; margin-top: 70px; padding-top: 34px !important;
+  background: linear-gradient(180deg, transparent, rgba(24, 20, 30, 0.88) 38%, rgba(24, 20, 30, 0.96)); }
+.chart-card:hover { border-color: rgba(255, 102, 171, 0.6); }
 .chart-card .body { padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 .chart-card .meta { display: flex; justify-content: space-between; gap: 6px; font-size: 0.8rem; color: var(--text-muted); }
 
-.judge-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: #0b1120; }
+.judge-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: rgba(0, 0, 0, 0.3); }
 .judge-bar div { height: 100%; }
 .j-perfect { background: #e0f2fe; } .j-great { background: #fbbf24; } .j-good { background: #4ade80; }
 .j-ok { background: #60a5fa; } .j-meh { background: #a78bfa; } .j-miss { background: #ef4444; }
@@ -242,5 +259,39 @@ tr.clickable:hover td { background: var(--bg-hover); }
 .heatmap div { width: 11px; height: 11px; border-radius: 2px; background: var(--bg-raised); }
 .chart-svg { width: 100%; height: auto; display: block; }
 .chart-svg text { fill: var(--text-muted); font-size: 11px; }
-.tooltip { position: fixed; pointer-events: none; background: #0b1120; border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 9px; font-size: 0.78rem; z-index: 50; white-space: nowrap; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
+.tooltip { position: fixed; pointer-events: none; background: rgba(24, 20, 30, 0.96); border: 1px solid var(--border-color); border-radius: 8px; padding: 6px 9px; font-size: 0.78rem; z-index: 50; white-space: nowrap; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); }
 .empty { padding: 30px; text-align: center; color: var(--text-muted); }
+
+/* --- motion (ADR-0037): entrances, hover feedback, drawn charts; all off when the system asks for less motion --- */
+@keyframes p7-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes p7-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes p7-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes p7-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* A page's blocks rise in one after another while it is first being filled (app.js marks it settled after). */
+html:not(.settled) .page > *, html:not(.settled) .home-cols > div > *, html:not(.settled) .chart-grid > * {
+  animation: p7-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+html:not(.settled) .page > *:nth-child(2), html:not(.settled) .home-cols > div > *:nth-child(1) { animation-delay: 0.05s; }
+html:not(.settled) .page > *:nth-child(3), html:not(.settled) .home-cols > div > *:nth-child(2) { animation-delay: 0.1s; }
+html:not(.settled) .page > *:nth-child(4), html:not(.settled) .home-cols > div > *:nth-child(3) { animation-delay: 0.15s; }
+html:not(.settled) .page > *:nth-child(n+5), html:not(.settled) .home-cols > div > *:nth-child(n+4) { animation-delay: 0.2s; }
+html:not(.settled) .chart-grid > * { animation-delay: calc(0.03s * var(--i, 0)); }
+html:not(.settled) .bar-fill { transform-origin: left; animation: p7-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s both; }
+@keyframes p7-spin { to { transform: rotate(360deg); } }
+#loading::before {
+  content: ""; display: block; width: 28px; height: 28px; margin: 0 auto 12px; border-radius: 50%;
+  border: 3px solid var(--border-color); border-top-color: var(--accent); animation: p7-spin 0.8s linear infinite;
+}
+.draw-in { stroke-dasharray: 1; animation: p7-draw 1.2s ease-out 0.2s both; }
+
+.card, .tile, .chart-card, .list-row, .mini, .dan-cell, button { transition: background 0.18s, border-color 0.18s, transform 0.18s, box-shadow 0.18s; }
+.chart-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); }
+.tile:hover, .dan-cell:hover { transform: translateY(-2px); }
+button:active:not(:disabled) { transform: scale(0.97); }
+.cover img { transition: transform 0.4s ease, opacity 0.3s; }
+.chart-card:hover .cover img { transform: scale(1.05); }
+.list-row:hover .cover img, .mini:hover .cover img { transform: scale(1.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

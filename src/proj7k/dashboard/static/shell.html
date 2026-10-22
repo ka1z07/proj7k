@@ -7,16 +7,39 @@
   <link rel="stylesheet" href="/static/app.css">
   <style>
     html, body { height: 100%; }
-    body { padding: 0; display: flex; overflow: hidden; }
+    body { padding: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-dark); }
+    .main { flex: 1; display: flex; min-height: 0; position: relative; }
+    /* Behind everything: the cover of the chart in the game (or the last one played), blurred and dimmed, with
+       osu!-style triangles drifting up over it. Pages are transparent over it; their cards are translucent. */
+    .backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: var(--bg-dark); }
+    .bd-layer { position: absolute; inset: -40px; background-size: cover; background-position: center; opacity: 0;
+      filter: blur(28px) brightness(0.26) saturate(1.2); transform: scale(1.06); transition: opacity 1.2s ease, transform 8s ease; }
+    .bd-layer.on { opacity: 1; transform: scale(1); }
+    .backdrop::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255, 102, 171, 0.10), transparent 60%), linear-gradient(180deg, rgba(24, 20, 29, 0.2), rgba(24, 20, 29, 0.75)); }
+    #tri { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+    /* The desktop app's own title bar (Tauri, ADR-0037): drag to move, double-click to maximise. */
+    .titlebar { height: 34px; flex: none; display: flex; align-items: stretch; background: rgba(14, 11, 18, 0.55); border-bottom: 1px solid var(--border-color); user-select: none; -webkit-user-select: none; }
+    .tb-drag { flex: 1; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 0.78rem; color: var(--text-muted); min-width: 0; }
+    .tb-drag .ellipsis { min-width: 0; }
+    html.mac .tb-drag { padding-left: 84px; }
+    .tb-buttons { display: flex; }
+    html.mac .tb-buttons { display: none; }
+    .tb-buttons button { width: 46px; border: 0; border-radius: 0; background: transparent; padding: 0; display: grid; place-items: center; color: var(--text-muted); }
+    .tb-buttons button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text-main); border: 0; }
+    .tb-buttons button.close:hover:not(:disabled) { background: #e81123; color: #fff; }
+    .tb-buttons button:active:not(:disabled) { transform: none; }
+    .tb-buttons svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.2; }
     /* The side bar: the player's pages, then the tools, then the game's state at the foot. */
     .side {
       width: 224px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 12px;
       background: var(--bg-side); border-right: 1px solid var(--border-color); overflow-y: auto;
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     }
     .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; font-weight: 800; font-size: 1.05rem; letter-spacing: 0.02em; }
     .brand .logo {
       width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center;
-      background: var(--accent); color: #fff; font-size: 0.8rem; font-weight: 900;
+      background: linear-gradient(135deg, var(--accent), #8866ee); color: #fff; font-size: 0.8rem; font-weight: 900;
+      box-shadow: 0 0 18px rgba(255, 102, 171, 0.35);
     }
     .nav { display: flex; flex-direction: column; gap: 2px; }
     .nav .group { font-size: 0.7rem; font-weight: 700; color: var(--text-dim); letter-spacing: 0.08em; padding: 12px 10px 4px; }
@@ -51,7 +74,16 @@
     .foot-row .grow { flex: 1; }
     #playerSel { padding: 4px 8px; font-size: 0.8rem; }
     .frames { flex: 1; position: relative; min-width: 0; }
-    .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg-dark); }
+    .frames iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+    @keyframes p7-page { from { opacity: 0; transform: translateY(12px) scale(0.995); } to { opacity: 1; transform: none; } }
+    @keyframes p7-slide { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes p7-shade { from { opacity: 0; } to { opacity: 1; } }
+    .frames iframe.enter { animation: p7-page 0.32s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .drawer:not(.hidden) { animation: p7-slide 0.28s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .drawer-shade:not(.hidden) { animation: p7-shade 0.2s ease-out; }
+    .nav a, .nav a svg { transition: background 0.18s, color 0.18s; }
+    .nav a.active::before { animation: p7-shade 0.25s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .frames iframe.enter, .drawer, .drawer-shade, .nav a.active::before { animation: none !important; } }
     /* A narrow window keeps the icons only; their names show on hover. */
     @media (max-width: 1080px) {
       .side { width: 64px; padding: 14px 8px 10px; align-items: center; }
@@ -64,18 +96,29 @@
       #langBtn { padding: 3px 6px; font-size: 0.7rem; }
     }
     /* Chart and play details open in a panel over the page that opened them, so the list stays where it was. */
-    .drawer-shade { position: absolute; inset: 0; background: rgba(4, 6, 10, 0.6); z-index: 10; }
+    .drawer-shade { position: absolute; inset: 0; background: rgba(8, 6, 12, 0.6); z-index: 10; backdrop-filter: blur(3px); }
     .drawer {
       position: absolute; top: 0; right: 0; bottom: 0; width: min(880px, 100%); z-index: 11;
-      background: var(--bg-dark); border-left: 1px solid var(--border-color); box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+      background: rgba(24, 20, 29, 0.94); border-left: 1px solid var(--border-color); box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(24px);
       display: flex; flex-direction: column;
     }
     .drawer-head { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-color); }
     .drawer-head .grow { flex: 1; color: var(--text-muted); font-size: 0.82rem; }
-    .drawer iframe { flex: 1; width: 100%; border: 0; background: var(--bg-dark); }
+    .drawer iframe { flex: 1; width: 100%; border: 0; background: transparent; }
   </style>
 </head>
 <body>
+  <div class="backdrop" aria-hidden="true"><div class="bd-layer" id="bdA"></div><div class="bd-layer" id="bdB"></div><canvas id="tri"></canvas></div>
+  <header class="titlebar hidden" id="titlebar">
+    <div class="tb-drag" id="tbDrag"><span class="ellipsis" id="tbTitle">proj7k</span></div>
+    <div class="tb-buttons">
+      <button id="tbMin" title="最小化"><svg viewBox="0 0 12 12"><path d="M1 6.5h10"/></svg></button>
+      <button id="tbMax" title="最大化"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9"/></svg></button>
+      <button id="tbClose" class="close" title="关闭"><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></button>
+    </div>
+  </header>
+  <div class="main">
   <aside class="side">
     <div class="brand"><span class="logo">7K</span><span class="name">proj7k</span></div>
     <nav class="nav" id="nav">
@@ -116,6 +159,7 @@
       <iframe id="drawerFrame" title="详情"></iframe>
     </div>
   </div>
+  </div>
 
   <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
@@ -132,6 +176,7 @@
     const ready = new Set();   // frames whose page has loaded and listens for parameters
     const pending = {};        // page -> parameters waiting for it to load
     let player = "";
+    let current = null;        // the page in front
 
     function pageSrc(name) {
       return PLAYER_PAGES.includes(name) && player ? `${PAGES[name]}?player=${encodeURIComponent(player)}` : PAGES[name];
@@ -143,8 +188,11 @@
         document.getElementById("frames").prepend(frames[name]);
       }
       for (const [k, f] of Object.entries(frames)) f.style.visibility = k === name ? "visible" : "hidden";
+      // The page coming forward fades and slides in; restarting the class replays it on every switch.
+      if (name !== current) { const f = frames[name]; f.classList.remove("enter"); void f.offsetWidth; f.classList.add("enter"); current = name; }
       document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === name));
-      document.title = `proj7k · ${document.querySelector(`#nav a[data-page="${name}"] .label`).textContent}`;
+      document.title = `proj7k · ${tr(document.querySelector(`#nav a[data-page="${name}"] .label`).textContent)}`;
+      document.getElementById("tbTitle").textContent = document.title;
       if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "shown" }, location.origin);
       if (params && Object.keys(params).length) {
         if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "params", params }, location.origin);
@@ -251,6 +299,7 @@
       const node = document.getElementById("gameState");
       const c = state.chart;
       gameMd5 = c ? c.md5_hash : null;
+      if (gameMd5) backdrop(gameMd5);
       node.textContent = c ? `♪ ${c.title} [${c.version}] · ${Number(c.star_rating).toFixed(2)}★ ${c.dan_tier || ""}` : "";
       node.title = c ? tr("osu!lazer 当前谱面：{chart}（点击查看详情）", { chart: P7.chartName(c) }) : tr("osu!lazer 里当前选中的谱面");
     });
@@ -286,6 +335,122 @@
 
     // Probed on load and after each sync job only: the probe takes osu!lazer's lock for an instant.
     refreshLazer();
+
+    // --- the backdrop: the current chart's cover, cross-faded, and drifting triangles -----------------------------
+    let bdShown = null, bdFront = "bdA";
+    function backdrop(md5) {
+      if (!md5 || md5 === bdShown) return;
+      bdShown = md5;
+      const img = new Image();
+      img.onload = () => {
+        const back = bdFront === "bdA" ? "bdB" : "bdA";
+        const node = document.getElementById(back);
+        node.style.backgroundImage = `url("${img.src}")`;
+        node.classList.add("on");
+        document.getElementById(bdFront).classList.remove("on");
+        bdFront = back;
+      };
+      img.src = P7.coverUrl(md5, 1280);
+    }
+    P7.getJSON("/api/me/players").then((d) => { if (!bdShown && d.last_md5) backdrop(d.last_md5); }).catch(() => {});
+
+    // osu!'s triangles, rising slowly. ~30 fps, and only while the window has focus: when the game is in front the
+    // canvas costs nothing. A system that asks for less motion gets them still.
+    (() => {
+      const canvas = document.getElementById("tri"), ctx = canvas.getContext("2d");
+      const tris = [];
+      let w = 0, h = 0, last = 0, running = false;
+      const COLORS = ["255,102,171", "136,102,238", "255,255,255", "102,204,255"];
+      function size() {
+        const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+        w = canvas.clientWidth; h = canvas.clientHeight;
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      function spawn(anywhere) {
+        const s = 30 + Math.random() * 130;
+        return { x: Math.random() * w, y: anywhere ? Math.random() * h : h + s, s, v: 4 + Math.random() * 10 * (60 / s),
+                 a: 0.018 + Math.random() * 0.035, c: COLORS[Math.floor(Math.random() * COLORS.length)] };
+      }
+      function draw() {
+        ctx.clearRect(0, 0, w, h);
+        for (const t of tris) {
+          ctx.beginPath();
+          ctx.moveTo(t.x, t.y - t.s * 0.58); ctx.lineTo(t.x + t.s / 2, t.y + t.s * 0.29); ctx.lineTo(t.x - t.s / 2, t.y + t.s * 0.29);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(${t.c},${t.a})`;
+          ctx.fill();
+        }
+      }
+      function frame(now) {
+        if (!running) return;
+        const dt = Math.min(0.1, (now - last) / 1000);
+        if (dt >= 1 / 30) {
+          last = now;
+          for (let i = 0; i < tris.length; i++) {
+            tris[i].y -= tris[i].v * dt;
+            if (tris[i].y < -tris[i].s) tris[i] = spawn(false);
+          }
+          draw();
+        }
+        requestAnimationFrame(frame);
+      }
+      function start() { if (!running && P7.motion && !document.hidden && document.hasFocus()) { running = true; last = performance.now(); requestAnimationFrame(frame); } }
+      function stop() { running = false; }
+      size();
+      for (let i = 0; i < 36; i++) tris.push(spawn(true));
+      draw();
+      window.addEventListener("resize", () => { size(); draw(); });
+      window.addEventListener("focus", start);
+      window.addEventListener("blur", stop);
+      document.addEventListener("visibilitychange", () => (document.hidden ? stop() : start()));
+      start();
+    })();
+
+    // --- inside the desktop app (Tauri): the title bar drives the window, web links open in the system browser ------
+    const TAURI = window.__TAURI__;
+    if (TAURI && TAURI.window) {
+      const win = TAURI.window.getCurrentWindow();
+      if (/Mac/.test(navigator.platform || navigator.userAgent)) document.documentElement.classList.add("mac");
+      document.getElementById("titlebar").classList.remove("hidden");
+      document.getElementById("tbDrag").addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        if (e.detail === 2) win.toggleMaximize(); else win.startDragging();
+      });
+      document.getElementById("tbMin").onclick = () => win.minimize();
+      document.getElementById("tbMax").onclick = () => win.toggleMaximize();
+      document.getElementById("tbClose").onclick = () => win.close();
+      const maxIcon = async () => {
+        const max = await win.isMaximized();
+        document.getElementById("tbMax").title = max ? tr("还原") : tr("最大化");
+        document.querySelector("#tbMax svg").innerHTML = max
+          ? '<rect x="1.5" y="3.5" width="7" height="7"/><path d="M3.5 3.5v-2h7v7h-2"/>' : '<rect x="1.5" y="1.5" width="9" height="9"/>';
+      };
+      win.onResized(maxIcon);
+      maxIcon();
+    }
+    // Links meant for a new tab (osu! pages, the catalog, a replay viewer) open in the system browser: the app
+    // window has no tabs. Pages run in frames of this same origin, so one listener per frame covers them all.
+    function externalLinks(doc) {
+      doc.addEventListener("click", (e) => {
+        const a = e.target.closest && e.target.closest("a[target=_blank]");
+        if (!a || !TAURI || !TAURI.opener) return;
+        e.preventDefault();
+        TAURI.opener.openUrl(new URL(a.getAttribute("href"), location.href).href);
+      }, true);
+    }
+    externalLinks(document);
+    function hookFrame(f) {
+      if (f.dataset.links) return;
+      f.dataset.links = "1";
+      const hook = () => { try { externalLinks(f.contentDocument); } catch (e) { /* not ours */ } };
+      f.addEventListener("load", hook);
+      if (f.contentDocument && f.contentDocument.readyState !== "loading") hook();
+    }
+    if (TAURI) {
+      document.querySelectorAll("iframe").forEach(hookFrame);
+      new MutationObserver(() => document.querySelectorAll("iframe").forEach(hookFrame)).observe(document.getElementById("frames"), { childList: true });
+    }
   </script>
 </body>
 </html>

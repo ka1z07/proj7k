@@ -1,0 +1,95 @@
+name: Desktop app
+
+# Builds proj7k's own window (desktop/tauri, ADR-0037) for Windows and macOS. On main the builds replace the
+# assets of the `desktop-latest` release, which deploy/desktop/install-tauri.{ps1,sh} download.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "desktop/tauri/**"
+      - "src/proj7k/desktop/icon.py"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "desktop/tauri/**"
+      - "src/proj7k/desktop/icon.py"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: proj7k-windows.exe
+          - os: macos-latest
+            asset: proj7k-macos.zip
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/tauri/src-tauri
+
+      # The icon set is drawn by the same code as the Windows shortcut's icon, not checked in.
+      - name: Icons
+        shell: bash
+        run: |
+          pip install pillow
+          # Run as a plain script: importing the proj7k package would pull in the engine (numpy, scipy).
+          python src/proj7k/desktop/icon.py desktop/tauri/app-icon.png
+          cd desktop/tauri && npx --yes @tauri-apps/cli@2 icon app-icon.png
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd desktop/tauri && npx --yes @tauri-apps/cli@2 build --no-bundle
+          cp src-tauri/target/release/proj7k.exe "$GITHUB_WORKSPACE/${{ matrix.asset }}"
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd desktop/tauri && npx --yes @tauri-apps/cli@2 build --bundles app
+          ditto -c -k --keepParent src-tauri/target/release/bundle/macos/proj7k.app "$GITHUB_WORKSPACE/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-latest
+          name: proj7k desktop (latest)
+          body: "proj7k's own window, built from ${{ github.sha }}. Install with deploy/desktop/install-tauri.ps1 (Windows) or install-tauri.sh (macOS)."
+          prerelease: true
+          make_latest: false
+          files: |
+            proj7k-windows.exe
+            proj7k-macos.zip

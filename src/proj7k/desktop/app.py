@@ -2,12 +2,14 @@
 The desktop app: find or start the dashboard, then open it in an app window.
 
 Usage:
-    python3 -m proj7k.desktop [--port 7770] [--window auto|webview|app|browser] [--page home]
+    python3 -m proj7k.desktop [--port 7770] [--window auto|tauri|webview|app|browser] [--page home]
 
 Windows: double-click `proj7k.cmd`, or the Start-menu / desktop shortcut `deploy/desktop/install-shortcut.ps1` makes.
 
 The window, in order of preference (`--window auto`):
 
+0. `tauri`: proj7k's own frameless window (`desktop/tauri`, ADR-0037), when its build is installed:
+   `deploy/desktop/install-tauri.ps1` on Windows, `deploy/desktop/install-tauri.sh` on macOS, or `PROJ7K_DESKTOP_EXE`.
 1. `webview`: a native window from pywebview (`pip install pywebview`; on Windows it uses the WebView2 runtime that
    ships with Windows 10/11), when it is installed and loads.
 2. `app`: Microsoft Edge or Google Chrome in app mode (`--app=URL`): a window with no tabs or address bar, with its
@@ -42,8 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python3 -m proj7k.desktop", description="proj7k as a desktop app.")
     parser.add_argument("--port", type=int, default=7770, help="The dashboard's port (default: 7770).")
     parser.add_argument(
-        "--window", choices=("auto", "webview", "app", "browser"), default="auto",
-        help="How to show it: a pywebview window, an Edge/Chrome app window, or the default browser (default: auto).",
+        "--window", choices=("auto", "tauri", "webview", "app", "browser"), default="auto",
+        help="How to show it: proj7k's own window, a pywebview window, an Edge/Chrome app window, or the default "
+             "browser (default: auto, the first of those that works).",
     )
     parser.add_argument("--page", default="home", help="The page to open on (home, history, library, live, ...).")
     parser.add_argument("--timeout", type=float, default=90.0, help="Seconds to wait for a dashboard it starts.")
@@ -139,6 +142,37 @@ def app_window_command(browser: Path, url: str) -> List[str]:
     ]
 
 
+def tauri_candidates() -> List[Path]:
+    """Where the install scripts put proj7k's own window (desktop/tauri), and a local build of it."""
+    found: List[Path] = []
+    if os.environ.get("PROJ7K_DESKTOP_EXE"):
+        found.append(Path(os.environ["PROJ7K_DESKTOP_EXE"]))
+    if sys.platform == "win32":
+        if os.environ.get("LOCALAPPDATA"):
+            found.append(Path(os.environ["LOCALAPPDATA"]) / "proj7k" / "desktop" / "proj7k.exe")
+        found.append(REPO_ROOT / "desktop" / "tauri" / "src-tauri" / "target" / "release" / "proj7k.exe")
+    elif sys.platform == "darwin":
+        found += [Path.home() / "Applications" / "proj7k.app" / "Contents" / "MacOS" / "proj7k",
+                  REPO_ROOT / "desktop" / "tauri" / "src-tauri" / "target" / "release" / "bundle" / "macos" / "proj7k.app"
+                  / "Contents" / "MacOS" / "proj7k"]
+    else:
+        found += [PROFILE_DIR / "bin" / "proj7k", REPO_ROOT / "desktop" / "tauri" / "src-tauri" / "target" / "release" / "proj7k"]
+    return [p for p in found if p.is_file()]
+
+
+def open_tauri(url: str) -> bool:
+    for exe in tauri_candidates():
+        try:
+            proc = subprocess.Popen([str(exe), "--url", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            logger.info(f"{exe} did not start: {e}")
+            continue
+        # One instance: a second launch focuses the open window and exits at once, which is fine too.
+        proc.wait()
+        return True
+    return False
+
+
 def open_webview(url: str) -> bool:
     try:
         import webview  # type: ignore[import-not-found]
@@ -188,9 +222,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     url = f"http://127.0.0.1:{args.port}/#{args.page}"
 
-    order = {"auto": ("webview", "app", "browser"), "webview": ("webview", "browser"),
-             "app": ("app", "browser"), "browser": ("browser",)}[args.window]
+    order = {"auto": ("tauri", "webview", "app", "browser"), "tauri": ("tauri", "browser"),
+             "webview": ("webview", "browser"), "app": ("app", "browser"), "browser": ("browser",)}[args.window]
     for how in order:
+        if how == "tauri" and open_tauri(url):
+            return 0
         if how == "webview" and open_webview(url):
             return 0
         if how == "app" and open_app_window(url):

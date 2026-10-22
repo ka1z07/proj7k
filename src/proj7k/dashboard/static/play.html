@@ -90,7 +90,7 @@
           : tr("这局排第 {rank}；最好一局 {best}，差 {gap}%。", { rank: d.attempt_rank, best: P7.acc(best.accuracy), gap: ((best.accuracy - p.accuracy) * 100).toFixed(2) })),
         d.attempts.slice(0, 20).map((q) => {
           const row = P7.playRow(q, { showChart: false });
-          if (q.id === p.id) row.style.background = "rgba(56, 189, 248, 0.10)";
+          if (q.id === p.id) row.style.background = "rgba(255, 102, 171, 0.12)";
           return row;
         }));
     }

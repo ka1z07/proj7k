@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import io
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -321,6 +322,25 @@ def test_desktop_reuses_a_running_dashboard_and_opens_its_window(lazer, monkeypa
             await s.server.stop()
 
     asyncio.run(_run())
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in window is a shell script")
+def test_desktop_prefers_its_own_window_when_installed(tmp_path, monkeypatch):
+    from proj7k.desktop import app
+
+    log = tmp_path / "args.txt"
+    exe = tmp_path / "proj7k"
+    exe.write_text(f'#!/bin/sh\necho "$@" > "{log}"\n')
+    exe.chmod(0o755)
+    monkeypatch.setenv("PROJ7K_DESKTOP_EXE", str(exe))
+    assert app.tauri_candidates()[0] == exe
+    assert app.open_tauri("http://127.0.0.1:7770/#home")
+    assert log.read_text().split() == ["--url", "http://127.0.0.1:7770/#home"]
+    monkeypatch.setenv("PROJ7K_DESKTOP_EXE", str(tmp_path / "missing"))
+    monkeypatch.setattr(app, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(app, "PROFILE_DIR", tmp_path / "profile")
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    assert app.tauri_candidates() == [] and not app.open_tauri("http://127.0.0.1:7770/#home")
 
 
 def test_desktop_starts_a_dashboard_when_none_runs(tmp_path, monkeypatch):

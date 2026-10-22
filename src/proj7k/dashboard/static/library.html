@@ -82,8 +82,8 @@
       return out.sort(by[$("#sort").value]);
     }
 
-    function card(c) {
-      return el("div", { class: "chart-card", onclick: () => P7.openChart(c.md5), title: `${c.artist} - ${c.title} [${c.version}]` },
+    function card(c, i) {
+      return el("div", { class: "chart-card", style: `--i:${Math.min(i, 24)}`, onclick: () => P7.openChart(c.md5), title: `${c.artist} - ${c.title} [${c.version}]` },
         P7.cover(c.md5, c.has_cover, 480, "card-cover"),
         el("div", { class: "body" },
           el("div", { class: "ellipsis" }, P7.chartTitle(c)),
@@ -100,7 +100,7 @@
     function render() {
       const rows = filtered();
       $("#count").textContent = tr("{n} 张谱", { n: rows.length }) + (nearLevel ? tr("（画像实力 {level} ±0.5★、没玩过的）", { level: level === null ? tr("未知") : level.toFixed(2) + "★" }) : "");
-      $("#grid").replaceChildren(...(rows.length ? rows.slice(0, shown).map(card) : [el("div", { class: "empty", text: charts.length ? tr("没有符合条件的谱。") : tr("曲库里还没有 7K 谱。") })]));
+      $("#grid").replaceChildren(...(rows.length ? rows.slice(0, shown).map((c, i) => card(c, i)) : [el("div", { class: "empty", text: charts.length ? tr("没有符合条件的谱。") : tr("曲库里还没有 7K 谱。") })]));
       $("#more").classList.toggle("hidden", rows.length <= shown);
       $("#more").textContent = tr("显示更多（还有 {n} 张）", { n: rows.length - shown });
       $("#forMe").classList.toggle("primary", nearLevel);

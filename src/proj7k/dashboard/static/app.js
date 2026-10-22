@@ -5,6 +5,14 @@
 const P7 = (() => {
   const embedded = window.top !== window;
   if (embedded) document.documentElement.classList.add("embedded");
+  // Entrance animations run while the page is first filled, not on every later refresh of its data.
+  // A page still showing its #loading line waits for its content first.
+  window.addEventListener("load", () => {
+    const settle = () => setTimeout(() => document.documentElement.classList.add("settled"), 1500);
+    if (!document.getElementById("loading")) return settle();
+    const watch = new MutationObserver(() => { if (!document.getElementById("loading")) { watch.disconnect(); settle(); } });
+    watch.observe(document.body, { childList: true, subtree: true });
+  });
 
   // --- DOM helper ---------------------------------------------------------------------------------------------
   function el(tag, attrs, ...children) {
@@ -252,6 +260,22 @@ const P7 = (() => {
     }));
   }
 
+  // Motion is decoration: a system set to reduce motion gets every number and bar in its final state at once.
+  const motion = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  // A number that counts up from zero to `value` (formatted by `fmt`) once it is on the page.
+  function counter(value, fmt, ms = 700) {
+    const node = el("span", { text: fmt(motion ? 0 : value) });
+    if (!motion || !value) { node.textContent = fmt(value); return node; }
+    const t0 = performance.now();
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / ms);
+      node.textContent = fmt(value * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return node;
+  }
+
   function stat(k, v) { return el("div", { class: "stat" }, el("div", { class: "k", text: k }), el("div", { class: "v", text: String(v) })); }
 
   function kv(pairs) {
@@ -405,7 +429,7 @@ const P7 = (() => {
 
   connect();
   return {
-    el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS,
+    el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
     onGameChart, gameChartLine, chartName,
     navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
     modBadges, chartTitle, chartLink, query, playRow, tip, svg,

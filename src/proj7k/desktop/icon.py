@@ -1,6 +1,7 @@
 """
 The app icon, drawn rather than shipped as a binary: `python3 -m proj7k.desktop.icon out.ico` writes a
-multi-size .ico (the shortcut's icon) with Pillow.
+multi-size .ico (the shortcut's icon) with Pillow; `... out.png` writes one 1024px PNG, the source the Tauri build
+(`desktop/tauri`) turns into its own icon set.
 """
 
 from pathlib import Path
@@ -8,8 +9,8 @@ import sys
 
 from PIL import Image, ImageDraw
 
-#: The dashboard's own gradient (app.css --accent-blue to --accent-purple) behind seven key columns.
-_TOP, _BOTTOM = (37, 99, 235), (124, 58, 237)
+#: The dashboard's own accent (app.css --accent, osu!'s pink) fading to violet, behind seven key columns.
+_TOP, _BOTTOM = (255, 102, 171), (136, 102, 238)
 
 
 def draw(size: int = 256) -> Image.Image:
@@ -39,6 +40,10 @@ def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else list(argv)
     out = Path(args[0] if args else "proj7k.ico")
     out.parent.mkdir(parents=True, exist_ok=True)
+    if out.suffix.lower() == ".png":
+        draw(1024).save(out)
+        print(out)
+        return 0
     draw(256).save(out, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     print(out)
     return 0

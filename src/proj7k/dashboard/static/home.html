@@ -22,7 +22,7 @@
     .tile .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tile .s { color: var(--text-muted); font-size: 0.76rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
     .ranks { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .next-card { border-color: rgba(255, 95, 162, 0.35); background: linear-gradient(180deg, rgba(255, 95, 162, 0.07), transparent 60%), var(--bg-card); }
+    .next-card { border-color: rgba(255, 102, 171, 0.35); background: linear-gradient(180deg, rgba(255, 102, 171, 0.08), transparent 60%), var(--bg-card); }
     .step { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border-color); }
     .step:first-of-type { border-top: 0; padding-top: 0; }
     .step .t { font-weight: 700; }
@@ -49,6 +49,9 @@
     "use strict";
     const { el, $ } = P7;
     let data = null;
+    // Numbers count up the first time the page is drawn; a refresh (back from the game) shows them as they are.
+    let drawn = false;
+    const num = (value, fmt) => (drawn ? el("span", { text: fmt(value) }) : P7.counter(value, fmt));
 
     // --- pieces -----------------------------------------------------------------------------------------------
     function hero(d) {
@@ -59,7 +62,7 @@
       const level = el("div", { class: "level" },
         el("div", { class: "hint", text: lv && lv.source === "profile" ? tr("当前水平（回放画像）") : tr("当前水平（按通关估算）") }),
         el("div", { class: "dan", text: lv ? lv.dan : "—" }),
-        lv ? el("div", { class: "sr", text: `${lv.stars.toFixed(2)}★` }) : null,
+        lv ? el("div", { class: "sr" }, num(lv.stars, (x) => `${x.toFixed(2)}★`)) : null,
         prof ? el("div", { class: "why", text: tr("擅长 {a} · 短板 {b}", { a: P7.skillName(prof.dominant), b: P7.skillName(prof.bottleneck) }) })
           : el("div", { class: "why", text: tr("导入回放后按八项技法细算") }));
       return el("div", { class: "hero" },
@@ -92,13 +95,13 @@
         return el("span", { class: x * better > 0 ? "good" : "bad", text: ` ${x > 0 ? "+" : "−"}${fmt(Math.abs(x))}` });
       }
       const pct = (x) => `${(x * 100).toFixed(2)}%`, st = (x) => `${x.toFixed(2)}★`;
-      const tile = (k, v, ...sub) => el("div", { class: "tile" }, el("div", { class: "k", text: k }), el("div", { class: "v", text: v }), el("div", { class: "s" }, ...sub));
+      const tile = (k, v, ...sub) => el("div", { class: "tile" }, el("div", { class: "k", text: k }), el("div", { class: "v" }, v), el("div", { class: "s" }, ...sub));
       return el("div", { class: "strip" },
-        tile(tr("游玩次数"), P7.num(t.plays), tr("近 30 天 {n} 局", { n: r.plays }), delta(r.plays, p.plays, (x) => String(Math.round(x)))),
+        tile(tr("游玩次数"), num(t.plays, (x) => P7.num(Math.round(x))), tr("近 30 天 {n} 局", { n: r.plays }), delta(r.plays, p.plays, (x) => String(Math.round(x)))),
         tile(tr("游玩时长"), P7.duration(t.play_time_s), tr("{n} 张谱 · 最高 {combo}x", { n: P7.num(t.charts), combo: P7.num(t.max_combo) })),
-        tile(tr("准确率（近 30 天）"), r.median_accuracy === null ? "—" : pct(r.median_accuracy), tr("中位数"), delta(r.median_accuracy, p.median_accuracy, pct)),
-        tile(tr("常打星级（近 30 天）"), r.median_stars === null ? "—" : st(r.median_stars), tr("中位数"), delta(r.median_stars, p.median_stars, st)),
-        tile(tr("通关最高（近 30 天）"), r.best_stars === null ? "—" : st(r.best_stars), tr("比前 30 天"), delta(r.best_stars, p.best_stars, st)),
+        tile(tr("准确率（近 30 天）"), r.median_accuracy === null ? "—" : num(r.median_accuracy, pct), tr("中位数"), delta(r.median_accuracy, p.median_accuracy, pct)),
+        tile(tr("常打星级（近 30 天）"), r.median_stars === null ? "—" : num(r.median_stars, st), tr("中位数"), delta(r.median_stars, p.median_stars, st)),
+        tile(tr("通关最高（近 30 天）"), r.best_stars === null ? "—" : num(r.best_stars, st), tr("比前 30 天"), delta(r.best_stars, p.best_stars, st)),
         el("div", { class: "tile" }, el("div", { class: "k", text: tr("评级（每张谱最好一局）") }),
           el("div", { class: "ranks" }, Object.entries(t.ranks).filter(([, v]) => v).map(([k, v]) => el("span", {}, P7.rankBadge(k), v)))));
     }
@@ -167,7 +170,7 @@
       const svgNode = P7.svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart-svg", role: "img", "aria-label": tr("每局谱面星级随时间变化") });
       let lastLabel = Infinity;  // tiers close together on the scale keep their line but share a label slot
       d.dan_stars.filter((t) => t.stars >= smin && t.stars <= smax).forEach((t) => {
-        svgNode.append(P7.svg("line", { x1: L, x2: W - R, y1: y(t.stars), y2: y(t.stars), stroke: "#1c2330", "stroke-width": 1 }));
+        svgNode.append(P7.svg("line", { x1: L, x2: W - R, y1: y(t.stars), y2: y(t.stars), stroke: "rgba(255, 255, 255, 0.06)", "stroke-width": 1 }));
         if (lastLabel - y(t.stars) >= 13) { svgNode.append(P7.svg("text", { x: W - R + 4, y: y(t.stars) + 4 }, t.name)); lastLabel = y(t.stars); }
       });
       const ticks = 5;
@@ -179,17 +182,17 @@
       // A rolling median of the last 15 plays reads as the trend through the scatter.
       const med = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - 14), i + 1).map((p) => p.stars).sort((a, b) => a - b); return w[w.length >> 1]; });
       pts.forEach((p) => {
-        const dot = P7.svg("circle", { cx: x(p.t), cy: y(p.stars), r: 3.2, fill: p.rank === "F" ? "#5d687c" : "#4cb3ff", "fill-opacity": 0.5, class: "clickable" });
+        const dot = P7.svg("circle", { cx: x(p.t), cy: y(p.stars), r: 3.2, fill: p.rank === "F" ? "#7a7089" : "#66ccff", "fill-opacity": 0.5, class: "clickable" });
         dot.addEventListener("mousemove", (e) => P7.tip.show(e, [`${p.stars.toFixed(2)}★ · ${p.rank} · ${(p.accuracy * 100).toFixed(2)}%`, new Date(p.t * 1000).toLocaleString(P7I18N.locale, { hour12: false }), tr("点击查看这局")]));
         dot.addEventListener("mouseleave", P7.tip.hide);
         dot.addEventListener("click", () => P7.openPlay(p.id));
         svgNode.append(dot);
       });
       // The trend on top of the dots it summarises.
-      svgNode.append(P7.svg("polyline", { points: pts.map((p, i) => `${x(p.t)},${y(med[i])}`).join(" "), fill: "none", stroke: "#ff5fa2", "stroke-width": 2.5, "stroke-linejoin": "round" }));
+      svgNode.append(P7.svg("polyline", { points: pts.map((p, i) => `${x(p.t)},${y(med[i])}`).join(" "), fill: "none", stroke: "#ff66ab", "stroke-width": 2.5, "stroke-linejoin": "round", pathLength: 1, class: drawn ? "" : "draw-in" }));
       card.append(svgNode, el("div", { class: "judge-legend" },
-        el("span", {}, el("span", { class: "sw", style: "background:#4cb3ff" }), tr("一局（点击查看）")),
-        el("span", {}, el("span", { class: "sw", style: "background:#ff5fa2" }), tr("最近 15 局的中位数")),
+        el("span", {}, el("span", { class: "sw", style: "background:#66ccff" }), tr("一局（点击查看）")),
+        el("span", {}, el("span", { class: "sw", style: "background:#ff66ab" }), tr("最近 15 局的中位数")),
         el("span", { class: "muted", text: tr("横线是段位星级") })));
       return card;
     }
@@ -203,7 +206,7 @@
       for (let dt = new Date(start); dt <= today; dt.setDate(dt.getDate() + 1)) {
         const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
         const n = byDay[key] || 0;
-        const cell = el("div", { style: n ? `background: rgba(76, 179, 255, ${(0.25 + 0.75 * n / max).toFixed(2)})` : "" });
+        const cell = el("div", { style: n ? `background: rgba(102, 204, 255, ${(0.25 + 0.75 * n / max).toFixed(2)})` : "" });
         const label = tr("{day}：{n} 局", { day: key, n });
         cell.addEventListener("mousemove", (e) => P7.tip.show(e, [label]));
         cell.addEventListener("mouseleave", P7.tip.hide);
@@ -267,6 +270,7 @@
       try {
         data = await P7.api("overview");
         render(data);
+        drawn = true;
       } catch (e) {
         $("#page").replaceChildren(el("div", { class: "empty", text: tr("读取失败：{error}", { error: e }) }));
       }
