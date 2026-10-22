@@ -1,6 +1,6 @@
 # proj7k
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
 A desktop companion for osu!mania 7K players: see your level and how it is moving, find out what makes a chart hard, turn a chart you can't pass into one you can practise, generate a chart from a song, and find your weak spots from your own replays.
 

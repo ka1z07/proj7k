@@ -1,6 +1,6 @@
 # proj7k
 
-[English](README.md) · **简体中文**
+[English](README.md) · **简体中文** · [繁體中文](README.zh-TW.md)
 
 给 osu!mania 7K 玩家的桌面工具：看自己的水平和进步、知道一张图难在哪、把打不过的图降到能练的难度、从一首歌生成谱面、从回放里找出短板。
 
