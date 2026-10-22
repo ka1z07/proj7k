@@ -42,7 +42,7 @@ from proj7k.generator.tempo import TempoEstimate, estimate_tempo
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
-GENERATOR_VERSION = "gen-5"
+GENERATOR_VERSION = "gen-6"
 LEVEL_BONUS = {DOWNBEAT: 0.30, BEAT: 0.18, HALF: 0.06}
 MIN_STRENGTH = 0.06
 X_MIN, X_MAX = 0.0, 3.5

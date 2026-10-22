@@ -260,7 +260,7 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
     Last, the rows are moved between stretches of `STRETCH_BARS` measures so each stretch's density is
     its density so far raised to `contrast` (the song's rows kept): the model follows the onsets, and a
     quiet verse read that way gets a few notes a measure while the star rating is set by the chorus, so
-    the chart swings from trivial to hard and is sparse overall (ADR-0038). With a brief's sections the
+    the chart swings from trivial to hard and is sparse overall (ADR-0039). With a brief's sections the
     rows move only within a section: the brief's own contrast between sections stays as written."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
     by_section = gain is not None and section is not None and rows_per_s is not None
