@@ -78,12 +78,40 @@
     @keyframes p7-page { from { opacity: 0; transform: translateY(12px) scale(0.995); } to { opacity: 1; transform: none; } }
     @keyframes p7-slide { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
     @keyframes p7-shade { from { opacity: 0; } to { opacity: 1; } }
-    .frames iframe.enter { animation: p7-page 0.32s cubic-bezier(0.2, 0.7, 0.2, 1); }
-    .drawer:not(.hidden) { animation: p7-slide 0.28s cubic-bezier(0.2, 0.7, 0.2, 1); }
-    .drawer-shade:not(.hidden) { animation: p7-shade 0.2s ease-out; }
+    @keyframes p7-page-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-6px); } }
+    @keyframes p7-slide-out { to { transform: translateX(40px); opacity: 0; } }
+    @keyframes p7-shade-out { to { opacity: 0; } }
+    @keyframes p7-zoom { from { opacity: 0; transform: scale(0.96) translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes p7-zoom-out { to { opacity: 0; transform: scale(0.97) translateY(8px); } }
+    /* A page switch cross-fades: the new page rises in while the old one fades out above it. */
+    .frames iframe.enter { animation: p7-page 0.34s cubic-bezier(0.2, 0.7, 0.2, 1); z-index: 1; }
+    .frames iframe.leave { animation: p7-page-out 0.22s ease-in forwards; z-index: 2; pointer-events: none; }
+    .drawer:not(.hidden) { animation: p7-slide 0.3s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .drawer-shade:not(.hidden) { animation: p7-shade 0.22s ease-out; }
+    .drawer.closing { animation: p7-slide-out 0.2s ease-in forwards; }
+    .drawer-shade.closing { animation: p7-shade-out 0.2s ease-in forwards; }
     .nav a, .nav a svg { transition: background 0.18s, color 0.18s; }
-    .nav a.active::before { animation: p7-shade 0.25s ease-out; }
-    @media (prefers-reduced-motion: reduce) { .frames iframe.enter, .drawer, .drawer-shade, .nav a.active::before { animation: none !important; } }
+    /* One pill slides between the nav items instead of each item lighting up on its own. */
+    .nav { position: relative; }
+    .nav-pill { position: absolute; left: 0; right: 0; top: 0; height: 38px; border-radius: 8px; background: var(--accent-soft); pointer-events: none;
+      transition: transform 0.34s cubic-bezier(0.3, 0.8, 0.25, 1), height 0.34s; z-index: 0; }
+    .nav-pill::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+    .nav a { z-index: 1; }
+    .nav a.active { background: transparent; }
+    .nav a.active::before { display: none; }
+    /* The replay viewer and other pages a job writes open over the app, not in a browser tab. */
+    .viewer { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: rgba(16, 13, 20, 0.97);
+      animation: p7-zoom 0.32s cubic-bezier(0.2, 0.7, 0.2, 1); }
+    .viewer.closing { animation: p7-zoom-out 0.2s ease-in forwards; }
+    .viewer-head { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border-color); }
+    .viewer-head .grow { flex: 1; min-width: 0; font-weight: 700; }
+    .viewer iframe { flex: 1; width: 100%; border: 0; background: #100d14; opacity: 0; transition: opacity 0.25s ease-out; }
+    .viewer iframe.loaded { opacity: 1; }
+    .viewer-spin { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px; border-radius: 50%; pointer-events: none;
+      border: 3px solid rgba(255, 255, 255, 0.12); border-top-color: var(--accent); animation: p7-spin 0.8s linear infinite; }
+    .viewer iframe.loaded + .viewer-spin { display: none; }
+    @media (prefers-reduced-motion: reduce) { .frames iframe.enter, .frames iframe.leave, .drawer, .drawer-shade, .viewer, .nav-pill { animation: none !important; transition: none !important; } }
+    @media (max-width: 1080px) { .nav-pill::before { left: -8px; } }
     /* A narrow window keeps the icons only; their names show on hover. */
     @media (max-width: 1080px) {
       .side { width: 64px; padding: 14px 8px 10px; align-items: center; }
@@ -122,6 +150,7 @@
   <aside class="side">
     <div class="brand"><span class="logo">7K</span><span class="name">proj7k</span></div>
     <nav class="nav" id="nav">
+      <span class="nav-pill" id="navPill"></span>
       <span class="group">玩家</span>
       <a href="#home" data-page="home" title="主页"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span class="label">主页</span></a>
       <a href="#history" data-page="history" title="游玩记录"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="label">游玩记录</span></a>
@@ -148,6 +177,15 @@
       </div>
     </div>
   </aside>
+  <div class="viewer hidden" id="viewer">
+    <div class="viewer-head">
+      <button class="small" id="viewerBack" title="返回（Esc）">← 返回</button>
+      <span class="grow ellipsis" id="viewerTitle"></span>
+      <button class="small" id="viewerExternal" title="在系统浏览器里打开这一页">在浏览器中打开</button>
+    </div>
+    <iframe id="viewerFrame" title="查看器" allow="autoplay; fullscreen"></iframe>
+    <div class="viewer-spin"></div>
+  </div>
   <div class="frames" id="frames">
     <div class="drawer-shade hidden" id="shade"></div>
     <div class="drawer hidden" id="drawer">
@@ -187,10 +225,20 @@
         frames[name] = P7.el("iframe", { src: pageSrc(name), title: name });
         document.getElementById("frames").prepend(frames[name]);
       }
-      for (const [k, f] of Object.entries(frames)) f.style.visibility = k === name ? "visible" : "hidden";
-      // The page coming forward fades and slides in; restarting the class replays it on every switch.
-      if (name !== current) { const f = frames[name]; f.classList.remove("enter"); void f.offsetWidth; f.classList.add("enter"); current = name; }
+      const previous = current && current !== name ? frames[current] : null;
+      for (const [k, f] of Object.entries(frames)) if (f !== previous) f.style.visibility = k === name ? "visible" : "hidden";
+      // The page coming forward fades and slides in; restarting the class replays it on every switch. The one it
+      // replaces fades out over it, then hides.
+      if (name !== current) {
+        const f = frames[name]; f.classList.remove("enter", "leave"); void f.offsetWidth; f.classList.add("enter");
+        if (previous) {
+          previous.classList.remove("enter"); previous.classList.add("leave");
+          setTimeout(() => { previous.classList.remove("leave"); if (previous !== frames[current]) previous.style.visibility = "hidden"; }, P7.motion ? 230 : 0);
+        }
+        current = name;
+      }
       document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === name));
+      movePill();
       document.title = `proj7k · ${tr(document.querySelector(`#nav a[data-page="${name}"] .label`).textContent)}`;
       document.getElementById("tbTitle").textContent = document.title;
       if (ready.has(frames[name])) frames[name].contentWindow.postMessage({ p7: true, kind: "shown" }, location.origin);
@@ -223,19 +271,65 @@
       drawerFrame.src = src;
       document.getElementById("drawerTitle").textContent = DETAIL_TITLE[src.slice(1).split("?")[0]] || "";
       document.getElementById("drawerBack").disabled = stack.length < 2;
-      drawer.classList.remove("hidden");
-      document.getElementById("shade").classList.remove("hidden");
+      drawer.classList.remove("hidden", "closing");
+      document.getElementById("shade").classList.remove("hidden", "closing");
     }
     function closeDetail() {
+      if (drawer.classList.contains("hidden")) return;
       stack.length = 0;
-      drawer.classList.add("hidden");
-      document.getElementById("shade").classList.add("hidden");
-      drawerFrame.src = "about:blank";
+      const shade = document.getElementById("shade");
+      drawer.classList.add("closing"); shade.classList.add("closing");
+      setTimeout(() => {
+        if (stack.length) return;  // reopened meanwhile
+        drawer.classList.add("hidden"); shade.classList.add("hidden");
+        drawer.classList.remove("closing"); shade.classList.remove("closing");
+        drawerFrame.src = "about:blank";
+      }, P7.motion ? 200 : 0);
     }
     document.getElementById("drawerClose").onclick = closeDetail;
     document.getElementById("shade").onclick = closeDetail;
     document.getElementById("drawerBack").onclick = () => { stack.pop(); loadDetail(); };
-    window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
+    window.addEventListener("keydown", (e) => { if (e.key === "Escape") escape(); });
+    function escape() { if (!viewer.classList.contains("hidden")) closeViewer(); else closeDetail(); }
+
+    // --- the viewer: a page a job wrote (the replay viewer), full size over the app --------------------------------
+    const viewer = document.getElementById("viewer");
+    const viewerFrame = document.getElementById("viewerFrame");
+    let viewerUrl = "";
+    function openViewer(url, title) {
+      viewerUrl = url;
+      document.getElementById("viewerTitle").textContent = title || tr("查看器");
+      viewer.classList.remove("hidden", "closing");
+      viewerFrame.classList.remove("loaded");
+      viewerFrame.src = url;
+    }
+    function closeViewer() {
+      if (viewer.classList.contains("hidden")) return;
+      viewer.classList.add("closing");
+      setTimeout(() => {
+        if (!viewer.classList.contains("closing")) return;
+        viewer.classList.add("hidden"); viewer.classList.remove("closing");
+        viewerFrame.src = "about:blank";  // stops its audio
+      }, P7.motion ? 200 : 0);
+    }
+    document.getElementById("viewerBack").onclick = closeViewer;
+    document.getElementById("viewerExternal").onclick = () => openOutside(viewerUrl);
+    // The viewer's page takes the keyboard straight away (Space plays a replay), and Esc inside it closes it too.
+    viewerFrame.addEventListener("load", () => {
+      if (viewer.classList.contains("hidden")) return;
+      viewerFrame.classList.add("loaded");
+      try { viewerFrame.contentWindow.addEventListener("keydown", (e) => { if (e.key === "Escape") closeViewer(); }); } catch (e) { /* not ours */ }
+      viewerFrame.focus();
+    });
+
+    function movePill() {
+      const a = document.querySelector("#nav a.active"), pill = document.getElementById("navPill");
+      if (!a) return;
+      pill.style.transform = `translate(${a.offsetLeft}px, ${a.offsetTop}px)`;
+      pill.style.width = `${a.offsetWidth}px`;
+      pill.style.height = `${a.offsetHeight}px`;
+    }
+    window.addEventListener("resize", movePill);
 
     window.addEventListener("message", (e) => {
       if (e.origin !== location.origin || !e.data || !e.data.p7) return;
@@ -429,14 +523,24 @@
       win.onResized(maxIcon);
       maxIcon();
     }
-    // Links meant for a new tab (osu! pages, the catalog, a replay viewer) open in the system browser: the app
-    // window has no tabs. Pages run in frames of this same origin, so one listener per frame covers them all.
+    // Links meant for a new tab: a page of this dashboard (a job's replay viewer) opens in the viewer above; anything
+    // else (osu! pages, the catalog) goes to the system browser in the app, a new tab in a browser. Pages run in
+    // frames of this same origin, so one listener per frame covers them all.
+    function openOutside(url) {
+      if (TAURI && TAURI.opener) TAURI.opener.openUrl(url); else window.open(url, "_blank", "noopener");
+    }
     function externalLinks(doc) {
       doc.addEventListener("click", (e) => {
         const a = e.target.closest && e.target.closest("a[target=_blank]");
-        if (!a || !TAURI || !TAURI.opener) return;
-        e.preventDefault();
-        TAURI.opener.openUrl(new URL(a.getAttribute("href"), location.href).href);
+        if (!a) return;
+        const url = new URL(a.getAttribute("href"), location.href);
+        if (url.origin === location.origin) {
+          e.preventDefault();
+          openViewer(url.href, a.title || a.textContent.trim() || decodeURIComponent(url.pathname.split("/").pop()));
+        } else if (TAURI && TAURI.opener) {
+          e.preventDefault();
+          TAURI.opener.openUrl(url.href);
+        }
       }, true);
     }
     externalLinks(document);
@@ -447,10 +551,8 @@
       f.addEventListener("load", hook);
       if (f.contentDocument && f.contentDocument.readyState !== "loading") hook();
     }
-    if (TAURI) {
-      document.querySelectorAll("iframe").forEach(hookFrame);
-      new MutationObserver(() => document.querySelectorAll("iframe").forEach(hookFrame)).observe(document.getElementById("frames"), { childList: true });
-    }
+    document.querySelectorAll("#frames iframe").forEach(hookFrame);
+    new MutationObserver(() => document.querySelectorAll("#frames iframe").forEach(hookFrame)).observe(document.getElementById("frames"), { childList: true });
   </script>
 </body>
 </html>

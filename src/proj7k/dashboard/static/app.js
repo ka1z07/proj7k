@@ -202,7 +202,7 @@ const P7 = (() => {
   function artifactRow(jobId, index, a) {
     const buttons = [];
     if (a.kind === "html") {
-      buttons.push(el("a", { href: a.url, target: "_blank", rel: "noopener" }, el("button", { class: "small primary", text: tr("打开") })));
+      buttons.push(el("a", { href: a.url, target: "_blank", rel: "noopener", title: a.label }, el("button", { class: "small primary", text: tr("打开") })));
     } else {
       buttons.push(el("a", { href: a.url, download: a.name }, el("button", { class: "small", text: tr("下载") })));
     }
