@@ -35,7 +35,7 @@ and when an individual is officially representing the project in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing or otherwise unacceptable behavior may be reported to the maintainer, Kai
-([@ka1z07](https://github.com/ka1z07)), at **CONTACT_EMAIL**. All complaints will be reviewed and investigated
+([@ka1z07](https://github.com/ka1z07)), at [contact-me@kaiz.dev](mailto:contact-me@kaiz.dev). All complaints will be reviewed and investigated
 promptly and fairly, and the privacy and security of the reporter will be respected.
 
 The maintainer may remove, edit or reject comments, commits, code, issues and other contributions that do not align
