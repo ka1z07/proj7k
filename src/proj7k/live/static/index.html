@@ -1,522 +1,350 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>proj7k Live Radar Dashboard</title>
+  <title>proj7k 实时雷达</title>
+  <!-- The live radar (ADR-0010): the chart osu!lazer has selected, its eight-skill radar and its difficulty timeline
+       with a playhead. Self-contained, so the plain live server and OBS (?mode=overlay) can serve it without the
+       dashboard's /static; it copies the dashboard's osu!lazer look (ADR-0037) and its language choice (ADR-0035). -->
   <style>
     :root {
-      --bg-dark: #090d16;
-      --bg-card: rgba(18, 24, 38, 0.85);
-      --bg-card-solid: #121826;
-      --border-color: #242f48;
-      --border-highlight: #3b82f6;
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
-      --accent-blue: #38bdf8;
-      --accent-cyan: #06b6d4;
-      --accent-purple: #c084fc;
-      --accent-gold: #f59e0b;
-      --accent-green: #10b981;
-      --accent-red: #ef4444;
-      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, monospace;
+      color-scheme: dark;
+      --bg-dark: #18141d;
+      --bg-card: rgba(38, 32, 47, 0.74);
+      --bg-inset: rgba(12, 10, 16, 0.38);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f5f1fa;
+      --text-muted: #b1a8c0;
+      --text-dim: #7a7089;
+      --accent: #ff66ab;
+      --accent-soft: rgba(255, 102, 171, 0.16);
+      --accent-blue: #66ccff;
+      --accent-purple: #aa88ff;
+      --accent-gold: #ffcc22;
+      --accent-green: #8fd44f;
+      --accent-red: #ff6680;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: Consolas, "Cascadia Mono", Menlo, monospace;
+      --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background-color: var(--bg-dark);
+      background: var(--bg-dark);
       color: var(--text-main);
       font-family: var(--font-stack);
+      font-size: 14px;
+      line-height: 1.5;
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
+      padding: 24px 28px;
       overflow-x: hidden;
     }
+    /* Inside the dashboard shell the page is see-through: the shell's blurred cover and triangles show behind it. */
+    html.embedded body { background: transparent; }
+    .embedded .standalone-only { display: none !important; }
 
-    /* OBS Overlay Mode Overrides */
+    .page { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Header (standalone only; in the shell its side bar names the page and shows the connection) */
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .brand-title { font-size: 1.45rem; font-weight: 800; }
+    .brand-subtitle { color: var(--text-muted); font-size: 0.85rem; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600; background: var(--bg-card); border: 1px solid var(--border-color);
+      color: var(--text-muted); transition: color 0.3s, border-color 0.3s;
+    }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-red); transition: background 0.3s, box-shadow 0.3s; }
+    .status-badge.connected .status-dot { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+    .status-badge.connected { color: var(--text-main); }
+
+    /* Layout: the chart and its numbers beside the radar, the timeline across the bottom */
+    .dashboard-container {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 420px;
+      grid-template-areas: "info radar" "strain strain";
+      gap: 16px;
+      align-items: stretch;
+    }
+    .col-info { grid-area: info; }
+    .col-radar { grid-area: radar; }
+    .col-strain { grid-area: strain; }
+    @media (max-width: 900px) {
+      body { padding: 16px; }
+      .dashboard-container { grid-template-columns: minmax(0, 1fr); grid-template-areas: "info" "radar" "strain"; }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 16px 18px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .card-title {
+      display: flex; align-items: center; gap: 8px; font-size: 0.95rem; font-weight: 700; margin-bottom: 12px;
+    }
+    .card-title::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: var(--accent); flex: none; }
+    .card-title .aside { margin-left: auto; font-size: 0.75rem; font-weight: 600; color: var(--text-dim); }
+
+    /* Column 1: the chart, as an osu!lazer beatmap panel: its cover across the top, the text over a gradient */
+    .col-info { padding: 0; overflow: hidden; }
+    .banner { position: relative; flex: 1 0 auto; min-height: 172px; padding: 16px 18px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+    .banner-bg { position: absolute; inset: 0; background: linear-gradient(135deg, #3a2448, #1d1a33 60%, #142233); }
+    .banner-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.06);
+      transition: opacity 0.6s ease, transform 1.2s var(--ease); }
+    .banner-bg img.loaded { opacity: 0.75; transform: none; }
+    .banner::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(24, 20, 29, 0.1) 0%, rgba(24, 20, 29, 0.55) 55%, rgba(30, 25, 37, 0.96) 100%); }
+    .banner > :not(.banner-bg) { position: relative; z-index: 1; }
+    .banner-top { position: absolute !important; top: 14px; left: 18px; right: 18px; display: flex; justify-content: space-between; gap: 8px; }
+
+    .sync-tag {
+      display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700;
+      background: rgba(0, 0, 0, 0.45); color: var(--text-muted); backdrop-filter: blur(4px);
+    }
+    .sync-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .sync-tag.playing { color: var(--accent); }
+    .sync-tag.playing::before { animation: lr-pulse 1.2s ease-in-out infinite; }
+
+    .song-title { font-size: 1.5rem; font-weight: 800; line-height: 1.2; word-break: break-word; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); }
+    .song-artist { font-size: 0.98rem; font-weight: 600; color: var(--text-muted); margin-top: 2px; }
+    .song-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.82rem; color: var(--text-muted); }
+    .diff-badge {
+      padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+      background: rgba(255, 255, 255, 0.1); color: var(--text-main); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .info-body { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .rating-row { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+    .rating-label { font-size: 0.75rem; color: var(--text-dim); }
+    .sr-number { font-size: 2.6rem; font-weight: 900; line-height: 1; color: var(--accent-gold); font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 18px rgba(255, 204, 34, 0.28); }
+    .dan-badge {
+      display: inline-flex; padding: 3px 12px; border-radius: 999px; font-size: 0.95rem; font-weight: 800;
+      background: var(--accent); color: #fff; box-shadow: 0 0 16px rgba(255, 102, 171, 0.45);
+    }
+    .dan-badge.empty { background: rgba(255, 255, 255, 0.08); color: var(--text-dim); box-shadow: none; }
+    .dominant-container { margin-left: auto; text-align: right; }
+    .dominant-badge { font-size: 1.05rem; font-weight: 800; color: var(--accent-blue); }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .stat-box { padding: 8px 12px; background: var(--bg-inset); border-radius: 10px; }
+    .stat-label { font-size: 0.75rem; color: var(--text-dim); }
+    .stat-value { font-size: 1.05rem; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+    .drop-zone {
+      border: 1.5px dashed rgba(255, 255, 255, 0.16); border-radius: 10px; padding: 12px; text-align: center;
+      cursor: pointer; font-size: 0.82rem; color: var(--text-muted); transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: var(--accent); color: var(--text-main); background: var(--accent-soft); }
+    .drop-zone.over { transform: scale(1.01); }
+
+    /* Column 2: the radar */
+    .radar-wrapper { flex: 1; display: flex; align-items: center; justify-content: center; }
+    #radarCanvas { width: 100%; max-width: 380px; aspect-ratio: 1 / 1; display: block; }
+
+    /* Bottom: the difficulty timeline */
+    .strain-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .strain-header .card-title { margin-bottom: 0; }
+    .playhead-time { margin-left: auto; font-family: var(--mono); font-size: 0.95rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .strain-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-color { width: 10px; height: 10px; border-radius: 3px; }
+    .legend-level { background: none; border-top: 2px dashed rgba(255, 255, 255, 0.45); height: 0; border-radius: 0; }
+    .legend-risk { background: none; border-top: 2px solid rgba(255, 255, 255, 0.85); height: 0; border-radius: 0; }
+    #strainCanvas { width: 100%; height: 240px; display: block; border-radius: 10px; background: var(--bg-inset); }
+
+    /* Motion: the cards rise in one after another; a new chart's text fades across */
+    @keyframes lr-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes lr-swap { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+    @keyframes lr-pop { 0% { transform: scale(0.85); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+    @keyframes lr-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    header, .dashboard-container > .card { animation: lr-rise 0.45s var(--ease) both; }
+    .col-radar { animation-delay: 0.07s !important; }
+    .col-strain { animation-delay: 0.14s !important; }
+    .swap { animation: lr-swap 0.4s var(--ease) both; }
+    .pop { animation: lr-pop 0.45s var(--ease); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* OBS overlay (?mode=overlay): no page chrome, see-through cards side by side */
     body.overlay-mode {
       background: transparent !important;
-      background-color: transparent !important;
       padding: 0 !important;
       margin: 0 !important;
       overflow: hidden !important;
       min-height: auto !important;
-      display: block !important;
     }
-
     body.overlay-mode header,
     body.overlay-mode .drop-zone,
-    body.overlay-mode .no-overlay {
-      display: none !important;
-    }
-
+    body.overlay-mode .no-overlay { display: none !important; }
+    body.overlay-mode .page { max-width: none; }
     body.overlay-mode .dashboard-container {
-      max-width: none !important;
+      display: grid !important;
       gap: 12px !important;
       padding: 10px !important;
       grid-template-columns: auto auto auto !important;
+      grid-template-areas: none !important;
       align-items: start !important;
     }
-
+    body.overlay-mode .dashboard-container > .card { grid-area: auto; width: 380px; }
+    body.overlay-mode .col-strain { width: 560px !important; }
     body.overlay-mode .card {
-      background: transparent !important;
-      background-color: transparent !important;
+      background: rgba(24, 20, 29, 0.45) !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
-      border: 1px solid rgba(56, 189, 248, 0.25) !important;
+      border: 1px solid rgba(255, 102, 171, 0.28) !important;
       box-shadow: none !important;
     }
-
-    /* Header */
-    header {
-      width: 100%;
-      max-width: 1400px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding: 12px 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    }
-
-    .brand-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .brand-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-transform: uppercase;
-    }
-
-    .brand-subtitle {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border-color);
-      transition: all 0.3s ease;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--accent-red);
-    }
-
-    .status-badge.connected .status-dot {
-      background-color: var(--accent-green);
-      box-shadow: 0 0 10px var(--accent-green);
-    }
-
-    .status-badge.connected {
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
-    }
-
-    .status-badge.disconnected {
-      border-color: rgba(239, 68, 68, 0.4);
-      color: #f87171;
-    }
-
-    /* Main Container (Three Columns Layout) */
-    .dashboard-container {
-      width: 100%;
-      max-width: 1400px;
-      display: grid;
-      grid-template-columns: 340px 440px 1fr;
-      gap: 20px;
-      align-items: stretch;
-    }
-
-    @media (max-width: 1200px) {
-      .dashboard-container {
-        grid-template-columns: 1fr 1fr;
-      }
-      .col-strain {
-        grid-column: span 2;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-container {
-        grid-template-columns: 1fr;
-      }
-      .col-strain {
-        grid-column: span 1;
-      }
-    }
-
-    /* Cards */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-
-    .card-title {
-      font-size: 0.95rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-      margin-bottom: 14px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    /* Column 1: Info Panel */
-    .song-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      color: #ffffff;
-      line-height: 1.25;
-      word-break: break-word;
-    }
-
-    .song-artist {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    .diff-badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      background: rgba(56, 189, 248, 0.12);
-      color: var(--accent-blue);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-    }
-
-    .mapper-text {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-top: 8px;
-    }
-
-    .rating-row {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: rgba(0, 0, 0, 0.35);
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .sr-number {
-      font-size: 2.2rem;
-      font-weight: 900;
-      color: var(--accent-gold);
-      letter-spacing: -0.02em;
-      text-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
-    }
-
-    .dan-badge {
-      display: inline-flex;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.88rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      background: rgba(192, 132, 252, 0.18);
-      color: var(--accent-purple);
-      border: 1px solid rgba(192, 132, 252, 0.4);
-      box-shadow: 0 0 12px rgba(192, 132, 252, 0.2);
-    }
-
-    .dominant-container {
-      margin-top: 14px;
-      padding: 10px 14px;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .dominant-label {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .dominant-badge {
-      font-size: 0.92rem;
-      font-weight: 800;
-      color: var(--accent-cyan);
-      text-shadow: 0 0 10px var(--accent-cyan);
-      text-transform: uppercase;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .stat-box {
-      padding: 8px 10px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 6px;
-    }
-
-    .stat-label {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-    }
-
-    .stat-value {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-main);
-      margin-top: 2px;
-    }
-
-    .drop-zone {
-      margin-top: 16px;
-      border: 2px dashed var(--border-color);
-      border-radius: 8px;
-      padding: 16px 12px;
-      text-align: center;
-      cursor: pointer;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      transition: all 0.25s ease;
-      background: rgba(0, 0, 0, 0.15);
-    }
-
-    .drop-zone:hover {
-      border-color: var(--accent-blue);
-      color: var(--accent-blue);
-      background: rgba(56, 189, 248, 0.05);
-    }
-
-    /* Column 2: Radar Chart */
-    .radar-wrapper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-    }
-
-    #radarCanvas {
-      width: 100%;
-      max-width: 400px;
-      aspect-ratio: 1 / 1;
-    }
-
-    /* Column 3: Difficulty Timeline */
-    .strain-wrapper {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-    }
-
-    .strain-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-
-    .strain-legend {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px 14px;
-      font-size: 0.78rem;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .legend-color {
-      width: 10px;
-      height: 10px;
-      border-radius: 2px;
-    }
-
-    .legend-level { background: none; border-top: 2px dashed rgba(255, 255, 255, 0.45); height: 0; }
-    .legend-risk { background: none; border-top: 2px solid rgba(255, 255, 255, 0.85); height: 0; }
-
-    .playhead-time {
-      font-family: monospace;
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--accent-blue);
-    }
-
-    #strainCanvas {
-      width: 100%;
-      height: 280px;
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
+    body.overlay-mode .banner-bg { display: none; }
+    body.overlay-mode .banner { min-height: 0; padding-bottom: 4px; }
+    body.overlay-mode .banner::after { display: none; }
+    body.overlay-mode .banner-top { position: static !important; margin-bottom: 6px; }
   </style>
 </head>
 <body>
-
-  <!-- Header Banner -->
-  <header>
-    <div class="brand-group">
+  <div class="page">
+    <header class="standalone-only">
       <div>
-        <div class="brand-title">proj7k // Live Radar</div>
-        <div class="brand-subtitle">Intrinsic 7K Difficulty & Real-time Technique Profile</div>
+        <div class="brand-title" data-t="实时雷达">实时雷达</div>
+        <div class="brand-subtitle" data-t="osu!lazer 选中的谱面：引擎星级、八项技法与难度时间线">osu!lazer 选中的谱面：引擎星级、八项技法与难度时间线</div>
       </div>
+      <div id="statusBadge" class="status-badge disconnected">
+        <span class="status-dot"></span>
+        <span id="statusText" data-t="未连接">未连接</span>
+      </div>
+    </header>
+
+    <div class="dashboard-container" id="dashboardContainer">
+
+      <!-- The chart -->
+      <div class="card col-info" id="cardInfo">
+        <div class="banner">
+          <div class="banner-bg"><img id="bmCover" alt=""></div>
+          <div class="banner-top">
+            <span class="sync-tag" id="syncStatusTag" data-t="待机">待机</span>
+          </div>
+          <div id="bmText">
+            <div class="song-title" id="bmTitle" data-t="等待谱面…">等待谱面…</div>
+            <div class="song-artist" id="bmArtist" data-t="在 osu!lazer 里选一张 7K 谱，或把 .osu 拖到下面">在 osu!lazer 里选一张 7K 谱，或把 .osu 拖到下面</div>
+            <div class="song-line">
+              <span class="diff-badge" id="bmDiff">7K</span>
+              <span id="bmCreator"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-body">
+          <div class="rating-row">
+            <div>
+              <div class="rating-label" data-t="引擎星级">引擎星级</div>
+              <div class="sr-number" id="srValue">0.00★</div>
+            </div>
+            <div>
+              <div class="rating-label" data-t="段位">段位</div>
+              <div class="dan-badge empty" id="danTierBadge">—</div>
+            </div>
+            <div class="dominant-container">
+              <div class="rating-label" data-t="主技法">主技法</div>
+              <div class="dominant-badge" id="dominantBadge">—</div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-box"><div class="stat-label" data-t="物量">物量</div><div class="stat-value" id="statNotes">0</div></div>
+            <div class="stat-box"><div class="stat-label" data-t="长条占比">长条占比</div><div class="stat-value" id="statHold">0.0%</div></div>
+            <div class="stat-box"><div class="stat-label" data-t="时长">时长</div><div class="stat-value" id="statDuration">0:00</div></div>
+            <div class="stat-box"><div class="stat-label" data-t="平均 NPS">平均 NPS</div><div class="stat-value" id="statNps">0.00</div></div>
+          </div>
+
+          <div class="drop-zone no-overlay" id="dropZone" data-t="把 .osu 谱面拖到这里，离线分析">把 .osu 谱面拖到这里，离线分析</div>
+        </div>
+      </div>
+
+      <!-- The eight skills -->
+      <div class="card col-radar" id="cardRadar">
+        <div class="card-title"><span data-t="八项技法">八项技法</span><span class="aside" data-t="满格 12.5★">满格 12.5★</span></div>
+        <div class="radar-wrapper">
+          <canvas id="radarCanvas" width="380" height="380"></canvas>
+        </div>
+      </div>
+
+      <!-- Difficulty along the chart, with the game's playhead -->
+      <div class="card col-strain" id="cardStrain">
+        <div class="strain-header">
+          <div class="card-title" data-t="难度时间线">难度时间线</div>
+          <div class="playhead-time" id="playheadTime">00:00.00</div>
+        </div>
+        <div class="strain-legend" id="timelineLegend">
+          <div class="legend-item"><span class="legend-color legend-level"></span><span data-t="谱面水平">谱面水平</span></div>
+          <div class="legend-item"><span class="legend-color legend-risk"></span><span data-t="预计失误">预计失误</span></div>
+        </div>
+        <canvas id="strainCanvas" width="560" height="240"></canvas>
+      </div>
+
     </div>
-    <div id="statusBadge" class="status-badge disconnected">
-      <span class="status-dot"></span>
-      <span id="statusText">Disconnected</span>
-    </div>
-  </header>
-
-  <!-- 3-Column Dashboard Container -->
-  <div class="dashboard-container" id="dashboardContainer">
-
-    <!-- Column 1: Beatmap Info & Drop Zone -->
-    <div class="card col-info" id="cardInfo">
-      <div class="card-title">
-        <span>Beatmap Overview</span>
-        <span id="syncStatusTag" style="font-size: 0.75rem; color: var(--accent-green);">IDLE</span>
-      </div>
-
-      <div class="song-title" id="bmTitle">Waiting for chart...</div>
-      <div class="song-artist" id="bmArtist">Start playing in osu!lazer or drop an .osu file</div>
-      <div>
-        <span class="diff-badge" id="bmDiff">7K Standard</span>
-      </div>
-      <div class="mapper-text" id="bmCreator">Mapped by Unknown</div>
-
-      <div class="rating-row">
-        <div>
-          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Intrinsic SR</div>
-          <div class="sr-number" id="srValue">0.00★</div>
-        </div>
-        <div style="margin-left: auto;">
-          <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Dan Tier</div>
-          <div class="dan-badge" id="danTierBadge">0th Dan</div>
-        </div>
-      </div>
-
-      <div class="dominant-container">
-        <span class="dominant-label">Dominant Technique</span>
-        <span class="dominant-badge" id="dominantBadge">None</span>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Total Notes</div>
-          <div class="stat-value" id="statNotes">0</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Hold Ratio</div>
-          <div class="stat-value" id="statHold">0.0%</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Duration</div>
-          <div class="stat-value" id="statDuration">0:00</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Avg NPS</div>
-          <div class="stat-value" id="statNps">0.00</div>
-        </div>
-      </div>
-
-      <div class="drop-zone no-overlay" id="dropZone">
-        <span id="dropZh">拖拽 .osu 谱面至此即可离线深度解析<br></span>
-        <span style="font-size: 0.75rem; opacity: 0.7;">(Drag & Drop .osu File)</span>
-      </div>
-    </div>
-
-    <!-- Column 2: 8-Axis Radar Chart -->
-    <div class="card col-radar" id="cardRadar">
-      <div class="card-title">
-        <span>8-Axis Technique Radar</span>
-        <span style="font-size: 0.75rem; color: var(--accent-purple);">12.5★ Scale</span>
-      </div>
-      <div class="radar-wrapper">
-        <canvas id="radarCanvas" width="400" height="400"></canvas>
-      </div>
-    </div>
-
-    <!-- Column 3: Dual-Hand Strain Profile & Playhead Cursor -->
-    <div class="card col-strain" id="cardStrain">
-      <div class="strain-header">
-        <div class="card-title" style="margin-bottom: 0;">Difficulty Timeline</div>
-        <div class="playhead-time" id="playheadTime">00:00.00</div>
-      </div>
-      <div class="strain-legend" id="timelineLegend" style="margin-bottom: 10px;">
-        <div class="legend-item">
-          <span class="legend-color legend-level"></span>
-          <span>Chart level</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color legend-risk"></span>
-          <span>Expected misses</span>
-        </div>
-      </div>
-      <div class="strain-wrapper">
-        <canvas id="strainCanvas" width="560" height="280"></canvas>
-      </div>
-    </div>
-
   </div>
 
   <script>
-    // The dashboard's language choice (ADR-0035): this page is English apart from the drop hint's Chinese line.
-    try { if (localStorage.getItem("p7.lang") === "en") document.getElementById("dropZh").remove(); } catch (e) { /* no storage */ }
+    // 0. Language (ADR-0035): the dashboard's choice in localStorage, else the system's. This page carries its own
+    // few strings so it works without the dashboard's /static.
+    const LANG = (() => {
+      let saved = null;
+      try { saved = localStorage.getItem("p7.lang"); } catch (e) { /* storage blocked */ }
+      if (saved === "zh" || saved === "en") return saved;
+      const sys = String((navigator.languages && navigator.languages[0]) || navigator.language || "zh").toLowerCase();
+      return sys.startsWith("zh") ? "zh" : "en";
+    })();
+    const EN = {
+      "proj7k 实时雷达": "proj7k Live Radar",
+      "实时雷达": "Live radar",
+      "osu!lazer 选中的谱面：引擎星级、八项技法与难度时间线": "The chart osu!lazer has selected: engine stars, eight skills and difficulty timeline",
+      "未连接": "Disconnected",
+      "已连接": "Connected",
+      "待机": "Idle",
+      "游玩中": "Playing",
+      "等待谱面…": "Waiting for a chart…",
+      "在 osu!lazer 里选一张 7K 谱，或把 .osu 拖到下面": "Pick a 7K chart in osu!lazer, or drop an .osu below",
+      "引擎星级": "Engine stars",
+      "段位": "Dan",
+      "主技法": "Main skill",
+      "物量": "Notes",
+      "长条占比": "Hold ratio",
+      "时长": "Length",
+      "平均 NPS": "Avg NPS",
+      "把 .osu 谱面拖到这里，离线分析": "Drop an .osu chart here to analyse it offline",
+      "八项技法": "Eight skills",
+      "满格 12.5★": "Full scale 12.5★",
+      "难度时间线": "Difficulty timeline",
+      "谱面水平": "Chart level",
+      "预计失误": "Expected misses",
+      "谱师 {name}": "Mapped by {name}",
+      "未知": "Unknown",
+    };
+    function tr(zh, vars) {
+      let s = LANG === "en" && EN[zh] ? EN[zh] : zh;
+      if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+      return s;
+    }
+    document.documentElement.lang = LANG === "en" ? "en" : "zh-CN";
+    document.title = tr("proj7k 实时雷达");
+    if (LANG === "en") document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = tr(n.dataset.t); });
+
+    const MOTION = !(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const embedded = window.top !== window;
+    if (embedded) document.documentElement.classList.add("embedded");
+
     // 1. URL Query Parameter Handling & OBS Overlay Adaptation
     const urlParams = new URLSearchParams(window.location.search);
     const isOverlay = urlParams.get("mode") === "overlay";
@@ -543,25 +371,19 @@
     }
 
     // 2. UI Elements
-    const statusBadge = document.getElementById("statusBadge");
-    const statusText = document.getElementById("statusText");
-    const syncStatusTag = document.getElementById("syncStatusTag");
-    const bmTitle = document.getElementById("bmTitle");
-    const bmArtist = document.getElementById("bmArtist");
-    const bmDiff = document.getElementById("bmDiff");
-    const bmCreator = document.getElementById("bmCreator");
-    const srValue = document.getElementById("srValue");
-    const danTierBadge = document.getElementById("danTierBadge");
-    const dominantBadge = document.getElementById("dominantBadge");
-    const statNotes = document.getElementById("statNotes");
-    const statHold = document.getElementById("statHold");
-    const statDuration = document.getElementById("statDuration");
-    const statNps = document.getElementById("statNps");
-    const playheadTime = document.getElementById("playheadTime");
+    const $ = (id) => document.getElementById(id);
+    const statusBadge = $("statusBadge");
+    const statusText = $("statusText");
+    const syncStatusTag = $("syncStatusTag");
+    const bmText = $("bmText");
+    const bmCover = $("bmCover");
+    const srValue = $("srValue");
+    const danTierBadge = $("danTierBadge");
+    const playheadTime = $("playheadTime");
 
-    const radarCanvas = document.getElementById("radarCanvas");
+    const radarCanvas = $("radarCanvas");
     const radarCtx = radarCanvas.getContext("2d");
-    const strainCanvas = document.getElementById("strainCanvas");
+    const strainCanvas = $("strainCanvas");
     const strainCtx = strainCanvas.getContext("2d");
 
     // 3. State
@@ -585,6 +407,7 @@
       { key: "ln_inverse", label: "LN Inv" },
       { key: "ln_release", label: "LN Rel" }
     ];
+    const TECH_LABEL = Object.fromEntries(TECHS.map((t) => [t.key, t.label]));
 
     function formatTime(ms) {
       if (!ms || ms < 0) ms = 0;
@@ -602,6 +425,29 @@
       return `${m}:${String(s).padStart(2, "0")}`;
     }
 
+    // Restarts a one-shot CSS animation class on a node.
+    function replay(node, cls) {
+      if (!MOTION) return;
+      node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls);
+    }
+
+    // A number that rolls from where it was to its new value.
+    const rolling = new Map();
+    function roll(node, to, fmt, ms = 650) {
+      const from = rolling.has(node) ? rolling.get(node).value : 0;
+      const state = { value: to };
+      rolling.set(node, state);
+      if (!MOTION || from === to) { node.textContent = fmt(to); return; }
+      const t0 = performance.now();
+      const step = (t) => {
+        if (rolling.get(node) !== state) return;   // a newer value took over
+        const k = Math.min(1, (t - t0) / ms);
+        node.textContent = fmt(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
     // 4. WebSocket Connection
     let ws;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
@@ -617,12 +463,12 @@
 
       ws.onopen = () => {
         statusBadge.className = "status-badge connected";
-        statusText.textContent = "Live Stream Active";
+        statusText.textContent = tr("已连接");
       };
 
       ws.onclose = () => {
         statusBadge.className = "status-badge disconnected";
-        statusText.textContent = "Disconnected";
+        statusText.textContent = tr("未连接");
         setTimeout(connectWs, 2000);
       };
 
@@ -640,23 +486,41 @@
       };
     }
 
+    // The chart's cover comes from the dashboard's library; the plain live server has none and keeps the gradient.
+    let coverMd5 = null;
+    function setCover(md5) {
+      if (md5 === coverMd5) return;
+      coverMd5 = md5;
+      bmCover.classList.remove("loaded");
+      if (!md5) { bmCover.removeAttribute("src"); return; }
+      bmCover.onload = () => { if (coverMd5 === md5) bmCover.classList.add("loaded"); };
+      bmCover.onerror = () => bmCover.classList.remove("loaded");
+      bmCover.src = `/api/me/cover/${encodeURIComponent(md5)}?w=960`;
+    }
+
     function handleBeatmapUpdate(data) {
+      const previous = currentBeatmapData;
       currentBeatmapData = data;
       const meta = data.metadata || {};
-      bmTitle.textContent = meta.title || "Unknown Title";
-      bmArtist.textContent = meta.artist || "Unknown Artist";
-      bmDiff.textContent = meta.version || "7K";
-      bmCreator.textContent = `Mapped by ${meta.creator || "Unknown"}`;
-      srValue.textContent = `${(data.star_rating || 0).toFixed(2)}★`;
-      danTierBadge.textContent = data.dan_tier || meta.dan_tier || "0th Dan";
+      $("bmTitle").textContent = meta.title || tr("未知");
+      $("bmArtist").textContent = meta.artist || tr("未知");
+      $("bmDiff").textContent = meta.version || "7K";
+      $("bmCreator").textContent = tr("谱师 {name}", { name: meta.creator || tr("未知") });
+      setCover(meta.lazer && meta.lazer.md5_hash);
+      const sameChart = previous && previous.metadata && previous.metadata.title === meta.title && previous.metadata.version === meta.version;
+      if (!sameChart) { replay(bmText, "swap"); replay(danTierBadge, "pop"); }
 
-      const dom = (data.radar && data.radar.dominant_technique) || meta.dominant_technique || "None";
-      dominantBadge.textContent = dom.replace("_", " ").toUpperCase();
+      roll(srValue, data.star_rating || 0, (v) => `${v.toFixed(2)}★`);
+      danTierBadge.textContent = data.dan_tier || meta.dan_tier || "—";
+      danTierBadge.classList.toggle("empty", !(data.dan_tier || meta.dan_tier));
 
-      statNotes.textContent = (meta.total_notes || 0).toLocaleString();
-      statHold.textContent = `${(meta.hold_pct || 0).toFixed(1)}%`;
-      statDuration.textContent = formatDuration(meta.duration_seconds || 0);
-      statNps.textContent = (meta.avg_nps || 0).toFixed(2);
+      const dom = (data.radar && data.radar.dominant_technique) || meta.dominant_technique || "";
+      $("dominantBadge").textContent = TECH_LABEL[dom] || "—";
+
+      roll($("statNotes"), meta.total_notes || 0, (v) => Math.round(v).toLocaleString());
+      roll($("statHold"), meta.hold_pct || 0, (v) => `${v.toFixed(1)}%`);
+      $("statDuration").textContent = formatDuration(meta.duration_seconds || 0);
+      roll($("statNps"), meta.avg_nps || 0, (v) => v.toFixed(2));
 
       // Difficulty timeline
       currentTimeline = data.timeline || null;
@@ -665,6 +529,8 @@
       } else {
         currentDurationMs = (meta.duration_seconds || 0) * 1000;
       }
+      if (!sameChart) timelineGrowAt = performance.now();
+      strainDirty = true;
 
       // Reset playhead clock on new beatmap
       currentClock = {
@@ -673,8 +539,13 @@
         rate: 1.0,
         sync_local_time: performance.now(),
       };
-      syncStatusTag.textContent = "IDLE";
-      syncStatusTag.style.color = "var(--text-muted)";
+      setSyncTag();
+    }
+
+    function setSyncTag() {
+      const playing = currentClock.status === "playing";
+      syncStatusTag.textContent = tr(playing ? "游玩中" : "待机");
+      syncStatusTag.classList.toggle("playing", playing);
     }
 
     function handleClockSync(data) {
@@ -682,23 +553,43 @@
       currentClock.start_ms = data.start_ms || 0;
       currentClock.rate = typeof data.rate === "number" ? data.rate : 1.0;
       currentClock.sync_local_time = performance.now();
+      setSyncTag();
+      strainDirty = true;
+    }
 
-      if (currentClock.status === "playing") {
-        syncStatusTag.textContent = "PLAYING";
-        syncStatusTag.style.color = "var(--accent-green)";
-      } else {
-        syncStatusTag.textContent = "IDLE";
-        syncStatusTag.style.color = "var(--text-muted)";
+    // Canvases are drawn at the screen's pixel density and their laid-out size, so they stay sharp.
+    function fit(canvas, ctx) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, Math.round(canvas.clientWidth)), h = Math.max(1, Math.round(canvas.clientHeight));
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { w, h };
     }
 
     // 5. Canvas Drawing: 8-Axis Radar Chart
+    // The polygon eases from the last chart's shape to the new one rather than jumping.
+    const shown = Object.fromEntries(TECHS.map((t) => [t.key, 0]));
+    let radarMoving = true, radarDirty = true;
+
+    function easeRadar(radar, dt) {
+      radarMoving = false;
+      const k = MOTION ? 1 - Math.exp(-dt / 140) : 1;
+      TECHS.forEach(({ key }) => {
+        const target = radar ? Math.min(12.5, Math.max(0, radar[key] || 0)) : 0;
+        const next = shown[key] + (target - shown[key]) * k;
+        shown[key] = Math.abs(target - next) < 0.005 ? target : next;
+        if (shown[key] !== target) radarMoving = true;
+      });
+    }
+
     function drawRadar(radar, dominantKey, animTime) {
-      const w = radarCanvas.width;
-      const h = radarCanvas.height;
+      const { w, h } = fit(radarCanvas, radarCtx);
       const cx = w / 2;
       const cy = h / 2;
-      const r = Math.min(cx, cy) - 48;
+      const r = Math.min(cx, cy) - 46;
+      const angleOf = (i) => (Math.PI * 2 / 8) * i - Math.PI / 2;
 
       radarCtx.clearRect(0, 0, w, h);
 
@@ -708,118 +599,100 @@
         const curR = (r / rings) * s;
         radarCtx.beginPath();
         for (let i = 0; i < 8; i++) {
-          const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-          const x = cx + curR * Math.cos(angle);
-          const y = cy + curR * Math.sin(angle);
+          const x = cx + curR * Math.cos(angleOf(i));
+          const y = cy + curR * Math.sin(angleOf(i));
           if (i === 0) radarCtx.moveTo(x, y);
           else radarCtx.lineTo(x, y);
         }
         radarCtx.closePath();
-        radarCtx.strokeStyle = s === rings ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.06)";
+        if (s === rings) { radarCtx.fillStyle = "rgba(255, 255, 255, 0.025)"; radarCtx.fill(); }
+        radarCtx.strokeStyle = s === rings ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.06)";
         radarCtx.lineWidth = 1;
         radarCtx.stroke();
 
-        // Scale label along top axis
         if (s % 2 === 1 || s === rings) {
-          const labelVal = ((12.5 / rings) * s).toFixed(1);
-          radarCtx.fillStyle = "rgba(148, 163, 184, 0.5)";
-          radarCtx.font = "9px monospace";
-          radarCtx.textAlign = "center";
-          radarCtx.fillText(`${labelVal}★`, cx + 14, cy - curR);
+          radarCtx.fillStyle = "rgba(177, 168, 192, 0.55)";
+          radarCtx.font = "9px Consolas, Menlo, monospace";
+          radarCtx.textAlign = "left";
+          radarCtx.textBaseline = "middle";
+          radarCtx.fillText(`${((12.5 / rings) * s).toFixed(1)}★`, cx + 4, cy - curR);
         }
       }
 
       // Spokes and labels
       TECHS.forEach(({ key, label }, i) => {
-        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-        const x = cx + r * Math.cos(angle);
-        const y = cy + r * Math.sin(angle);
-
+        const angle = angleOf(i);
         radarCtx.beginPath();
         radarCtx.moveTo(cx, cy);
-        radarCtx.lineTo(x, y);
-        radarCtx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+        radarCtx.lineTo(cx + r * Math.cos(angle), cy + r * Math.sin(angle));
+        radarCtx.strokeStyle = "rgba(255, 255, 255, 0.07)";
         radarCtx.stroke();
 
-        // Label text positioning
         const isDom = dominantKey === key;
-        const score = radar ? (radar[key] || 0) : 0;
         const labelR = r + 24;
         const lx = cx + labelR * Math.cos(angle);
         const ly = cy + labelR * Math.sin(angle);
-
-        radarCtx.font = isDom ? "bold 11px sans-serif" : "10px sans-serif";
-        radarCtx.fillStyle = isDom ? "#06b6d4" : "#94a3b8";
         radarCtx.textAlign = "center";
         radarCtx.textBaseline = "middle";
-        radarCtx.fillText(label, lx, ly - 6);
-
-        radarCtx.font = "bold 10px monospace";
-        radarCtx.fillStyle = isDom ? "#38bdf8" : "#cbd5e1";
-        radarCtx.fillText(`${score.toFixed(1)}★`, lx, ly + 7);
+        radarCtx.font = `${isDom ? "bold " : ""}11px -apple-system, "Segoe UI", sans-serif`;
+        radarCtx.fillStyle = isDom ? "#ff66ab" : "#b1a8c0";
+        radarCtx.fillText(label, lx, ly - 7);
+        radarCtx.font = "bold 11px Consolas, Menlo, monospace";
+        radarCtx.fillStyle = isDom ? "#ff66ab" : "#f5f1fa";
+        radarCtx.fillText(`${(radar ? shown[key] : 0).toFixed(1)}★`, lx, ly + 7);
       });
 
       if (!radar) return;
 
       // Data polygon
-      const points = [];
-      TECHS.forEach(({ key }, i) => {
-        const val = Math.min(12.5, Math.max(0, radar[key] || 0));
-        const norm = val / 12.5;
-        const curR = r * norm;
-        const angle = (Math.PI * 2 / 8) * i - Math.PI / 2;
-        const x = cx + curR * Math.cos(angle);
-        const y = cy + curR * Math.sin(angle);
-        points.push({ x, y, key, val });
+      const points = TECHS.map(({ key }, i) => {
+        const curR = r * (shown[key] / 12.5);
+        return { x: cx + curR * Math.cos(angleOf(i)), y: cy + curR * Math.sin(angleOf(i)), key };
       });
+      radarCtx.beginPath();
+      points.forEach((pt, i) => { if (i === 0) radarCtx.moveTo(pt.x, pt.y); else radarCtx.lineTo(pt.x, pt.y); });
+      radarCtx.closePath();
+      const grad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, "rgba(102, 204, 255, 0.42)");
+      grad.addColorStop(1, "rgba(170, 136, 255, 0.16)");
+      radarCtx.fillStyle = grad;
+      radarCtx.fill();
+      radarCtx.strokeStyle = "#66ccff";
+      radarCtx.lineWidth = 2;
+      radarCtx.lineJoin = "round";
+      radarCtx.shadowColor = "rgba(102, 204, 255, 0.6)";
+      radarCtx.shadowBlur = 10;
+      radarCtx.stroke();
+      radarCtx.shadowBlur = 0;
 
-      if (points.length > 0) {
+      // Vertices; the main skill's in pink with a slow halo
+      points.forEach((pt) => {
+        const isDom = pt.key === dominantKey;
         radarCtx.beginPath();
-        points.forEach((pt, i) => {
-          if (i === 0) radarCtx.moveTo(pt.x, pt.y);
-          else radarCtx.lineTo(pt.x, pt.y);
-        });
-        radarCtx.closePath();
-
-        // Gradient fill
-        const grad = radarCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        grad.addColorStop(0, "rgba(56, 189, 248, 0.45)");
-        grad.addColorStop(1, "rgba(192, 132, 252, 0.15)");
-        radarCtx.fillStyle = grad;
+        radarCtx.arc(pt.x, pt.y, isDom ? 5 : 3, 0, Math.PI * 2);
+        radarCtx.fillStyle = isDom ? "#ff66ab" : "#ffffff";
         radarCtx.fill();
-
-        radarCtx.strokeStyle = "#38bdf8";
-        radarCtx.lineWidth = 2.5;
-        radarCtx.stroke();
-
-        // Vertex points and Dominant Technique Glowing Halo
-        points.forEach((pt) => {
-          const isDom = pt.key === dominantKey;
+        if (isDom && MOTION) {
+          const k = (animTime % 1600) / 1600;
           radarCtx.beginPath();
-          radarCtx.arc(pt.x, pt.y, isDom ? 5 : 3.5, 0, Math.PI * 2);
-          radarCtx.fillStyle = isDom ? "#06b6d4" : "#ffffff";
-          radarCtx.fill();
-
-          if (isDom) {
-            // Pulsing halo
-            const pulse = 8 + Math.sin(animTime / 250) * 3;
-            radarCtx.beginPath();
-            radarCtx.arc(pt.x, pt.y, pulse, 0, Math.PI * 2);
-            radarCtx.strokeStyle = "rgba(6, 182, 212, 0.6)";
-            radarCtx.lineWidth = 1.5;
-            radarCtx.stroke();
-          }
-        });
-      }
+          radarCtx.arc(pt.x, pt.y, 6 + k * 10, 0, Math.PI * 2);
+          radarCtx.strokeStyle = `rgba(255, 102, 171, ${0.7 * (1 - k)})`;
+          radarCtx.lineWidth = 2;
+          radarCtx.stroke();
+        }
+      });
     }
 
     // 6. Canvas Drawing: Difficulty Timeline & 1.0x Playhead Cursor
     // One bar per bin: the hardest reading in it against the chart's own level (1.0 = as hard as
     // the chart), coloured by the skill that carries the bin's risk; the white line is the misses a
-    // player at the chart's level is expected to take there.
+    // player at the chart's level is expected to take there. A new chart's bars grow in from the left.
     const SKILL_COL = ["#ef6f6c", "#f2a65a", "#f2d675", "#7ccf8e", "#5cc8d6", "#6f9bf0", "#a889f0", "#e68ac8"];
+    const GROW_MS = 700;
+    let timelineGrowAt = -1e9;
+    let strainDirty = true;
     // the bars' colour key, in the frame's skill order (`timeline.skills`, the same order as TECHS)
-    const timelineLegend = document.getElementById("timelineLegend");
+    const timelineLegend = $("timelineLegend");
     TECHS.forEach((t, i) => {
       const item = document.createElement("div");
       item.className = "legend-item";
@@ -827,23 +700,21 @@
       timelineLegend.appendChild(item);
     });
 
-    function drawStrain(tl, currentMs) {
-      const w = strainCanvas.width;
-      const h = strainCanvas.height;
+    function drawStrain(tl, currentMs, now) {
+      const { w, h } = fit(strainCanvas, strainCtx);
       strainCtx.clearRect(0, 0, w, h);
 
       const padL = 40;
-      const padR = 15;
-      const padT = 20;
-      const padB = 25;
+      const padR = 16;
+      const padT = 18;
+      const padB = 26;
       const plotW = w - padL - padR;
       const plotH = h - padT - padB;
 
-      // Draw gridlines
       strainCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
       strainCtx.lineWidth = 1;
       for (let i = 0; i <= 4; i++) {
-        const y = padT + (plotH / 4) * i;
+        const y = Math.round(padT + (plotH / 4) * i) + 0.5;
         strainCtx.beginPath();
         strainCtx.moveTo(padL, y);
         strainCtx.lineTo(padL + plotW, y);
@@ -851,11 +722,12 @@
       }
 
       if (!tl || !tl.load || tl.load.length === 0) {
-        strainCtx.fillStyle = "rgba(148, 163, 184, 0.4)";
-        strainCtx.font = "12px sans-serif";
+        strainCtx.fillStyle = "rgba(177, 168, 192, 0.5)";
+        strainCtx.font = "12px -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif";
         strainCtx.textAlign = "center";
-        strainCtx.fillText("Waiting for chart difficulty data...", padL + plotW / 2, padT + plotH / 2);
-        return;
+        strainCtx.textBaseline = "middle";
+        strainCtx.fillText(tr("等待谱面…"), padL + plotW / 2, padT + plotH / 2);
+        return false;
       }
 
       const bins = tl.load.length;
@@ -866,14 +738,20 @@
       const loadMax = Math.max(1.15, ...tl.load);
       const riskMax = Math.max(1e-6, ...tl.risk);
       const bw = Math.max(1, (binMs / tEnd) * plotW);
+      const grow = MOTION ? (now - timelineGrowAt) / GROW_MS : 2;
+      const growing = grow < 1.6;
+      const growOf = (b) => {
+        const k = Math.min(1, Math.max(0, grow * 1.6 - (b / bins) * 0.6));
+        return 1 - Math.pow(1 - k, 3);
+      };
 
-      // Demand bars: what has been played is a little brighter than what is to come
+      // Demand bars: what has been played is brighter than what is to come
       for (let b = 0; b < bins; b++) {
         const start = t0 + b * binMs;
-        const barH = Math.min(1, tl.load[b] / loadMax) * plotH;
+        const barH = Math.min(1, tl.load[b] / loadMax) * plotH * growOf(b);
         const sk = tl.skill[b];
-        strainCtx.globalAlpha = start + binMs <= currentMs ? 1 : 0.6;
-        strainCtx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#475569";
+        strainCtx.globalAlpha = start + binMs <= currentMs ? 1 : 0.55;
+        strainCtx.fillStyle = sk >= 0 ? SKILL_COL[sk] : "#5a5068";
         strainCtx.fillRect(X(start), padT + plotH - barH, Math.ceil(bw) - (bw > 3 ? 1 : 0), barH);
       }
       strainCtx.globalAlpha = 1;
@@ -889,13 +767,20 @@
       strainCtx.stroke();
       strainCtx.setLineDash([]);
       strainCtx.fillStyle = "rgba(255, 255, 255, 0.6)";
-      strainCtx.font = "9px monospace";
+      strainCtx.font = "9px Consolas, Menlo, monospace";
       strainCtx.textAlign = "right";
-      strainCtx.fillText("1.0×", padL - 4, yLevel + 3);
+      strainCtx.textBaseline = "middle";
+      strainCtx.fillText("1.0×", padL - 6, yLevel);
 
-      // Expected misses at the chart's level
+      // Expected misses at the chart's level, drawn in along with the bars
+      const drawn = Math.min(1, Math.max(0, grow));
+      strainCtx.save();
+      strainCtx.beginPath();
+      strainCtx.rect(0, 0, padL + plotW * drawn, h);
+      strainCtx.clip();
       strainCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
-      strainCtx.lineWidth = 1.2;
+      strainCtx.lineWidth = 1.3;
+      strainCtx.lineJoin = "round";
       strainCtx.beginPath();
       for (let b = 0; b < bins; b++) {
         const x = X(t0 + (b + 0.5) * binMs);
@@ -903,44 +788,59 @@
         if (b === 0) strainCtx.moveTo(x, y); else strainCtx.lineTo(x, y);
       }
       strainCtx.stroke();
+      strainCtx.restore();
 
       // Bottom time ticks
-      strainCtx.fillStyle = "rgba(148, 163, 184, 0.6)";
-      strainCtx.font = "9px monospace";
+      strainCtx.fillStyle = "rgba(177, 168, 192, 0.65)";
+      strainCtx.font = "9px Consolas, Menlo, monospace";
       strainCtx.textAlign = "center";
+      strainCtx.textBaseline = "alphabetic";
       const tickCount = 5;
       for (let i = 0; i <= tickCount; i++) {
         const t = (tEnd / tickCount) * i;
-        const x = padL + (i / tickCount) * plotW;
-        strainCtx.fillText(formatDuration(t / 1000), x, padT + plotH + 16);
+        strainCtx.fillText(formatDuration(t / 1000), padL + (i / tickCount) * plotW, padT + plotH + 17);
       }
 
-      // 1.0x Smooth Cursor Line
-      if (tEnd > 0 && currentMs >= 0) {
-        const normTime = Math.max(0, Math.min(1.0, currentMs / tEnd));
-        const cursorX = padL + normTime * plotW;
+      // The playhead: a pink line with a glow, over a faint wash of what has been played
+      if (tEnd > 0 && currentMs > 0) {
+        const cursorX = padL + Math.max(0, Math.min(1.0, currentMs / tEnd)) * plotW;
+        const wash = strainCtx.createLinearGradient(cursorX - 60, 0, cursorX, 0);
+        wash.addColorStop(0, "rgba(255, 102, 171, 0)");
+        wash.addColorStop(1, "rgba(255, 102, 171, 0.14)");
+        strainCtx.fillStyle = wash;
+        strainCtx.fillRect(Math.max(padL, cursorX - 60), padT, Math.min(60, cursorX - padL), plotH);
 
-        // Glowing cursor line
         strainCtx.beginPath();
-        strainCtx.moveTo(cursorX, padT - 5);
+        strainCtx.moveTo(cursorX, padT - 4);
         strainCtx.lineTo(cursorX, padT + plotH);
         strainCtx.strokeStyle = "#ffffff";
         strainCtx.lineWidth = 2;
-        strainCtx.shadowColor = "#38bdf8";
-        strainCtx.shadowBlur = 8;
+        strainCtx.shadowColor = "#ff66ab";
+        strainCtx.shadowBlur = 10;
         strainCtx.stroke();
         strainCtx.shadowBlur = 0;
 
-        // Head dot
         strainCtx.beginPath();
-        strainCtx.arc(cursorX, padT - 2, 4, 0, Math.PI * 2);
-        strainCtx.fillStyle = "#38bdf8";
+        strainCtx.arc(cursorX, padT - 3, 4, 0, Math.PI * 2);
+        strainCtx.fillStyle = "#ff66ab";
         strainCtx.fill();
       }
+      return growing;
     }
 
     // 7. Render Loop with requestAnimationFrame
+    // Draws only what moves: the radar while its shape eases (and its halo at ~30 fps), the timeline while it
+    // grows, while the game plays, or after a resize: the game itself runs beside this page.
+    let lastFrame = performance.now(), lastRadar = -1e9, lastPlayhead = "";
+    // A canvas that changes size (window resize, the page first shown in the shell) is redrawn at its new size.
+    if (window.ResizeObserver) new ResizeObserver(() => { strainDirty = true; radarDirty = true; }).observe(document.body);
+    window.addEventListener("resize", () => { strainDirty = true; radarDirty = true; });
+
     function renderLoop(time) {
+      const now = performance.now();
+      const dt = Math.min(100, now - lastFrame);
+      lastFrame = now;
+
       let playheadMs = 0;
       if (currentClock.status === "playing") {
         const elapsed = (performance.now() - currentClock.sync_local_time) * currentClock.rate;
@@ -952,35 +852,35 @@
         playheadMs = currentClock.start_ms || 0;
       }
 
-      playheadTime.textContent = formatTime(playheadMs);
+      const stamp = formatTime(playheadMs);
+      if (stamp !== lastPlayhead) { playheadTime.textContent = stamp; lastPlayhead = stamp; }
 
-      // Draw radar
       const radar = currentBeatmapData ? currentBeatmapData.radar : null;
-      const dominantKey = radar ? radar.dominant_technique : "None";
-      drawRadar(radar, dominantKey, time);
+      const dominantKey = radar ? radar.dominant_technique : null;
+      if (showRadar || !isOverlay) {
+        easeRadar(radar, dt);
+        const halo = MOTION && dominantKey && now - lastRadar > 33;
+        if (radarMoving || radarDirty || halo) { drawRadar(radar, dominantKey, time); lastRadar = now; radarDirty = false; }
+      }
 
-      // Draw difficulty timeline
-      drawStrain(currentTimeline, playheadMs);
+      if (strainDirty || currentClock.status === "playing") {
+        strainDirty = drawStrain(currentTimeline, playheadMs, now);
+      }
 
       requestAnimationFrame(renderLoop);
     }
 
     // 8. Drag and drop handler
-    const dropZone = document.getElementById("dropZone");
+    const dropZone = $("dropZone");
     if (dropZone) {
       dropZone.addEventListener("dragover", (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = "var(--accent-blue)";
-        dropZone.style.background = "rgba(56, 189, 248, 0.08)";
+        dropZone.classList.add("over");
       });
-      dropZone.addEventListener("dragleave", () => {
-        dropZone.style.borderColor = "var(--border-color)";
-        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
-      });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
       dropZone.addEventListener("drop", (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = "var(--border-color)";
-        dropZone.style.background = "rgba(0, 0, 0, 0.15)";
+        dropZone.classList.remove("over");
         if (e.dataTransfer.files.length > 0) {
           const file = e.dataTransfer.files[0];
           const reader = new FileReader();

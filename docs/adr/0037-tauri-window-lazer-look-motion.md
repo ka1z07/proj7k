@@ -14,5 +14,5 @@
 ## 后果
 
 - 第一次需要在每台机器上运行一次 `install-tauri.ps1` / `.sh`（需要已登录的 `gh`）；没装时一切照旧用 Edge 窗口。
-- 实时雷达页（`live/static/index.html`，也是 OBS 叠加层）仍是自己的不透明深蓝风格，留待单独统一。
+- 实时雷达页（`live/static/index.html`，也是 OBS 叠加层）2026-10-22 也改成同一风格：谱面封面横幅（封面取自控制台曲库，单独的 live 服务器没有时用渐变）、半透明卡片、中英文跟随控制台；星级滚动、雷达形状过渡、时间线从左长出；只在有变化时重画画布（游戏在旁边跑）。页面仍自带样式与文案，不依赖控制台的 `/static`，所以 OBS 叠加层（`?mode=overlay`）照旧可用。
 - 未签名：Windows SmartScreen / macOS Gatekeeper 第一次打开可能提示，`install-tauri.sh` 已去掉隔离标记。
