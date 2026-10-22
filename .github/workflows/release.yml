@@ -29,6 +29,10 @@ jobs:
 
   build:
     needs: check
+    # A called workflow gets no more than its caller grants, and desktop.yml's (skipped here) desktop-latest job
+    # asks for contents: write; without this grant the run fails to start.
+    permissions:
+      contents: write
     uses: ./.github/workflows/desktop.yml
 
   draft:
