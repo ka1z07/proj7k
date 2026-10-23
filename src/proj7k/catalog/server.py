@@ -11,6 +11,8 @@ The catalog website and its JSON API, on the standard library's threaded HTTP se
     GET /mappers                          mappers (the list), `/mappers/<user id or @name>` one mapper's style
     GET /api/mappers?q=&sort=&min=&page=
     GET /api/mappers/<user id or @name>
+    GET /oauth/start, /oauth/callback; POST /oauth/redeem, /oauth/refresh
+                                          "sign in with osu!" for the desktop app (`proj7k.catalog.oauth`, ADR-0041)
 
 Read-only: nothing a client sends reaches the database except as a bound SQL parameter, and only the
 files of `static/` are served. In production it sits behind a reverse proxy (TLS, caching, rate limits).
@@ -24,9 +26,10 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 from proj7k.catalog.mappers import MapperIndex
+from proj7k.catalog.oauth import OAuthBroker, local_state, parse_state
 from proj7k.catalog.store import CatalogStore
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
     server_version = "proj7k-catalog"
     store: CatalogStore   # set on the subclass `make_server` builds
     mappers: MapperIndex
+    oauth: Optional[OAuthBroker]
 
     def log_message(self, fmt: str, *args: Any) -> None:
         logger.info("%s %s", self.address_string(), fmt % args)
@@ -75,8 +79,20 @@ class CatalogHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parts = urlsplit(self.path)
         path, query = parts.path, {k: v[-1] for k, v in parse_qs(parts.query).items()}
+        self._answer(lambda: self.route(path, query))
+
+    def do_POST(self) -> None:
+        path = urlsplit(self.path).path
+        length = _int(self.headers.get("Content-Length"), 0)
+        if not 0 <= length <= 8192:
+            self._answer(lambda: self._json({"error": "too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE))
+            return
+        raw = self.rfile.read(length)
+        self._answer(lambda: self.route_post(path, raw))
+
+    def _answer(self, handle: Any) -> None:
         try:
-            status, headers, body = self.route(path, query)
+            status, headers, body = handle()
         except Exception:
             logger.exception("error serving %s", self.path)
             status, headers, body = self._json({"error": "internal error"}, HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -130,16 +146,73 @@ class CatalogHandler(BaseHTTPRequestHandler):
         if m:
             data = self.mappers.get(unquote(m.group(1)))
             return self._json(data) if data else self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        if path.startswith("/oauth/"):
+            return self._oauth(path, query)
         if path == "/api/stats":
             return self._json(self.store.stats())
         if path.startswith("/static/") and path[len("/static/"):] in STATIC_FILES:
             return self._static(path[len("/static/"):])
         return self._not_found()
 
+    # ---- sign in with osu! (ADR-0041) -----------------------------------------------------------------
+
+    def _oauth(self, path: str, query: Dict[str, str]) -> Tuple[int, Dict[str, str], bytes]:
+        if self.oauth is None:
+            return self._json({"error": "sign-in is not configured"}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if path == "/oauth/start":
+            state = local_state(query.get("port"), query.get("nonce"))
+            if state is None:
+                return self._json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+            return self._redirect(self.oauth.authorize_url(state))
+        if path == "/oauth/callback":
+            parsed = parse_state(query.get("state", ""))
+            if parsed is None:
+                return self._json({"error": "bad state"}, HTTPStatus.BAD_REQUEST)
+            port, nonce = parsed
+            back = {"nonce": nonce}
+            if query.get("code"):
+                try:
+                    back["handoff"] = self.oauth.exchange(query["code"])
+                except Exception as e:
+                    logger.warning("osu! sign-in exchange failed: %s", e)
+                    back["error"] = "exchange_failed"
+            else:
+                back["error"] = query.get("error") or "denied"
+            return self._redirect(f"http://127.0.0.1:{port}/oauth/done?{urlencode(back)}")
+        return self._not_found()
+
+    def route_post(self, path: str, raw: bytes) -> Tuple[int, Dict[str, str], bytes]:
+        if not path.startswith("/oauth/"):
+            return self._not_found()
+        if self.oauth is None:
+            return self._json({"error": "sign-in is not configured"}, HTTPStatus.SERVICE_UNAVAILABLE)
+        try:
+            body = json.loads(raw or b"{}")
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            return self._json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+        if path == "/oauth/redeem":
+            tokens = self.oauth.redeem(body.get("handoff"))
+            if tokens is None:
+                return self._json({"error": "unknown or expired handoff"}, HTTPStatus.NOT_FOUND)
+            return self._json(tokens)
+        if path == "/oauth/refresh":
+            if not isinstance(body.get("refresh_token"), str):
+                return self._json({"error": "bad request"}, HTTPStatus.BAD_REQUEST)
+            try:
+                return self._json(self.oauth.refresh(body["refresh_token"]))
+            except Exception as e:
+                logger.info("osu! token refresh failed: %s", e)
+                return self._json({"error": "refresh failed"}, HTTPStatus.UNAUTHORIZED)
+        return self._not_found()
+
     @staticmethod
     def _json(data: Any, status: int = HTTPStatus.OK) -> Tuple[int, Dict[str, str], bytes]:
         body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         cache = f"public, max-age={API_MAX_AGE_S}" if status == HTTPStatus.OK else "no-cache"
+        if not isinstance(data, dict) or "access_token" in data:
+            cache = "no-store"
         return status, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": cache}, body
 
     @staticmethod
@@ -155,7 +228,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _redirect(location: str) -> Tuple[int, Dict[str, str], bytes]:
-        return HTTPStatus.FOUND, {"Location": location}, b""
+        return HTTPStatus.FOUND, {"Location": location, "Cache-Control": "no-store"}, b""
 
     def _not_found(self) -> Tuple[int, Dict[str, str], bytes]:
         if self.path.startswith("/api/"):
@@ -164,11 +237,12 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
 
 def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780,
-                mapper_stale_s: Optional[float] = None) -> ThreadingHTTPServer:
+                mapper_stale_s: Optional[float] = None, oauth: Optional[OAuthBroker] = None) -> ThreadingHTTPServer:
     """`mapper_stale_s`: see `MapperIndex`; the command line sets it so a crawl running beside the site
-    never makes a visitor wait for the mapper profiles."""
+    never makes a visitor wait for the mapper profiles. `oauth`: the osu! client behind "sign in with osu!";
+    without one `/oauth/*` answers 503."""
     mappers = MapperIndex(store, stale_s=mapper_stale_s)
-    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": mappers})
+    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": mappers, "oauth": oauth})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server
