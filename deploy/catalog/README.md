@@ -55,6 +55,8 @@
 
 7. **桌面端的「用 osu! 登录」**（ADR-0041）：网站进程读到 `OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 就开启 `/oauth/*`。网站任务以 SYSTEM 运行，读不到你的用户环境变量，所以这两个值要写进任务运行的那份 `catalog-serve.cmd`（`cd` 那行之前加 `set "OSU_CLIENT_ID=…"`、`set "OSU_CLIENT_SECRET=…"`），再用 `icacls <文件> /inheritance:r /grant:r SYSTEM:F Administrators:F` 把文件收紧到只有 SYSTEM 和管理员能读。这是唯一把凭据写进文件的地方。在 osu! 设置 → OAuth 里，把同一个应用的 Application Callback URL 设成 `https://7k.kaiz.dev/oauth/callback`（站点不在这个地址时用 `serve --public-url` 改，两边要一致）。不要给 `/oauth/*` 开缓存。
 
+8. **搜索引擎**（ADR-0042）：站点自带 `robots.txt` 和 `https://7k.kaiz.dev/sitemap.xml`。在 [Google Search Console](https://search.google.com/search-console) 添加「网域」资源 `kaiz.dev`，按提示把一条 `google-site-verification=…` TXT 记录加到 Cloudflare 的 DNS（根域名 `@`），验证后在「站点地图」里提交 `https://7k.kaiz.dev/sitemap.xml`。[Bing Webmaster Tools](https://www.bing.com/webmasters) 可以直接从 Search Console 导入。之后在 Search Console 用「网址检查」看一个谱面页，确认抓到的 HTML 里有曲名。
+
 电脑关机、重启后两项服务都会自己起来；断网期间访客会看到 Cloudflare 的 502 页。
 
 # B. Linux VPS + Caddy

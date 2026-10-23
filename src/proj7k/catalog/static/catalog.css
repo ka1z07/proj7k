@@ -246,3 +246,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .home-links { display: flex; flex-wrap: wrap; gap: 10px 24px; color: var(--text-2); font-weight: 600; }
 .home-links a:hover { color: var(--accent); }
 @media (max-width: 560px) { .home-hero { padding: 36px 0 28px; } .home-stats dd { font-size: 22px; } }
+
+/* The server's summary of a set or mapper, shown until the script draws the page (ADR-0042). */
+.ssr { color: var(--text-2); font-size: 13px; padding-top: 20px; }
+.ssr h1 { font-size: 22px; color: var(--text); margin-bottom: 6px; }
+.ssr p, .ssr ul { margin-bottom: 8px; }
+.ssr table { border-collapse: collapse; }
+.ssr th, .ssr td { text-align: left; padding: 3px 10px 3px 0; }
