@@ -15,7 +15,7 @@ could not find (not 7K, or not in the library yet). The pages preselect it as th
 replay source. `/api/current` answers the same.
 
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
-`/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its tools, `/home`, `/history`, `/library`, `/chart`
+`/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its tools, `/jobs` lists every job, `/home`, `/history`, `/library`, `/chart`
 and `/play` its player pages (ADR-0034), `/api/*` is read-only state, and `/files/<job>/<index>/<name>` serves a
 job's registered outputs.
 
@@ -63,6 +63,7 @@ PAGES = {
     "/sync": "sync.html",
     "/downscaler": "downscaler.html",
     "/generator": "generator.html",
+    "/jobs": "jobs.html",
     "/profiler": "profiler.html",
     "/home": "home.html",
     "/history": "history.html",

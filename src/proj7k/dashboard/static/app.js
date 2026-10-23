@@ -429,7 +429,7 @@ const P7 = (() => {
 
   connect();
   return {
-    el, $, on, send, startJob, getJSON, jobPanel, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
+    el, $, on, send, startJob, getJSON, jobPanel, artifactRow, STATUS_TEXT, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
     onGameChart, gameChartLine, chartName,
     navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
     modBadges, chartTitle, chartLink, query, playRow, tip, svg,

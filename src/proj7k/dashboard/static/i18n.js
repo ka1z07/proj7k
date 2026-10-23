@@ -610,7 +610,22 @@ const P7I18N = (() => {
     "返回（Esc）": "Back (Esc)",
     "在浏览器中打开": "Open in browser",
     "在系统浏览器里打开这一页": "Open this page in the system browser",
-    "查看器": "Viewer"
+    "查看器": "Viewer",
+    "proj7k 全部任务": "proj7k jobs",
+    "全部任务": "All jobs",
+    "看板里的全部任务：正在跑的、排队的和最近结束的。任务一个接一个运行；看板重启后这个列表会清空。": "Every job in the dashboard: running, queued and recently finished. Jobs run one at a time; this list is cleared when the dashboard restarts.",
+    "全部": "All",
+    "进行中": "Active",
+    "osu!lazer 开关": "osu!lazer control",
+    "导入回放": "Import replays",
+    "重启": "Restart",
+    "等待中": "Waiting",
+    "去「{page}」": "Go to \"{page}\"",
+    "读取日志…": "Loading log…",
+    "共 {n} 个，{running} 个运行中，{queued} 个排队": "{n} in all, {running} running, {queued} queued",
+    "没有符合的任务。": "No matching jobs.",
+    "还没有任务。在降阶练习、谱面生成、回放与画像或曲库同步里开始的任务会出现在这里。": "No jobs yet. Jobs started from Downscale, Chart generator, Replays or Library sync show up here.",
+    "（没有日志）": "(no log)"
   }/* EN-END */;
 
   // The text in the page's language, with {name} filled from `vars`.
