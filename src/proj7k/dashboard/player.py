@@ -54,6 +54,192 @@ CATALOG_WEB = "https://7k.kaiz.dev"
 AVATAR_WEB = "https://a.ppy.sh"
 
 
+def _num(value: Any) -> Optional[float]:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _online_rank(value: Any) -> Optional[int]:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
+
+
+def online_profile(user: Dict[str, Any]) -> Dict[str, Any]:
+    """What the home page shows of osu!'s `GET /me/mania`: overall and per-keycount (4K/7K) rank and pp."""
+    stats = user.get("statistics") or {}
+    variants = {}
+    for v in stats.get("variants") or []:
+        if isinstance(v, dict) and v.get("variant"):
+            variants[str(v["variant"])] = {"pp": _num(v.get("pp")), "global_rank": _online_rank(v.get("global_rank")),
+                                           "country_rank": _online_rank(v.get("country_rank"))}
+    level = stats.get("level") or {}
+    history = (user.get("rank_history") or {}).get("data") or []
+    return {
+        "id": int(user.get("id") or 0),
+        "username": user.get("username") or "",
+        "country_code": user.get("country_code") or (user.get("country") or {}).get("code") or "",
+        "mania": {
+            "pp": _num(stats.get("pp")), "global_rank": _online_rank(stats.get("global_rank")),
+            "country_rank": _online_rank(stats.get("country_rank")), "accuracy": _num(stats.get("hit_accuracy")),
+            "play_count": stats.get("play_count"), "level": _num(level.get("current")),
+        },
+        "variants": variants,
+        "rank_history": [int(r) for r in history if isinstance(r, (int, float))],
+    }
+
+
+class OsuAccount:
+    """
+    The player's osu! account, signed in through the catalog site (ADR-0041), and what osu! says about it.
+
+    Signing in: `login_url()` points the system browser at the site's `/oauth/start`; osu! asks the player, the site
+    trades the code for tokens and sends the browser to this dashboard's `/oauth/done` with a one-time handoff code,
+    and `finish()` redeems it (checking the nonce this machine started with). Tokens are kept in `token_path`, readable
+    only by the player; an expired access token is renewed through the site's `/oauth/refresh`. The rank and pp are
+    read from osu! directly with the player's own token, at most once per `ttl_s`.
+    """
+
+    NONCE_TTL_S = 900.0
+
+    def __init__(self, token_path: Optional[Path] = None, port: int = 7770, catalog: Optional[str] = None,
+                 api: str = OSU_WEB, ttl_s: float = 600.0, error_ttl_s: float = 120.0, timeout_s: float = 10.0,
+                 http: Optional[Callable[[str, Dict[str, str], Optional[bytes]], bytes]] = None,
+                 clock: Callable[[], float] = time.time) -> None:
+        import os
+
+        self.token_path = token_path or Path.home() / ".proj7k" / "osu_account.json"
+        self.port = port
+        self.catalog = (catalog or os.environ.get("PROJ7K_CATALOG_URL") or CATALOG_WEB).rstrip("/")
+        self.api, self.ttl_s, self.error_ttl_s, self.timeout_s = api.rstrip("/"), ttl_s, error_ttl_s, timeout_s
+        self.http = http or self._urlopen
+        self.clock = clock
+        self._nonce: Optional[Tuple[str, float]] = None
+        self._profile: Optional[Tuple[float, Dict[str, Any]]] = None
+        self._lock = threading.Lock()
+
+    def _urlopen(self, url: str, headers: Dict[str, str], body: Optional[bytes]) -> bytes:
+        import urllib.request
+
+        req = urllib.request.Request(url, data=body, method="POST" if body is not None else "GET",
+                                     headers={"Accept": "application/json", "User-Agent": "proj7k-desktop", **headers})
+        with urllib.request.urlopen(req, timeout=self.timeout_s) as res:
+            return res.read(4 * 2**20)
+
+    def _post_catalog(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        return json.loads(self.http(f"{self.catalog}{path}", {"Content-Type": "application/json"},
+                                    json.dumps(data).encode()))
+
+    # --- tokens ---
+
+    def _tokens(self) -> Optional[Dict[str, Any]]:
+        try:
+            data = json.loads(self.token_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) and data.get("access_token") else None
+        except (OSError, ValueError):
+            return None
+
+    def _save(self, tokens: Dict[str, Any], user: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        import os
+
+        old = self._tokens() or {}
+        record = {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens.get("refresh_token") or old.get("refresh_token"),
+            "expires_at": self.clock() + float(tokens.get("expires_in") or 0),
+            "user": user if user is not None else old.get("user"),
+        }
+        self.token_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.token_path.with_suffix(".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(record, f)
+        os.replace(tmp, self.token_path)
+        return record
+
+    def _access_token(self) -> Optional[str]:
+        tokens = self._tokens()
+        if tokens is None:
+            return None
+        if self.clock() < float(tokens.get("expires_at") or 0) - 120:
+            return tokens["access_token"]
+        if not tokens.get("refresh_token"):
+            return None
+        return self._save(self._post_catalog("/oauth/refresh", {"refresh_token": tokens["refresh_token"]}))["access_token"]
+
+    # --- signing in and out ---
+
+    def login_url(self) -> str:
+        import secrets
+        import urllib.parse
+
+        with self._lock:
+            if self._nonce is None or self.clock() >= self._nonce[1]:
+                self._nonce = (secrets.token_urlsafe(24), self.clock() + self.NONCE_TTL_S)
+            nonce = self._nonce[0]
+        return f"{self.catalog}/oauth/start?" + urllib.parse.urlencode({"port": self.port, "nonce": nonce})
+
+    def finish(self, nonce: str, handoff: Optional[str], error: Optional[str] = None) -> Optional[str]:
+        """Complete a sign-in osu! sent back here; None when it worked, else what went wrong."""
+        import hmac
+
+        with self._lock:
+            expected = self._nonce
+            ok = expected is not None and self.clock() < expected[1] and hmac.compare_digest(expected[0], nonce or "")
+            if ok:
+                self._nonce = None
+        if not ok:
+            return tr("登录已过期或不是从这台电脑发起的，请回到 proj7k 重新点登录。",
+                      "This sign-in expired or wasn't started on this computer. Sign in again from proj7k.")
+        if error or not handoff:
+            return tr("osu! 没有授权（{error}）。", "osu! didn't authorize ({error}).").format(error=error or "denied")
+        try:
+            tokens = self._post_catalog("/oauth/redeem", {"handoff": handoff})
+            self._save(tokens)
+            user = self._fetch_me()
+            self._save(tokens, user={"id": user.get("id"), "username": user.get("username")})
+        except Exception as e:
+            logger.warning(f"osu! sign-in failed: {e}")
+            return tr("登录没有完成：{error}", "Sign-in didn't complete: {error}").format(error=e)
+        with self._lock:
+            self._profile = (self.clock() + self.ttl_s, online_profile(user))
+        return None
+
+    def logout(self) -> None:
+        with self._lock:
+            self._profile = None
+        try:
+            self.token_path.unlink()
+        except FileNotFoundError:
+            pass
+
+    # --- what osu! says ---
+
+    def _fetch_me(self) -> Dict[str, Any]:
+        token = self._access_token()
+        if token is None:
+            raise PermissionError("not signed in")
+        return json.loads(self.http(f"{self.api}/api/v2/me/mania", {"Authorization": f"Bearer {token}"}, None))
+
+    def status(self) -> Dict[str, Any]:
+        """`{"signed_in": False, "login_url"}`, or `{"signed_in": True, "user", "profile"}` (profile None offline)."""
+        tokens = self._tokens()
+        if tokens is None:
+            return {"signed_in": False, "login_url": self.login_url()}
+        now = self.clock()
+        with self._lock:
+            hit = self._profile
+        if hit is None or now >= hit[0]:
+            try:
+                hit = (now + self.ttl_s, online_profile(self._fetch_me()))
+            except Exception as e:
+                if getattr(e, "code", None) == 401 or isinstance(e, PermissionError):
+                    self.logout()   # the player revoked the app on osu!, or the refresh token is gone
+                    return {"signed_in": False, "login_url": self.login_url()}
+                logger.info(f"osu! profile unavailable: {e}")
+                hit = (now + self.error_ttl_s, {})
+            with self._lock:
+                self._profile = hit
+        return {"signed_in": True, "user": tokens.get("user") or {}, "profile": hit[1] or None}
+
+
 def store_path(files_dir: Path, file_hash: str) -> Path:
     """A file in osu!lazer's content-addressed store."""
     return files_dir / file_hash[:1] / file_hash[:2] / file_hash
