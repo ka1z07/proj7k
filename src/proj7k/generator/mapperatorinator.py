@@ -95,11 +95,34 @@ def _uv() -> List[str]:
     return [sys.executable, "-m", "uv"]
 
 
+#: git (here and for its git requirements) may write paths past Windows' 260-character limit, e.g. slider's example beatmaps.
+GIT_ENV = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.longpaths", "GIT_CONFIG_VALUE_0": "true"}
+
+
 def _run(cmd: Sequence[str], log: Callable[[str], None], cwd: Optional[Path] = None) -> None:
-    proc = subprocess.run(list(map(str, cmd)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(list(map(str, cmd)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env=dict(os.environ, **GIT_ENV))
     if proc.returncode != 0:
         raise ModelUnavailable(tr("安装 Mapperatorinator 失败：", "Failed to install Mapperatorinator: ")
                                + " ".join(map(str, cmd[:4])) + " … " + (proc.stderr or proc.stdout).strip()[-600:])
+
+
+def _managed_python(uv: List[str], log: Callable[[str], None]) -> str:
+    """The exact interpreter uv installed for `PYTHON`, not its minor-version link (`cpython-3.10-…`):
+    on some Windows machines that junction can't be traversed, and `uv python install` / `uv venv --python 3.10`
+    fail on it even though the interpreter itself is unpacked fine."""
+    installing = subprocess.run(uv + ["python", "install", PYTHON], capture_output=True, text=True,
+                                encoding="utf-8", errors="replace")
+    proc = subprocess.run(uv + ["python", "dir"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    root = Path(proc.stdout.strip())
+    exe = "python.exe" if os.name == "nt" else "bin/python3"
+    found = sorted((d for d in root.glob(f"cpython-{PYTHON}.*") if (d / exe).is_file()),
+                   key=lambda d: [int(x) for x in d.name.split("-")[1].split(".") if x.isdigit()])
+    if found:
+        return str(found[-1] / exe)
+    if installing.returncode != 0:
+        _run(uv + ["python", "install", PYTHON], log)
+    return PYTHON
 
 
 def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = None) -> None:
@@ -120,7 +143,7 @@ def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = Non
     uv = _uv()
     py = venv_python(home)
     if not py.is_file():
-        _run(uv + ["venv", "--python", PYTHON, home / ".venv"], log)
+        _run(uv + ["venv", "--python", _managed_python(uv, log), home / ".venv"], log)
     log(tr("正在安装 PyTorch（按本机显卡选择版本）……", "Installing PyTorch (the build for this machine's GPU)…"))
     _run(uv + ["pip", "install", "--python", py, "--torch-backend", "auto", "torch", "torchaudio"], log)
     reqs = requirements((repo / "requirements.txt").read_text(encoding="utf-8"))
