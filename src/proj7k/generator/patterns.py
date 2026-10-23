@@ -358,10 +358,14 @@ def pattern_stats(rows: Sequence[Tuple[float, int]], beat_ms: float) -> Dict[str
       exactly that of an earlier measure;
     - `density_cv`: how much the number of rows changes from one 16-beat stretch to the next
       (coefficient of variation; ranked charts about 0.3 at every level);
+    - `density_floor`, `density_peak`: the 10th and 90th percentile of the notes per 16-beat stretch,
+      over its median (how easy the easy parts are, how hard the hard ones);
+    - `rows_per_s`, `notes_per_s`: rows and notes per second from the first row to the last;
     - `quarter`, `triplet`: the share of rows on a quarter (1/16 note) or third of a beat.
     """
     out = {"roll": 0.0, "trill": 0.0, "jack_half": 0.0, "key_repeat": 0.0, "rhythm_repeat": 0.0,
-           "density_cv": 0.0, "quarter": 0.0, "triplet": 0.0}
+           "density_cv": 0.0, "density_floor": 0.0, "density_peak": 0.0, "rows_per_s": 0.0, "notes_per_s": 0.0,
+           "quarter": 0.0, "triplet": 0.0}
     if len(rows) < 3 or beat_ms <= 0:
         return out
     times = [t for t, _ in rows]
@@ -409,6 +413,13 @@ def pattern_stats(rows: Sequence[Tuple[float, int]], beat_ms: float) -> Dict[str
     t_rel = (np.array(times) - t0) / beat_ms
     counts = np.bincount((t_rel // 16).astype(int))
     counts = counts[counts > 0]
+    stretch = (t_rel // 16).astype(int)
+    notes = np.bincount(stretch, weights=[popcount(m) for m in masks])
+    notes = notes[notes > 0]
+    mid = float(np.median(notes))
+    span_s = max((times[-1] - t0) / 1000.0, 1e-3)
+    out.update(density_floor=float(np.percentile(notes, 10)) / mid, density_peak=float(np.percentile(notes, 90)) / mid,
+               rows_per_s=len(rows) / span_s, notes_per_s=sum(popcount(m) for m in masks) / span_s)
     frac = t_rel % 1.0
     near = lambda f: np.minimum(np.abs(frac - f), 1 - np.abs(frac - f)) < 0.03  # noqa: E731
     out.update(density_cv=float(counts.std() / counts.mean()) if len(counts) > 1 else 0.0,

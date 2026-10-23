@@ -209,6 +209,10 @@ FINE_MEASURES = 0.3
 ROOM = 2.0
 #: A beat goes 1/6 only when the model expects at least this many rows on its 1/6-only places.
 TRIPLET_MIN = 0.3
+#: How much of the model's swing in density from one stretch of `STRETCH_BARS` measures to the next
+#: the chart keeps (see `pick`): 1 keeps it all, 0 makes every stretch that sounds equally dense.
+CONTRAST = 0.5
+STRETCH_BARS = 4
 _QUARTER = (0, 12, 24, 36)
 _EIGHTH_ONLY = (6, 18, 30, 42)
 _SIXTH_ONLY = (8, 16, 32, 40)
@@ -233,7 +237,7 @@ def grid_points(pl: Places, X: np.ndarray, silence_db: float):
 
 def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np.ndarray,
          rows_per_s: Optional[float] = None, chords: float = 0.0, gain: Optional[np.ndarray] = None,
-         section: Optional[np.ndarray] = None) -> np.ndarray:
+         section: Optional[np.ndarray] = None, contrast: float = CONTRAST) -> np.ndarray:
     """Chord size per place (0: no row), drawn from the model's probabilities with fixed uniforms `u`
     (row or not) and `v` (its size), so a higher density only adds rows.
 
@@ -252,7 +256,12 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
     rows: its sounding time times its gain. Scaling the model's probabilities alone could not do that: a
     section the model rates sparse stays sparse under any uniform gain, and the song-wide rescale hands
     its rows to the other sections (ADR-0033). The gain also ranks the measures that keep their 1/8 and
-    1/6 places, so a dense section gets them first."""
+    1/6 places, so a dense section gets them first.
+    Last, the rows are moved between stretches of `STRETCH_BARS` measures so each stretch's density is
+    its density so far raised to `contrast` (the song's rows kept): the model follows the onsets, and a
+    quiet verse read that way gets a few notes a measure while the star rating is set by the chorus, so
+    the chart swings from trivial to hard and is sparse overall (ADR-0039). With a brief's sections the
+    rows move only within a section: the brief's own contrast between sections stays as written."""
     p_row = np.where(silent, 0.0, 1.0 - probs[:, 0])
     by_section = gain is not None and section is not None and rows_per_s is not None
     if gain is not None and not by_section:
@@ -301,6 +310,8 @@ def pick(probs: np.ndarray, pl: Places, u: np.ndarray, v: np.ndarray, silent: np
             p_row = _scaled_by_section(p_row, rows_per_s * span_s, pl.time_ms, silent, gain, section)
         else:
             p_row = _scaled(p_row, rows_per_s * span_s)
+    if contrast < 1.0 and len(pl) and p_row.sum() > 0:
+        p_row = _evened(p_row, pl, silent, contrast, section if by_section else None)
     row = u < p_row
     if chords > 0:
         v = v ** (1.0 / (1.0 + CHORD_GAIN * chords))
@@ -325,9 +336,38 @@ def _scaled_by_section(p: np.ndarray, target: float, time_ms: np.ndarray, silent
     return out
 
 
-def _scaled(p: np.ndarray, target: float) -> np.ndarray:
-    """min(1, c p) with c such that the expected count is `target` (or as close as the places allow)."""
-    q = p ** SHARPEN
+def _evened(p: np.ndarray, pl: Places, silent: np.ndarray, contrast: float,
+            section: Optional[np.ndarray] = None) -> np.ndarray:
+    """`p` with each stretch's rows per sounding second d set to c d^contrast, c keeping the total (of
+    each `section`, when given)."""
+    step = np.diff(pl.time_ms, append=pl.time_ms[-1]) / 1000.0
+    sounding = np.where(silent, 0.0, step)
+    stretch = (pl.bar - pl.bar.min()) // STRETCH_BARS
+    part = np.zeros(len(p), int) if section is None else np.unique(section, return_inverse=True)[1]
+    group = np.unique(part * (int(stretch.max()) + 1) + stretch, return_inverse=True)[1]
+    n = int(group.max()) + 1
+    mass = np.bincount(group, weights=p, minlength=n)
+    secs = np.bincount(group, weights=sounding, minlength=n)
+    part_of = np.zeros(n, int)
+    part_of[group] = part
+    live = (mass > 0) & (secs > 0)
+    dens = np.where(live, mass / np.maximum(secs, 1e-9), 0.0)
+    want = np.where(live, secs * dens ** contrast, 0.0)
+    for q in np.unique(part_of):
+        m = part_of == q
+        if want[m].sum() > 0:
+            want[m] *= mass[m].sum() / want[m].sum()
+    out = p.copy()
+    for k in np.flatnonzero(live):
+        m = group == k
+        out[m] = _scaled(p[m], want[k], sharpen=1.0)
+    return out
+
+
+def _scaled(p: np.ndarray, target: float, sharpen: float = SHARPEN) -> np.ndarray:
+    """min(1, c p**sharpen) with c such that the expected count is `target` (or as close as the places
+    allow)."""
+    q = p ** sharpen
     lo, hi = 0.0, 1.0
     while np.minimum(1.0, hi * q).sum() < target and hi < 1e9:
         hi *= 2.0
