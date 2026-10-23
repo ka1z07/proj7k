@@ -4,6 +4,7 @@ requirements it installs, and the loop that brings its runs to the target star r
 for the model that writes a stream whose density follows the difficulty it is asked for.
 """
 
+import os
 import zipfile
 from pathlib import Path
 
@@ -148,3 +149,31 @@ def test_model_processes_start_without_the_parent_interpreters_variables(monkeyp
     env = mt.child_env(PYTHONUTF8="1")
     assert not {"__PYVENV_LAUNCHER__", "PYTHONPATH", "VIRTUAL_ENV"} & set(env)
     assert env["PROJ7K_KEEP"] == "1" and env["PYTHONUTF8"] == "1"
+
+
+def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, monkeypatch):
+    # uv's default %APPDATA% install, written from inside an MSIX app, is invisible to the dashboard outside it.
+    home = tmp_path / "mt"
+    mt.venv_python(home).parent.mkdir(parents=True)
+    mt.venv_python(home).write_bytes(b"")
+    (home / "repo").mkdir()
+    (home / "repo" / "inference.py").write_text("", encoding="utf-8")
+    (home / "repo" / "requirements.txt").write_text("", encoding="utf-8")
+    (home / ".installed").write_text(mt.COMMIT, encoding="utf-8")
+    cfg = home / ".venv" / "pyvenv.cfg"
+    cfg.write_text(f"home = {tmp_path / 'gone'}\nversion_info = 3.10.22\n", encoding="utf-8")
+    assert not mt.available(home)
+
+    seen = mt.python_dir(home) / "cpython-3.10.22" / ("python.exe" if os.name == "nt" else "bin/python3")
+    seen.parent.mkdir(parents=True)
+    seen.write_bytes(b"")
+    runs = []
+    monkeypatch.setattr(mt, "_run", lambda cmd, log, cwd=None, **env: runs.append((list(map(str, cmd)), env)))
+    monkeypatch.setattr(mt, "_uv", lambda: ["uv"])
+    monkeypatch.setattr(mt, "_managed_python", lambda uv, log, home: str(seen))
+    monkeypatch.setattr(mt.shutil, "which", lambda name: name)
+    mt.install(log=lambda message: None, home=home)
+    assert f"home = {seen.parent}" in cfg.read_text(encoding="utf-8").splitlines()
+    assert "version_info = 3.10.22" in cfg.read_text(encoding="utf-8")
+    assert not any(cmd[1:2] == ["venv"] for cmd, _ in runs)  # its packages are kept
+    assert mt.available(home)

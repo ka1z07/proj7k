@@ -69,9 +69,30 @@ def repo_dir(home: Optional[Path] = None) -> Path:
     return (home or HOME) / "repo"
 
 
+def python_dir(home: Optional[Path] = None) -> Path:
+    """Where uv unpacks the model's Python. Not uv's default under %APPDATA%: when the install runs inside an MSIX
+    app (the Claude desktop app), Windows redirects those writes into the app's private LocalCache, and the dashboard,
+    started outside it, gets "No Python at '"…\\uv\\python\\cpython-3.10…\\python.exe'" from the venv launcher."""
+    return (home or HOME) / "python"
+
+
+def base_python(home: Optional[Path] = None) -> Optional[Path]:
+    """The interpreter the venv runs on: its pyvenv.cfg `home`."""
+    try:
+        text = ((home or HOME) / ".venv" / "pyvenv.cfg").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip().lower() == "home":
+            return Path(value.strip()) / ("python.exe" if os.name == "nt" else "python3")
+    return None
+
+
 def available(home: Optional[Path] = None) -> bool:
-    return venv_python(home).is_file() and (repo_dir(home) / "inference.py").is_file() and \
-        (home or HOME).joinpath(".installed").is_file()
+    base = base_python(home)
+    return venv_python(home).is_file() and base is not None and base.is_file() and \
+        (repo_dir(home) / "inference.py").is_file() and (home or HOME).joinpath(".installed").is_file()
 
 
 def requirements(text: str) -> List[str]:
@@ -102,9 +123,8 @@ def _uv() -> List[str]:
 GIT_ENV = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.longpaths", "GIT_CONFIG_VALUE_0": "true"}
 
 
-#: What the running interpreter tells its children about itself. proj7k runs from a Python 3.14 venv; inherited by the
-#: model's Python 3.10 venv launcher, they point it at the wrong interpreter ("No Python at '"…python.exe'" when the
-#: dashboard starts it on Windows), so its processes start without them.
+#: What the running interpreter (proj7k's own Python 3.14 venv) tells its children about itself; the model's Python
+#: 3.10 venv has no use for them, so its processes start without them.
 PARENT_PYTHON_VARS = ("__PYVENV_LAUNCHER__", "__PYVENV_BASE_EXECUTABLE__", "PYTHONHOME", "PYTHONPATH",
                       "PYTHONEXECUTABLE", "VIRTUAL_ENV", "PYTHONSTARTUP", "PYTHONNOUSERSITE")
 
@@ -116,21 +136,27 @@ def child_env(**extra: str) -> dict:
     return env
 
 
-def _run(cmd: Sequence[str], log: Callable[[str], None], cwd: Optional[Path] = None) -> None:
+def _run(cmd: Sequence[str], log: Callable[[str], None], cwd: Optional[Path] = None, **env: str) -> None:
     proc = subprocess.run(list(map(str, cmd)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          env=child_env(**GIT_ENV))
+                          env=child_env(**GIT_ENV, **env))
     if proc.returncode != 0:
         raise ModelUnavailable(tr("安装 Mapperatorinator 失败：", "Failed to install Mapperatorinator: ")
                                + " ".join(map(str, cmd[:4])) + " … " + (proc.stderr or proc.stdout).strip()[-600:])
 
 
-def _managed_python(uv: List[str], log: Callable[[str], None]) -> str:
-    """The exact interpreter uv installed for `PYTHON`, not its minor-version link (`cpython-3.10-…`):
-    on some Windows machines that junction can't be traversed, and `uv python install` / `uv venv --python 3.10`
-    fail on it even though the interpreter itself is unpacked fine."""
+def _uv_env(home: Path) -> dict:
+    return {"UV_PYTHON_INSTALL_DIR": str(python_dir(home))}
+
+
+def _managed_python(uv: List[str], log: Callable[[str], None], home: Path) -> str:
+    """The exact interpreter uv installed for `PYTHON` (under `python_dir`), not its minor-version link
+    (`cpython-3.10-…`): on some Windows machines that junction can't be traversed, and `uv python install` /
+    `uv venv --python 3.10` fail on it even though the interpreter itself is unpacked fine."""
+    env = child_env(**_uv_env(home))
     installing = subprocess.run(uv + ["python", "install", PYTHON], capture_output=True, text=True,
-                                encoding="utf-8", errors="replace")
-    proc = subprocess.run(uv + ["python", "dir"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+                                encoding="utf-8", errors="replace", env=env)
+    proc = subprocess.run(uv + ["python", "dir"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env=env)
     root = Path(proc.stdout.strip())
     exe = "python.exe" if os.name == "nt" else "bin/python3"
     found = sorted((d for d in root.glob(f"cpython-{PYTHON}.*") if (d / exe).is_file()),
@@ -138,8 +164,21 @@ def _managed_python(uv: List[str], log: Callable[[str], None]) -> str:
     if found:
         return str(found[-1] / exe)
     if installing.returncode != 0:
-        _run(uv + ["python", "install", PYTHON], log)
+        _run(uv + ["python", "install", PYTHON], log, **_uv_env(home))
     return PYTHON
+
+
+def _rehome(home: Path, python: Path, log: Callable[[str], None]) -> None:
+    """Point an existing venv whose interpreter this process can't see (see `python_dir`) at `python`, keeping its
+    packages; if there is no such interpreter, drop the venv so it is built again."""
+    cfg = home / ".venv" / "pyvenv.cfg"
+    if not python.is_file():
+        shutil.rmtree(home / ".venv", ignore_errors=True)
+        return
+    log(tr("Mapperatorinator 的 Python 不可见，改用 ", "Mapperatorinator's Python can't be seen; using ") + str(python))
+    lines = [f"home = {python.parent}" if line.partition("=")[0].strip().lower() == "home" else line
+             for line in cfg.read_text(encoding="utf-8").splitlines()]
+    cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = None) -> None:
@@ -159,8 +198,11 @@ def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = Non
     _run(["git", "-C", repo, "checkout", "--quiet", COMMIT], log)
     uv = _uv()
     py = venv_python(home)
+    base = base_python(home)
+    if py.is_file() and not (base and base.is_file()):
+        _rehome(home, Path(_managed_python(uv, log, home)), log)
     if not py.is_file():
-        _run(uv + ["venv", "--python", _managed_python(uv, log), home / ".venv"], log)
+        _run(uv + ["venv", "--python", _managed_python(uv, log, home), home / ".venv"], log, **_uv_env(home))
     log(tr("正在安装 PyTorch（按本机显卡选择版本）……", "Installing PyTorch (the build for this machine's GPU)…"))
     _run(uv + ["pip", "install", "--python", py, "--torch-backend", "auto", "torch", "torchaudio"], log)
     reqs = requirements((repo / "requirements.txt").read_text(encoding="utf-8"))
