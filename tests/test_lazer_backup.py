@@ -112,8 +112,12 @@ def test_revert_realm_modifications(tmp_path: Path):
     cache_dir = tmp_path / "cache"
     manager = LazerBackupManager(realm_path=realm_file, cache_dir=cache_dir)
 
-    r1 = _make_dummy_record("id-1", sr=3.0, diff="Normal", tags="tag1")
-    manager.record_original_states([r1])
+    beatmap_id = "eec0c1f9-6f3e-4a59-9c4e-2d8f1b7a3c10"
+    r1 = _make_dummy_record(beatmap_id, sr=3.0, diff="Normal", tags="tag1")
+    # A record whose id isn't a UUID can't be a lazer beatmap; one left by a test once made the bridge abort
+    # the whole revert, so it is never sent.
+    stray = _make_dummy_record("1", sr=2.0, diff="Hard")
+    manager.record_original_states([r1, stray])
 
     mock_bridge = MagicMock(spec=RealmBridgeClient)
     mock_bridge.revert_batch.return_value = BatchUpdateResult(success=True, updated_count=1)
@@ -126,7 +130,7 @@ def test_revert_realm_modifications(tmp_path: Path):
     kwargs = mock_bridge.revert_batch.call_args.kwargs
     revert_payloads = kwargs["reverts"]
     assert len(revert_payloads) == 1
-    assert revert_payloads[0].id == "id-1"
+    assert revert_payloads[0].id == beatmap_id
     assert revert_payloads[0].star_rating == 3.0
     assert revert_payloads[0].difficulty_name == "Normal"
 

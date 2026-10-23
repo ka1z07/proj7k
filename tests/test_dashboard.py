@@ -21,6 +21,7 @@ from proj7k.dashboard import DashboardConfig, DashboardServer, JobManager
 from proj7k.dashboard.cli import build_config, build_parser
 from proj7k.dashboard.server import DASHBOARD_STATIC_DIR
 from proj7k.live.engine import LiveEngine
+from proj7k.lazer.backup import DEFAULT_CACHE_DIR as LAZER_CACHE_DIR
 from proj7k.live.guard import StaticAssetGuard
 
 REPO = Path(__file__).resolve().parents[1]
@@ -505,6 +506,9 @@ def test_cli_config_follows_lazer_dir(tmp_path):
     assert cfg.lazer_files_dir == tmp_path / "files"
     assert cfg.lazer_lock_path == tmp_path / "client.realm.lock"
     assert cfg.db_path == tmp_path / "p.db"
+    # The sync backup (the original stars 还原 writes back) lives where `proj7k.sync` keeps it, not in the live
+    # engine's relative --cache-dir: reading the wrong one made every restore a silent no-op.
+    assert cfg.cache_dir == LAZER_CACHE_DIR
     args = build_parser().parse_args(["--realm", str(tmp_path / "r" / "client.realm")])
     assert build_config(args).lazer_files_dir == tmp_path / "r" / "files"
     assert build_config(args).lazer_exe is None

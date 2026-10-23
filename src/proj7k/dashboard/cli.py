@@ -69,7 +69,8 @@ def build_config(args: argparse.Namespace) -> DashboardConfig:
     return DashboardConfig(
         realm_path=Path(realm),
         files_dir=(args.lazer_dir / "files") if args.lazer_dir else None,
-        cache_dir=args.cache_dir,
+        # `--cache-dir` is the live engine's feature cache (a path relative to the working directory); the sync
+        # backup must stay where `python -m proj7k.sync` keeps it, or 还原 can't find the original stars.
         db_path=args.db,
         output_dir=args.output_dir,
         lazer_exe=args.lazer_exe,

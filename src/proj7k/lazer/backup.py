@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import time
+import uuid
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 from proj7k.lazer.annotator import ALL_BIAXIAL_COLLECTIONS
@@ -63,6 +64,14 @@ class BeatmapBackupState:
             tags=self.original_tags,
         )
 
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 class LazerBackupManager:
@@ -191,7 +200,8 @@ class LazerBackupManager:
         if not states:
             return BatchUpdateResult(success=True, updated_count=0)
 
-        reverts = [state.to_revert_payload() for state in states.values()]
+        # lazer's beatmap IDs are UUIDs; anything else (e.g. a stray test record) can't be in the library.
+        reverts = [state.to_revert_payload() for state in states.values() if _is_uuid(state.id)]
 
         result = bridge_client.revert_batch(
             reverts=reverts,
