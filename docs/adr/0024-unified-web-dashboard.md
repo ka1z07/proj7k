@@ -1,6 +1,6 @@
 # 0024. 统一 Web 控制台：live、sync、downscaler、profiler 合到一个页面
 
-- **状态**：accepted（2026-10-08；扩展 ADR-0010 的实时面板服务）。
+- **状态**：accepted（2026-10-08；扩展 ADR-0010 的实时面板服务）。第 3 条的「单个工作线程」已由 ADR-0043 替代（2026-10-23）：任务按声明的资源并行，共用资源的仍按提交顺序一个一个跑。
 - **背景**：四个面向玩家的功能各有一条命令行：`proj7k.live`（网页雷达）、`proj7k.sync`（写 lazer 曲库）、`proj7k.downscaler`（降阶练习谱）、`proj7k.profiler`（回放诊断、画像、导入）。主要用户在中文 Windows 上，`PYTHONPATH=src python3 -m ...` 加一串参数的门槛高，路径里的空格与中文还要反复转义。只有 live 有网页。
 
 ## 决策内容

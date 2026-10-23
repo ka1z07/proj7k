@@ -1,15 +1,22 @@
 """
 Jobs: the dashboard's long-running work (a library sync, a downscale, a replay diagnosis) run off the event loop.
 
-Jobs run one at a time, in submission order: they share osu!lazer's database and the CPU, and the sync and the
-downscaler's lazer injection must never write the library at the same time (ADR-0024). Each job's log lines are
-captured from the standard `logging` records its worker thread emits, so the actions log as the CLIs do.
+Each job claims a set of resources when it is submitted (the osu!lazer library, the profiler database, the
+generator's GPU and caches, ...), and jobs whose sets overlap run one at a time, in submission order; jobs whose sets
+are disjoint run side by side (ADR-0043, replacing ADR-0024's single worker). The sync and the downscaler's lazer
+injection both claim the library, so they still never write it at the same time. `Scheduler` is the whole decision,
+with no threads of its own, so it can be checked exhaustively (tests/test_dashboard_scheduler.py). Without a resource
+function every job claims the same resource and the jobs run one at a time, as before.
+
+Each job's log lines are captured from the standard `logging` records its worker thread emits, so the actions log as
+the CLIs do.
 
 A job's outputs are registered files (`Job.artifacts`); the server serves exactly those, by index, never a path a
 client names.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+import contextlib
 from dataclasses import dataclass, field
 import itertools
 import logging
@@ -19,10 +26,10 @@ import shutil
 import threading
 import time
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 from urllib.parse import quote
 
-from proj7k import i18n
+from proj7k import claims, i18n
 
 logger = logging.getLogger("proj7k.dashboard.jobs")
 
@@ -30,6 +37,10 @@ logger = logging.getLogger("proj7k.dashboard.jobs")
 MAX_LOG_LINES = 400
 #: Finished jobs kept in memory (and their working folders on disk); the oldest are forgotten first.
 MAX_FINISHED_JOBS = 50
+#: Jobs running at once, at most (each holds a worker thread).
+MAX_PARALLEL_JOBS = 4
+#: What a job claims when nobody says otherwise: one resource every such job shares, so they run one at a time.
+SERIAL: FrozenSet[str] = frozenset({"serial"})
 
 
 class JobCancelled(Exception):
@@ -86,6 +97,8 @@ class Job:
     uploads: Dict[str, Tuple[str, bytes]] = field(default_factory=dict, repr=False)
     #: The language of the page that started it, for its messages (ADR-0035).
     lang: str = "zh"
+    #: What it holds while it runs; a job waits while an earlier or running job holds any of them (ADR-0043).
+    resources: FrozenSet[str] = SERIAL
 
     @property
     def finished(self) -> bool:
@@ -105,6 +118,7 @@ class Job:
             "artifacts": [a.to_dict(self.id, i) for i, a in enumerate(self.artifacts)],
             # What it is doing now, for a list of jobs that doesn't follow every log line.
             "last_log": self.logs[-1] if self.logs else None,
+            "resources": sorted(self.resources),
         }
         if with_logs:
             data["logs"] = list(self.logs)
@@ -113,6 +127,64 @@ class Job:
 
 Action = Callable[[Dict[str, Any], JobContext], Optional[Dict[str, Any]]]
 Notify = Callable[[Dict[str, Any]], None]
+#: (kind, params) -> the resources a job of that kind with those parameters claims.
+Resources = Callable[[str, Dict[str, Any]], FrozenSet[str]]
+
+
+class Scheduler:
+    """
+    Which queued jobs may start (ADR-0043). Not thread-safe: the caller holds one lock around every call.
+
+    A queued job starts when (1) no running job holds any of its resources, (2) no job queued before it claims any of
+    them, and (3) fewer than `max_running` jobs run. So two jobs that share a resource never run at the same time, and
+    they start in the order they were submitted; a job blocks only the later jobs it shares a resource with.
+    """
+
+    def __init__(self, max_running: int = MAX_PARALLEL_JOBS):
+        if max_running < 1:
+            raise ValueError("max_running must be at least 1")
+        self.max_running = max_running
+        self.queue: List[Tuple[str, FrozenSet[str]]] = []
+        self.running: Dict[str, FrozenSet[str]] = {}
+
+    def held(self) -> FrozenSet[str]:
+        return frozenset().union(*self.running.values())
+
+    def enqueue(self, job_id: str, resources: FrozenSet[str]) -> None:
+        if not resources:
+            raise ValueError("a job claims at least one resource")
+        if job_id in self.running or any(q == job_id for q, _ in self.queue):
+            raise ValueError(f"job {job_id} is already scheduled")
+        self.queue.append((job_id, frozenset(resources)))
+
+    def remove(self, job_id: str) -> bool:
+        """Drop a queued job (cancelled before it started); False when it isn't queued."""
+        for i, (queued, _) in enumerate(self.queue):
+            if queued == job_id:
+                del self.queue[i]
+                return True
+        return False
+
+    def finish(self, job_id: str) -> None:
+        """A running job ended (done, failed or stopped) and releases its resources."""
+        del self.running[job_id]
+
+    def start_ready(self) -> List[str]:
+        """Move every job that may start now from the queue to the running set; the ids, in queue order."""
+        started: List[str] = []
+        busy = set(self.held())
+        waiting: List[Tuple[str, FrozenSet[str]]] = []
+        for job_id, resources in self.queue:
+            if len(self.running) < self.max_running and not (resources & busy):
+                self.running[job_id] = resources
+                started.append(job_id)
+            else:
+                waiting.append((job_id, resources))
+            # Started or not, a job keeps everything after it in the queue off its resources: a running one because
+            # it holds them, a waiting one so it starts first (no later job overtakes it on a shared resource).
+            busy |= resources
+        self.queue = waiting
+        return started
 
 
 class _JobLogHandler(logging.Handler):
@@ -134,18 +206,28 @@ class _JobLogHandler(logging.Handler):
 
 
 class JobManager:
-    """Queues jobs onto one worker thread and reports every change through `notify` (called from any thread)."""
+    """
+    Runs jobs on worker threads as the `Scheduler` allows and reports every change through `notify` (called from any
+    thread). `resources` says what each job claims; without it every job claims `SERIAL` and they run one at a time.
+    """
 
-    def __init__(self, actions: Dict[str, Action], root_dir: Path, notify: Optional[Notify] = None):
+    def __init__(self, actions: Dict[str, Action], root_dir: Path, notify: Optional[Notify] = None,
+                 resources: Optional[Resources] = None, max_parallel: int = MAX_PARALLEL_JOBS):
         self.actions = actions
         self.root_dir = Path(root_dir)
         self.notify: Notify = notify or (lambda frame: None)
+        self.resources: Resources = resources or (lambda kind, params: SERIAL)
+        self._claims_checked = resources is not None
         self._jobs: Dict[str, Job] = {}
         self._lock = threading.Lock()
+        self._scheduler = Scheduler(max_parallel)
+        self._closed = False
         self._ids = itertools.count(1)
         self._prefix = time.strftime("%Y%m%d-%H%M%S")
         self._local = threading.local()
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="proj7k-job")
+        # The scheduler never runs more than `max_parallel` jobs, so a started job gets a thread at once (or as soon as
+        # the job that made room for it has returned from its thread).
+        self._executor = ThreadPoolExecutor(max_workers=max_parallel, thread_name_prefix="proj7k-job")
         self._handler = _JobLogHandler(self)
         logging.getLogger().addHandler(self._handler)
 
@@ -197,31 +279,50 @@ class JobManager:
         job.lang = lang
         for key, (name, _) in job.uploads.items():
             job.params[key] = name
+        # Claimed from the parameters as the action will read them; an upload's parameter changes from its name to
+        # a path in the job's folder when it starts, which no flag reads as set (ADR-0043).
+        job.resources = frozenset(self.resources(kind, job.params))
         job.workdir = self.root_dir / job.id
         with self._lock:
+            if self._closed:
+                raise RuntimeError("The job manager is shut down")
             self._jobs[job.id] = job
+            self._scheduler.enqueue(job.id, job.resources)
         self._publish(job)
-        self._executor.submit(self._run, job)
+        self._dispatch()
         return job
 
     def cancel(self, job_id: str) -> bool:
         """Cancel a queued job, or ask a running one to stop (only long loops, such as the daemon, check)."""
-        job = self.get(job_id)
-        if job is None or job.finished:
-            return False
-        job.stop_event.set()
-        if job.status == "queued":
-            job.status = "cancelled"
-            job.finished_at = time.time()
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.finished:
+                return False
+            job.stop_event.set()
+            dropped = self._scheduler.remove(job.id)
+            if dropped:
+                job.status = "cancelled"
+                job.finished_at = time.time()
+        if dropped:
             self._publish(job)
+            self._dispatch()  # a later job it held back may start now
         return True
 
+    def _dispatch(self) -> None:
+        """Start every job the scheduler lets start. Their status turns to running under the lock, so a cancel
+        either removes a job from the queue first or finds it running."""
+        with self._lock:
+            if self._closed:
+                return
+            started = [self._jobs[job_id] for job_id in self._scheduler.start_ready()]
+            for job in started:
+                job.status = "running"
+                job.started_at = time.time()
+        for job in started:
+            self._publish(job)
+            self._executor.submit(self._run, job)
+
     def _run(self, job: Job) -> None:
-        if job.status == "cancelled":
-            return
-        job.status = "running"
-        job.started_at = time.time()
-        self._publish(job)
         self._local.job = job
         language = i18n.enter(job.lang)
         try:
@@ -232,7 +333,10 @@ class JobManager:
                 target.write_bytes(content)
                 job.params[key] = str(target)
             job.uploads = {}
-            result = self.actions[job.kind](job.params, JobContext(job=job, workdir=job.workdir))
+            # A job that runs alone (no resource function) may write anything; otherwise only what it claimed.
+            guard = claims.holding(job.resources) if self._claims_checked else contextlib.nullcontext()
+            with guard:
+                result = self.actions[job.kind](job.params, JobContext(job=job, workdir=job.workdir))
             job.result = result or {}
             job.status = "done"
         except JobCancelled:
@@ -246,12 +350,20 @@ class JobManager:
             i18n.leave(language)
             self._local.job = None
             job.finished_at = time.time()
+            with self._lock:
+                self._scheduler.finish(job.id)
             self._publish(job)
             self._forget_old()
+            self._dispatch()
 
     def shutdown(self) -> None:
         with self._lock:
+            self._closed = True
             jobs = list(self._jobs.values())
+            dropped = [job for job in jobs if self._scheduler.remove(job.id)]
+            for job in dropped:
+                job.status = "cancelled"
+                job.finished_at = time.time()
         for job in jobs:
             job.stop_event.set()
         self._executor.shutdown(wait=False, cancel_futures=True)

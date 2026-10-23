@@ -14,6 +14,7 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+from proj7k import claims
 from proj7k.lazer.annotator import ALL_BIAXIAL_COLLECTIONS
 from proj7k.lazer.bridge import (
     BatchUpdateResult,
@@ -113,6 +114,7 @@ class LazerBackupManager:
         Create a timestamped copy of client.realm and prune snapshots exceeding max_snapshots.
         Returns the created snapshot path, or None if client.realm does not exist.
         """
+        claims.require(claims.LAZER)
         if not self.realm_path.exists():
             return None
 
@@ -153,6 +155,7 @@ class LazerBackupManager:
         Employs first-write protection: if a beatmap ID is already recorded,
         its original state is NEVER overwritten.
         """
+        claims.require(claims.LAZER)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         states = self.load_backup_states()
 
@@ -181,6 +184,7 @@ class LazerBackupManager:
 
     def clear_backup_states(self) -> None:
         """Remove the sidecar backup state file."""
+        claims.require(claims.LAZER)
         if self.state_file.exists():
             try:
                 self.state_file.unlink(missing_ok=True)
