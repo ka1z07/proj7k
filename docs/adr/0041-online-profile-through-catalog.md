@@ -1,7 +1,7 @@
 # 0041. 在线排名与 pp 经曲库站点代理
 
 - **状态**：accepted（2026-10-23；Kai：「研究连接 Oauth」，读完三个方案后选 A「经 7k.kaiz.dev 代理」）。
-- **背景**：桌面端主页（ADR-0034）只读 osu!lazer 本机数据库，全球排名、pp 这类在线数据要走 osu! API v2，而 API 要 OAuth 应用。玩家装的是 GitHub Release（ADR-0036），安装包里不能放 client secret。曲库爬虫（ADR-0026）已经用 Kai 的 OAuth 应用（客户端凭证模式，`public` 权限，`OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 在 meow 的用户环境变量里）。桌面端也已经从 lazer 成绩里拿到玩家的 osu! user id。
+- **背景**：桌面端主页（ADR-0034）只读 osu!lazer 本机数据库，全球排名、pp 这类在线数据要走 osu! API v2，而 API 要 OAuth 应用。玩家装的是 GitHub Release，安装包里不能放 client secret。曲库爬虫（ADR-0026）已经用 Kai 的 OAuth 应用（客户端凭证模式，`public` 权限，`OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 在 meow 的用户环境变量里）。桌面端也已经从 lazer 成绩里拿到玩家的 osu! user id。
 
 ## 选项
 
