@@ -123,9 +123,8 @@ def _uv() -> List[str]:
 GIT_ENV = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.longpaths", "GIT_CONFIG_VALUE_0": "true"}
 
 
-#: What the running interpreter tells its children about itself. proj7k runs from a Python 3.14 venv; inherited by the
-#: model's Python 3.10 venv launcher, they point it at the wrong interpreter ("No Python at '"…python.exe'" when the
-#: dashboard starts it on Windows), so its processes start without them.
+#: What the running interpreter (proj7k's own Python 3.14 venv) tells its children about itself; the model's Python
+#: 3.10 venv has no use for them, so its processes start without them.
 PARENT_PYTHON_VARS = ("__PYVENV_LAUNCHER__", "__PYVENV_BASE_EXECUTABLE__", "PYTHONHOME", "PYTHONPATH",
                       "PYTHONEXECUTABLE", "VIRTUAL_ENV", "PYTHONSTARTUP", "PYTHONNOUSERSITE")
 
