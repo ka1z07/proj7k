@@ -57,6 +57,9 @@ DEFAULT_RUNS = 4
 AIM = 1.15
 #: A run at most this far above the target is brought down to it by the downscaler (pure deletion, technique kept).
 TRIM_MAX = 1.5
+#: Deleting notes moves the stars in steps, so a trimmed run this close to the target is kept and the loop stops
+#: (meow, 2026-10-23: trims landed 0.14–0.17★ off and each miss cost another ~50 s run).
+TRIM_TOLERANCE = 0.2
 DEFAULT_YEAR = 2023
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
@@ -411,25 +414,29 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         tried += 1
         log(tr(f"  → 引擎星级 {stars:.2f}★（目标 {target:.2f}★），{len(chart.hit_objects)} 个音符",
                f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes"))
+        written = stars
+        good_enough = options.tolerance
         if target + options.tolerance < stars <= target + TRIM_MAX:
             trimmed = trim(chart, target, options.tolerance, log)
             if trimmed is not None:
                 chart, profile = trimmed
                 stars = float(profile.total_stars)
+                good_enough = max(options.tolerance, TRIM_TOLERANCE)
         if best is None or abs(stars - target) < abs(best[2] - target):
-            best = (chart, profile, stars, difficulty, seed)
-        if abs(stars - target) <= options.tolerance:
+            best = (chart, profile, stars, difficulty, seed, good_enough)
+        if abs(stars - target) <= good_enough:
             break
-        if stars < target and difficulty >= MAX_DIFFICULTY:
+        if written < target and difficulty >= MAX_DIFFICULTY:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
             warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
                                f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
                                f"it can't reach {target:.2f}★ on this song"))
             break
-        difficulty = next_difficulty(difficulty, stars, target)
+        # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
+        difficulty = next_difficulty(difficulty, written, target)
 
-    chart, profile, stars, difficulty, seed = best
-    if abs(stars - target) > options.tolerance:
+    chart, profile, stars, difficulty, seed, good_enough = best
+    if abs(stars - target) > good_enough:
         warnings.append(tr(f"{tried} 次生成里最接近的是 {stars:.2f}★，没到目标 ±{options.tolerance:.2f}★",
                            f"The closest of {tried} runs is {stars:.2f}★, outside the target ±{options.tolerance:.2f}★"))
     timing = [tp for tp in chart.timing_points if tp.uninherited]

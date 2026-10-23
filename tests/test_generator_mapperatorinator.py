@@ -201,6 +201,46 @@ def test_a_run_a_little_too_hard_is_trimmed_to_the_target(song, tmp_path):
     assert result.n_notes < len(parse_osu_7k((tmp_path / "probe" / "beatmap2.osu").read_text(encoding="utf-8")).hit_objects)
 
 
+def _trim_landing(monkeypatch, offset):
+    """Stands in for the downscaler: a trim that lands `offset` stars from the target."""
+    class Profile:
+        def __init__(self, stars):
+            self.total_stars = stars
+
+    def landing(chart, target, tolerance, log):
+        return chart, Profile(target + offset)
+    monkeypatch.setattr(mt, "trim", landing)
+
+
+def _fixed_stars_run(song, tmp_path):
+    """A runner that always writes the same chart, whatever difficulty it is asked for, and that chart's stars."""
+    asked = []
+    chart = stream_runner([])(song, tmp_path / "fixed", 4.0, 0, [])
+
+    def run(audio, out, difficulty, seed, extra):
+        asked.append(difficulty)
+        return chart
+    return run, asked, float(evaluate_osu(chart.read_text(encoding="utf-8")).total_stars)
+
+
+def test_a_trim_that_lands_close_is_kept(song, tmp_path, monkeypatch):
+    _trim_landing(monkeypatch, -0.15)
+    run, asked, raw = _fixed_stars_run(song, tmp_path)
+    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=4)
+    result = generate_from_file(song, options)
+    assert len(asked) == 1
+    assert not any("最接近" in w or "closest" in w for w in result.warnings)
+
+
+def test_the_next_run_is_steered_by_what_the_model_wrote_not_the_trim(song, tmp_path, monkeypatch):
+    _trim_landing(monkeypatch, -0.6)
+    run, asked, raw = _fixed_stars_run(song, tmp_path)
+    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=2)
+    generate_from_file(song, options)
+    # The model wrote above the target, so it is asked for less, though the trim undershot.
+    assert len(asked) == 2 and asked[1] < asked[0]
+
+
 def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
     calls = []
     reference = Beatmap7K(title="Ref", artist="A", creator="Mapper", version="Hard",
