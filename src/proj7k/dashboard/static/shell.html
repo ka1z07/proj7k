@@ -69,7 +69,9 @@
     #gameState { cursor: pointer; }
     #gameState:hover { color: var(--accent); }
     #jobState:empty { display: none; }
-    #jobState { color: var(--accent-blue); }
+    #jobState { color: var(--accent-blue); cursor: pointer; }
+    #jobState:hover { text-decoration: underline; }
+    .nav-count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent-blue); color: #10131a; font-size: 0.7rem; font-weight: 800; text-align: center; line-height: 18px; }
     .foot-row { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-muted); padding: 0 4px; }
     .foot-row .grow { flex: 1; }
     #playerSel { padding: 4px 8px; font-size: 0.8rem; }
@@ -120,6 +122,7 @@
       .nav .group + a { margin-top: 14px; }
       .nav a { padding: 9px; justify-content: center; }
       .nav a.active::before { left: -8px; }
+      .nav-count { position: absolute; top: 1px; right: 1px; min-width: 16px; padding: 0 4px; line-height: 16px; }
       .foot-row { flex-direction: column; padding: 0; }
       #langBtn { padding: 3px 6px; font-size: 0.7rem; }
     }
@@ -160,6 +163,7 @@
       <a href="#profiler" data-page="profiler" title="回放与画像"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="label" data-en="Replays">回放与画像</span></a>
       <a href="#downscaler" data-page="downscaler" title="降阶练习"><svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h7M4 18h4"/><path d="M18 5v14m-3-3 3 3 3-3"/></svg><span class="label">降阶练习</span></a>
       <a href="#generator" data-page="generator" title="谱面生成"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg><span class="label" data-en="Generator">谱面生成</span></a>
+      <a href="#jobs" data-page="jobs" title="全部任务"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2"/><circle cx="5" cy="18" r="1.2"/></svg><span class="label" data-en="Jobs">任务</span><span class="nav-count hidden" id="jobCount"></span></a>
       <span class="group">设置</span>
       <a href="#sync" data-page="sync" title="曲库同步"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3"/><path d="M4 4v4h4M20 20v-4h-4"/></svg><span class="label" data-en="Sync">曲库同步</span></a>
     </nav>
@@ -207,7 +211,7 @@
     // game and a running job keeps streaming while another tab is open.
     const PAGES = {
       home: "/home", history: "/history", library: "/library",
-      live: "/live", sync: "/sync", downscaler: "/downscaler", generator: "/generator", profiler: "/profiler",
+      live: "/live", sync: "/sync", downscaler: "/downscaler", generator: "/generator", profiler: "/profiler", jobs: "/jobs",
     };
     const PLAYER_PAGES = ["home", "history", "library"];
     const frames = {};
@@ -347,6 +351,7 @@
         openDetail(msg.page, msg.params);
       }
     });
+    document.getElementById("jobState").onclick = () => { location.hash = "#jobs"; };
     document.getElementById("gameState").onclick = () => { if (gameMd5) openDetail("chart", { md5: gameMd5 }); };
 
     // --- whose pages: the library's own player unless another is picked --------------------------------------------
@@ -378,6 +383,9 @@
       const queued = [...active.values()].filter((j) => j.status === "queued").length;
       document.getElementById("jobState").textContent =
         running || queued ? tr("任务：{n} 运行中", { n: running }) + (queued ? tr("，{n} 排队", { n: queued }) : "") : "";
+      const count = document.getElementById("jobCount");
+      count.textContent = running + queued;
+      count.classList.toggle("hidden", !(running + queued));
     }
     P7.on("jobs", (msg) => { active.clear(); msg.jobs.forEach((j) => { if (j.status === "queued" || j.status === "running") active.set(j.id, j); }); renderJobs(); });
     P7.on("job_update", (msg) => {

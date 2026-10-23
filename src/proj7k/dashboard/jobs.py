@@ -103,6 +103,8 @@ class Job:
             "result": self.result,
             "error": self.error,
             "artifacts": [a.to_dict(self.id, i) for i, a in enumerate(self.artifacts)],
+            # What it is doing now, for a list of jobs that doesn't follow every log line.
+            "last_log": self.logs[-1] if self.logs else None,
         }
         if with_logs:
             data["logs"] = list(self.logs)

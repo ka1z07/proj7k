@@ -78,6 +78,8 @@ def test_job_manager_runs_actions_in_order_and_captures_logs_and_outputs(tmp_pat
         assert jobs[1].result == {"n": 1}
         assert any("writing 1" in line for line in jobs[1].logs)
         assert not any("writing 1" in line for line in jobs[0].logs)
+        # The jobs list shows what each job last logged without following its log.
+        assert jobs[1].to_dict()["last_log"].endswith("writing 1")
         assert jobs[2].artifacts[0].path.read_text(encoding="utf-8") == "x"
         assert jobs[2].to_dict()["artifacts"][0]["url"] == f"/files/{jobs[2].id}/0/out2.txt"
         assert {"job_update", "job_log"} <= {f["type"] for f in frames}
@@ -184,7 +186,7 @@ def test_pages_apis_and_the_overlay_url(tmp_path):
         await s.server.start()
         try:
             for path, marker in (("/", '<aside class="side">'), ("/sync", "曲库同步"), ("/downscaler", "降阶练习"),
-                                 ("/generator", "谱面生成"), ("/profiler", "回放与画像"), ("/live", 'id="radarCanvas"')):
+                                 ("/generator", "谱面生成"), ("/profiler", "回放与画像"), ("/jobs", 'id="filters"'), ("/live", 'id="radarCanvas"')):
                 status, headers, body = await s.get(path)
                 assert status == 200, path
                 assert headers["Content-Type"].startswith("text/html")
