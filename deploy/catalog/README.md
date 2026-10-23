@@ -53,7 +53,7 @@
    `/IT` 表示只在自己登录着的时候跑（不用把密码交给任务计划程序）；错过的时间点登录后补跑（`-StartWhenAvailable`）。想在注销时也跑，把 `/IT` 换成 `/RU $env:USERNAME /RP`（会提示输入密码）。网站进程会自己发现库变了，不用重启。手动跑一次：`schtasks /Run /TN "proj7k catalog update"`；也可以 `update --since 2026-10-01` 指定从哪天起查。
 6. 打开 `https://7k.kaiz.dev/beatmapsets` 检查。可以在 Cloudflare 里给 `/static/*` 和 `/api/*` 开缓存，接口本身已带 `Cache-Control`。
 
-7. **桌面端的「用 osu! 登录」**（ADR-0041）：网站进程读到 `OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 就开启 `/oauth/*`。在 osu! 设置 → OAuth 里，把同一个应用的 Application Callback URL 设成 `https://7k.kaiz.dev/oauth/callback`（站点不在这个地址时用 `serve --public-url` 改，两边要一致）。不要给 `/oauth/*` 开缓存。
+7. **桌面端的「用 osu! 登录」**（ADR-0041）：网站进程读到 `OSU_CLIENT_ID`/`OSU_CLIENT_SECRET` 就开启 `/oauth/*`。网站任务以 SYSTEM 运行，读不到你的用户环境变量，所以这两个值要写进任务运行的那份 `catalog-serve.cmd`（`cd` 那行之前加 `set "OSU_CLIENT_ID=…"`、`set "OSU_CLIENT_SECRET=…"`），再用 `icacls <文件> /inheritance:r /grant:r SYSTEM:F Administrators:F` 把文件收紧到只有 SYSTEM 和管理员能读。这是唯一把凭据写进文件的地方。在 osu! 设置 → OAuth 里，把同一个应用的 Application Callback URL 设成 `https://7k.kaiz.dev/oauth/callback`（站点不在这个地址时用 `serve --public-url` 改，两边要一致）。不要给 `/oauth/*` 开缓存。
 
 电脑关机、重启后两项服务都会自己起来；断网期间访客会看到 Cloudflare 的 502 页。
 
