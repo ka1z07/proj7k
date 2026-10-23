@@ -25,8 +25,11 @@ import shutil
 import subprocess
 import sys
 import time
+import wave
 from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Union
+
+import numpy as np
 
 from proj7k.engine import evaluate_notes
 from proj7k.i18n import tr
@@ -220,6 +223,40 @@ def next_difficulty(difficulty: float, stars: float, target: float) -> float:
     return min(max(difficulty * step, MIN_DIFFICULTY), MAX_DIFFICULTY)
 
 
+#: The audio extensions its inference.py accepts; osu!lazer keeps audio under extension-less hash names.
+AUDIO_SUFFIXES = (".flac", ".mp3", ".ogg", ".wav", ".m4a")
+
+
+def model_audio(audio: Path, work: Path, audio_filename: str = "") -> Path:
+    """The audio as the model can read it. Its loader (pydub) needs a known extension (osu!lazer keeps audio under
+    extension-less hash names) and, for anything but .wav, ffmpeg's ffprobe on PATH: without ffprobe the audio is
+    decoded here (mono, 24 kHz, above the model's 16 kHz) and handed over as a .wav."""
+    suffix = audio.suffix.lower()
+    if suffix not in AUDIO_SUFFIXES:
+        suffix = Path(audio_filename).suffix.lower()
+    if suffix not in AUDIO_SUFFIXES:
+        head = audio.read_bytes()[:12]
+        suffix = (".ogg" if head[:4] == b"OggS" else ".flac" if head[:4] == b"fLaC" else
+                  ".wav" if head[:4] == b"RIFF" else ".m4a" if head[4:8] == b"ftyp" else ".mp3")
+    work.mkdir(parents=True, exist_ok=True)
+    if suffix != ".wav" and shutil.which("ffprobe") is None:
+        from proj7k.generator.audio import load_audio
+
+        decoded = load_audio(audio)
+        copy = work / "audio.wav"
+        with wave.open(str(copy), "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(decoded.sample_rate)
+            out.writeframes((np.clip(decoded.samples, -1.0, 1.0) * 32767).astype("<i2").tobytes())
+        return copy
+    if audio.suffix.lower() == suffix:
+        return audio
+    copy = work / ("audio" + suffix)
+    shutil.copyfile(audio, copy)
+    return copy
+
+
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
@@ -227,6 +264,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
 
     audio_path = Path(audio_path)
     log = options.log or logger.info
+    real_model = runner is None
     runner = runner or _default_runner(home, log)
     work = Path(work_dir) if work_dir else (home or HOME) / "runs" / time.strftime("%Y%m%d-%H%M%S")
     target = float(options.target_stars)
@@ -243,15 +281,19 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         warnings.append(tr("设计稿、分轨与按段技法只用于 proj7k 自己的落键，Mapperatorinator 不读它们",
                            "Briefs, stems and per-section techniques apply to proj7k's own notes; Mapperatorinator ignores them"))
 
+    reference = getattr(options, "reference", None)
+    audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
+    title = options.title or getattr(reference, "title", "") or ""
+    artist = options.artist or getattr(reference, "artist", "") or ""
     best = None
     tried = 0
     for i in range(runs):
         seed = options.seed + i
-        extra = overrides(audio_path, work, difficulty, seed, hold_note_ratio=hold_ratio,
-                          title=options.title, artist=options.artist) + list(options.model_args or ())
+        extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio,
+                          title=title, artist=artist) + list(options.model_args or ())
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
-        osu = runner(audio_path, work, difficulty, seed, extra)
+        osu = runner(audio, work, difficulty, seed, extra)
         chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
         if chart.circle_size != 7 or not chart.hit_objects:
             raise RuntimeError(tr(f"Mapperatorinator 写出的不是 7K 谱：{osu}", f"Mapperatorinator didn't write a 7K chart: {osu}"))
@@ -275,9 +317,9 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if options.version is None:
         options.version = f"Mapperatorinator {label} ({stars:.2f})"
     bm = _beatmap(list(chart.hit_objects), timing, options, stars)
-    if not options.title and chart.title:
+    if not title and chart.title:
         bm.title = chart.title
-    if not options.artist and chart.artist:
+    if not artist and chart.artist:
         bm.artist = chart.artist
     bm.tags = f"proj7k mapperatorinator-{CONFIG} seed{seed} difficulty{difficulty:.2f}"
     if not (options.reference and options.reference.audio_filename):
