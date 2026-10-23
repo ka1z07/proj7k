@@ -480,6 +480,12 @@ class CatalogStore:
         sets = self._load_sets([set_id], set(), full=True)
         return sets[0] if sets else None
 
+    def sitemap_sets(self) -> List[Tuple[int, str]]:
+        """(set id, date it last changed) of every set osu! knows, for the sitemap."""
+        with self._lock:
+            return [(r[0], r[1][:10]) for r in self._db.execute(
+                "SELECT id, updated_at FROM beatmapsets WHERE id > 0 ORDER BY id")]
+
     def beatmapset_of(self, beatmap_id: int) -> Optional[int]:
         with self._lock:
             rec = self._db.execute("SELECT beatmapset_id FROM beatmaps WHERE id = ?", (beatmap_id,)).fetchone()

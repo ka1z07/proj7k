@@ -13,6 +13,8 @@ The catalog website and its JSON API, on the standard library's threaded HTTP se
     GET /api/mappers/<user id or @name>
     GET /oauth/start, /oauth/callback; POST /oauth/redeem, /oauth/refresh
                                           "sign in with osu!" for the desktop app (`proj7k.catalog.oauth`, ADR-0041)
+    GET /robots.txt, /sitemap.xml, /sitemaps/<pages|mappers|sets-N>.xml
+                                          for search engines (`proj7k.catalog.seo`, ADR-0042)
 
 Read-only: nothing a client sends reaches the database except as a bound SQL parameter, and only the
 files of `static/` are served. In production it sits behind a reverse proxy (TLS, caching, rate limits).
@@ -26,8 +28,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from urllib.parse import parse_qs, unquote, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlsplit
 
+from proj7k.catalog import seo
 from proj7k.catalog.mappers import MapperIndex
 from proj7k.catalog.oauth import OAuthBroker, local_state, parse_state
 from proj7k.catalog.store import CatalogStore
@@ -52,9 +55,11 @@ _SET_API = re.compile(r"^/api/beatmapsets/(-?\d+)$")
 #: How long a browser or a caching proxy may reuse an answer. The catalog changes once a day.
 API_MAX_AGE_S = 60
 STATIC_MAX_AGE_S = 300
+SITEMAP_MAX_AGE_S = 3600
 
 _MAPPER_PAGE = re.compile(r"^/mappers/([^/]+)/?$")
 _MAPPER_API = re.compile(r"^/api/mappers/([^/]+)$")
+_SITEMAP = re.compile(r"^/sitemaps/(pages|mappers|sets-(\d+))\.xml$")
 
 
 def _int(value: Optional[str], default: int) -> int:
@@ -69,6 +74,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
     store: CatalogStore   # set on the subclass `make_server` builds
     mappers: MapperIndex
     oauth: Optional[OAuthBroker]
+    base: str             # the site's public address, for canonical links and the sitemap
 
     def log_message(self, fmt: str, *args: Any) -> None:
         logger.info("%s %s", self.address_string(), fmt % args)
@@ -109,11 +115,15 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
     def route(self, path: str, query: Dict[str, str]) -> Tuple[int, Dict[str, str], bytes]:
         if path in ("/", ""):
-            return self._static("home.html")
+            return self._page("home.html", "/")
         if path == "/beatmapsets":
-            return self._static("search.html")
-        if _SET_PAGE.match(path):
-            return self._static("beatmapset.html")
+            return self._page("search.html", "/beatmapsets")
+        m = _SET_PAGE.match(path)
+        if m:
+            data = self.store.beatmapset(int(m.group(1)))
+            if data is None:
+                return self._missing_page("beatmapset.html", path)
+            return self._page("beatmapset.html", path, *seo.set_page(self.base, data))
         m = _BEATMAP_PAGE.match(path)
         if m:
             set_id = self.store.beatmapset_of(int(m.group(1)))
@@ -135,9 +145,14 @@ class CatalogHandler(BaseHTTPRequestHandler):
             data = self.store.beatmapset(int(m.group(1)))
             return self._json(data) if data else self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         if path == "/mappers":
-            return self._static("mappers.html")
-        if _MAPPER_PAGE.match(path):
-            return self._static("mapper.html")
+            return self._page("mappers.html", "/mappers")
+        m = _MAPPER_PAGE.match(path)
+        if m:
+            key = unquote(m.group(1))
+            data = self.mappers.get(key)
+            if data is None:
+                return self._missing_page("mapper.html", path)
+            return self._page("mapper.html", path, *seo.mapper_page(self.base, key, data))
         if path == "/api/mappers":
             return self._json(self.mappers.listing(
                 q=query.get("q", ""), sort=query.get("sort", "diffs_desc"), min_diffs=_int(query.get("min"), 1),
@@ -152,7 +167,51 @@ class CatalogHandler(BaseHTTPRequestHandler):
             return self._json(self.store.stats())
         if path.startswith("/static/") and path[len("/static/"):] in STATIC_FILES:
             return self._static(path[len("/static/"):])
+        if path == "/favicon.ico":
+            return self._static("favicon.svg")
+        if path == "/robots.txt":
+            return self._text(seo.robots(self.base), "text/plain")
+        if path == "/sitemap.xml":
+            sets = self.store.sitemap_sets()
+            chunks = max(1, -(-len(sets) // seo.SITEMAP_CHUNK))
+            return self._text(seo.sitemap_index(self.base, chunks, max((d for _, d in sets), default=None)))
+        m = _SITEMAP.match(path)
+        if m:
+            return self._sitemap(m.group(1), int(m.group(2) or 0))
         return self._not_found()
+
+    # ---- pages and what search engines read (ADR-0042) -----------------------------------------------
+
+    def _page(self, name: str, path: str, head: Optional[str] = None, summary: str = "",
+              status: int = HTTPStatus.OK) -> Tuple[int, Dict[str, str], bytes]:
+        _, headers, body = self._static(name)
+        page = body.decode("utf-8")
+        if head is None:
+            head = seo.static_head(self.base, path, page)
+        return status, headers, seo.render(page, head, summary).encode("utf-8")
+
+    def _missing_page(self, name: str, path: str) -> Tuple[int, Dict[str, str], bytes]:
+        """The page's own "not found" (its script says so), as a 404 search engines drop."""
+        head = seo.head(self.base, path, seo.SITE_NAME, "找不到这个页面。", index=False)
+        status, headers, body = self._page(name, path, head, status=HTTPStatus.NOT_FOUND)
+        headers["Cache-Control"] = "no-cache"
+        return status, headers, body
+
+    def _sitemap(self, name: str, chunk: int) -> Tuple[int, Dict[str, str], bytes]:
+        if name == "pages":
+            return self._text(seo.urlset(self.base, [(p, None) for p in seo.STATIC_PAGES]))
+        if name == "mappers":
+            keys = sorted(self.mappers.profiles(), key=lambda k: (k.startswith("@"), k))
+            return self._text(seo.urlset(self.base, [(f"/mappers/{quote(k, safe='@')}", None) for k in keys]))
+        sets = self.store.sitemap_sets()[(chunk - 1) * seo.SITEMAP_CHUNK: chunk * seo.SITEMAP_CHUNK]
+        if chunk < 1 or not sets:
+            return self._not_found()
+        return self._text(seo.urlset(self.base, [(f"/beatmapsets/{i}", d) for i, d in sets]))
+
+    @staticmethod
+    def _text(text: str, kind: str = "application/xml") -> Tuple[int, Dict[str, str], bytes]:
+        return HTTPStatus.OK, {"Content-Type": f"{kind}; charset=utf-8",
+                               "Cache-Control": f"public, max-age={SITEMAP_MAX_AGE_S}"}, text.encode("utf-8")
 
     # ---- sign in with osu! (ADR-0041) -----------------------------------------------------------------
 
@@ -237,12 +296,14 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
 
 def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780,
-                mapper_stale_s: Optional[float] = None, oauth: Optional[OAuthBroker] = None) -> ThreadingHTTPServer:
+                mapper_stale_s: Optional[float] = None, oauth: Optional[OAuthBroker] = None,
+                public_url: str = "https://7k.kaiz.dev") -> ThreadingHTTPServer:
     """`mapper_stale_s`: see `MapperIndex`; the command line sets it so a crawl running beside the site
     never makes a visitor wait for the mapper profiles. `oauth`: the osu! client behind "sign in with osu!";
-    without one `/oauth/*` answers 503."""
+    without one `/oauth/*` answers 503. `public_url`: where the site is reached, for canonical links."""
     mappers = MapperIndex(store, stale_s=mapper_stale_s)
-    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": mappers, "oauth": oauth})
+    handler = type("BoundCatalogHandler", (CatalogHandler,),
+                   {"store": store, "mappers": mappers, "oauth": oauth, "base": public_url.rstrip("/")})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server

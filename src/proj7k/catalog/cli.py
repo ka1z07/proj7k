@@ -128,7 +128,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if client_id and secret else None
         if oauth is None:
             print("OSU_CLIENT_ID/OSU_CLIENT_SECRET not set: sign-in with osu! (/oauth/*) answers 503", file=sys.stderr)
-        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh, oauth=oauth)
+        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh, oauth=oauth,
+                             public_url=args.public_url)
         # The mapper profiles take a while on a full catalog; build them before the first visitor asks.
         threading.Thread(target=server.RequestHandlerClass.mappers.profiles, daemon=True).start()
         url = f"http://{args.host}:{args.port}/beatmapsets"
