@@ -10,6 +10,9 @@
     # the same, from osu!lazer's library: an .osu MD5, beatmap id or osu! link
     python3 -m proj7k.generator --timing-from https://osu.ppy.sh/b/5271675 --target-dan 3rd
 
+    # notes written by Mapperatorinator (ADR-0040; installs itself on first use, several GB)
+    python3 -m proj7k.generator --audio song.mp3 --target-dan 5th --backend mapperatorinator
+
 The chart is written as an .osu and, unless --no-package, an .osz with the audio (and the reference
 chart's background) that osu! and osu!lazer import directly; --open hands the .osz to the system,
 which imports it into osu!lazer.
@@ -190,8 +193,9 @@ def format_report(run: GenerateRun) -> str:
         f"  星级 {d['stars']:.2f}★（目标 {d['target_stars']:.2f}★），主技能 {d['dominant_skill']}",
         f"  {d['notes']} 个音符 / {d['rows']} 行，长条 {d['ln_share']:.0%}，强度 {d['intensity']:.2f}",
     ]
-    source = {"reference": "借用参考谱面", "manual": "手动指定", "auto": "自动测得"}[d["timing_source"]]
-    lines.append(f"  timing：{source}，{d['bpm']:g} BPM，offset {d['offset_ms']:g} ms")
+    source = {"reference": "借用参考谱面", "manual": "手动指定", "auto": "自动测得", "model": "Mapperatorinator 生成"}[d["timing_source"]]
+    if d["bpm"] is not None:
+        lines.append(f"  timing：{source}，{d['bpm']:g} BPM，offset {d['offset_ms']:g} ms")
     t = d["tempo"]
     if t is not None:
         lines.append(f"  自动测速：置信度 {t['confidence']:.2f}，前后段拍点差 {t['drift_ms']:g} ms")
@@ -229,13 +233,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--od", type=float, default=8.0, help="OverallDifficulty，默认 8")
     p.add_argument("--stems", action="store_true",
                    help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
-    p.add_argument("--ln", type=float, default=0.0,
-                   help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段")
+    p.add_argument("--ln", type=float,
+                   help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段。"
+                        "Mapperatorinator 落键时不给就由模型自己定")
     p.add_argument("--brief", help="谱面设计稿 JSON（ADR-0033，chart-design skill 写的）：每段的主跟层、技法、键形、密度与长条")
     p.add_argument("--auto-design", action="store_true",
                    help="没有设计稿时，按人写谱的技法配比给每段定主技法与键形（ADR-0033）")
     p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
     p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
+    p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
+                   help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（实验，ADR-0040；首次使用会安装，数 GB）")
+    p.add_argument("--model-runs", type=int, help="Mapperatorinator 最多生成几次，取引擎星级最接近目标的一张（默认 4）")
+    p.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
+                   help="传给 Mapperatorinator 的额外参数（Hydra 写法，如 descriptors=[\'tech\']、mapper_id=123），可重复")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
     p.add_argument("--no-package", action="store_true", help="只写 .osu，不打 .osz")
@@ -273,10 +283,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
-            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say, ln_ratio=args.ln, whole_inverse=args.inverse,
+            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say,
+            ln_ratio=args.ln or 0.0, whole_inverse=args.inverse,
             brief=brief.load(args.brief) if args.brief else None, auto_design=args.auto_design,
+            backend=args.backend, model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
         )
-        if args.stems:
+        if args.backend == "mapperatorinator":
+            from proj7k.generator import mapperatorinator
+
+            mapperatorinator.install(_say)
+        elif args.stems:
             stems.install(_say)
         run = run_generate(options, Path(args.output_dir).expanduser(),
                            audio=Path(args.audio).expanduser() if args.audio else None,

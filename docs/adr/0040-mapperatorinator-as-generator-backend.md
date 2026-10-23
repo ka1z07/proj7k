@@ -1,6 +1,6 @@
 # 0040. 借用 Mapperatorinator 作 7K 生成器的落键后端
 
-- **状态**：proposed（2026-10-23；Kai 问：「结合当前 proj7k 的 context 和 Mapperatorinator，是否能开发一个铺面生成模型？」）。尚未决定，阶段 0 之前不训练、不改生成器。
+- **状态**：accepted（2026-10-23；Kai 问：「结合当前 proj7k 的 context 和 Mapperatorinator，是否能开发一个铺面生成模型？」，读完方案后：「试试接入 mappertorinator」）。阶段 0 与阶段 1 一起做：先把后端接上，再在 meow 上用它跑试评。LoRA（阶段 2）另等 Kai 点头。
 - **背景**：gen-1 到 gen-6（ADR-0027、0030–0033、0039）用的是拼装式模型：节奏 MLP、行掩码 n-gram、长条分类器、段落切分、设计稿，再由引擎闭环到目标星级。Kai 多次觉得谱面僵硬、公式化：段落没有主题，节奏变化少，切叠混合很机械。问题出在结构上：每个小模型只看局部，键形和节奏是分开抽的，谁也没学过「人写谱时整段怎么写」。
 
 ## Mapperatorinator 是什么（2026-10-23 读 main 分支源码）
@@ -38,3 +38,11 @@
 - meow 的显卡未知、CPU 常年约 68% 占用，CPU 推理可能每首几分钟以上；Mac 走 MPS 可能更现实。训练一定要外租或另找 NVIDIA 卡。
 - mania 7K 的生成质量没有公开数据，阶段 0 可能得出「不如 gen-6」，那就停在这里，只把结论记进本 ADR。
 - 训练数据含他人音频与谱面：仅供自用；把微调权重公开发布前要另议。
+
+## 实现（2026-10-23）
+
+- `proj7k.generator.mapperatorinator`：固定在 Mapperatorinator 提交 `0e2b0e3`、配置 `v32`。`install` 把它克隆到 `~/.cache/proj7k/mapperatorinator/repo`（环境变量 `PROJ7K_MAPPERATORINATOR` 可改位置），用 uv 建 Python 3.10 的 `.venv`，PyTorch 用 `--torch-backend auto` 按本机显卡选版本，桌面 UI 的依赖不装。`run_model` 在子进程里跑它的 `inference.py`（`gamemode=3 keycount=7`）。
+- 星级：第一次的难度条件取目标星级，之后每次乘以「目标 / 引擎星级」（每次最多 ×1.6 或 ÷1.6，限制在 0.5–12），种子逐次加一，落进容差就停，否则取最接近的一次并警告。默认最多 4 次（`--model-runs`）。
+- 命令行：`python3 -m proj7k.generator --backend mapperatorinator`；`--ln` 不给时长条比例由模型自己定，给了就作为它的 `hold_note_ratio` 条件；`--model-arg` 透传其他条件（如 `descriptors`、`mapper_id`）。模型自己测 timing，参考谱面只借用音频与元数据；设计稿、分轨、按段技法对它不生效，会给出提示。
+- 面板「谱面生成」：「实验：Mapperatorinator 模型落键」勾选项，第一次勾选时安装。
+- 评测：`python3 -m proj7k.generator.evaluate --backend mapperatorinator --skip-ranked <catalog.db>`，按线上谱面库跳过 ranked/loved/qualified 的谱（模型训练时见过）。

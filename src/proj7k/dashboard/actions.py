@@ -300,8 +300,13 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         ln_ratio=_float(params, "ln_ratio") or 0.0,
         whole_inverse=_flag(params, "inverse"),
         auto_design=_flag(params, "auto_design"),
+        backend=_text(params, "backend") or "proj7k",
     )
-    if options.stems:
+    if options.backend == "mapperatorinator":
+        from proj7k.generator import mapperatorinator
+
+        mapperatorinator.install(logger.info)
+    elif options.stems:
         from proj7k.generator import stems
 
         stems.install(logger.info)

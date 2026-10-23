@@ -31,7 +31,7 @@ import numpy as np
 
 from proj7k.engine import evaluate_osu
 from proj7k.generator.audio import load_audio
-from proj7k.generator.generate import GeneratorOptions, generate
+from proj7k.generator.generate import GeneratorOptions, generate, generate_from_file
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import pattern_stats, rows_of_chart
 from proj7k.generator.rhythm import is_holdout
@@ -83,11 +83,16 @@ def bpm_match(estimated: float, true: float) -> str:
     return "wrong"
 
 
-def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, seed: int = 0) -> ChartScore:
+def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, seed: int = 0,
+                backend: str = "proj7k") -> ChartScore:
     human_stars = float(evaluate_osu(content).total_stars)
     audio = load_audio(audio_path)
     timing = [tp for tp in chart.timing_points if tp.uninherited]
-    result = generate(audio, GeneratorOptions(target_stars=human_stars, timing=timing, seed=seed))
+    if backend == "mapperatorinator":
+        # The model times the song itself, so its rows are held against the human ones as they fall (ADR-0040).
+        result = generate_from_file(audio_path, GeneratorOptions(target_stars=human_stars, seed=seed, backend=backend))
+    else:
+        result = generate(audio, GeneratorOptions(target_stars=human_stars, timing=timing, seed=seed))
     gen_rows = sorted({o.time for o in result.beatmap.hit_objects})
     human_rows = sorted({o.time for o in chart.hit_objects})
     precision, recall = row_match(gen_rows, human_rows)
@@ -166,6 +171,33 @@ def lazer_charts(realm_path: Optional[Path] = None, files_dir: Optional[Path] = 
         yield f"{rec.artist} - {rec.title} [{rec.difficulty_name}]", Path(asset.osu_path), Path(asset.audio_path)
 
 
+RANKED = ("ranked", "approved", "loved", "qualified")
+
+
+def ranked_sets(catalog_db: Path) -> set:
+    """The ids of the sets the catalog lists as ranked, loved or qualified (read-only, safe while it is written)."""
+    import sqlite3
+
+    db = sqlite3.connect(f"{catalog_db.resolve().as_uri()}?immutable=1", uri=True)
+    try:
+        rows = db.execute(f"SELECT id FROM beatmapsets WHERE status IN ({','.join('?' * len(RANKED))})", RANKED)
+        return {int(r[0]) for r in rows}
+    finally:
+        db.close()
+
+
+def set_id(content: str) -> Optional[int]:
+    """The chart's BeatmapSetID, when it has an online one."""
+    for line in content.splitlines():
+        if line.strip().startswith("BeatmapSetID"):
+            try:
+                v = int(line.split(":", 1)[1].strip())
+            except (IndexError, ValueError):
+                return None
+            return v if v > 0 else None
+    return None
+
+
 def summarize(scores: List[ChartScore]) -> dict:
     ok = [s for s in scores if s.error is None]
     if not ok:
@@ -208,10 +240,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--one-per-song", action="store_true", help="同一首歌只取一个难度")
     p.add_argument("--holdout", action="store_true", help="只评测节奏模型训练时留出的歌（rhythm.is_holdout）")
     p.add_argument("--output", help="把逐谱结果与汇总写成 JSON")
+    p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
+                   help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（ADR-0040）")
+    p.add_argument("--skip-ranked", metavar="CATALOG_DB",
+                   help="跳过线上谱面库（catalog.db）里 ranked/loved/qualified 的谱：Mapperatorinator 训练时见过它们（ADR-0040）")
     args = p.parse_args(argv)
 
     charts = songs_folder_charts(Path(args.songs).expanduser()) if args.songs else \
         lazer_charts(Path(args.realm).expanduser() if args.realm else None)
+    ranked = ranked_sets(Path(args.skip_ranked).expanduser()) if args.skip_ranked else set()
     scores: List[ChartScore] = []
     seen_audio = set()
     for name, osu, audio in charts:
@@ -221,10 +258,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             continue
         if args.holdout and not is_holdout(Path(audio).name):
             continue
-        seen_audio.add(audio)
         try:
             content = osu.read_text(encoding="utf-8", errors="replace")
-            s = score_chart(name, parse_osu_7k(content), content, audio)
+            if ranked and set_id(content) in ranked:
+                continue
+            seen_audio.add(audio)
+            s = score_chart(name, parse_osu_7k(content), content, audio, backend=args.backend)
         except Exception as e:
             s = ChartScore(name, 0, 0, 0, 0, 0, 0, 0, None, "wrong", None, error=str(e)[:200])
         scores.append(s)

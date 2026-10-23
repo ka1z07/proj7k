@@ -86,6 +86,11 @@ class GeneratorOptions:
     brief: Optional[brief_mod.Brief] = None   # a chart design brief (ADR-0033): sections, leads, patterns, long notes
     auto_design: bool = False                 # without a brief, give each section a technique from people's charts
     log: Optional[Callable[[str], None]] = None
+    backend: str = "proj7k"                   # who writes the notes: "proj7k" (this module) or "mapperatorinator" (ADR-0040)
+    model_runs: Optional[int] = None          # mapperatorinator: runs at most, each scored by the engine
+    model_hold_ratio: Optional[float] = None  # mapperatorinator: its hold_note_ratio condition; None lets it choose
+    model_args: Optional[List[str]] = None    # mapperatorinator: extra Hydra overrides (descriptors, mapper_id, ...)
+    model_runner: Optional[Callable] = None   # stands in for the model (tests)
 
 
 @dataclass
@@ -94,7 +99,7 @@ class GenerationResult:
     profile: DifficultyProfile
     target_stars: float
     intensity: float
-    timing_source: str                        # "reference", "manual" or "auto"
+    timing_source: str                        # "reference", "manual", "auto" or "model" (the model wrote it)
     onset_shift_ms: float                     # how much later the music's onsets sit than the timing's beats
     tempo: Optional[TempoEstimate]
     iterations: int
@@ -114,6 +119,12 @@ class GenerationResult:
 
 def generate_from_file(audio_path: Union[str, Path], options: GeneratorOptions) -> GenerationResult:
     audio_path = Path(audio_path)
+    if options.backend == "mapperatorinator":
+        from proj7k.generator import mapperatorinator
+
+        return mapperatorinator.generate_from_file(audio_path, options, runner=options.model_runner)
+    if options.backend != "proj7k":
+        raise ValueError(tr(f"未知的落键方式：{options.backend}", f"Unknown backend: {options.backend}"))
     result = generate(load_audio(audio_path), options)
     if not (options.reference and options.reference.audio_filename):
         result.beatmap.audio_filename = audio_path.name
