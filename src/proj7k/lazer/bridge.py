@@ -8,13 +8,19 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import threading
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k import claims
 from proj7k.lazer.paths import LAZER_DIR
 
 
 DEFAULT_REALM_PATH = LAZER_DIR / "client.realm"
 DEFAULT_BRIDGE_DIR = Path(__file__).resolve().parents[3] / "tools" / "lazer-bridge"
+
+#: One `npm install` at a time in this process: every bridge call checks the install first, and the dashboard's jobs
+#: and its library reader call from several threads (ADR-0043); two installs into one node_modules can break it.
+_INSTALL_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -139,7 +145,13 @@ class RealmBridgeClient:
         )
 
     def ensure_installed(self) -> bool:
-        status = self.check_environment()
+        if self.check_environment().is_ready:
+            return True
+        with _INSTALL_LOCK:
+            return self._install()
+
+    def _install(self) -> bool:
+        status = self.check_environment()  # again: another thread may have installed it while this one waited
         if status.is_ready:
             return True
 
@@ -267,6 +279,7 @@ class RealmBridgeClient:
         realm_path: Optional[Path] = None,
         auto_setup: bool = True,
     ) -> BatchUpdateResult:
+        claims.require(claims.LAZER)
         if auto_setup:
             self.ensure_installed()
 
@@ -296,6 +309,7 @@ class RealmBridgeClient:
         realm_path: Optional[Path] = None,
         auto_setup: bool = True,
     ) -> BatchUpdateResult:
+        claims.require(claims.LAZER)
         if auto_setup:
             self.ensure_installed()
 

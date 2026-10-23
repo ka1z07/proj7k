@@ -88,7 +88,8 @@ def test_ensure_installed_triggers_npm():
         npm_path="/usr/local/bin/npm",
     )
 
-    with patch.object(client, "check_environment", side_effect=[mock_status_unready, mock_status_ready]), \
+    # Checked once before taking the install lock and once more inside it, then after installing.
+    with patch.object(client, "check_environment", side_effect=[mock_status_unready, mock_status_unready, mock_status_ready]), \
          patch("pathlib.Path.exists", return_value=True), \
          patch("subprocess.run") as mock_run:
         mock_proc = MagicMock(returncode=0)

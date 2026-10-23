@@ -45,7 +45,7 @@ from urllib.parse import parse_qs, quote, unquote
 from websockets.asyncio.server import ServerConnection
 from websockets.http11 import Request, Response
 
-from proj7k.dashboard.actions import DashboardConfig, build_actions
+from proj7k.dashboard.actions import DashboardConfig, build_actions, job_resources
 from proj7k.dashboard import player as player_api
 from proj7k.dashboard.jobs import JobManager
 from proj7k.i18n import current as current_language, from_cookie, set_language, tr
@@ -126,7 +126,7 @@ class DashboardServer(LiveServer):
                          open_timeout=PLAYER_API_TIMEOUT_S)
         self.config = config or DashboardConfig()
         self.dashboard_static_dir = static_dir or DASHBOARD_STATIC_DIR
-        self.jobs = jobs or JobManager(build_actions(self.config), self.config.jobs_dir)
+        self.jobs = jobs or JobManager(build_actions(self.config), self.config.jobs_dir, resources=job_resources)
         self.jobs.notify = self._notify_from_thread
         self.opener = opener
         self.library = player_api.PlayerLibrary(

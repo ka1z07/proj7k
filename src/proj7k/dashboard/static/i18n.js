@@ -613,7 +613,7 @@ const P7I18N = (() => {
     "查看器": "Viewer",
     "proj7k 全部任务": "proj7k jobs",
     "全部任务": "All jobs",
-    "看板里的全部任务：正在跑的、排队的和最近结束的。任务一个接一个运行；看板重启后这个列表会清空。": "Every job in the dashboard: running, queued and recently finished. Jobs run one at a time; this list is cleared when the dashboard restarts.",
+    "看板里的全部任务：正在跑的、排队的和最近结束的。不同工具的任务可以同时运行，用到同一份数据（lazer 曲库、回放数据库等）的任务按顺序一个一个跑；看板重启后这个列表会清空。": "Every job in the dashboard: running, queued and recently finished. Jobs from different tools can run at the same time; jobs that use the same data (the lazer library, the replay database, ...) run one after another in order. This list is cleared when the dashboard restarts.",
     "全部": "All",
     "进行中": "Active",
     "osu!lazer 开关": "osu!lazer control",
