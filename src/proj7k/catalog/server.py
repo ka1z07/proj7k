@@ -11,6 +11,7 @@ The catalog website and its JSON API, on the standard library's threaded HTTP se
     GET /mappers                          mappers (the list), `/mappers/<user id or @name>` one mapper's style
     GET /api/mappers?q=&sort=&min=&page=
     GET /api/mappers/<user id or @name>
+    GET /api/players/<user id>            a player's public osu!mania rank and pp, for the desktop app (ADR-0041)
 
 Read-only: nothing a client sends reaches the database except as a bound SQL parameter, and only the
 files of `static/` are served. In production it sits behind a reverse proxy (TLS, caching, rate limits).
@@ -27,6 +28,7 @@ from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from proj7k.catalog.mappers import MapperIndex
+from proj7k.catalog.players import TTL_S as PLAYER_TTL_S, PlayerProfiles, PlayerUnavailable
 from proj7k.catalog.store import CatalogStore
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ STATIC_MAX_AGE_S = 300
 
 _MAPPER_PAGE = re.compile(r"^/mappers/([^/]+)/?$")
 _MAPPER_API = re.compile(r"^/api/mappers/([^/]+)$")
+_PLAYER_API = re.compile(r"^/api/players/(\d{1,10})$")
 
 
 def _int(value: Optional[str], default: int) -> int:
@@ -65,6 +68,7 @@ class CatalogHandler(BaseHTTPRequestHandler):
     server_version = "proj7k-catalog"
     store: CatalogStore   # set on the subclass `make_server` builds
     mappers: MapperIndex
+    players: PlayerProfiles
 
     def log_message(self, fmt: str, *args: Any) -> None:
         logger.info("%s %s", self.address_string(), fmt % args)
@@ -130,11 +134,25 @@ class CatalogHandler(BaseHTTPRequestHandler):
         if m:
             data = self.mappers.get(unquote(m.group(1)))
             return self._json(data) if data else self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        m = _PLAYER_API.match(path)
+        if m:
+            return self._player(int(m.group(1)))
         if path == "/api/stats":
             return self._json(self.store.stats())
         if path.startswith("/static/") and path[len("/static/"):] in STATIC_FILES:
             return self._static(path[len("/static/"):])
         return self._not_found()
+
+    def _player(self, user_id: int) -> Tuple[int, Dict[str, str], bytes]:
+        try:
+            data = self.players.get(user_id)
+        except PlayerUnavailable:
+            return self._json({"error": "osu! is unavailable"}, HTTPStatus.SERVICE_UNAVAILABLE)
+        if data is None:
+            return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        status, headers, body = self._json(data)
+        headers["Cache-Control"] = f"public, max-age={int(PLAYER_TTL_S)}"
+        return status, headers, body
 
     @staticmethod
     def _json(data: Any, status: int = HTTPStatus.OK) -> Tuple[int, Dict[str, str], bytes]:
@@ -164,11 +182,14 @@ class CatalogHandler(BaseHTTPRequestHandler):
 
 
 def make_server(store: CatalogStore, host: str = "127.0.0.1", port: int = 7780,
-                mapper_stale_s: Optional[float] = None) -> ThreadingHTTPServer:
+                mapper_stale_s: Optional[float] = None,
+                players: Optional[PlayerProfiles] = None) -> ThreadingHTTPServer:
     """`mapper_stale_s`: see `MapperIndex`; the command line sets it so a crawl running beside the site
-    never makes a visitor wait for the mapper profiles."""
+    never makes a visitor wait for the mapper profiles. `players`: the osu! profile lookups behind `/api/players`;
+    without one that endpoint answers 503."""
     mappers = MapperIndex(store, stale_s=mapper_stale_s)
-    handler = type("BoundCatalogHandler", (CatalogHandler,), {"store": store, "mappers": mappers})
+    handler = type("BoundCatalogHandler", (CatalogHandler,), {
+        "store": store, "mappers": mappers, "players": players or PlayerProfiles(None)})
     server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
     return server

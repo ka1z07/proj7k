@@ -21,7 +21,8 @@ job's registered outputs.
 
 The player pages read `/api/me/*` (`proj7k.dashboard.player`): `players`, `overview`, `history`, `library`,
 `chart/<md5>`, `play/<id>`, and from osu!lazer's file store a chart's `cover/<md5>` and `audio/<md5>` and a play's
-`replay/<id>` (.osr). They are answered off the event loop: the first one reads the library through the Node bridge.
+`replay/<id>` (.osr), and `online/<osu! user id>`: the player's online rank and pp, through the catalog site
+(ADR-0041). They are answered off the event loop: the first one reads the library through the Node bridge.
 `open_replay {play}` hands a play's replay to osu!lazer, which shows it.
 """
 
@@ -76,7 +77,7 @@ MAX_MESSAGE_BYTES = 256 * 2**20
 PLAYER_API_TIMEOUT_S = 120.0
 
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
-_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar)(?:/([\w.-]+))?$")
+_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar|online)(?:/([\w.-]+))?$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -132,6 +133,7 @@ class DashboardServer(LiveServer):
         )
         # The chart pages' own engine: the live radar's is used from the event loop, these from worker threads.
         self._chart_engine = LiveEngine(max_mem_entries=64)
+        self.online = player_api.OnlineProfile()
         self._profiles: Dict[Tuple[str, float], Dict[str, Any]] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._game_chart: Dict[str, Any] = {"type": "game_chart", "chart": None, "unresolved": None}
@@ -255,6 +257,8 @@ class DashboardServer(LiveServer):
         params = {k: v[-1] for k, v in parse_qs(query).items()}
         set_language(from_cookie(request.headers.get("Cookie")))  # this thread's copy of the context only
         try:
+            if what == "online":   # osu!'s own record of the player; needs nothing from the library
+                return self._json_response(self.online.get(int(arg) if arg and arg.isdigit() else -1))
             snapshot = self.library.snapshot(force=what == "refresh")
             player = params.get("player") or snapshot.default_player() or ""
             not_found = self._json_response({"error": tr("没有找到", "Not found")}, 404, "Not Found")

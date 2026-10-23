@@ -54,6 +54,52 @@ CATALOG_WEB = "https://7k.kaiz.dev"
 AVATAR_WEB = "https://a.ppy.sh"
 
 
+class OnlineProfile:
+    """
+    A player's online osu!mania rank and pp (ADR-0041), asked of the catalog site's `/api/players/<id>` (which holds
+    the OAuth client the app can't ship) and kept `ttl_s`; a failure is remembered for `error_ttl_s`, so a machine
+    offline doesn't make every home page wait on the network.
+    """
+
+    def __init__(self, base: Optional[str] = None, ttl_s: float = 600.0, error_ttl_s: float = 120.0,
+                 timeout_s: float = 6.0, fetch: Optional[Callable[[str], bytes]] = None) -> None:
+        import os
+
+        self.base = (base or os.environ.get("PROJ7K_CATALOG_URL") or CATALOG_WEB).rstrip("/")
+        self.ttl_s, self.error_ttl_s, self.timeout_s = ttl_s, error_ttl_s, timeout_s
+        self.fetch = fetch or self._urlopen
+        self._cache: Dict[int, Tuple[float, Dict[str, Any]]] = {}
+        self._lock = threading.Lock()
+
+    def _urlopen(self, url: str) -> bytes:
+        import urllib.request
+
+        req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "proj7k-desktop"})
+        with urllib.request.urlopen(req, timeout=self.timeout_s) as res:
+            return res.read(2**20)
+
+    def get(self, user_id: int) -> Dict[str, Any]:
+        """`{"available": True, "profile": {...}}`, or `{"available": False, "reason": ...}`."""
+        if user_id <= 0:
+            return {"available": False, "reason": "no_user"}
+        now = time.monotonic()
+        with self._lock:
+            hit = self._cache.get(user_id)
+            if hit and now < hit[0]:
+                return hit[1]
+        try:
+            out = {"available": True, "profile": json.loads(self.fetch(f"{self.base}/api/players/{user_id}"))}
+            expires = now + self.ttl_s
+        except Exception as e:
+            code = getattr(e, "code", None)
+            out = {"available": False, "reason": "not_found" if code == 404 else "offline"}
+            logger.info(f"Online profile of {user_id} unavailable: {e}")
+            expires = now + self.error_ttl_s
+        with self._lock:
+            self._cache[user_id] = (expires, out)
+        return out
+
+
 def store_path(files_dir: Path, file_hash: str) -> Path:
     """A file in osu!lazer's content-addressed store."""
     return files_dir / file_hash[:1] / file_hash[:2] / file_hash

@@ -116,9 +116,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         store.export(args.output)
         print(f"wrote {args.output} ({args.output.stat().st_size / 1e6:.0f} MB)")
     elif args.command == "serve":
+        from proj7k.catalog.players import PlayerProfiles, osu_user_fetcher
         from proj7k.catalog.server import make_server
 
-        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh)
+        # The desktop app's online rank and pp come through the site, which holds the OAuth client (ADR-0041).
+        client_id, secret = os.environ.get("OSU_CLIENT_ID"), os.environ.get("OSU_CLIENT_SECRET")
+        players = PlayerProfiles(osu_user_fetcher(ingest.OsuApiClient(client_id, secret, min_interval_s=1.0))
+                                 if client_id and secret else None)
+        if not players.available:
+            print("OSU_CLIENT_ID/OSU_CLIENT_SECRET not set: /api/players answers 503", file=sys.stderr)
+        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh, players=players)
         # The mapper profiles take a while on a full catalog; build them before the first visitor asks.
         threading.Thread(target=server.RequestHandlerClass.mappers.profiles, daemon=True).start()
         url = f"http://{args.host}:{args.port}/beatmapsets"
