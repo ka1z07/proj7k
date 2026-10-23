@@ -84,7 +84,7 @@ def bpm_match(estimated: float, true: float) -> str:
 
 
 def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, seed: int = 0,
-                backend: str = "proj7k") -> ChartScore:
+                backend: str = "proj7k", contrast: Optional[float] = None) -> ChartScore:
     human_stars = float(evaluate_osu(content).total_stars)
     audio = load_audio(audio_path)
     timing = [tp for tp in chart.timing_points if tp.uninherited]
@@ -92,7 +92,8 @@ def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, see
         # The model times the song itself, so its rows are held against the human ones as they fall (ADR-0040).
         result = generate_from_file(audio_path, GeneratorOptions(target_stars=human_stars, seed=seed, backend=backend))
     else:
-        result = generate(audio, GeneratorOptions(target_stars=human_stars, timing=timing, seed=seed))
+        result = generate(audio, GeneratorOptions(target_stars=human_stars, timing=timing, seed=seed,
+                                                         contrast=contrast))
     gen_rows = sorted({o.time for o in result.beatmap.hit_objects})
     human_rows = sorted({o.time for o in chart.hit_objects})
     precision, recall = row_match(gen_rows, human_rows)
@@ -219,15 +220,26 @@ def summarize(scores: List[ChartScore]) -> dict:
         },
         "patterns_median": {
             who: {k: float(np.median([getattr(s, attr)[k] for s in ok if getattr(s, attr)]))
-                  for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat", "density_cv", "quarter", "triplet")}
+                  for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat", "density_cv", "density_floor", "density_peak", "rows_per_s", "notes_per_s",
+                            "quarter", "triplet")}
             for who, attr in (("human", "human_patterns"), ("generated", "generated_patterns"))
             if any(getattr(s, attr) for s in ok)
         },
+        # Generated over human, chart by chart, at the same star rating: below 1 the generator reaches
+        # the rating with fewer notes than the person did.
+        "notes_ratio_median": _ratio_median(ok, "notes_per_s"),
+        "rows_ratio_median": _ratio_median(ok, "rows_per_s"),
         "onset_shift_by_audio": {
             kind: float(np.median([s.onset_shift_ms for s in ok if s.audio == kind]))
             for kind in sorted({s.audio for s in ok})
         },
     }
+
+
+def _ratio_median(scores: List[ChartScore], key: str) -> Optional[float]:
+    r = [s.generated_patterns[key] / s.human_patterns[key] for s in scores
+         if s.human_patterns and s.generated_patterns and s.human_patterns.get(key) and key in s.generated_patterns]
+    return float(np.median(r)) if r else None
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -239,6 +251,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--limit", type=int, default=30, help="最多评测几张谱，默认 30")
     p.add_argument("--one-per-song", action="store_true", help="同一首歌只取一个难度")
     p.add_argument("--holdout", action="store_true", help="只评测节奏模型训练时留出的歌（rhythm.is_holdout）")
+    p.add_argument("--contrast", type=float, help="段落密度起伏保留多少（0..1，默认 rhythm.CONTRAST）")
     p.add_argument("--output", help="把逐谱结果与汇总写成 JSON")
     p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
                    help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（ADR-0040）")
@@ -263,7 +276,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             if ranked and set_id(content) in ranked:
                 continue
             seen_audio.add(audio)
-            s = score_chart(name, parse_osu_7k(content), content, audio, backend=args.backend)
+            s = score_chart(name, parse_osu_7k(content), content, audio, backend=args.backend, contrast=args.contrast)
         except Exception as e:
             s = ChartScore(name, 0, 0, 0, 0, 0, 0, 0, None, "wrong", None, error=str(e)[:200])
         scores.append(s)
