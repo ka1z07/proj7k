@@ -99,7 +99,7 @@ def test_pages_load_no_external_scripts_or_styles():
         text = path.read_text(encoding="utf-8")
         assert not re.search(r"<(script|link)[^>]+(src|href)=[\"'](https?:)?//", text), path.name
         assert "@import" not in text, path.name
-        assert not re.search(r"https?://(?!assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/|github\.com/ka1z07/proj7k|kaiz\.dev/)", text), path.name
+        assert not re.search(r"https?://(?!www\.w3\.org/2000/svg|assets\.ppy\.sh/|osu\.ppy\.sh/|a\.ppy\.sh/|github\.com/ka1z07/proj7k|kaiz\.dev/)", text), path.name
 
 
 def test_pages_link_scripts_and_styles_by_content_version(site):
@@ -123,3 +123,61 @@ def test_a_random_page_without_a_seed_is_never_cached(site):
     assert headers["Cache-Control"] == "no-store" and isinstance(json.loads(body)["seed"], int)
     _, headers, body = _get(f"{site}/api/beatmapsets/search?sort=random&seed=3")
     assert headers["Cache-Control"] == "public, max-age=60" and json.loads(body)["seed"] == 3
+
+
+def test_a_set_page_carries_its_own_title_description_and_summary(site):
+    """Search engines and link previews read the HTML, not what the script draws (ADR-0042)."""
+    status, _, body = _get(f"{site}/beatmapsets/1877617")
+    page = body.decode("utf-8")
+    assert status == 200 and page.count("<title>") == 1
+    title = re.search(r"<title>(.*?)</title>", page).group(1)
+    assert "osu!mania 7K" in title and title != "谱面 · proj7k 7K 谱面库"
+    assert '<link rel="canonical" href="https://7k.kaiz.dev/beatmapsets/1877617">' in page
+    assert re.search(r'<meta name="description" content="[^"]*官方星级 4\.20★', page)
+    assert 'property="og:image" content="https://assets.ppy.sh/beatmaps/1877617/covers/cover@2x.jpg"' in page
+    summary = re.search(r'<section class="ssr container" id="ssr">(.*?)</section>', page, re.S).group(1)
+    assert summary.count("<tr>") == 3 and "<h1>" in summary
+    ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', page).group(1))
+    assert ld["@type"] == "BreadcrumbList" and len(ld["itemListElement"]) == 2
+
+
+def test_a_missing_set_or_mapper_is_a_real_404_kept_out_of_the_index(site):
+    for path in ("/beatmapsets/42", "/mappers/999999999"):
+        status, headers, body = _get(f"{site}{path}")
+        assert status == 404 and headers["Content-Type"].startswith("text/html"), path
+        assert b'<meta name="robots" content="noindex">' in body and b'id="ssr"' not in body
+
+
+def test_a_mapper_page_carries_its_own_title(site):
+    key = json.loads(_get(f"{site}/api/mappers")[2])["mappers"][0]["key"]
+    status, _, body = _get(f"{site}/mappers/{quote(key, safe='@')}")
+    page = body.decode("utf-8")
+    assert status == 200 and "osu!mania 7K 谱师" in re.search(r"<title>(.*?)</title>", page).group(1)
+    assert f'href="https://7k.kaiz.dev/mappers/{quote(key, safe='@')}"' in page and 'id="ssr"' in page
+
+
+def test_fixed_pages_have_a_description_and_canonical(site):
+    for path in ("/", "/beatmapsets", "/mappers"):
+        page = _get(f"{site}{path}?q=x")[2].decode("utf-8")
+        assert page.count('<meta name="description"') == 1, path
+        assert f'<link rel="canonical" href="https://7k.kaiz.dev{path}">' in page, path
+
+
+def test_robots_and_sitemaps(site):
+    status, headers, body = _get(f"{site}/robots.txt")
+    assert status == 200 and headers["Content-Type"].startswith("text/plain")
+    assert "Sitemap: https://7k.kaiz.dev/sitemap.xml" in body.decode() and "Disallow: /api/" not in body.decode()
+    index = _get(f"{site}/sitemap.xml")[2].decode()
+    locs = re.findall(r"<loc>https://7k\.kaiz\.dev(/sitemaps/[\w-]+\.xml)</loc>", index)
+    assert locs == ["/sitemaps/pages.xml", "/sitemaps/mappers.xml", "/sitemaps/sets-1.xml"]
+    urls = {}
+    for loc in locs:
+        status, headers, body = _get(f"{site}{loc}")
+        assert status == 200 and headers["Content-Type"].startswith("application/xml"), loc
+        urls[loc] = re.findall(r"<loc>https://7k\.kaiz\.dev([^<]*)</loc>", body.decode())
+    assert len(urls["/sitemaps/sets-1.xml"]) == 2
+    assert "/" in urls["/sitemaps/pages.xml"] and urls["/sitemaps/mappers.xml"]
+    for path in urls["/sitemaps/sets-1.xml"] + urls["/sitemaps/mappers.xml"]:
+        assert _get(f"{site}{path}")[0] == 200, path
+    assert _get(f"{site}/sitemaps/sets-2.xml")[0] == 404
+    assert _get(f"{site}/favicon.ico")[0] == 200

@@ -12,11 +12,12 @@ import logging
 from pathlib import Path
 import re
 import shutil
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from proj7k.lazer.backup import DEFAULT_CACHE_DIR
 from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
 
+from proj7k.claims import ALL as ALL_RESOURCES, DOWNSCALER, GENERATOR, LAZER, PROFILER
 from proj7k.dashboard.jobs import Action, JobContext
 from proj7k.i18n import tr
 
@@ -539,6 +540,41 @@ def import_replays(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         f"{stats['already_exists']} already in the database, {stats['unsupported_mods']} under unsupported mods."
     )
     return stats
+
+
+# --- what each job holds (ADR-0043) -----------------------------------------------------------------------------
+
+#: What each job kind claims whatever its parameters (the resources are described in `proj7k.claims`). Reading the
+#: library is not claimed: the bridge opens it read-only for every read (tests/test_dashboard_scheduler.py checks
+#: bridge.js), so a reader cannot change it. Every write checks its claim when it happens (`claims.require`).
+JOB_RESOURCES: Dict[str, FrozenSet[str]] = {
+    "sync_setup": frozenset({LAZER}),
+    "sync_once": frozenset({LAZER}),       # a dry run too: it writes the evaluation cache
+    "sync_revert": frozenset({LAZER}),
+    "lazer_control": frozenset({LAZER}),
+    "downscale": frozenset({DOWNSCALER}),  # and LAZER when it adds the charts to the library, below
+    "generate": frozenset({GENERATOR}),
+    "profile_replay": frozenset({PROFILER}),
+    "profile_player": frozenset({PROFILER}),
+    "profile_habits": frozenset({PROFILER}),
+    "import_replays": frozenset({PROFILER}),
+}
+
+
+def job_resources(kind: str, params: Dict[str, Any]) -> FrozenSet[str]:
+    """
+    What a job of `kind` with `params` holds while it runs. A kind missing from `JOB_RESOURCES` claims everything,
+    so a new action runs alone until it is listed. Never raises: a parameter the action rejects claims more, not less.
+    """
+    claimed = JOB_RESOURCES.get(kind, ALL_RESOURCES)
+    if kind == "downscale":
+        try:
+            writes_library = _flag(params, "sync_lazer")
+        except Exception:
+            writes_library = True
+        if writes_library:
+            claimed = claimed | {LAZER}
+    return claimed
 
 
 def build_actions(config: DashboardConfig) -> Dict[str, Action]:

@@ -197,17 +197,21 @@ const Catalog = (() => {
     return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polygon points="0,${h} ${pts} ${w},${h}" fill="${colour}" fill-opacity=".35" stroke="${colour}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
   }
 
+  // The server's plain-HTML summary of a set or mapper, for search engines and link previews (ADR-0042).
+  const dropSummary = () => document.getElementById("ssr")?.remove();
+
   function setPage() {
     navMeta();
     const setId = parseInt(location.pathname.split("/").filter(Boolean)[1], 10);
     getJSON(`/api/beatmapsets/${setId}`).then((set) => {
+      dropSummary();
       document.title = `${set.artist} - ${set.title} · ${tr("proj7k 7K 谱面库")}`;
       const header = document.getElementById("header");
       cover(header, set.id, "cover@2x.jpg");
       const pick = (id) => render(set, set.beatmaps.find((b) => String(b.id) === String(id)) || set.beatmaps[set.beatmaps.length - 1]);
       window.addEventListener("hashchange", () => pick(location.hash.slice(1)));
       pick(location.hash.slice(1));
-    }).catch(() => { document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这组谱面")}</div>`; });
+    }).catch(() => { dropSummary(); document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这组谱面")}</div>`; });
   }
 
   function render(set, cur) {
@@ -334,7 +338,8 @@ const Catalog = (() => {
     navMeta();
     const key = decodeURIComponent(location.pathname.split("/").filter(Boolean)[1]);
     let m;
-    try { m = await getJSON(`/api/mappers/${encodeURIComponent(key)}`); } catch (e) { document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这位谱师")}</div>`; return; }
+    try { m = await getJSON(`/api/mappers/${encodeURIComponent(key)}`); } catch (e) { dropSummary(); document.getElementById("main").innerHTML = `<div class="empty">${tr("找不到这位谱师")}</div>`; return; }
+    dropSummary();
     document.title = `${m.name} · ${tr("谱师")} · ${tr("proj7k 7K 谱面库")}`;
     const years = m.years[0] ? (m.years[0] === m.years[1] ? `${m.years[0]}` : `${m.years[0]}–${m.years[1]}`) : "";
     document.getElementById("head").innerHTML = `
