@@ -46,3 +46,9 @@
 - 命令行：`python3 -m proj7k.generator --backend mapperatorinator`；`--ln` 不给时长条比例由模型自己定，给了就作为它的 `hold_note_ratio` 条件；`--model-arg` 透传其他条件（如 `descriptors`、`mapper_id`）。模型自己测 timing，参考谱面只借用音频与元数据；设计稿、分轨、按段技法对它不生效，会给出提示。
 - 面板「谱面生成」：「实验：Mapperatorinator 模型落键」勾选项，第一次勾选时安装。
 - 评测：`python3 -m proj7k.generator.evaluate --backend mapperatorinator --skip-ranked <catalog.db>`，按线上谱面库跳过 ranked/loved/qualified 的谱（模型训练时见过）。
+
+## 排键合法化（2026-10-23，Kai：「排查生成铺面存在排键重叠不合法的问题」）
+
+meow 上扫了 `~/.cache/proj7k` 里全部 330 份 7K 谱：Mapperatorinator 的原始输出 112 张里 49 张不合法（同列同时间重复 314 处、音符落在长条按住段里 7549 处、列号越界 22 处、长条尾不晚于头 333 处，重复与越界多在 t=0），写出时原样带进了面板的谱（4 张）。它按窗口分别写、窗口互相重叠，所以同一个音符会写两遍、后一个窗口的音符会落进前一个窗口的长条。proj7k 自己的落键（gen-6）一处都没有。
+
+`generator/legal.py`：模型每次的输出在评星之前先合法化（按写进 .osu 的整毫秒判）：越界列丢掉；同列同头只留最长的一个；落进长条的音符保留，长条在它之前 1/8 拍收尾，剩下不到 1/8 拍就改成米；没有长度的长条改成米。`_beatmap` 对两种后端写出的谱都再过一遍，所以交出去的谱不会有重叠。
