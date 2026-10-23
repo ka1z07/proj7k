@@ -53,6 +53,6 @@ PYTHONPATH=src python3 tools/export_benchmark_corpus.py \
 
 玩家装的是 GitHub Release 的 Source code (zip) + `install.cmd`/`install.sh`（装 Python 3.14、Node.js、`.venv`、lazer bridge，再从最新 release 下载 Tauri 窗口；没有正式版时退回 `desktop-latest`）。出新版：
 
-1. 把 `desktop/tauri/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 `version` 改成新版本号，写 `docs/releases/v<版本>.md`（就是 release 的正文），合并到 main。
+1. 把 `desktop/tauri/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 `version` 改成新版本号，写 `docs/releases/v<版本>.md`（就是 release 的正文，用英文，开头链接简体 `v<版本>.zh-CN.md` 与繁体 `v<版本>.zh-TW.md` 两份中文说明，链接指向 `blob/v<版本>/…`；繁体可由简体经 OpenCC `s2twp` 转换后人工修词），合并到 main。Release workflow 会检查这三份都在、且英文正文链接了两份中文。
 2. Actions → Release → Run workflow，填版本号（如 `0.1.0`）：构建 Windows/macOS 窗口，在该提交上留一个**草稿** release `v<版本>`。
 3. 草稿过目后在 GitHub 上点 Publish（这一步才创建 tag、对外可见）。
