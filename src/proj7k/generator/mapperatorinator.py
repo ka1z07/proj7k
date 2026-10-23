@@ -445,7 +445,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if not (options.reference and options.reference.audio_filename):
         bm.audio_filename = audio_path.name
     return GenerationResult(
-        beatmap=bm, profile=profile, target_stars=target, intensity=difficulty, timing_source="model",
+        beatmap=bm, profile=profile, target_stars=target, intensity=difficulty, timing_source="reference" if timing_from else "model",
         onset_shift_ms=0.0, tempo=None, iterations=tried, warnings=warnings,
     )
 

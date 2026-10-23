@@ -217,6 +217,7 @@ def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
     assert "BeatmapID:0" in text and "BeatmapSetID:-1" in text and "TimingPoints" in text
     assert reference.extra_sections["Metadata"]["BeatmapID"] == "123"
     assert not any("timing" in w for w in result.warnings)
+    assert result.timing_source == "reference"
 
 
 def test_stops_once_the_difficulty_condition_is_at_its_ceiling(song):
