@@ -38,6 +38,7 @@
     .dan-cell.empty-dan { opacity: 0.45; }
     .online { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-variant-numeric: tabular-nums; }
     .online:empty { display: none; }
+    .online { align-items: center; }
     .online .chip { background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-color); border-radius: 999px; padding: 3px 10px; font-size: 0.82rem; }
     .online .chip b { font-weight: 800; }
     .online .chip.lead { border-color: rgba(255, 102, 171, 0.5); }
@@ -79,21 +80,30 @@
               pl.country ? `${flag(pl.country)} ${pl.country} · ` : "",
               t.first_play ? tr("{date} 开始记录", { date: new Date(t.first_play).toLocaleDateString(P7I18N.locale) }) + " · " : "",
               t.last_play ? tr("最近游玩 {when}", { when: P7.ago(t.last_play) }) : tr("还没有游玩记录")),
-            onlineLine(pl),
+            onlineLine(),
             el("div", { class: "actions", style: "margin-top:10px" },
               el("button", { class: "small", text: tr("完整画像"), onclick: () => P7.navigate("profiler", { tab: "player" }) }),
               pl.profile_url ? el("a", { href: pl.profile_url, target: "_blank", rel: "noopener" }, el("button", { class: "small", text: tr("osu! 官网主页") })) : null)),
           level));
     }
 
-    // osu!'s own rank and pp for this player (ADR-0041): asked after the page is drawn, so an offline machine
-    // never holds the home page up; nothing is shown when osu! can't be reached.
-    let online = { id: null, data: null };
-    function onlineLine(pl) {
+    // The signed-in osu! account's rank and pp (ADR-0041): asked after the page is drawn, so an offline machine never
+    // holds the home page up. Signing in opens osu! in the system browser; the line fills in when the page is next shown.
+    let online = null;
+    function onlineLine() {
       const box = el("div", { class: "online" });
       const fill = (o) => {
-        if (!o || !o.available) { box.replaceChildren(); return; }
-        const p = o.profile, m = p.mania || {}, v7 = (p.variants || {})["7k"] || {};
+        if (!o) return;
+        if (!o.signed_in) {
+          box.replaceChildren(el("a", { href: o.login_url, target: "_blank", rel: "noopener" },
+            el("button", { class: "small primary", text: tr("用 osu! 登录") })),
+            el("span", { class: "hint", text: tr("登录后显示 osu! 官网的排名和 pp") }));
+          return;
+        }
+        const p = o.profile, who = (o.user && o.user.username) || "";
+        const logout = el("button", { class: "small", text: tr("退出登录"), onclick: async () => { online = await P7.api("online/logout"); fill(online); } });
+        if (!p) { box.replaceChildren(el("span", { class: "hint", text: tr("已登录 {name}，暂时连不上 osu!", { name: who }) }), logout); return; }
+        const m = p.mania || {}, v7 = (p.variants || {})["7k"] || {};
         const rank = (r) => (r ? `#${P7.num(r)}` : "—");
         const pp = (x) => (x ? `${P7.num(Math.round(x))}pp` : "—");
         const chip = (label, value, cls) => el("span", { class: `chip ${cls || ""}` }, `${label} `, el("b", { text: value }));
@@ -102,12 +112,12 @@
           chip(tr("7K 国内"), rank(v7.country_rank)),
           chip("7K", pp(v7.pp)),
           chip(tr("mania 全球"), rank(m.global_rank)),
-          chip("mania", pp(m.pp)));
-        box.title = tr("osu! 官网数据，每 10 分钟更新");
+          chip("mania", pp(m.pp)),
+          el("span", { class: "hint", title: tr("osu! 官网数据，每 10 分钟更新"), text: who }),
+          logout);
       };
-      if (!(pl.user_id > 0)) return box;
-      if (online.id === pl.user_id && online.data) fill(online.data);
-      P7.api(`online/${pl.user_id}`).then((o) => { online = { id: pl.user_id, data: o }; fill(o); }).catch(() => {});
+      fill(online);
+      P7.api("online").then((o) => { online = o; fill(o); }).catch(() => {});
       return box;
     }
 

@@ -179,10 +179,10 @@ class OsuApiClient:
                 time.sleep(self.min_interval_s * 5 * 2 ** attempt)
         raise AssertionError("unreachable")
 
-    def get(self, path: str, params: Optional[Any] = None, retries: int = 4) -> Any:
+    def get(self, path: str, params: Optional[Any] = None) -> Any:
         url = f"{self.base}/api/v2/{path}" + (f"?{urllib.parse.urlencode(params)}" if params else "")
         return json.loads(self._retrying(lambda: self.fetch(
-            url, {"Authorization": f"Bearer {self.token()}", "Accept": "application/json"}, None), retries))
+            url, {"Authorization": f"Bearer {self.token()}", "Accept": "application/json"}, None)))
 
     def users(self, ids: List[int]) -> Dict[int, str]:
         """Usernames of osu! users, 50 per request."""

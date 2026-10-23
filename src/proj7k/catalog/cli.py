@@ -63,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=7780)
     serve.add_argument("--open", action="store_true", help="open the browser")
+    serve.add_argument("--public-url", default="https://7k.kaiz.dev",
+                       help="where the site is reached; osu! sends players back to <this>/oauth/callback, which must "
+                            "be the OAuth application's callback URL")
     serve.add_argument("--mapper-refresh", type=float, default=600.0, metavar="SECONDS",
                        help="rebuild the mapper profiles in the background at most this often while the "
                             "catalog changes (default 600)")
@@ -116,16 +119,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         store.export(args.output)
         print(f"wrote {args.output} ({args.output.stat().st_size / 1e6:.0f} MB)")
     elif args.command == "serve":
-        from proj7k.catalog.players import PlayerProfiles, osu_user_fetcher
+        from proj7k.catalog.oauth import OAuthBroker
         from proj7k.catalog.server import make_server
 
-        # The desktop app's online rank and pp come through the site, which holds the OAuth client (ADR-0041).
+        # "Sign in with osu!" for the desktop app goes through the site, which holds the secret (ADR-0041).
         client_id, secret = os.environ.get("OSU_CLIENT_ID"), os.environ.get("OSU_CLIENT_SECRET")
-        players = PlayerProfiles(osu_user_fetcher(ingest.OsuApiClient(client_id, secret, min_interval_s=1.0))
-                                 if client_id and secret else None)
-        if not players.available:
-            print("OSU_CLIENT_ID/OSU_CLIENT_SECRET not set: /api/players answers 503", file=sys.stderr)
-        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh, players=players)
+        oauth = OAuthBroker(client_id, secret, args.public_url.rstrip("/") + "/oauth/callback") \
+            if client_id and secret else None
+        if oauth is None:
+            print("OSU_CLIENT_ID/OSU_CLIENT_SECRET not set: sign-in with osu! (/oauth/*) answers 503", file=sys.stderr)
+        server = make_server(store, args.host, args.port, mapper_stale_s=args.mapper_refresh, oauth=oauth)
         # The mapper profiles take a while on a full catalog; build them before the first visitor asks.
         threading.Thread(target=server.RequestHandlerClass.mappers.profiles, daemon=True).start()
         url = f"http://{args.host}:{args.port}/beatmapsets"
