@@ -15,6 +15,7 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional, Union
 
+from proj7k import claims
 from proj7k.parser import Beatmap7K
 from proj7k.profiler.mods import AFFECTING_BITS
 from proj7k.engine.skills import SKILL_TECH_KEY
@@ -450,6 +451,7 @@ class ProfilerStorage:
 
     def delete_replay(self, replay_hash: str) -> int:
         """Removes a replay's snapshot (so it can be ingested again), returning the number of rows removed."""
+        claims.require(claims.PROFILER)
         with self.conn:
             return self.conn.execute("DELETE FROM match_snapshots WHERE replay_hash = ?", (replay_hash,)).rowcount
 
@@ -462,6 +464,7 @@ class ProfilerStorage:
         INSERT OR IGNORE, which would also swallow NOT NULL and CHECK violations and
         report a malformed snapshot to the caller as a duplicate.
         """
+        claims.require(claims.PROFILER)
         norm_player = normalize_player_name(snapshot.player_name)
         snapshot.player_name = norm_player
         with self.conn:

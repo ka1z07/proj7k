@@ -26,6 +26,7 @@ import sys
 import time
 from typing import Callable, List, Mapping, Optional, Sequence
 
+from proj7k import claims
 from proj7k.i18n import tr
 
 logger = logging.getLogger("proj7k.lazer.client")
@@ -145,6 +146,7 @@ class LazerClient:
         Close osu!lazer and wait until it has exited. Returns whether it was running.
         Raises TimeoutError when it is still running after `timeout_s` (it may be showing a dialog).
         """
+        claims.require(claims.LAZER)
         procs = self.processes()
         if not procs:
             logger.info("osu!lazer is not running.")
@@ -165,6 +167,7 @@ class LazerClient:
 
     def start(self) -> None:
         """Start osu!lazer, detached from this process."""
+        claims.require(claims.LAZER)
         exe = self.executable
         if exe is None:
             raise FileNotFoundError(tr("不知道 osu!lazer 装在哪里：启动 dashboard 时用 --lazer-exe 指定",
