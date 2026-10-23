@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 全部任务</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .job-row { border-bottom: 1px solid var(--border-color); }
+    .job-row:last-child { border-bottom: none; }
+    .job-line { display: flex; gap: 12px; align-items: center; padding: 10px 8px; cursor: pointer; border-radius: 8px; }
+    .job-line:hover { background: var(--bg-hover); }
+    .job-line .grow { flex: 1 1 auto; min-width: 0; }
+    .job-line .badge { flex: none; min-width: 64px; text-align: center; }
+    .job-kind { font-weight: 700; margin-right: 8px; }
+    .job-when { flex: none; text-align: right; font-variant-numeric: tabular-nums; width: 120px; }
+    .job-now { font-family: var(--mono); font-size: 0.76rem; color: var(--text-dim); }
+    .job-row.running .job-now { color: var(--accent-blue); }
+    .job-now.bad { color: var(--accent-red); }
+    .job-detail { padding: 0 8px 12px 84px; }
+    .job-detail .log { max-height: 320px; }
+    .job-row.running .badge { animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 10px rgba(102, 204, 255, 0.45); } }
+    @media (prefers-reduced-motion: reduce) { .job-row.running .badge { animation: none; } }
+    @media (max-width: 640px) { .job-detail { padding-left: 8px; } .job-when { width: 84px; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title" data-en="Jobs">任务</div>
+        <div class="page-sub">看板里的全部任务：正在跑的、排队的和最近结束的。任务一个接一个运行；看板重启后这个列表会清空。</div>
+      </div>
+      <a class="standalone-only" href="/#jobs">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="tabs" id="filters">
+          <button class="small active" data-filter="all">全部</button>
+          <button class="small" data-filter="active">进行中</button>
+          <button class="small" data-filter="failed">失败</button>
+        </div>
+        <span class="hint" id="count"></span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:6px 10px">
+      <div id="list"><div class="empty">正在读取…</div></div>
+    </div>
+  </div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const KIND = {
+      sync_setup: tr("安装 / 检查 bridge"), sync_once: tr("曲库同步"), sync_revert: tr("还原为官方星级"),
+      lazer_control: tr("osu!lazer 开关"), downscale: tr("降阶练习"), generate: tr("谱面生成"),
+      profile_replay: tr("回放诊断"), profile_player: tr("玩家画像"), profile_habits: tr("发力习惯"), import_replays: tr("导入回放"),
+    };
+    // The page a job's kind is started from, to go back to it for the full result.
+    const PAGE = {
+      sync_setup: "sync", sync_once: "sync", sync_revert: "sync", downscale: "downscaler", generate: "generator",
+      profile_replay: "profiler", profile_player: "profiler", profile_habits: "profiler", import_replays: "profiler",
+    };
+    const PAGE_NAME = { sync: tr("曲库同步"), downscaler: tr("降阶练习"), generator: tr("谱面生成"), profiler: tr("回放与画像") };
+    const LAZER_MODE = { restart: tr("重启"), close: tr("关闭"), open: tr("打开") };
+    const ACTIVE = ["queued", "running"];
+
+    const jobs = new Map();   // id -> job, as the server last sent it
+    const rows = new Map();   // id -> {root, ...nodes}, kept across updates so an open log stays open
+    const open = new Set();   // ids whose details are shown
+    let filter = "all";
+
+    const base = (p) => String(p || "").split(/[\\/]/).pop();
+    function describe(j) {
+      const p = j.params || {}, r = j.result || {};
+      const title = r.title || (r.result && r.result.title);
+      const target = p.target_dan || (p.target_sr ? `${p.target_sr}★` : "");
+      switch (j.kind) {
+        case "sync_once": return p.dry_run ? tr("预演（不写入）") : "";
+        case "lazer_control": return LAZER_MODE[p.mode || "restart"] || p.mode;
+        case "downscale": return [title || base(p.input), target && `→ ${target}`].filter(Boolean).join(" ");
+        case "generate": return [title || p.title || base(p.audio) || base(p.reference), target && `· ${target}`,
+          p.backend === "mapperatorinator" ? "· Mapperatorinator" : ""].filter(Boolean).join(" ");
+        case "profile_replay": return title || base(p.replay) || (p.source === "current" ? tr("游戏当前谱面") : "");
+        default: return p.player || "";
+      }
+    }
+    function clock(t) {
+      if (!t) return "—";
+      const d = new Date(t * 1000);
+      return d.toDateString() === new Date().toDateString()
+        ? d.toLocaleTimeString(P7I18N.locale, { hour12: false }) : d.toLocaleString(P7I18N.locale, { hour12: false });
+    }
+    function elapsed(j) {
+      if (!j.started_at) return j.status === "queued" ? tr("等待中") : "";
+      return P7.duration((j.finished_at || Date.now() / 1000) - j.started_at);
+    }
+
+    function makeRow(j) {
+      const r = {
+        badge: el("span", { class: "badge" }), kind: el("span", { class: "job-kind" }), desc: el("span", { class: "muted" }),
+        now: el("div", { class: "job-now ellipsis" }), started: el("div", { class: "hint" }), took: el("div"),
+        error: el("div", { class: "job-error hidden" }), files: el("div", { class: "artifacts" }),
+        actions: el("div", { class: "row", style: "margin:6px 0" }), log: el("div", { class: "log hidden" }),
+      };
+      r.detail = el("div", { class: "job-detail hidden" }, r.error, r.files, r.actions, r.log);
+      r.root = el("div", { class: "job-row" },
+        el("div", { class: "job-line", onclick: () => toggle(j.id) },
+          r.badge,
+          el("div", { class: "grow" }, el("div", { class: "ellipsis" }, r.kind, r.desc), r.now),
+          el("div", { class: "job-when" }, r.took, r.started)),
+        r.detail);
+      rows.set(j.id, r);
+      return r;
+    }
+
+    function fill(j) {
+      const r = rows.get(j.id) || makeRow(j);
+      r.root.className = `job-row ${j.status}`;
+      r.badge.className = `badge ${j.status}`;
+      r.badge.textContent = P7.STATUS_TEXT[j.status] || j.status;
+      r.kind.textContent = KIND[j.kind] || j.kind;
+      r.desc.textContent = describe(j);
+      r.desc.title = r.desc.textContent;
+      // Running: the latest log line; finished: the error, if any.
+      r.now.textContent = j.status === "failed" ? (j.error || "") : ACTIVE.includes(j.status) ? (j.last_log || "") : "";
+      r.now.classList.toggle("bad", j.status === "failed");
+      r.started.textContent = clock(j.started_at || j.created_at);
+      r.started.title = tr("任务 {id}", { id: j.id });
+      r.took.textContent = elapsed(j);
+      r.error.textContent = j.error || "";
+      r.error.classList.toggle("hidden", !j.error);
+      r.files.replaceChildren(...(j.artifacts || []).map((a, i) => P7.artifactRow(j.id, i, a)));
+      r.actions.replaceChildren(...[
+        j.status === "queued" ? el("button", { class: "small danger", text: tr("取消"), onclick: () => P7.send({ type: "job_cancel", id: j.id }) }) : null,
+        PAGE[j.kind] ? el("button", { class: "small", text: tr("去「{page}」", { page: PAGE_NAME[PAGE[j.kind]] }), onclick: () => P7.navigate(PAGE[j.kind]) }) : null,
+        el("span", { class: "hint", text: tr("任务 {id}", { id: j.id }) })].filter(Boolean));
+      return r;
+    }
+
+    function toggle(id) {
+      const r = rows.get(id);
+      if (open.has(id)) { open.delete(id); r.detail.classList.add("hidden"); return; }
+      open.add(id);
+      r.detail.classList.remove("hidden");
+      r.log.classList.remove("hidden");
+      r.log.textContent = tr("读取日志…");
+      P7.send({ type: "job_logs", id });
+    }
+
+    function render() {
+      const all = [...jobs.values()].sort((a, b) => b.created_at - a.created_at);
+      const shown = all.filter((j) => filter === "all" || (filter === "active" ? ACTIVE.includes(j.status) : j.status === "failed"));
+      const running = all.filter((j) => j.status === "running").length, queued = all.filter((j) => j.status === "queued").length;
+      $("#count").textContent = tr("共 {n} 个，{running} 个运行中，{queued} 个排队", { n: all.length, running, queued });
+      if (!shown.length) {
+        $("#list").replaceChildren(el("div", { class: "empty", text: all.length ? tr("没有符合的任务。") : tr("还没有任务。在降阶练习、谱面生成、回放与画像或曲库同步里开始的任务会出现在这里。") }));
+        return;
+      }
+      $("#list").replaceChildren(...shown.map((j) => fill(j).root));
+    }
+
+    P7.on("connection", (up) => { if (up) P7.send({ type: "jobs_list" }); });
+    P7.on("jobs", (msg) => {
+      jobs.clear();
+      (msg.jobs || []).forEach((j) => jobs.set(j.id, j));
+      for (const id of [...rows.keys()]) if (!jobs.has(id)) { rows.delete(id); open.delete(id); }
+      render();
+      open.forEach((id) => P7.send({ type: "job_logs", id }));
+    });
+    P7.on("job_update", (msg) => {
+      jobs.set(msg.job.id, msg.job);
+      render();
+    });
+    P7.on("job_log", (msg) => {
+      const j = jobs.get(msg.id);
+      if (!j) return;
+      j.last_log = msg.line;
+      const r = rows.get(msg.id);
+      if (!r) return;
+      if (ACTIVE.includes(j.status)) r.now.textContent = msg.line;
+      if (open.has(msg.id)) { r.log.textContent += msg.line + "\n"; r.log.scrollTop = r.log.scrollHeight; }
+    });
+    P7.on("job_logs", (msg) => {
+      const r = rows.get(msg.id);
+      if (!r || !open.has(msg.id)) return;
+      r.log.textContent = (msg.logs || []).length ? msg.logs.join("\n") + "\n" : tr("（没有日志）");
+      r.log.scrollTop = r.log.scrollHeight;
+    });
+    // Running jobs' durations tick.
+    setInterval(() => jobs.forEach((j) => { if (j.status === "running" && rows.has(j.id)) rows.get(j.id).took.textContent = elapsed(j); }), 1000);
+
+    document.querySelectorAll("#filters button").forEach((b) => b.addEventListener("click", () => {
+      filter = b.dataset.filter;
+      document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("active", x === b));
+      render();
+    }));
+    P7.onNav((params) => {
+      if (params.filter) document.querySelector(`#filters button[data-filter="${params.filter}"]`)?.click();
+    });
+  </script>
+</body>
+</html>
