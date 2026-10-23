@@ -331,22 +331,29 @@ def model_audio(audio: Path, work: Path, audio_filename: str = "") -> Path:
 
 
 def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None]):
-    """(chart, profile) brought down to `target` by the downscaler, or None when it can't get within `tolerance`."""
+    """(chart, profile) brought down toward `target` by the downscaler: within `tolerance` if it can (keeping the
+    technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing."""
     from proj7k.downscaler.pipeline import DownscaleOptions, downscale_beatmap
 
+    closest = None
     for keep_technique in (True, False):
         try:
             res = downscale_beatmap(chart, DownscaleOptions(target_dan=None, target_sr=target,
                                                             preserve_technique=keep_technique))
         except (ValueError, RuntimeError) as e:
             log(tr(f"  降难没成功：{e}", f"  Trimming failed: {e}"))
-            return None
+            break
         stars = float(res.downscaled_profile.total_stars)
+        if res.notes_removed and (closest is None or abs(stars - target) < abs(closest[2] - target)):
+            closest = (res.downscaled_beatmap, res.downscaled_profile, stars, res.notes_removed)
         if abs(stars - target) <= tolerance:
-            log(tr(f"  → 删去 {res.notes_removed} 个音符，降到 {stars:.2f}★",
-                   f"  → removed {res.notes_removed} notes, down to {stars:.2f}★"))
-            return res.downscaled_beatmap, res.downscaled_profile
-    return None
+            break
+    if closest is None:
+        log(tr("  降难没有删掉任何音符", "  Trimming removed no notes"))
+        return None
+    beatmap, profile, stars, removed = closest
+    log(tr(f"  → 删去 {removed} 个音符，降到 {stars:.2f}★", f"  → removed {removed} notes, down to {stars:.2f}★"))
+    return beatmap, profile
 
 
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
@@ -412,6 +419,12 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         if best is None or abs(stars - target) < abs(best[2] - target):
             best = (chart, profile, stars, difficulty, seed)
         if abs(stars - target) <= options.tolerance:
+            break
+        if stars < target and difficulty >= MAX_DIFFICULTY:
+            # Asked for all it has and still short: further runs only redraw the same ceiling.
+            warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
+                               f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
+                               f"it can't reach {target:.2f}★ on this song"))
             break
         difficulty = next_difficulty(difficulty, stars, target)
 

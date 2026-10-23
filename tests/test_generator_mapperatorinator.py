@@ -97,8 +97,7 @@ def test_keeps_the_closest_run_and_warns_when_out_of_reach(song):
     options = GeneratorOptions(target_stars=40.0, backend="mapperatorinator", model_runner=stream_runner(calls),
                                model_runs=3, timing=[TimingPoint(time=0.0, beat_length=500.0, uninherited=True)])
     result = generate_from_file(song, options)
-    assert len(calls) == 3
-    assert [round(c[0], 2) for c in calls] == sorted(round(c[0], 2) for c in calls)  # asks for more each time
+    assert len(calls) == 1  # 40★ asks for the ceiling at once, and the ceiling falls short
     assert any("±" in w for w in result.warnings) and any("timing" in w for w in result.warnings)
 
 
@@ -218,3 +217,12 @@ def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
     assert "BeatmapID:0" in text and "BeatmapSetID:-1" in text and "TimingPoints" in text
     assert reference.extra_sections["Metadata"]["BeatmapID"] == "123"
     assert not any("timing" in w for w in result.warnings)
+
+
+def test_stops_once_the_difficulty_condition_is_at_its_ceiling(song):
+    calls = []
+    options = GeneratorOptions(target_stars=60.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+                               model_runs=8)
+    result = generate_from_file(song, options)
+    assert calls[-1][0] == mt.MAX_DIFFICULTY and len(calls) < 8
+    assert any(f"{mt.MAX_DIFFICULTY:g}★" in w for w in result.warnings)
