@@ -19,6 +19,7 @@ model a few times: each run is scored by the engine and the next run's difficult
 target / stars, until a run lands within the tolerance or the runs are spent; the closest run is kept.
 """
 
+import copy
 import logging
 import os
 import shutil
@@ -33,7 +34,7 @@ import numpy as np
 
 from proj7k.engine import evaluate_notes
 from proj7k.i18n import tr
-from proj7k.parser import Beatmap7K, NoteType, parse_osu_7k
+from proj7k.parser import Beatmap7K, NoteType, dump_osu_7k, parse_osu_7k
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,12 @@ MIN_DIFFICULTY, MAX_DIFFICULTY = 0.5, 12.0
 #: How far one run may move the next run's difficulty (×), so one odd run can't throw the search off.
 MAX_STEP = 1.6
 DEFAULT_RUNS = 4
+#: The first run asks for this much more than the target: the model tends to land under the engine's stars (10
+#: charts, 2026-10-23: 8 under, median 0.56★ off), and a chart a little too hard is brought down by deleting notes,
+#: which is one run instead of several.
+AIM = 1.15
+#: A run at most this far above the target is brought down to it by the downscaler (pure deletion, technique kept).
+TRIM_MAX = 1.5
 DEFAULT_YEAR = 2023
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
@@ -218,7 +225,12 @@ def quote(value: str) -> str:
 
 
 def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, hold_note_ratio: Optional[float] = None,
-              year: int = DEFAULT_YEAR, title: str = "", artist: str = "") -> List[str]:
+              year: int = DEFAULT_YEAR, title: str = "", artist: str = "", timing_from: Optional[Path] = None,
+              fast: bool = False) -> List[str]:
+    """Its inference.py arguments. It writes no scroll speed changes (we don't use them in 7K: SV costs a pass and
+    changes nothing else); with `timing_from`, a chart of the same song, it reads that chart's timing instead of
+    writing its own (faster, and the rows land on the chart's beats); `fast` writes all windows at once instead of
+    one after another (about twice as fast, slightly fewer rows and long notes; 2026-10-23 on meow)."""
     out = [
         f"audio_path={quote(Path(audio).resolve().as_posix())}",
         f"output_path={quote(Path(output_dir).resolve().as_posix())}",
@@ -226,6 +238,12 @@ def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, ho
         f"difficulty={difficulty:.2f}", f"seed={int(seed)}", f"year={int(year)}",
         "export_osz=false",
     ]
+    if timing_from is not None:
+        out += [f"beatmap_path={quote(Path(timing_from).resolve().as_posix())}", "in_context=[TIMING]", "output_type=[MAP]"]
+    else:
+        out.append("output_type=[TIMING,MAP]")
+    if fast:
+        out.append("parallel=true")
     if hold_note_ratio is not None:
         out.append(f"hold_note_ratio={min(max(hold_note_ratio, 0.0), 1.0):.2f}")
     if title:
@@ -312,6 +330,25 @@ def model_audio(audio: Path, work: Path, audio_filename: str = "") -> Path:
     return copy
 
 
+def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None]):
+    """(chart, profile) brought down to `target` by the downscaler, or None when it can't get within `tolerance`."""
+    from proj7k.downscaler.pipeline import DownscaleOptions, downscale_beatmap
+
+    for keep_technique in (True, False):
+        try:
+            res = downscale_beatmap(chart, DownscaleOptions(target_dan=None, target_sr=target,
+                                                            preserve_technique=keep_technique))
+        except (ValueError, RuntimeError) as e:
+            log(tr(f"  降难没成功：{e}", f"  Trimming failed: {e}"))
+            return None
+        stars = float(res.downscaled_profile.total_stars)
+        if abs(stars - target) <= tolerance:
+            log(tr(f"  → 删去 {res.notes_removed} 个音符，降到 {stars:.2f}★",
+                   f"  → removed {res.notes_removed} notes, down to {stars:.2f}★"))
+            return res.downscaled_beatmap, res.downscaled_profile
+    return None
+
+
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
@@ -323,15 +360,12 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     runner = runner or _default_runner(home, log)
     work = Path(work_dir) if work_dir else (home or HOME) / "runs" / time.strftime("%Y%m%d-%H%M%S")
     target = float(options.target_stars)
-    difficulty = min(max(target, MIN_DIFFICULTY), MAX_DIFFICULTY)
+    difficulty = min(max(target * AIM, MIN_DIFFICULTY), MAX_DIFFICULTY)
     runs = max(1, int(options.model_runs or DEFAULT_RUNS))
     hold_ratio = options.model_hold_ratio
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
     warnings: List[str] = []
-    if options.timing:
-        warnings.append(tr("Mapperatorinator 用它自己从音乐里测的 timing，没有借用参考谱面的 timing",
-                           "Mapperatorinator uses the timing it hears in the music, not the reference chart's"))
     if options.brief is not None or options.stems or options.auto_design:
         warnings.append(tr("设计稿、分轨与按段技法只用于 proj7k 自己的落键，Mapperatorinator 不读它们",
                            "Briefs, stems and per-section techniques apply to proj7k's own notes; Mapperatorinator ignores them"))
@@ -340,12 +374,25 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
     title = options.title or getattr(reference, "title", "") or ""
     artist = options.artist or getattr(reference, "artist", "") or ""
+    timing_from = None
+    if options.timing and reference is not None:
+        # Its parser wants a .osu file of the same song. It also takes the chart's online id as a style (that
+        # mapper's, and the chart itself if it was in its training set), so the copy goes without one.
+        work.mkdir(parents=True, exist_ok=True)
+        anonymous = copy.deepcopy(reference)
+        anonymous.extra_sections["Metadata"] = {**anonymous.extra_sections.get("Metadata", {}),
+                                                "BeatmapID": "0", "BeatmapSetID": "-1"}
+        timing_from = work / "reference.osu"
+        timing_from.write_text(dump_osu_7k(anonymous), encoding="utf-8")
+    elif options.timing or options.bpm:
+        warnings.append(tr("Mapperatorinator 只能借用参考谱面的 timing，这次用它自己从音乐里测的",
+                           "Mapperatorinator can only borrow a reference chart's timing; it timed the music itself"))
     best = None
     tried = 0
     for i in range(runs):
         seed = options.seed + i
-        extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio,
-                          title=title, artist=artist) + list(options.model_args or ())
+        extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
+                          timing_from=timing_from, fast=options.model_fast) + list(options.model_args or ())
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
         osu = runner(audio, work, difficulty, seed, extra)
@@ -357,6 +404,11 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         tried += 1
         log(tr(f"  → 引擎星级 {stars:.2f}★（目标 {target:.2f}★），{len(chart.hit_objects)} 个音符",
                f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes"))
+        if target + options.tolerance < stars <= target + TRIM_MAX:
+            trimmed = trim(chart, target, options.tolerance, log)
+            if trimmed is not None:
+                chart, profile = trimmed
+                stars = float(profile.total_stars)
         if best is None or abs(stars - target) < abs(best[2] - target):
             best = (chart, profile, stars, difficulty, seed)
         if abs(stars - target) <= options.tolerance:

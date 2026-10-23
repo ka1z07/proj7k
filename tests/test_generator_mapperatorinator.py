@@ -53,6 +53,10 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     audio_arg = next(o for o in out if o.startswith("audio_path="))
     assert audio_arg.startswith("audio_path='") and audio_arg.endswith("'") and "\\'s" in audio_arg
     assert not any(o.startswith("hold_note_ratio") for o in mt.overrides(audio, tmp_path, 5, 0))
+    assert "output_type=[TIMING,MAP]" in out and "parallel=true" not in out
+    borrowed = mt.overrides(audio, tmp_path, 5, 0, timing_from=tmp_path / "ref.osu", fast=True)
+    assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed and "parallel=true" in borrowed
+    assert any(o.startswith("beatmap_path='") for o in borrowed)
 
 
 def test_requirements_leave_out_the_desktop_ui():
@@ -177,3 +181,40 @@ def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, m
     assert "version_info = 3.10.22" in cfg.read_text(encoding="utf-8")
     assert not any(cmd[1:2] == ["venv"] for cmd, _ in runs)  # its packages are kept
     assert mt.available(home)
+
+
+def test_a_run_a_little_too_hard_is_trimmed_to_the_target(song, tmp_path):
+    calls = []
+    hard = stream_runner(calls)
+    probe = float(evaluate_osu(hard(song, tmp_path / "probe", 3.0, 0, []).read_text(encoding="utf-8")).total_stars)
+    raw = float(evaluate_osu(hard(song, tmp_path / "probe", 4.0, 0, []).read_text(encoding="utf-8")).total_stars)
+    assert probe < raw <= probe + mt.TRIM_MAX
+    calls.clear()
+
+    def always_four(audio, out, difficulty, seed, extra):
+        return hard(audio, out, 4.0, seed, extra)
+
+    options = GeneratorOptions(target_stars=probe + 0.3, backend="mapperatorinator", model_runner=always_four,
+                               model_runs=4)
+    result = generate_from_file(song, options)
+    assert len(calls) == 1
+    assert abs(result.stars - options.target_stars) <= options.tolerance
+    assert result.n_notes < len(parse_osu_7k((tmp_path / "probe" / "beatmap2.osu").read_text(encoding="utf-8")).hit_objects)
+
+
+def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
+    calls = []
+    reference = Beatmap7K(title="Ref", artist="A", creator="Mapper", version="Hard",
+                          timing_points=[TimingPoint(time=1000.0, beat_length=375.0, uninherited=True)],
+                          hit_objects=[HitObject(column=0, time=1000, note_type=NoteType.RICE)],
+                          extra_sections={"Metadata": {"BeatmapID": "123", "BeatmapSetID": "45"}})
+    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+                               model_runs=1, reference=reference, timing=reference.timing_points, model_fast=True)
+    result = generate_from_file(song, options)
+    extra = calls[0][2]
+    assert "in_context=[TIMING]" in extra and "parallel=true" in extra
+    path = Path(next(o for o in extra if o.startswith("beatmap_path="))[len("beatmap_path='"):-1])
+    text = path.read_text(encoding="utf-8")
+    assert "BeatmapID:0" in text and "BeatmapSetID:-1" in text and "TimingPoints" in text
+    assert reference.extra_sections["Metadata"]["BeatmapID"] == "123"
+    assert not any("timing" in w for w in result.warnings)

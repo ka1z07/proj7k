@@ -46,3 +46,12 @@
 - 命令行：`python3 -m proj7k.generator --backend mapperatorinator`；`--ln` 不给时长条比例由模型自己定，给了就作为它的 `hold_note_ratio` 条件；`--model-arg` 透传其他条件（如 `descriptors`、`mapper_id`）。模型自己测 timing，参考谱面只借用音频与元数据；设计稿、分轨、按段技法对它不生效，会给出提示。
 - 面板「谱面生成」：「实验：Mapperatorinator 模型落键」勾选项，第一次勾选时安装。
 - 评测：`python3 -m proj7k.generator.evaluate --backend mapperatorinator --skip-ranked <catalog.db>`，按线上谱面库跳过 ranked/loved/qualified 的谱（模型训练时见过）。
+
+## 提速（2026-10-23，Kai：「有办法加速 mappertorinator 生成吗？」）
+
+在 meow（RTX 5060 Ti 16 GB）上用两首歌（2:25 / 2:58）实测单次生成（秒）：默认 197 / 191，其中加载模型约 16 秒、timing 约 8 秒，写音符 160–170 秒，SV 5–7 秒；去掉 SV 194 / 176，谱面不变；加大窗口步长 172 / 206，召回下降，不用；所有窗口一起写（`parallel=true`）98 / 89，写音符一步降到约 37 秒，但它自己测 timing 反而从约 7 秒变成约 40 秒，长条变少、星级略低；借用人类谱的 timing 117 / 139；两个进程同时跑每张只省约 10%，GPU 已经满了。
+
+- 不再写 SV（`output_type=[TIMING,MAP]`）。
+- 借用参考谱面 timing 时（面板默认），把参考谱面去掉在线 ID 后交给它读 timing（`in_context=[TIMING]`），只写音符。不去掉 ID 的话它会把那张谱的谱师当成风格条件，训练时见过的谱还可能被照抄。
+- 「快速」选项（`--model-fast`，面板勾选项）开启 `parallel=true`，默认关闭：省一半时间，但手感需要 Kai 试过再决定要不要默认开。
+- 少跑几次：第一次的难度条件取目标 ×1.15，结果高出目标不超过 1.5★ 时，用降难器纯删音符降到目标（先保技法，不行再放开）。多数情况一次就够，不必重写 2–4 次。
