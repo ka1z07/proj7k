@@ -138,3 +138,13 @@ def test_command_line_backend(song, tmp_path, monkeypatch, capsys):
     assert "song.mp3" in names and any(n.endswith(".osu") for n in names)
     chart = parse_osu_7k(next(out.glob("*.osu")).read_text(encoding="utf-8"))
     assert chart.circle_size == 7 and chart.hit_objects
+
+
+def test_model_processes_start_without_the_parent_interpreters_variables(monkeypatch):
+    monkeypatch.setenv("__PYVENV_LAUNCHER__", r'"C:\proj7k\.venv\Scripts\python.exe"')
+    monkeypatch.setenv("PYTHONPATH", "src")
+    monkeypatch.setenv("VIRTUAL_ENV", r"C:\proj7k\.venv")
+    monkeypatch.setenv("PROJ7K_KEEP", "1")
+    env = mt.child_env(PYTHONUTF8="1")
+    assert not {"__PYVENV_LAUNCHER__", "PYTHONPATH", "VIRTUAL_ENV"} & set(env)
+    assert env["PROJ7K_KEEP"] == "1" and env["PYTHONUTF8"] == "1"

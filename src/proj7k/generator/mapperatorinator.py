@@ -102,9 +102,23 @@ def _uv() -> List[str]:
 GIT_ENV = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.longpaths", "GIT_CONFIG_VALUE_0": "true"}
 
 
+#: What the running interpreter tells its children about itself. proj7k runs from a Python 3.14 venv; inherited by the
+#: model's Python 3.10 venv launcher, they point it at the wrong interpreter ("No Python at '"…python.exe'" when the
+#: dashboard starts it on Windows), so its processes start without them.
+PARENT_PYTHON_VARS = ("__PYVENV_LAUNCHER__", "__PYVENV_BASE_EXECUTABLE__", "PYTHONHOME", "PYTHONPATH",
+                      "PYTHONEXECUTABLE", "VIRTUAL_ENV", "PYTHONSTARTUP", "PYTHONNOUSERSITE")
+
+
+def child_env(**extra: str) -> dict:
+    """The environment for the model's own Python and its installer: the user's, without the parent interpreter's."""
+    env = {k: v for k, v in os.environ.items() if k.upper() not in PARENT_PYTHON_VARS}
+    env.update(extra)
+    return env
+
+
 def _run(cmd: Sequence[str], log: Callable[[str], None], cwd: Optional[Path] = None) -> None:
     proc = subprocess.run(list(map(str, cmd)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          env=dict(os.environ, **GIT_ENV))
+                          env=child_env(**GIT_ENV))
     if proc.returncode != 0:
         raise ModelUnavailable(tr("安装 Mapperatorinator 失败：", "Failed to install Mapperatorinator: ")
                                + " ".join(map(str, cmd[:4])) + " … " + (proc.stderr or proc.stdout).strip()[-600:])
@@ -191,8 +205,7 @@ def run_model(audio: Path, output_dir: Path, difficulty: float, seed: int, extra
     output_dir.mkdir(parents=True, exist_ok=True)
     before = set(output_dir.glob("*.osu"))
     cmd = [str(venv_python(home)), "inference.py", "-cn", CONFIG, *extra]
-    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
-    env.pop("PYTHONPATH", None)
+    env = child_env(PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
     proc = subprocess.run(cmd, cwd=repo_dir(home), capture_output=True, text=True, encoding="utf-8",
                           errors="replace", env=env)
     made = sorted(set(output_dir.glob("*.osu")) - before, key=lambda p: p.stat().st_mtime)
