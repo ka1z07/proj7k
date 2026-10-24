@@ -11,7 +11,11 @@ scale), and what is left to the pruner is choosing *what* to delete:
 3. Candidates are the notes in those windows that the metric skeleton lets go (1/1 downbeats, chords).
 4. Each candidate is scored by `downscaler.marginal.removal_benefit` (how much of the expected loss at
    `D*` its demand carries through the hand accumulator), damped for the notes that carry the dominant
-   skill, divided by the bimanual asymmetry penalty.
+   skill, divided by the column balance penalty. The benefit is compared within a column, not across
+   columns: the engine's finger coupling reads the middle fingers' notes as the most demanding and the
+   thumb's as the least, so ranked across columns it thinned the middle fingers and kept columns 3-4. The
+   balance penalty then holds each column's retention to the chart-wide one, so the practice chart keeps the
+   original's column shares (ADR-0044).
 5. The top 15-25% of each peak window is deleted as one batch, and the engine re-reads it. The batch is
    halved when it breaks technique preservation or overshoots the target below tolerance, so the star
    lands on the target rather than under it.
@@ -20,8 +24,8 @@ scale), and what is left to the pruner is choosing *what* to delete:
    at the target level have (`downscaler.burst`): while it does not, the batch is taken from the notes that
    carry the burst instead, hardest first, and the loop runs until both the star and the bursts are in.
 
-Pure deletion, skeleton protection, flux balance, and the dual-gate validation are the ADR-0011 invariants
-and are unchanged. In free mode (a validator with `preserve_technique=False`) the dominant skill's notes are not
+Pure deletion, skeleton protection and the dual-gate validation are the ADR-0011 invariants and are unchanged;
+the hand-level flux balance became the column balance above, which keeps the original's hand split with it. In free mode (a validator with `preserve_technique=False`) the dominant skill's notes are not
 damped and the validation only asks that the chart stay playable; the other invariants hold as before.
 """
 
@@ -34,7 +38,7 @@ from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.field import ChartField, d_of_stars, trace_beatmap
 from proj7k.parser import Beatmap7K, HitObject
-from proj7k.downscaler.balancer import LEFT_LANES, RIGHT_LANES, BimanualFluxBalancer
+from proj7k.downscaler.balancer import BimanualFluxBalancer
 from proj7k.downscaler.burst import BurstReading, burst_reading, cap, excess
 from proj7k.downscaler.marginal import removal_benefit
 from proj7k.downscaler.mutation import apply_pure_deletion
@@ -47,6 +51,34 @@ PEAK_MARGIN = 0.10
 #: How much a note's score is damped by the share of it that the dominant skill carries (attribution `a_ik`).
 #: Thinning is steered toward what the dominant skill does not need, without making it untouchable.
 DOMINANCE_BIAS = 0.35
+
+#: When the batch halves down to its best note and that note alone breaks validation, how many such notes are
+#: set aside (and the rest of the batch retried) before the loop stops.
+SKIPPED_BLOCKERS = 8
+
+#: Exponent of the column balance penalty: (chart-wide retention / the column's retention) ** this.
+COLUMN_BALANCE = 1.0
+
+
+def column_retention(current: Beatmap7K, reference: Beatmap7K) -> np.ndarray:
+    """Per column, the share of the reference's notes still in `current`, over the share kept chart-wide (1 = in step)."""
+    ref = np.bincount([ho.column for ho in reference.hit_objects], minlength=7).astype(float)
+    cur = np.bincount([ho.column for ho in current.hit_objects], minlength=7).astype(float)
+    overall = cur.sum() / max(1.0, ref.sum())
+    with np.errstate(divide="ignore", invalid="ignore"):
+        kept = np.where(ref > 0, cur / ref, overall)
+    return kept / overall if overall > 0 else np.ones(7)
+
+
+def _per_column(values: np.ndarray, col: np.ndarray, members: np.ndarray) -> np.ndarray:
+    """`values` over the mean of its column (taken over `members`), so a note is ranked against its own column's notes."""
+    out = values.astype(float).copy()
+    for c in range(7):
+        sel = members & (col == c)
+        m = float(values[sel].mean()) if sel.any() else 0.0
+        if m > 0.0:
+            out[col == c] = values[col == c] / m
+    return out
 
 
 def engine_skill(name: Optional[str]) -> Optional[str]:
@@ -157,12 +189,14 @@ class ExcessLossPruner:
         field: ChartField,
         target_sr: float,
         dominant: Optional[str],
+        reference: Optional[Beatmap7K] = None,
     ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
         """
         (scored removable notes in peak windows, the peak-window notes the skeleton refused), for one trace.
+        `reference` is the chart before any deletion, whose column shares the result keeps (default: `beatmap`).
         """
         D_star = d_of_stars(target_sr)
-        benefit = removal_benefit(field, D_star)
+        benefit = _per_column(removal_benefit(field, D_star), field.col, ~field.release)
         k_dom = SKILLS.index(dominant) if dominant in SKILLS else None
         bias = DOMINANCE_BIAS if self.validator.preserve_technique else 0.0
         window_ms = max(100.0, self.window_s * 1000.0)
@@ -190,7 +224,7 @@ class ExcessLossPruner:
             r = field.release_index(i)
             b = float(benefit[i] + (benefit[r] if r is not None else 0.0))
             in_peak.append((ho, b, float(field.a[i, k_dom]) if k_dom is not None else 0.0))
-        return self._admit(beatmap, in_peak, bias)
+        return self._admit(beatmap, in_peak, bias, reference)
 
     def burst_scores(
         self,
@@ -199,6 +233,7 @@ class ExcessLossPruner:
         burst: BurstReading,
         target_sr: float,
         dominant: Optional[str],
+        reference: Optional[Beatmap7K] = None,
     ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
         """
         (scored removable notes that carry a burst over its cap at the target level, the ones the skeleton refused).
@@ -225,17 +260,19 @@ class ExcessLossPruner:
             if ratio <= 1.0:
                 continue
             over.append((ho, float(ratio * field.v[i] / v_mean), float(field.a[i, k_dom]) if k_dom is not None else 0.0))
-        return self._admit(beatmap, over, bias)
+        return self._admit(beatmap, over, bias, reference)
 
     def _admit(
         self, beatmap: Beatmap7K, notes: List[Tuple[HitObject, float, float]], bias: float,
+        reference: Optional[Beatmap7K] = None,
     ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
-        """Skeleton filter, dominant-skill damping and the bimanual penalty over (note, score, dominant share)."""
-        detector = MetricSkeletonDetector(beatmap)
+        """Skeleton filter, dominant-skill damping and the column balance penalty over (note, score, dominant share)."""
+        retention = column_retention(beatmap, reference or beatmap)
+        # the skeleton keeps a chord's note on the column most thinned so far
+        detector = MetricSkeletonDetector(beatmap, column_weight=retention)
         allowed = {id(ho) for ho in detector.filter_candidate_removals([ho for ho, _, _ in notes])}
-
-        l_flux, r_flux = self.balancer.compute_hand_flux(beatmap.hit_objects)
-        penalty_l, penalty_r = self.balancer.compute_asymmetry_penalty(l_flux, r_flux)
+        # a column thinned more than the chart is protected, one thinned less is taken first
+        penalty = np.maximum(retention, 0.05) ** -COLUMN_BALANCE
 
         scored: List[Tuple[float, HitObject]] = []
         refused: List[HitObject] = []
@@ -243,13 +280,7 @@ class ExcessLossPruner:
             if id(ho) not in allowed:
                 refused.append(ho)
                 continue
-            if ho.column in LEFT_LANES:
-                pen = penalty_l
-            elif ho.column in RIGHT_LANES:
-                pen = penalty_r
-            else:
-                pen = (penalty_l + penalty_r) / 2.0
-            scored.append((b * (1.0 - bias * share) / max(0.01, pen), ho))
+            scored.append((b * (1.0 - bias * share) / float(penalty[ho.column]), ho))
         return scored, refused
 
     def _batch(self, scored: List[Tuple[float, HitObject]]) -> List[HitObject]:
@@ -315,14 +346,14 @@ class ExcessLossPruner:
 
             scored: List[Tuple[float, HitObject]] = []
             if bursting:
-                scored, refused = self.burst_scores(current, field, burst, target_sr, dominant)
+                scored, refused = self.burst_scores(current, field, burst, target_sr, dominant, beatmap)
                 if not scored:
                     bursts_stuck = True   # nothing over the caps can go: back to the star alone
                     if star <= upper:
                         converged = True
                         break
             if not scored:
-                scored, refused = self.candidate_scores(current, field, target_sr, dominant)
+                scored, refused = self.candidate_scores(current, field, target_sr, dominant, beatmap)
             if not scored:
                 warnings.append(
                     "Metric skeleton protected all peak candidates; cannot prune further safely."
@@ -333,22 +364,29 @@ class ExcessLossPruner:
 
             # Take the whole batch, then fewer: halved while it breaks technique preservation, and while it
             # overshoots the target below tolerance (a single note is always accepted on the second count).
-            size, committed, passed = len(ordered), None, False
-            while size >= 1:
-                cand = apply_pure_deletion(current, notes_to_remove=ordered[:size])
-                if not cand.hit_objects:
-                    size //= 2
-                    continue
-                val = self.validator.validate(beatmap, cand)
-                if not val.passed:
-                    size //= 2
-                    continue
-                cand_field = trace_beatmap(cand)
-                if cand_field.profile.total_stars < lower and size > 1:
-                    size //= 2
-                    continue
-                committed, passed = (cand, cand_field, size), True
-                break
+            # When even the best note alone breaks validation, it is set aside and the rest of the batch is tried
+            # the same way (a chart whose dominant skill holds by a small margin otherwise stopped on one note).
+            committed, passed = None, False
+            for _ in range(1 + SKIPPED_BLOCKERS):
+                size = len(ordered)
+                while size >= 1:
+                    cand = apply_pure_deletion(current, notes_to_remove=ordered[:size])
+                    if not cand.hit_objects:
+                        size //= 2
+                        continue
+                    val = self.validator.validate(beatmap, cand)
+                    if not val.passed:
+                        size //= 2
+                        continue
+                    cand_field = trace_beatmap(cand)
+                    if cand_field.profile.total_stars < lower and size > 1:
+                        size //= 2
+                        continue
+                    committed, passed = (cand, cand_field, size), True
+                    break
+                if committed is not None or len(ordered) <= 1:
+                    break
+                ordered = ordered[1:]
 
             if committed is None and bursting:
                 bursts_stuck = True   # no burst note can go without breaking the chart: back to the star alone
