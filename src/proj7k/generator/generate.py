@@ -32,7 +32,7 @@ import numpy as np
 
 from proj7k.engine import DifficultyProfile, evaluate_notes
 from proj7k.generator.audio import Audio, load_audio
-from proj7k.generator import brief as brief_mod, holds, rhythm, stems as stems_mod
+from proj7k.generator import brief as brief_mod, holds, legal, rhythm, stems as stems_mod
 from proj7k.generator.grid import BEAT, DOWNBEAT, HALF, SILENCE_DB, GridPoint, build_grid, onset_shift_ms
 from proj7k.generator.onset import onset_envelope
 from proj7k.generator.patterns import PatternSampler, default_model, mask_columns, mirror, popcount
@@ -543,7 +543,8 @@ def _beatmap(objs: List[HitObject], timing: List[TimingPoint], options: Generato
         overall_difficulty=options.overall_difficulty,
         timing_points=[TimingPoint(time=tp.time, beat_length=tp.beat_length, meter=tp.meter, uninherited=True)
                        for tp in timing if tp.uninherited],
-        hit_objects=sorted(objs, key=lambda o: (o.time, o.column)),
+        # Whoever wrote the notes, the file osu! gets is playable (legal.py).
+        hit_objects=legal.sanitize(objs, timing)[0],
         audio_filename=ref.audio_filename if ref else "",
         tags=f"proj7k {GENERATOR_VERSION} seed{options.seed}",
     )
