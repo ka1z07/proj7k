@@ -53,6 +53,10 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     audio_arg = next(o for o in out if o.startswith("audio_path="))
     assert audio_arg.startswith("audio_path='") and audio_arg.endswith("'") and "\\'s" in audio_arg
     assert not any(o.startswith("hold_note_ratio") for o in mt.overrides(audio, tmp_path, 5, 0))
+    assert "output_type=[TIMING,MAP]" in out and "parallel=true" not in out
+    borrowed = mt.overrides(audio, tmp_path, 5, 0, timing_from=tmp_path / "ref.osu", fast=True)
+    assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed and "parallel=true" in borrowed
+    assert any(o.startswith("beatmap_path='") for o in borrowed)
 
 
 def test_requirements_leave_out_the_desktop_ui():
@@ -93,8 +97,7 @@ def test_keeps_the_closest_run_and_warns_when_out_of_reach(song):
     options = GeneratorOptions(target_stars=40.0, backend="mapperatorinator", model_runner=stream_runner(calls),
                                model_runs=3, timing=[TimingPoint(time=0.0, beat_length=500.0, uninherited=True)])
     result = generate_from_file(song, options)
-    assert len(calls) == 3
-    assert [round(c[0], 2) for c in calls] == sorted(round(c[0], 2) for c in calls)  # asks for more each time
+    assert len(calls) == 1  # 40★ asks for the ceiling at once, and the ceiling falls short
     assert any("±" in w for w in result.warnings) and any("timing" in w for w in result.warnings)
 
 
@@ -177,3 +180,90 @@ def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, m
     assert "version_info = 3.10.22" in cfg.read_text(encoding="utf-8")
     assert not any(cmd[1:2] == ["venv"] for cmd, _ in runs)  # its packages are kept
     assert mt.available(home)
+
+
+def test_a_run_a_little_too_hard_is_trimmed_to_the_target(song, tmp_path):
+    calls = []
+    hard = stream_runner(calls)
+    probe = float(evaluate_osu(hard(song, tmp_path / "probe", 3.0, 0, []).read_text(encoding="utf-8")).total_stars)
+    raw = float(evaluate_osu(hard(song, tmp_path / "probe", 4.0, 0, []).read_text(encoding="utf-8")).total_stars)
+    assert probe < raw <= probe + mt.TRIM_MAX
+    calls.clear()
+
+    def always_four(audio, out, difficulty, seed, extra):
+        return hard(audio, out, 4.0, seed, extra)
+
+    options = GeneratorOptions(target_stars=probe + 0.3, backend="mapperatorinator", model_runner=always_four,
+                               model_runs=4)
+    result = generate_from_file(song, options)
+    assert len(calls) == 1
+    assert abs(result.stars - options.target_stars) <= options.tolerance
+    assert result.n_notes < len(parse_osu_7k((tmp_path / "probe" / "beatmap2.osu").read_text(encoding="utf-8")).hit_objects)
+
+
+def _trim_landing(monkeypatch, offset):
+    """Stands in for the downscaler: a trim that lands `offset` stars from the target."""
+    class Profile:
+        def __init__(self, stars):
+            self.total_stars = stars
+
+    def landing(chart, target, tolerance, log):
+        return chart, Profile(target + offset)
+    monkeypatch.setattr(mt, "trim", landing)
+
+
+def _fixed_stars_run(song, tmp_path):
+    """A runner that always writes the same chart, whatever difficulty it is asked for, and that chart's stars."""
+    asked = []
+    chart = stream_runner([])(song, tmp_path / "fixed", 4.0, 0, [])
+
+    def run(audio, out, difficulty, seed, extra):
+        asked.append(difficulty)
+        return chart
+    return run, asked, float(evaluate_osu(chart.read_text(encoding="utf-8")).total_stars)
+
+
+def test_a_trim_that_lands_close_is_kept(song, tmp_path, monkeypatch):
+    _trim_landing(monkeypatch, -0.15)
+    run, asked, raw = _fixed_stars_run(song, tmp_path)
+    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=4)
+    result = generate_from_file(song, options)
+    assert len(asked) == 1
+    assert not any("最接近" in w or "closest" in w for w in result.warnings)
+
+
+def test_the_next_run_is_steered_by_what_the_model_wrote_not_the_trim(song, tmp_path, monkeypatch):
+    _trim_landing(monkeypatch, -0.6)
+    run, asked, raw = _fixed_stars_run(song, tmp_path)
+    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=2)
+    generate_from_file(song, options)
+    # The model wrote above the target, so it is asked for less, though the trim undershot.
+    assert len(asked) == 2 and asked[1] < asked[0]
+
+
+def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
+    calls = []
+    reference = Beatmap7K(title="Ref", artist="A", creator="Mapper", version="Hard",
+                          timing_points=[TimingPoint(time=1000.0, beat_length=375.0, uninherited=True)],
+                          hit_objects=[HitObject(column=0, time=1000, note_type=NoteType.RICE)],
+                          extra_sections={"Metadata": {"BeatmapID": "123", "BeatmapSetID": "45"}})
+    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+                               model_runs=1, reference=reference, timing=reference.timing_points, model_fast=True)
+    result = generate_from_file(song, options)
+    extra = calls[0][2]
+    assert "in_context=[TIMING]" in extra and "parallel=true" in extra
+    path = Path(next(o for o in extra if o.startswith("beatmap_path="))[len("beatmap_path='"):-1])
+    text = path.read_text(encoding="utf-8")
+    assert "BeatmapID:0" in text and "BeatmapSetID:-1" in text and "TimingPoints" in text
+    assert reference.extra_sections["Metadata"]["BeatmapID"] == "123"
+    assert not any("timing" in w for w in result.warnings)
+    assert result.timing_source == "reference"
+
+
+def test_stops_once_the_difficulty_condition_is_at_its_ceiling(song):
+    calls = []
+    options = GeneratorOptions(target_stars=60.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+                               model_runs=8)
+    result = generate_from_file(song, options)
+    assert calls[-1][0] == mt.MAX_DIFFICULTY and len(calls) < 8
+    assert any(f"{mt.MAX_DIFFICULTY:g}★" in w for w in result.warnings)

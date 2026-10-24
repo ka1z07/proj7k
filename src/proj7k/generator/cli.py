@@ -244,6 +244,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
                    help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（实验，ADR-0040；首次使用会安装，数 GB）")
     p.add_argument("--model-runs", type=int, help="Mapperatorinator 最多生成几次，取引擎星级最接近目标的一张（默认 4）")
+    p.add_argument("--model-fast", action="store_true",
+                   help="Mapperatorinator 所有窗口一起写：约快一倍，行与长条略少")
     p.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
                    help="传给 Mapperatorinator 的额外参数（Hydra 写法，如 descriptors=[\'tech\']、mapper_id=123），可重复")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
@@ -287,6 +289,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             ln_ratio=args.ln or 0.0, whole_inverse=args.inverse,
             brief=brief.load(args.brief) if args.brief else None, auto_design=args.auto_design,
             backend=args.backend, model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
+            model_fast=args.model_fast,
         )
         if args.backend == "mapperatorinator":
             from proj7k.generator import mapperatorinator
