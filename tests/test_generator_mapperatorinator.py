@@ -56,6 +56,7 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     assert "output_type=[TIMING,MAP]" in out and "parallel=true" not in out
     borrowed = mt.overrides(audio, tmp_path, 5, 0, timing_from=tmp_path / "ref.osu", fast=True)
     assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed and "parallel=true" in borrowed
+    assert f"parallel_keep={mt.FAST_KEEP}" in borrowed
     assert any(o.startswith("beatmap_path='") for o in borrowed)
 
 
@@ -161,6 +162,7 @@ def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, m
     mt.venv_python(home).write_bytes(b"")
     (home / "repo").mkdir()
     (home / "repo" / "inference.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(mt, "patch", lambda home=None: None)
     (home / "repo" / "requirements.txt").write_text("", encoding="utf-8")
     (home / ".installed").write_text(mt.COMMIT, encoding="utf-8")
     cfg = home / ".venv" / "pyvenv.cfg"
@@ -239,6 +241,49 @@ def test_the_next_run_is_steered_by_what_the_model_wrote_not_the_trim(song, tmp_
     generate_from_file(song, options)
     # The model wrote above the target, so it is asked for less, though the trim undershot.
     assert len(asked) == 2 and asked[1] < asked[0]
+
+
+def test_a_run_with_long_empty_stretches_is_passed_over(song):
+    calls = []
+    stream = stream_runner(calls)
+
+    def holey_first(audio, out, difficulty, seed, extra):
+        path = stream(audio, out, difficulty, seed, extra)
+        if len(calls) == 1:
+            bm = parse_osu_7k(path.read_text(encoding="utf-8"))
+            bm.hit_objects = [o for o in bm.hit_objects if not 20000 <= o.time < 40000]
+            path.write_text(dump_osu_7k(bm), encoding="utf-8")
+        return path
+
+    first = parse_osu_7k(stream([], song.parent / "probe", 1.0, 0, []).read_text(encoding="utf-8"))
+    assert mt.holes(first) == 0.0
+    target = float(evaluate_osu(dump_osu_7k(first)).total_stars)
+    options = GeneratorOptions(target_stars=target / mt.AIM, backend="mapperatorinator", model_runner=holey_first,
+                               model_runs=3, tolerance=5.0)
+    result = generate_from_file(song, options)
+    assert len(calls) == 2
+    assert mt.holes(result.beatmap) == 0.0
+    assert not any("空白" in w for w in result.warnings)
+
+
+def test_the_pinned_source_is_patched_once_keeping_its_line_endings(tmp_path):
+    repo = mt.repo_dir(tmp_path)
+    for name in {name for name, _, _ in mt.PATCHES}:
+        lines = ["# head"] + [line for n, line, _ in mt.PATCHES if n == name] + ["# tail"]
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_bytes("\r\n".join(lines).encode("utf-8"))
+    assert not mt.patched(tmp_path)
+    mt.patch(tmp_path)
+    assert mt.patched(tmp_path)
+    text = (repo / "osuT5/osuT5/inference/processor.py").read_bytes().decode("utf-8")
+    assert "\n" not in text.replace("\r\n", "") and text.count("_keep_window(") == 3
+    before = {name: (repo / name).read_bytes() for name, _, _ in mt.PATCHES}
+    mt.patch(tmp_path)
+    assert {name: (repo / name).read_bytes() for name, _, _ in mt.PATCHES} == before
+    (repo / "config.py").write_text("changed upstream\n", encoding="utf-8")
+    (repo / "osuT5/osuT5/inference/processor.py").write_text("changed upstream\n", encoding="utf-8")
+    with pytest.raises(mt.ModelUnavailable):
+        mt.patch(tmp_path)
 
 
 def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
