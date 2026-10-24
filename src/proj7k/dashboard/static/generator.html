@@ -101,9 +101,10 @@
         <label class="check"><input type="checkbox" id="stems"> 实验：Demucs 分轨</label>
         <label class="check"><input type="checkbox" id="autoDesign"> 实验：每段一种主技法（按人写谱配比）</label>
         <label class="check"><input type="checkbox" id="model"> 实验：Mapperatorinator 模型落键</label>
+        <label class="check"><input type="checkbox" id="modelFast"> 快速：所有窗口一起写</label>
       </div>
       <div class="hint" style="margin-bottom:10px">分轨：把歌拆成鼓、贝斯、人声、其他，每段只跟一层写。第一次勾选会安装 Demucs 与 PyTorch（数 GB），每首歌第一次分轨在 CPU 上约 1–3 分钟，之后读缓存。</div>
-      <div class="hint" style="margin-bottom:10px">Mapperatorinator：一个听音频写谱的模型，节奏和键位一起写。它自己测 timing，不读分轨与按段技法；生成几次，取引擎星级最接近目标的一张。第一次勾选会安装它的 Python 3.10 环境与 PyTorch（数 GB），没有 NVIDIA 显卡时每首要几分钟。</div>
+      <div class="hint" style="margin-bottom:10px">Mapperatorinator：一个听音频写谱的模型，节奏和键位一起写，不读分轨与按段技法。借用参考谱面的 timing 时直接读那张谱的 timing（更快也更准），否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」所有窗口一起写，约快一倍，行与长条略少。第一次勾选会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
       <button class="primary" id="runBtn">生成</button>
       <span class="hint" style="margin-left:10px">同一设置换个种子就是另一种配键。</span>
     </div>
@@ -253,6 +254,7 @@
         stems: $("#stems").checked,
         auto_design: $("#autoDesign").checked,
         backend: $("#model").checked ? "mapperatorinator" : "proj7k",
+        model_fast: $("#modelFast").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
         inverse: $("#ln").value === "inverse",
       };

@@ -91,6 +91,7 @@ class GeneratorOptions:
     model_runs: Optional[int] = None          # mapperatorinator: runs at most, each scored by the engine
     model_hold_ratio: Optional[float] = None  # mapperatorinator: its hold_note_ratio condition; None lets it choose
     model_args: Optional[List[str]] = None    # mapperatorinator: extra Hydra overrides (descriptors, mapper_id, ...)
+    model_fast: bool = False                  # mapperatorinator: all windows at once (about 2x faster, fewer long notes)
     model_runner: Optional[Callable] = None   # stands in for the model (tests)
 
 

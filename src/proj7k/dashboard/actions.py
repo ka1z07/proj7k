@@ -302,6 +302,7 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         whole_inverse=_flag(params, "inverse"),
         auto_design=_flag(params, "auto_design"),
         backend=_text(params, "backend") or "proj7k",
+        model_fast=_flag(params, "model_fast"),
     )
     if options.backend == "mapperatorinator":
         from proj7k.generator import mapperatorinator
