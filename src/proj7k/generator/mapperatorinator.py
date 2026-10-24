@@ -67,6 +67,12 @@ HOLE_BEATS = 4
 #: reference) is passed over while another run has fewer. Its own timing at difficulty 12 left 29% of 9Lana's
 #: Propose empty, in different places on each seed (meow, 2026-10-24); a human chart's breaks are a few percent.
 HOLE_MAX = 0.10
+#: A stretch this many beats long with no note, where the reference chart has notes (or anywhere, with no
+#: reference), is written again on its own, the model reading the notes around it. In fast mode the windows of an
+#: outro can come back with nothing at all (the nightcore song, 171.9–196.5 s, at full loudness; meow, 2026-10-24).
+REFILL_BEATS = 8
+#: At most this many stretches per run, longest first; each is one more model call (~16 s to load, then the stretch).
+REFILL_MAX = 3
 DEFAULT_YEAR = 2023
 #: Fast mode writes overlapping windows and keeps this much of each. A window writes at most 2560 tokens, about 400
 #: notes: dense 7K used them up 10.9–13.3 s into its 16.4 s and left the rest empty (meow, 2026-10-24); half a
@@ -412,14 +418,46 @@ def model_audio(audio: Path, work: Path, audio_filename: str = "") -> Path:
     return copy
 
 
+def gaps(chart: Beatmap7K, beats: float) -> List[tuple]:
+    """(start, end) ms of each stretch of at least `beats` beats between two notes."""
+    times = sorted({int(round(o.time)) for o in chart.hit_objects})
+    beat = legal._beat_at(chart.timing_points)
+    return [(a, b) for a, b in zip(times, times[1:]) if b - a >= beats * beat(a)]
+
+
 def holes(chart: Beatmap7K) -> float:
     """How much of the chart, first note to last, lies in stretches of `HOLE_BEATS` beats or more without a note."""
-    times = sorted({int(round(o.time)) for o in chart.hit_objects})
-    if len(times) < 2:
+    times = [o.time for o in chart.hit_objects]
+    if len(times) < 2 or max(times) <= min(times):
         return 0.0
-    beat = legal._beat_at(chart.timing_points)
-    empty = sum(b - a for a, b in zip(times, times[1:]) if b - a >= HOLE_BEATS * beat(a))
-    return empty / (times[-1] - times[0])
+    return sum(b - a for a, b in gaps(chart, HOLE_BEATS)) / (max(times) - min(times))
+
+
+def refill_spans(chart: Beatmap7K, reference: Optional[Beatmap7K] = None) -> List[tuple]:
+    """The stretches to write again (`REFILL_BEATS`), longest first: with a reference, only where it has notes."""
+    spans = gaps(chart, REFILL_BEATS)
+    if reference is not None and reference.hit_objects:
+        ref = sorted(o.time for o in reference.hit_objects)
+        beat = legal._beat_at(reference.timing_points)
+
+        def mapped(a, b):
+            # The reference keeps writing through most of it: at least a note every two beats on average.
+            inside = sum(1 for t in ref if a < t < b)
+            return inside >= (b - a) / (2 * beat(a))
+        spans = [g for g in spans if mapped(*g)]
+    return sorted(spans, key=lambda g: g[0] - g[1])[:REFILL_MAX]
+
+
+def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
+    chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
+    if chart.circle_size != 7 or not chart.hit_objects:
+        raise RuntimeError(tr(f"Mapperatorinator 写出的不是 7K 谱：{osu}", f"Mapperatorinator didn't write a 7K chart: {osu}"))
+    # Its windows overlap, so a note can come back twice or land under a hold an earlier window wrote:
+    # the chart is made playable before it is rated (legal.py).
+    chart.hit_objects, fixed = legal.sanitize(chart.hit_objects, chart.timing_points)
+    if fixed:
+        log(tr(f"  修正了 {fixed} 个重叠或不合法的音符", f"  fixed {fixed} overlapping or illegal notes"))
+    return chart
 
 
 def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None]):
@@ -496,15 +534,19 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
                           timing_from=timing_from, fast=options.model_fast) + list(options.model_args or ())
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
-        osu = runner(audio, work, difficulty, seed, extra)
-        chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
-        if chart.circle_size != 7 or not chart.hit_objects:
-            raise RuntimeError(tr(f"Mapperatorinator 写出的不是 7K 谱：{osu}", f"Mapperatorinator didn't write a 7K chart: {osu}"))
-        # Its windows overlap, so a note can come back twice or land under a hold an earlier window wrote:
-        # the chart is made playable before it is rated (legal.py).
-        chart.hit_objects, fixed = legal.sanitize(chart.hit_objects, chart.timing_points)
-        if fixed:
-            log(tr(f"  修正了 {fixed} 个重叠或不合法的音符", f"  fixed {fixed} overlapping or illegal notes"))
+        chart = _read(runner(audio, work, difficulty, seed, extra), log)
+        for start, end in refill_spans(chart, reference):
+            log(tr(f"  {start / 1000:.1f}–{end / 1000:.1f} 秒没有音符，重写这一段……",
+                   f"  no notes from {start / 1000:.1f} to {end / 1000:.1f} s; writing that stretch again…"))
+            # The chart so far is the context; it is made of our notes, so it has no online id to copy.
+            current = work / f"refill-{seed}.osu"
+            current.write_text(dump_osu_7k(chart), encoding="utf-8")
+            again = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
+                              timing_from=current) + ["add_to_beatmap=true", f"start_time={start + 1}",
+                                                      f"end_time={end - 1}"] + list(options.model_args or ())
+            before = len(chart.hit_objects)
+            chart = _read(runner(audio, work, difficulty, seed, again), log)
+            log(tr(f"  → 补上 {len(chart.hit_objects) - before} 个音符", f"  → {len(chart.hit_objects) - before} notes added"))
         empty = holes(chart)
         holey = empty > allowed
         if holey:
