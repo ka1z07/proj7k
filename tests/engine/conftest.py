@@ -11,6 +11,7 @@ import pytest
 
 from engine_support import POOL_OF, TIERS, Notes
 from proj7k.engine import DifficultyProfile, evaluate_notes
+from proj7k.engine.params import V02
 from proj7k.engine.events import notes_from_osu
 
 GOLDEN_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "engine_golden_v02.json"
@@ -33,6 +34,12 @@ def engine_charts(benchmark_manifest, benchmark_corpus) -> Dict[Tuple[str, str],
 @pytest.fixture(scope="session")
 def engine_profiles(engine_charts) -> Dict[Tuple[str, str], DifficultyProfile]:
     return {key: evaluate_notes(notes) for key, notes in engine_charts.items()}
+
+
+@pytest.fixture(scope="session")
+def v02_profiles(engine_charts) -> Dict[Tuple[str, str], DifficultyProfile]:
+    """The 120 charts under the constants of the frozen spec-v0.2 prototype (`params.V02`)."""
+    return {key: evaluate_notes(notes, V02) for key, notes in engine_charts.items()}
 
 
 @pytest.fixture(scope="session")
