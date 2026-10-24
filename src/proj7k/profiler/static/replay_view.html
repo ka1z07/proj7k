@@ -129,6 +129,7 @@
         <label title="Scroll speed, as osu!lazer counts it (↑ ↓)">Scroll <input type="range" id="scroll" min="5" max="40" step="1" value="24"><output id="scrollOut">24</output></label>
         <label>Skin <select id="skin"></select></label>
         <label title="Outline the chart's notes behind your keystrokes"><input type="checkbox" id="overlay" checked> chart in input</label>
+        <label id="volLabel" title="Music volume (remembered on this computer)">Volume <input type="range" id="volume" min="0" max="100" step="1" value="100"><output id="volOut">100%</output></label>
         <label id="offLabel">Audio offset <input type="number" id="offset" value="0" step="1"> ms <button class="btn" id="offAuto" title="Line the music's attacks up with the chart's notes" disabled>Auto</button> <span id="offInfo"></span></label>
         <span class="spacer"></span>
         <span class="time" id="clock">0:00.0 / 0:00.0</span>
@@ -319,8 +320,8 @@ let audioOK = false;
 if (P.audio) {
   audio.src = encodeURI(P.audio).replace(/#/g, "%23");
   audio.addEventListener("canplay", () => { audioOK = true; });
-  audio.addEventListener("error", () => { audioOK = false; $("offLabel").style.display = "none"; });
-} else { $("offLabel").style.display = "none"; }
+  audio.addEventListener("error", () => { audioOK = false; $("offLabel").style.display = "none"; $("volLabel").style.display = "none"; });
+} else { $("offLabel").style.display = "none"; $("volLabel").style.display = "none"; }
 let now = 0, playing = false, userRate = 1, audioOffset = 0, dragging = false, resumeAfterDrag = false;
 let baseTs = 0, baseT = 0;                                  // while playing: now = baseT + (ts - baseTs) * speed
 const speed = () => userRate * RATE;
@@ -871,6 +872,12 @@ function hardest() {
 }
 
 // ---------- controls ----------
+function setVolume(v) {
+  const vol = clamp(Math.round(v), 0, 100);
+  audio.volume = vol / 100;
+  $("volume").value = vol; $("volOut").textContent = vol + "%";
+  store.set("volume", String(vol));
+}
 function setScroll(v) {
   scrollSpeed = clamp(Math.round(v), 5, 40);
   $("scroll").value = scrollSpeed; $("scrollOut").textContent = scrollSpeed;
@@ -882,12 +889,15 @@ $("skin").onchange = e => { skinName = e.target.value; store.set("skin", skinNam
 $("overlay").checked = overlay;
 $("overlay").onchange = e => { overlay = e.target.checked; store.set("overlay", overlay ? "1" : "0"); needDraw = true; };
 setScroll(scrollSpeed);
+const savedVol = parseFloat(store.get("volume"));
+setVolume(Number.isFinite(savedVol) ? savedVol : 100);
 $("play").onclick = toggle;
 $("prevErr").onclick = () => stepMistake(-1);
 $("nextErr").onclick = () => stepMistake(1);
 $("hardest").onclick = hardest;
 $("rate").onchange = e => { userRate = parseFloat(e.target.value); rebase(now); if (audioOK) setRate(); };
 $("scroll").oninput = e => setScroll(parseFloat(e.target.value));
+$("volume").oninput = e => setVolume(parseFloat(e.target.value));
 $("offset").onchange = e => applyOffset(parseFloat(e.target.value) || 0, false);
 $("offAuto").onclick = () => { if (detected) applyOffset(detected.offset, true); };
 if (P.audio) setTimeout(detectOffset, 50);
@@ -940,7 +950,7 @@ now = Math.max(0, (N.length ? N[0].t : 0) - 1500);
 { const m = /[#&]t=(\d+(?:\.\d+)?)/.exec(location.hash); if (m) now = clamp(parseFloat(m[1]), 0, DUR); }   // #t=<ms> opens at a moment
 shown = now;
 requestAnimationFrame(frame);
-window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }), setSkin: k => { skinName = k; $("skin").value = k; needDraw = true; }, setScroll, offset: () => ({ audioOffset, detected }), setOverlay: v => { overlay = v; $("overlay").checked = v; needDraw = true; } };   // for scripted checks
+window.__replay = { P, seek: jump, play, pause, state: () => ({ now, playing }), setSkin: k => { skinName = k; $("skin").value = k; needDraw = true; }, setScroll, setVolume, volume: () => audio.volume, offset: () => ({ audioOffset, detected }), setOverlay: v => { overlay = v; $("overlay").checked = v; needDraw = true; } };   // for scripted checks
 </script>
 </body>
 </html>

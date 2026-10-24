@@ -102,6 +102,12 @@ def test_the_page_embeds_the_payload_and_nothing_can_close_the_script(payload):
     assert json.loads(m.group(1))["meta"]["title"] == "</script><b>x"
 
 
+def test_the_page_has_a_volume_slider_it_remembers(payload):
+    page = render_replay_html(payload)
+    assert '<input type="range" id="volume" min="0" max="100"' in page
+    assert 'store.set("volume"' in page and 'store.get("volume")' in page
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_the_pages_script_is_valid_javascript(payload, tmp_path):
     page = render_replay_html(payload)
