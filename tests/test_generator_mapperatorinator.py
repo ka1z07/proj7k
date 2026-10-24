@@ -56,6 +56,7 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     assert "output_type=[TIMING,MAP]" in out and "parallel=true" not in out
     borrowed = mt.overrides(audio, tmp_path, 5, 0, timing_from=tmp_path / "ref.osu", fast=True)
     assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed and "parallel=true" in borrowed
+    assert f"parallel_keep={mt.FAST_KEEP}" in borrowed
     assert any(o.startswith("beatmap_path='") for o in borrowed)
 
 
@@ -161,6 +162,7 @@ def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, m
     mt.venv_python(home).write_bytes(b"")
     (home / "repo").mkdir()
     (home / "repo" / "inference.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(mt, "patch", lambda home=None: None)
     (home / "repo" / "requirements.txt").write_text("", encoding="utf-8")
     (home / ".installed").write_text(mt.COMMIT, encoding="utf-8")
     cfg = home / ".venv" / "pyvenv.cfg"
@@ -239,6 +241,65 @@ def test_the_next_run_is_steered_by_what_the_model_wrote_not_the_trim(song, tmp_
     generate_from_file(song, options)
     # The model wrote above the target, so it is asked for less, though the trim undershot.
     assert len(asked) == 2 and asked[1] < asked[0]
+
+
+def holey_runner(calls, holey_runs, refill_works):
+    """The stand-in, with no notes from 20 to 40 s on the runs in `holey_runs` (counted from 1, refills aside);
+    a refill writes the stretch when `refill_works`, else hands the chart back as it was."""
+    stream = stream_runner(calls)
+    runs = []
+
+    def run(audio, out, difficulty, seed, extra):
+        if "add_to_beatmap=true" in extra and not refill_works:
+            calls.append((difficulty, seed, list(extra)))
+            return Path(next(o for o in extra if o.startswith("beatmap_path="))[len("beatmap_path='"):-1])
+        path = stream(audio, out, difficulty, seed, extra)
+        if "add_to_beatmap=true" not in extra:
+            runs.append(seed)
+            if len(runs) in holey_runs:
+                bm = parse_osu_7k(path.read_text(encoding="utf-8"))
+                bm.hit_objects = [o for o in bm.hit_objects if not 20000 <= o.time < 40000]
+                path.write_text(dump_osu_7k(bm), encoding="utf-8")
+        return path
+    return run
+
+
+def _target(song):
+    chart = parse_osu_7k(stream_runner([])(song, song.parent / "probe", 1.0, 0, []).read_text(encoding="utf-8"))
+    assert mt.holes(chart) == 0.0
+    return float(evaluate_osu(dump_osu_7k(chart)).total_stars) / mt.AIM
+
+
+def test_an_empty_stretch_is_written_again_around_the_notes_it_has(song):
+    calls = []
+    options = GeneratorOptions(target_stars=_target(song), backend="mapperatorinator",
+                               model_runner=holey_runner(calls, {1}, refill_works=True), model_runs=3, tolerance=5.0)
+    result = generate_from_file(song, options)
+    assert len(calls) == 2
+    refill = calls[1][2]
+    assert "add_to_beatmap=true" in refill and "in_context=[TIMING]" in refill and "parallel=true" not in refill
+    start = int(next(o for o in refill if o.startswith("start_time="))[len("start_time="):])
+    end = int(next(o for o in refill if o.startswith("end_time="))[len("end_time="):])
+    assert 19000 < start < 20000 and 39000 < end <= 40000
+    assert mt.holes(result.beatmap) == 0.0
+
+
+def test_a_run_that_stays_empty_is_passed_over(song):
+    calls = []
+    options = GeneratorOptions(target_stars=_target(song), backend="mapperatorinator",
+                               model_runner=holey_runner(calls, {1}, refill_works=False), model_runs=3, tolerance=5.0)
+    result = generate_from_file(song, options)
+    assert len(calls) == 3  # the holey run, its refill, then a whole one
+    assert mt.holes(result.beatmap) == 0.0
+    assert not any("空白" in w for w in result.warnings)
+
+
+def test_a_reference_break_is_left_alone(song):
+    calls = []
+    reference = parse_osu_7k(stream_runner([])(song, song.parent / "ref", 1.0, 0, []).read_text(encoding="utf-8"))
+    reference.hit_objects = [o for o in reference.hit_objects if not 20000 <= o.time < 40000]
+    assert mt.refill_spans(reference, reference) == []
+    assert len(mt.refill_spans(reference)) == 1
 
 
 def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
