@@ -32,6 +32,7 @@ from typing import Callable, List, Optional, Sequence, Union
 import numpy as np
 
 from proj7k.engine import evaluate_notes
+from proj7k.generator import legal
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, NoteType, parse_osu_7k
 
@@ -352,6 +353,11 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
         if chart.circle_size != 7 or not chart.hit_objects:
             raise RuntimeError(tr(f"Mapperatorinator 写出的不是 7K 谱：{osu}", f"Mapperatorinator didn't write a 7K chart: {osu}"))
+        # Its windows overlap, so a note can come back twice or land under a hold an earlier window wrote:
+        # the chart is made playable before it is rated (legal.py).
+        chart.hit_objects, fixed = legal.sanitize(chart.hit_objects, chart.timing_points)
+        if fixed:
+            log(tr(f"  修正了 {fixed} 个重叠或不合法的音符", f"  fixed {fixed} overlapping or illegal notes"))
         profile = _stars(chart)
         stars = float(profile.total_stars)
         tried += 1
