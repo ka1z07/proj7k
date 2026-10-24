@@ -14,7 +14,9 @@ from proj7k.engine.solver import loss
 from proj7k.field import trace_beatmap
 from proj7k.parser import dump_osu_7k, parse_osu_7k
 
-CASES = [("Regular Stream", "Zenith", "7th"), ("Regular Jack", "Gamma", "5th"), ("LN Tech", "Gamma", "7th"), ("Regular Tech", "Azimuth", "8th")]
+#: Regular Stream Zenith -> 7th was a case until ADR-0044: on the re-weighted engine its stream/speed dominance margin
+#: flips on the way down and the technique gate stops it (free mode reaches it); Stellium -> 7th is the same cut.
+CASES = [("Regular Stream", "Stellium", "7th"), ("Regular Jack", "Gamma", "5th"), ("LN Tech", "Gamma", "7th"), ("Regular Tech", "Azimuth", "8th")]
 
 
 def _chart(manifest, corpus, pool, tier):

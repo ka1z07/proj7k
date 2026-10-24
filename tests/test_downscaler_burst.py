@@ -23,11 +23,13 @@ def test_the_envelopes_are_the_ones_the_benchmark_charts_give(benchmark_manifest
 
 def test_a_hammered_column_reads_over_the_cap_and_an_even_stream_does_not():
     # 220 BPM 1/4, the same notes per second: once rolled over all seven columns, once with column 1 taking every
-    # other note. The engine's star reads the two alike (its reading is a hand's average); the column reading does not.
+    # other note. Since the same-finger weight (ADR-0044) the engine's star reads the locked one harder, but its
+    # reading is still a hand's average: at the level the even roll reads, the column reading is over its cap.
     step = 60.0 / 220.0 / 4.0
     even = trace_notes([(k % 7, k * step, None) for k in range(240)])
     locked = trace_notes([((1 if k % 2 == 0 else 2 + (k // 2) % 5), k * step, None) for k in range(240)])
-    assert excess(burst_reading(locked), locked.total_D)["column"] > 1.0
+    assert locked.profile.total_stars > even.profile.total_stars + 0.5
+    assert excess(burst_reading(locked), even.total_D)["column"] > 1.0
     assert excess(burst_reading(even), even.total_D)["column"] < 0.5
 
 

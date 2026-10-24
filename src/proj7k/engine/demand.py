@@ -48,8 +48,11 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     c = 1.0 + p.chi_0 * (K[col] * ev.held[row]).sum(1)
     omega = np.where(rel, p.w_rel, 1.0)
     jxo = ev.j + x + o
-    v = np.minimum(omega * jxo * c, p.v_cap)
+    # a press's j is the finger repeating itself; a release's j is its LN's length and is not weighted
+    k_j = np.where(rel, 1.0, p.k_same)
+    v = np.minimum(omega * (k_j * ev.j + x + o) * c, p.v_cap)
 
+    # r stays the unweighted share: it is what membership's thresholds were set on (§8.1)
     with np.errstate(invalid="ignore", divide="ignore"):
         r = np.where(jxo > 0, ev.j / jxo, 0.0)
 

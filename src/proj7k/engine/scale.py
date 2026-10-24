@@ -18,8 +18,8 @@ import numpy as np
 ANCHORS_PATH = Path(__file__).with_name("anchors.json")
 
 #: The ln-ln line through the anchors' tier-level D and stars (fit of `anchors.json`).
-STAR_A = 0.22219312824310733
-STAR_B = 1.00661910788821
+STAR_A = 0.17276615937166498
+STAR_B = 1.0192315048133904
 
 
 def stars_of(D: float) -> float:

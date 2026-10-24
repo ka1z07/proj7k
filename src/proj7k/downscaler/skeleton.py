@@ -1,22 +1,25 @@
 import math
-from typing import Collection, Dict, List, Optional, Set, Tuple, Union
+import zlib
+from typing import Collection, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint
 
 
-def _select_skeleton_anchor(notes: List[HitObject]) -> HitObject:
+def _select_skeleton_anchor(notes: List[HitObject], column_weight: Optional[Sequence[float]] = None) -> HitObject:
     """
     Selects a canonical anchor note from concurrent notes:
     1. Long notes (LN) take precedence (preserving hold structure).
-    2. Symmetric proximity to center track S (column 3): abs(col - 3) ascending.
-    3. Deterministic track tie-breaker.
+    2. The column the chart most needs kept: the lowest `column_weight` (the pruner passes each column's
+       retention against the original), so the protected notes follow the chart's own column shares.
+    3. A deterministic tie-breaker that favours no column (a hash of time and column). Preferring the centre
+       track here once piled every chord's survivor onto columns 3-4 (ADR-0044).
     """
     return min(
         notes,
         key=lambda ho: (
             0 if ho.note_type == NoteType.LN else 1,
-            abs(ho.column - 3),
-            ho.column,
+            column_weight[ho.column] if column_weight is not None else 0.0,
+            zlib.crc32(f"{round(ho.time)}|{ho.column}".encode()),
         ),
     )
 
@@ -30,9 +33,11 @@ class MetricSkeletonDetector:
        to 0 notes, preserving rhythmic continuity.
     """
 
-    def __init__(self, beatmap: Beatmap7K, tolerance_ms: float = 3.0):
+    def __init__(self, beatmap: Beatmap7K, tolerance_ms: float = 3.0, column_weight: Optional[Sequence[float]] = None):
         self.beatmap = beatmap
         self.tolerance_ms = tolerance_ms
+        #: Per column, lower is kept first when an anchor is chosen (see `_select_skeleton_anchor`).
+        self.column_weight = column_weight
 
         uninherited = [
             tp for tp in beatmap.timing_points if tp.uninherited and tp.beat_length > 0
@@ -101,7 +106,7 @@ class MetricSkeletonDetector:
             is_db = self.is_downbeat(t_key)
             is_chord = len(notes) >= 2
             if is_db or is_chord:
-                anchor = _select_skeleton_anchor(notes)
+                anchor = _select_skeleton_anchor(notes, self.column_weight)
                 if id(anchor) not in seen_ids:
                     seen_ids.add(id(anchor))
                     skeleton.append(anchor)

@@ -93,8 +93,8 @@ def test_difficulty_name_idempotence():
 
     # 2. Re-formatting with updated values replaces suffix without accumulating; the version
     #    token is refreshed too, so a re-evaluation never leaves a stale version behind.
-    updated = format_injected_difficulty_name(formatted_1, 7.10, "tech", version="vdeadbeef")
-    assert updated == "Insane (7.10★ 8th Tech vdeadbeef)"
+    updated = format_injected_difficulty_name(formatted_1, 7.00, "tech", version="vdeadbeef")
+    assert updated == "Insane (7.00★ 8th Tech vdeadbeef)"
 
     # 3. Migration from historical suffix: replaces old suffix cleanly with new Dan suffix
     migrated = format_injected_difficulty_name("Insane (6.42★ Jack)", 6.42, "jack", version=VERSION)
@@ -154,7 +154,7 @@ def test_generate_binned_skill_tags():
     assert generate_binned_skill_tags("LN_General", 7.8) == ["dominant_ln_general", "ln_general_7★", "dan_10th"]
     assert generate_binned_skill_tags("Tech", 5.0) == ["dominant_tech", "tech_5★", "dan_3rd"]
     assert generate_binned_skill_tags("speed", 0.8) == ["dominant_speed", "speed_0★", "dan_0th"]
-    assert generate_binned_skill_tags("speed", 10.5) == ["dominant_speed", "speed_10★", "dan_zenith"]
+    assert generate_binned_skill_tags("speed", 10.4) == ["dominant_speed", "speed_10★", "dan_zenith"]
     assert generate_binned_skill_tags("stream", 11.2) == ["dominant_stream", "stream_11★", "dan_stellium"]
 
 

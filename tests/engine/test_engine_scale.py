@@ -45,13 +45,11 @@ def test_rc_anchors_are_met_within_a_quarter_star(anchors, engine_profiles):
             assert got >= anchor["min_stars"] - 1e-9, anchor
 
 
-def test_rc_tier_medians_are_strictly_increasing_stars(golden, engine_profiles, anchors):
-    """The dan table of ADR-0018 is read off these fifteen numbers."""
+def test_rc_tier_medians_are_strictly_increasing_stars(engine_profiles, anchors):
+    """The dan table of ADR-0018 is read off these fifteen numbers (`test_dan_table.py` pins it to them)."""
     medians = _tier_medians(engine_profiles, anchors["pools"])
     got = [stars_of(medians[t]) for t in TIERS]
     assert got == sorted(got) and len(set(got)) == 15
-    for t, want in golden["stars"]["rc_tier_level"].items():
-        assert stars_of(medians[t]) == pytest.approx(want["stars"], abs=0.006), t  # golden is rounded to 2 decimals
 
 
 def test_the_four_rc_pools_are_the_anchor_pools(anchors):
