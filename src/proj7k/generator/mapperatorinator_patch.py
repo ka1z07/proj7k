@@ -8,7 +8,7 @@ Its own parallel mode writes every window with no notes before it, so the patter
 """
 
 #: Marks a checkout patched with this version; a checkout with another version is restored and patched again.
-MARK = "proj7k patch v2"
+MARK = "proj7k patch v3"
 
 CHAINS_METHOD = '''    # {MARK}
     def generate_chains(
@@ -66,9 +66,10 @@ CHAINS_METHOD = '''    # {MARK}
                 for c, chain in enumerate(chains):
                     if step < len(chain):
                         wi = chain[step]
-                        # A run after the first starts where the run before it stops writing (its last window
-                        # writes up to its lookahead), so it too leaves its first window's lookback alone.
-                        flags = ((c, step) != (0, 0) and self.lookback_time > 0, wi != n_windows - 1)
+                        # A run's first window writes from its start, as the song's first window does; a model
+                        # held out of an empty lookback writes the same note over and over. What it writes before
+                        # its lookback is the run before's ground: context for this run, dropped at the end.
+                        flags = (step != 0 and self.lookback_time > 0, wi != n_windows - 1)
                         groups.setdefault(flags, []).append((c, wi))
                 for (trim_lookback, trim_lookahead), members in groups.items():
                     for start in range(0, len(members), self.max_batch_size):
@@ -102,8 +103,14 @@ CHAINS_METHOD = '''    # {MARK}
                         for b, (c, wi) in enumerate(batch):
                             self.add_predicted_tokens_to_context(runs[c], result[b, max_len:].cpu(), frame_times[wi].item(),
                                                                  trim_lookback, trim_lookahead)
-            context["events"] = context["events"][:given] + [e for run in runs for e in run["events"][given:]]
-            context["event_times"] = context["event_times"][:given] + [t for run in runs for t in run["event_times"][given:]]
+            events, times = context["events"][:given], context["event_times"][:given]
+            for c, run in enumerate(runs):
+                own = frame_times[chains[c][0]].item() + (self.lookback_time if c else 0)
+                for e, t in zip(run["events"][given:], run["event_times"][given:]):
+                    if t >= own:
+                        events.append(e)
+                        times.append(t)
+            context["events"], context["event_times"] = events, times
 '''
 
 #: (file, line it replaces, new lines). Each line must occur once in the pinned file.
