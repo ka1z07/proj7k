@@ -34,6 +34,7 @@ import numpy as np
 
 from proj7k.engine import evaluate_notes
 from proj7k.generator import legal
+from proj7k.generator.audio import AudioDecodeError
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, NoteType, dump_osu_7k, parse_osu_7k
 
@@ -448,6 +449,20 @@ def refill_spans(chart: Beatmap7K, reference: Optional[Beatmap7K] = None) -> Lis
     return sorted(spans, key=lambda g: g[0] - g[1])[:REFILL_MAX]
 
 
+def _reuse(chart: Beatmap7K, audio: Path, log: Callable[[str], None]) -> list:
+    """The chart's notes with phrases that sound alike charted alike (ADR-0045); unchanged when the audio
+    can't be read."""
+    from proj7k.generator import reuse
+    try:
+        objs, copied, total = reuse.reuse_phrases(chart.hit_objects, chart.timing_points, audio)
+    except (AudioDecodeError, ValueError) as e:
+        log(tr(f"  没有做乐句复用：{e}", f"  no phrase reuse: {e}"))
+        return chart.hit_objects
+    if copied:
+        log(tr(f"  {copied}/{total} 个乐句照前面听起来一样的乐句写", f"  {copied}/{total} phrases charted as an earlier one that sounds alike"))
+    return objs
+
+
 def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
     chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
     if chart.circle_size != 7 or not chart.hit_objects:
@@ -547,6 +562,8 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             before = len(chart.hit_objects)
             chart = _read(runner(audio, work, difficulty, seed, again), log)
             log(tr(f"  → 补上 {len(chart.hit_objects) - before} 个音符", f"  → {len(chart.hit_objects) - before} notes added"))
+        if options.model_reuse:
+            chart.hit_objects = _reuse(chart, audio, log)
         empty = holes(chart)
         holey = empty > allowed
         if holey:

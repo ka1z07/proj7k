@@ -303,6 +303,7 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         auto_design=_flag(params, "auto_design"),
         backend=_text(params, "backend") or "proj7k",
         model_fast=_flag(params, "model_fast"),
+        model_reuse=_flag(params, "model_reuse", True),
     )
     if options.backend == "mapperatorinator":
         from proj7k.generator import mapperatorinator
