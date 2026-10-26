@@ -27,6 +27,7 @@ import subprocess
 import sys
 import time
 import wave
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Union
 
@@ -34,6 +35,7 @@ import numpy as np
 
 from proj7k.engine import evaluate_notes
 from proj7k.generator import legal
+from proj7k.generator import mapperatorinator_patch as patches
 from proj7k.generator.audio import AudioDecodeError
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, NoteType, dump_osu_7k, parse_osu_7k
@@ -74,11 +76,18 @@ HOLE_MAX = 0.10
 REFILL_BEATS = 8
 #: At most this many stretches per run, longest first; each is one more model call (~16 s to load, then the stretch).
 REFILL_MAX = 3
+#: A long-note stream (`ln_streams`): at least this many seconds of rows of one long note each...
+STREAM_S = 4.0
+#: ...at least this many rows a second.
+STREAM_NPS = 8.0
+#: A hold shorter than this much of a beat is written as a tap.
+MIN_HOLD_BEATS = 0.3
 DEFAULT_YEAR = 2023
-#: Fast mode writes overlapping windows and keeps this much of each. A window writes at most 2560 tokens, about 400
-#: notes: dense 7K used them up 10.9–13.3 s into its 16.4 s and left the rest empty (meow, 2026-10-24); half a
-#: window holds up to ~49 notes a second.
-FAST_KEEP = 0.5
+#: Fast mode writes the windows as this many runs side by side, each in order with the notes before it as context
+#: (`mapperatorinator_patch`). Its own parallel mode wrote every window with nothing before it: each window's
+#: 2560 tokens ran out 11–13 s into its 16.4 s (meow, 2026-10-24), and the patterns broke at every window
+#: (2026-10-26). A run's steps go in one batch, so the time is about a run's length.
+FAST_CHAINS = 8
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
 Runner = Callable[[Path, Path, float, int, Sequence[str]], Path]
@@ -209,55 +218,25 @@ def _rehome(home: Path, python: Path, log: Callable[[str], None]) -> None:
     cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-#: Our changes to its pinned source, (file, line it follows or replaces, new lines): `parallel_keep`, so parallel
-#: sampling can write overlapping windows and keep only the start of each (`FAST_KEEP`).
-PATCHES = (
-    ("config.py", "    parallel: bool = False  # Use parallel sampling", [
-        "    parallel: bool = False  # Use parallel sampling",
-        "    parallel_keep: float = 1.0  # Fraction of each window kept in parallel sampling; the next window starts there",
-    ]),
-    ("osuT5/osuT5/inference/preprocessor.py", "            self.sequence_stride = self.samples_per_sequence", [
-        "            self.sequence_stride = int(self.samples_per_sequence * min(max(getattr(args, 'parallel_keep', 1.0), 0.1), 1.0))",
-    ]),
-    ("osuT5/osuT5/inference/processor.py", "        self.parallel = args.parallel", [
-        "        self.parallel = args.parallel",
-        "        self.parallel_keep = min(max(getattr(args, 'parallel_keep', 1.0), 0.1), 1.0)",
-    ]),
-    ("osuT5/osuT5/inference/processor.py",
-     "                        self.add_predicted_tokens_to_context(context, sequence[start:end], frame_time)", [
-        "                        self.add_predicted_tokens_to_context(context, sequence[start:end], frame_time)",
-        "                        self._keep_window(context, frame_time, sequence_index, len(frame_times))",
-    ]),
-    ("osuT5/osuT5/inference/processor.py",
-     "                    self.add_predicted_tokens_to_context(out_context[0], sequence[start:end], frame_time)", [
-        "                    self.add_predicted_tokens_to_context(out_context[0], sequence[start:end], frame_time)",
-        "                    self._keep_window(out_context[0], frame_time, sequence_index, len(frame_times))",
-    ]),
-    ("osuT5/osuT5/inference/processor.py", "    def generate_parallel(", [
-        "    def _keep_window(self, context, frame_time, index, count):",
-        "        # proj7k: with overlapping windows, a window keeps what lies before the next one starts.",
-        "        if self.parallel_keep < 1.0 and index != count - 1:",
-        "            keep = frame_time + self.parallel_keep * self.miliseconds_per_sequence",
-        "            self._trim_events_after_time(context[\"events\"], context[\"event_times\"], keep)",
-        "",
-        "    def generate_parallel(",
-    ]),
-)
-PATCH_MARK = "proj7k: with overlapping windows"
+#: The files an earlier version of our patch changed; a checkout patched by one is restored before patching.
+PATCHED_FILES = ("config.py", "osuT5/osuT5/inference/preprocessor.py", "osuT5/osuT5/inference/processor.py")
 
 
 def patched(home: Optional[Path] = None) -> bool:
     path = repo_dir(home) / "osuT5/osuT5/inference/processor.py"
-    return path.is_file() and PATCH_MARK in path.read_text(encoding="utf-8", errors="replace")
+    return path.is_file() and patches.MARK in path.read_text(encoding="utf-8", errors="replace")
 
 
-def patch(home: Optional[Path] = None) -> None:
-    """Apply `PATCHES` to the checkout (once; it keeps the file's own line endings)."""
+def patch(home: Optional[Path] = None, log: Callable[[str], None] = logger.info) -> None:
+    """Apply `mapperatorinator_patch.PATCHES` to the checkout (once; it keeps the files' own line endings)."""
     if patched(home):
         return
     repo = repo_dir(home)
+    if any("proj7k" in (repo / name).read_text(encoding="utf-8", errors="replace")
+           for name in PATCHED_FILES if (repo / name).is_file()):
+        _run(["git", "-C", repo, "checkout", "--quiet", COMMIT, "--", *PATCHED_FILES], log)
     texts = {}
-    for name, line, new in PATCHES:
+    for name, line, new in patches.PATCHES:
         text = texts.get(name)
         if text is None:
             text = texts[name] = (repo / name).read_bytes().decode("utf-8")
@@ -273,11 +252,11 @@ def patch(home: Optional[Path] = None) -> None:
 
 
 def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = None) -> None:
-    """Clone the pinned commit, patch it (`PATCHES`) and build its Python 3.10 environment (once; a few GB with
+    """Clone the pinned commit, patch it (`mapperatorinator_patch`) and build its Python 3.10 environment (once; a few GB with
     PyTorch)."""
     home = home or HOME
     if available(home):
-        patch(home)
+        patch(home, log)
         return
     log(tr("首次使用 Mapperatorinator：正在安装（Python 3.10 + PyTorch，数 GB，只需一次）……",
            "First use of Mapperatorinator: installing it (Python 3.10 + PyTorch, several GB, only once)…"))
@@ -289,7 +268,7 @@ def install(log: Callable[[str], None] = logger.info, home: Optional[Path] = Non
         _run(["git", "clone", "--quiet", REPO_URL, repo], log)
     _run(["git", "-C", repo, "fetch", "--quiet", "origin", COMMIT], log)
     _run(["git", "-C", repo, "checkout", "--quiet", "--force", COMMIT], log)
-    patch(home)
+    patch(home, log)
     uv = _uv()
     py = venv_python(home)
     base = base_python(home)
@@ -316,9 +295,8 @@ def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, ho
               fast: bool = False) -> List[str]:
     """Its inference.py arguments. It writes no scroll speed changes (we don't use them in 7K: SV costs a pass and
     changes nothing else); with `timing_from`, a chart of the same song, it reads that chart's timing instead of
-    writing its own (faster, and the rows land on the chart's beats); `fast` writes all windows at once instead of
-    one after another (about twice as fast, slightly fewer rows and long notes; 2026-10-23 on meow), overlapping so
-    no window runs out of tokens before its end (`FAST_KEEP`)."""
+    writing its own (faster, and the rows land on the chart's beats); `fast` writes the song as `FAST_CHAINS` runs
+    side by side, each in order (several times faster, seams only between the runs)."""
     out = [
         f"audio_path={quote(Path(audio).resolve().as_posix())}",
         f"output_path={quote(Path(output_dir).resolve().as_posix())}",
@@ -331,7 +309,7 @@ def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, ho
     else:
         out.append("output_type=[TIMING,MAP]")
     if fast:
-        out += ["parallel=true", f"parallel_keep={FAST_KEEP}"]
+        out.append(f"parallel_chains={FAST_CHAINS}")
     if hold_note_ratio is not None:
         out.append(f"hold_note_ratio={min(max(hold_note_ratio, 0.0), 1.0):.2f}")
     if title:
@@ -350,7 +328,7 @@ def run_model(audio: Path, output_dir: Path, difficulty: float, seed: int, extra
                                   "或运行 python -m proj7k.generator.mapperatorinator --install",
                                   "Mapperatorinator isn't installed: ticking \"Experimental: Mapperatorinator notes\" "
                                   "in the dashboard installs it, or run python -m proj7k.generator.mapperatorinator --install"))
-    patch(home)
+    patch(home, log)
     output_dir.mkdir(parents=True, exist_ok=True)
     before = set(output_dir.glob("*.osu"))
     cmd = [str(venv_python(home)), "inference.py", "-cn", CONFIG, *extra]
@@ -463,6 +441,40 @@ def _reuse(chart: Beatmap7K, audio: Path, log: Callable[[str], None]) -> list:
     return objs
 
 
+def ln_streams(chart: Beatmap7K) -> List[tuple]:
+    """(first, last head ms) of the model's long-note streams, longest first: `STREAM_S` seconds or more of rows
+    that each hold one long note, at least `STREAM_NPS` rows a second. Dense 7K needs chords; a run of 1/4-beat
+    holds one column at a time has none (65 ms holds at 229 BPM in KAERU; meow, 2026-10-26)."""
+    rows: dict = {}
+    for o in chart.hit_objects:
+        rows.setdefault(int(round(o.time)), []).append(o)
+    spans, run = [], []
+
+    def close():
+        if run and run[-1] - run[0] >= STREAM_S * 1000 and (len(run) - 1) / ((run[-1] - run[0]) / 1000) >= STREAM_NPS:
+            spans.append((run[0], run[-1]))
+
+    for t in sorted(rows):
+        if len(rows[t]) == 1 and rows[t][0].note_type == NoteType.LN and (not run or t - run[-1] <= 1000 / STREAM_NPS):
+            run.append(t)
+            continue
+        close()
+        run = [t] if len(rows[t]) == 1 and rows[t][0].note_type == NoteType.LN else []
+    close()
+    return sorted(spans, key=lambda g: g[0] - g[1])
+
+
+def short_holds_to_taps(chart: Beatmap7K) -> list:
+    """The notes with every hold shorter than `MIN_HOLD_BEATS` of a beat made a tap: osu! plays it as one."""
+    beat = legal._beat_at(chart.timing_points)
+    out = []
+    for o in chart.hit_objects:
+        if o.note_type == NoteType.LN and o.end_time is not None and o.end_time - o.time < MIN_HOLD_BEATS * beat(o.time):
+            o = replace(o, note_type=NoteType.RICE, end_time=None)
+        out.append(o)
+    return out
+
+
 def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
     chart = parse_osu_7k(Path(osu).read_text(encoding="utf-8", errors="replace"))
     if chart.circle_size != 7 or not chart.hit_objects:
@@ -550,18 +562,28 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
         chart = _read(runner(audio, work, difficulty, seed, extra), log)
-        for start, end in refill_spans(chart, reference):
-            log(tr(f"  {start / 1000:.1f}–{end / 1000:.1f} 秒没有音符，重写这一段……",
-                   f"  no notes from {start / 1000:.1f} to {end / 1000:.1f} s; writing that stretch again…"))
+
+        def remap(chart, start, end, ratio):
             # The chart so far is the context; it is made of our notes, so it has no online id to copy.
             current = work / f"refill-{seed}.osu"
             current.write_text(dump_osu_7k(chart), encoding="utf-8")
-            again = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
+            again = overrides(audio, work, difficulty, seed, hold_note_ratio=ratio, title=title, artist=artist,
                               timing_from=current) + ["add_to_beatmap=true", f"start_time={start + 1}",
                                                       f"end_time={end - 1}"] + list(options.model_args or ())
+            return _read(runner(audio, work, difficulty, seed, again), log)
+
+        for start, end in refill_spans(chart, reference):
+            log(tr(f"  {start / 1000:.1f}–{end / 1000:.1f} 秒没有音符，重写这一段……",
+                   f"  no notes from {start / 1000:.1f} to {end / 1000:.1f} s; writing that stretch again…"))
             before = len(chart.hit_objects)
-            chart = _read(runner(audio, work, difficulty, seed, again), log)
+            chart = remap(chart, start, end, hold_ratio)
             log(tr(f"  → 补上 {len(chart.hit_objects) - before} 个音符", f"  → {len(chart.hit_objects) - before} notes added"))
+        for start, end in ln_streams(chart)[:REFILL_MAX]:
+            log(tr(f"  {start / 1000:.1f}–{end / 1000:.1f} 秒是一串每行一个的短长条，不用长条重写这一段……",
+                   f"  {start / 1000:.1f}–{end / 1000:.1f} s is a stream of one short long note per row; "
+                   "writing it again without long notes…"))
+            chart = remap(chart, start - 1, end + 1, 0.0)
+        chart.hit_objects = short_holds_to_taps(chart)
         if options.model_reuse:
             chart.hit_objects = _reuse(chart, audio, log)
         empty = holes(chart)

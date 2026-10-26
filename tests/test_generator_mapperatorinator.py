@@ -55,8 +55,8 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     assert not any(o.startswith("hold_note_ratio") for o in mt.overrides(audio, tmp_path, 5, 0))
     assert "output_type=[TIMING,MAP]" in out and "parallel=true" not in out
     borrowed = mt.overrides(audio, tmp_path, 5, 0, timing_from=tmp_path / "ref.osu", fast=True)
-    assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed and "parallel=true" in borrowed
-    assert f"parallel_keep={mt.FAST_KEEP}" in borrowed
+    assert "in_context=[TIMING]" in borrowed and "output_type=[MAP]" in borrowed
+    assert f"parallel_chains={mt.FAST_CHAINS}" in borrowed and "parallel=true" not in borrowed
     assert any(o.startswith("beatmap_path='") for o in borrowed)
 
 
@@ -162,7 +162,7 @@ def test_a_venv_whose_python_cant_be_seen_is_pointed_at_one_that_can(tmp_path, m
     mt.venv_python(home).write_bytes(b"")
     (home / "repo").mkdir()
     (home / "repo" / "inference.py").write_text("", encoding="utf-8")
-    monkeypatch.setattr(mt, "patch", lambda home=None: None)
+    monkeypatch.setattr(mt, "patch", lambda home=None, log=None: None)
     (home / "repo" / "requirements.txt").write_text("", encoding="utf-8")
     (home / ".installed").write_text(mt.COMMIT, encoding="utf-8")
     cfg = home / ".venv" / "pyvenv.cfg"
@@ -312,7 +312,7 @@ def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
                                model_runs=1, reference=reference, timing=reference.timing_points, model_fast=True)
     result = generate_from_file(song, options)
     extra = calls[0][2]
-    assert "in_context=[TIMING]" in extra and "parallel=true" in extra
+    assert "in_context=[TIMING]" in extra and f"parallel_chains={mt.FAST_CHAINS}" in extra
     path = Path(next(o for o in extra if o.startswith("beatmap_path="))[len("beatmap_path='"):-1])
     text = path.read_text(encoding="utf-8")
     assert "BeatmapID:0" in text and "BeatmapSetID:-1" in text and "TimingPoints" in text
@@ -328,3 +328,108 @@ def test_stops_once_the_difficulty_condition_is_at_its_ceiling(song):
     result = generate_from_file(song, options)
     assert calls[-1][0] == mt.MAX_DIFFICULTY and len(calls) < 8
     assert any(f"{mt.MAX_DIFFICULTY:g}★" in w for w in result.warnings)
+
+
+def ln_stream_runner(calls):
+    """The stand-in, with 10–20 s written as one 1/4-beat long note per row, one column at a time, unless asked
+    for no long notes."""
+    stream = stream_runner(calls)
+
+    def run(audio, out, difficulty, seed, extra):
+        path = stream(audio, out, difficulty, seed, extra)
+        if "hold_note_ratio=0.00" in extra:
+            return path
+        bm = parse_osu_7k(path.read_text(encoding="utf-8"))
+        beat = 60000.0 / 160
+        stream_notes = [HitObject(column=k % 7, time=round(10000 + k * beat / 4), note_type=NoteType.LN,
+                                  end_time=round(10000 + (k + 1) * beat / 4 - 10)) for k in range(int(10000 / (beat / 4)))]
+        bm.hit_objects = [o for o in bm.hit_objects if not 10000 <= o.time < 20000] + stream_notes
+        path.write_text(dump_osu_7k(bm), encoding="utf-8")
+        return path
+    return run
+
+
+def test_a_long_note_stream_is_written_again_without_long_notes(song):
+    calls = []
+    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=ln_stream_runner(calls),
+                               model_runs=1, tolerance=50.0)
+    raw = parse_osu_7k(ln_stream_runner([])(song, song.parent / "probe", 1.0, 0, []).read_text(encoding="utf-8"))
+    assert mt.ln_streams(raw) and mt.ln_streams(raw)[0][0] == 10000
+    result = generate_from_file(song, options)
+    assert len(calls) == 2
+    remap = calls[1][2]
+    assert "add_to_beatmap=true" in remap and "hold_note_ratio=0.00" in remap
+    assert not mt.ln_streams(parse_osu_7k(dump_osu_7k(result.beatmap)))
+
+
+def test_holds_shorter_than_a_third_of_a_beat_are_taps():
+    beat = 400.0
+    chart = Beatmap7K(timing_points=[TimingPoint(time=0.0, beat_length=beat, uninherited=True)],
+                      hit_objects=[HitObject(column=0, time=0, note_type=NoteType.LN, end_time=100),
+                                   HitObject(column=1, time=0, note_type=NoteType.LN, end_time=200)])
+    kinds = [o.note_type for o in mt.short_holds_to_taps(chart)]
+    assert kinds == [NoteType.RICE, NoteType.LN]
+
+
+def test_the_dashboard_asks_the_model_for_no_long_notes_on_a_rice_chart(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from proj7k.dashboard import actions
+    from proj7k.generator import cli
+
+    seen = {}
+
+    def run_generate(options, output_dir, **kw):
+        seen["ratio"] = options.model_hold_ratio
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(cli, "run_generate", run_generate)
+    monkeypatch.setattr(mt, "install", lambda log=None, home=None: None)
+    audio = tmp_path / "a.mp3"
+    audio.write_bytes(b"")
+    config = SimpleNamespace(realm_path=None, lazer_files_dir=None, generated_dir=tmp_path)
+    for ln, expected in (("0", 0.0), ("0.35", 0.35)):
+        with pytest.raises(RuntimeError):
+            actions.generate_chart(config, {"target_sr": "5", "audio": str(audio), "backend": "mapperatorinator",
+                                            "ln_ratio": ln}, None)
+        assert seen["ratio"] == expected
+
+
+def _pinned_files(tmp_path, nl="\r\n"):
+    repo = mt.repo_dir(tmp_path)
+    for name in {name for name, _, _ in mt.patches.PATCHES}:
+        lines = ["# head"] + [line for n, line, _ in mt.patches.PATCHES if n == name] + ["# tail"]
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_bytes(nl.join(lines).encode("utf-8"))
+    return repo
+
+
+def test_the_pinned_source_is_patched_once_keeping_its_line_endings(tmp_path):
+    repo = _pinned_files(tmp_path)
+    assert not mt.patched(tmp_path)
+    mt.patch(tmp_path)
+    assert mt.patched(tmp_path)
+    text = (repo / "osuT5/osuT5/inference/processor.py").read_bytes().decode("utf-8")
+    assert "\n" not in text.replace("\r\n", "") and "def generate_chains(" in text and "self.generate_chains" in text
+    before = {name: (repo / name).read_bytes() for name, _, _ in mt.patches.PATCHES}
+    mt.patch(tmp_path)
+    assert {name: (repo / name).read_bytes() for name, _, _ in mt.patches.PATCHES} == before
+    (repo / "config.py").write_text("changed upstream\n", encoding="utf-8")
+    (repo / "osuT5/osuT5/inference/processor.py").write_text("changed upstream\n", encoding="utf-8")
+    with pytest.raises(mt.ModelUnavailable):
+        mt.patch(tmp_path)
+
+
+def test_a_checkout_with_an_older_patch_is_restored_first(tmp_path, monkeypatch):
+    repo = _pinned_files(tmp_path, "\n")
+    config = (repo / "config.py").read_text(encoding="utf-8")
+    (repo / "config.py").write_text(config + "\n    parallel_keep: float = 1.0  # proj7k old\n", encoding="utf-8")
+    restored = []
+
+    def run(cmd, log, cwd=None, **env):
+        restored.append([str(c) for c in cmd])
+        _pinned_files(tmp_path, "\n")
+    monkeypatch.setattr(mt, "_run", run)
+    mt.patch(tmp_path)
+    assert restored and restored[0][3:6] == ["checkout", "--quiet", mt.COMMIT]
+    assert mt.patched(tmp_path) and "parallel_keep" not in (repo / "config.py").read_text(encoding="utf-8")

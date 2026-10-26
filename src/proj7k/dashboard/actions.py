@@ -305,6 +305,10 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         model_fast=_flag(params, "model_fast"),
         model_reuse=_flag(params, "model_reuse", True),
     )
+    if options.backend == "mapperatorinator" and _float(params, "ln_ratio") is not None:
+        # The page always picks a long-note mix, rice (0) included: the model is told it, or it adds its own
+        # long notes, 11–22% on a chart asked for none (meow, 2026-10-26).
+        options.model_hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
     if options.backend == "mapperatorinator":
         from proj7k.generator import mapperatorinator
 
