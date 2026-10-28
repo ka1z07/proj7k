@@ -35,10 +35,10 @@ class OnsetEnvelope:
     loudness_db: np.ndarray  # [frames] frame RMS in dB relative to the song's loud level
     duration_s: float
     #: The song's loud level (power) relative to another envelope's, when loudness is compared across
-    #: envelopes (the stems against the mix, `stems.stem_envelopes`); 1 otherwise.
+    #: envelopes; 1 otherwise.
     loud_ref: float = 1.0
     #: The raw spectral flux the song's attacks reach (98th percentile, before normalizing), and this
-    #: envelope's onsets on another envelope's scale (`stems.stem_envelopes`; 1 otherwise).
+    #: envelope's onsets on another envelope's scale (1 otherwise).
     flux_level: float = 0.0
     onset_ref: float = 1.0
 

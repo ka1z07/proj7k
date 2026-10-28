@@ -80,7 +80,7 @@ def test_the_mapperatorinator_backend_reuses_phrases(song, tmp_path):
         return path
 
     logs = []
-    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=model,
+    options = GeneratorOptions(target_stars=1.0, model_runner=model,
                                model_runs=1, tolerance=50.0, log=logs.append)
     generate_from_file(song, options)
     assert any("乐句照前面" in m for m in logs)

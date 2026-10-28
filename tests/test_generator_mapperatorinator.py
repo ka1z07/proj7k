@@ -81,7 +81,7 @@ def test_runs_until_the_engine_stars_reach_the_target(song, tmp_path):
     target = float(evaluate_osu(runner(song, tmp_path / "probe", 4.0, 0, [])
                                 .read_text(encoding="utf-8")).total_stars)
     calls.clear()
-    options = GeneratorOptions(target_stars=target, target_label="probe", seed=7, backend="mapperatorinator",
+    options = GeneratorOptions(target_stars=target, target_label="probe", seed=7,
                                model_runner=runner, model_runs=5)
     result = generate_from_file(song, options)
     assert abs(result.stars - target) <= options.tolerance
@@ -95,27 +95,35 @@ def test_runs_until_the_engine_stars_reach_the_target(song, tmp_path):
 
 def test_keeps_the_closest_run_and_warns_when_out_of_reach(song):
     calls = []
-    options = GeneratorOptions(target_stars=40.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+    options = GeneratorOptions(target_stars=40.0, model_runner=stream_runner(calls),
                                model_runs=3, timing=[TimingPoint(time=0.0, beat_length=500.0, uninherited=True)])
     result = generate_from_file(song, options)
     assert len(calls) == 1  # 40★ asks for the ceiling at once, and the ceiling falls short
-    assert any("±" in w for w in result.warnings) and any("timing" in w for w in result.warnings)
+    assert any("±" in w for w in result.warnings)
+
+
+def test_typed_in_timing_is_handed_to_the_model_as_a_chart_of_only_timing(song, tmp_path):
+    calls = []
+    options = GeneratorOptions(target_stars=1.0, bpm=150.0, offset_ms=320.0, model_runner=stream_runner(calls),
+                               model_runs=1)
+    result = mt.generate_from_file(song, options, runner=stream_runner(calls), work_dir=tmp_path / "work")
+    assert result.timing_source == "manual"
+    args = calls[0][2]
+    assert "in_context=[TIMING]" in args and "output_type=[MAP]" in args
+    timing = parse_osu_7k((tmp_path / "work" / "timing.osu").read_text(encoding="utf-8"))
+    assert not timing.hit_objects and timing.circle_size == 7
+    assert timing.timing_points[0].time == 320.0 and timing.timing_points[0].beat_length == pytest.approx(400.0)
 
 
 def test_long_note_share_becomes_its_hold_note_condition(song):
     calls = []
-    generate_from_file(song, GeneratorOptions(target_stars=1.0, backend="mapperatorinator", ln_ratio=0.3,
+    generate_from_file(song, GeneratorOptions(target_stars=1.0, ln_ratio=0.3,
                                               model_runner=stream_runner(calls), model_runs=1))
     assert "hold_note_ratio=0.30" in calls[0][2]
     calls.clear()
-    generate_from_file(song, GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_hold_ratio=0.0,
+    generate_from_file(song, GeneratorOptions(target_stars=1.0, model_hold_ratio=0.0,
                                               ln_ratio=0.3, model_runner=stream_runner(calls), model_runs=1))
     assert "hold_note_ratio=0.00" in calls[0][2]
-
-
-def test_unknown_backend_is_refused(song):
-    with pytest.raises(ValueError):
-        generate_from_file(song, GeneratorOptions(target_stars=3.0, backend="nope"))
 
 
 def test_run_model_needs_the_install(tmp_path):
@@ -123,20 +131,20 @@ def test_run_model_needs_the_install(tmp_path):
         mt.run_model(tmp_path / "a.mp3", tmp_path / "out", 3.0, 0, home=tmp_path / "none")
 
 
-def test_command_line_backend(song, tmp_path, monkeypatch, capsys):
+def test_command_line(song, tmp_path, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr(mt, "install", lambda log=None, home=None: None)
     original = mt.generate_from_file
     monkeypatch.setattr(mt, "generate_from_file",
                         lambda audio, options, runner=None, **kw: original(audio, options, runner=stream_runner(calls), **kw))
     out = tmp_path / "gen"
-    code = main(["--audio", str(song), "--target-sr", "2.0", "--backend", "mapperatorinator", "--model-runs", "2",
+    code = main(["--audio", str(song), "--target-sr", "2.0", "--model-runs", "2",
                  "--model-arg", "descriptors=['tech']", "--output-dir", str(out)])
     assert code == 0, capsys.readouterr().err
     assert "descriptors=['tech']" in calls[0][2]
     assert not any(a.startswith("hold_note_ratio") for a in calls[0][2])  # no --ln: the model chooses
     report = capsys.readouterr().out
-    assert "Mapperatorinator 生成" in report
+    assert "Mapperatorinator 测得" in report
     osz = next(out.glob("*.osz"))
     with zipfile.ZipFile(osz) as z:
         names = z.namelist()
@@ -195,7 +203,7 @@ def test_a_run_a_little_too_hard_is_trimmed_to_the_target(song, tmp_path):
     def always_four(audio, out, difficulty, seed, extra):
         return hard(audio, out, 4.0, seed, extra)
 
-    options = GeneratorOptions(target_stars=probe + 0.3, backend="mapperatorinator", model_runner=always_four,
+    options = GeneratorOptions(target_stars=probe + 0.3, model_runner=always_four,
                                model_runs=4)
     result = generate_from_file(song, options)
     assert len(calls) == 1
@@ -228,7 +236,7 @@ def _fixed_stars_run(song, tmp_path):
 def test_a_trim_that_lands_close_is_kept(song, tmp_path, monkeypatch):
     _trim_landing(monkeypatch, -0.15)
     run, asked, raw = _fixed_stars_run(song, tmp_path)
-    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=4)
+    options = GeneratorOptions(target_stars=raw - 0.5, model_runner=run, model_runs=4)
     result = generate_from_file(song, options)
     assert len(asked) == 1
     assert not any("最接近" in w or "closest" in w for w in result.warnings)
@@ -237,7 +245,7 @@ def test_a_trim_that_lands_close_is_kept(song, tmp_path, monkeypatch):
 def test_the_next_run_is_steered_by_what_the_model_wrote_not_the_trim(song, tmp_path, monkeypatch):
     _trim_landing(monkeypatch, -0.6)
     run, asked, raw = _fixed_stars_run(song, tmp_path)
-    options = GeneratorOptions(target_stars=raw - 0.5, backend="mapperatorinator", model_runner=run, model_runs=2)
+    options = GeneratorOptions(target_stars=raw - 0.5, model_runner=run, model_runs=2)
     generate_from_file(song, options)
     # The model wrote above the target, so it is asked for less, though the trim undershot.
     assert len(asked) == 2 and asked[1] < asked[0]
@@ -272,7 +280,7 @@ def _target(song):
 
 def test_an_empty_stretch_is_written_again_around_the_notes_it_has(song):
     calls = []
-    options = GeneratorOptions(target_stars=_target(song), backend="mapperatorinator",
+    options = GeneratorOptions(target_stars=_target(song),
                                model_runner=holey_runner(calls, {1}, refill_works=True), model_runs=3, tolerance=5.0)
     result = generate_from_file(song, options)
     assert len(calls) == 2
@@ -286,7 +294,7 @@ def test_an_empty_stretch_is_written_again_around_the_notes_it_has(song):
 
 def test_a_run_that_stays_empty_is_passed_over(song):
     calls = []
-    options = GeneratorOptions(target_stars=_target(song), backend="mapperatorinator",
+    options = GeneratorOptions(target_stars=_target(song),
                                model_runner=holey_runner(calls, {1}, refill_works=False), model_runs=3, tolerance=5.0)
     result = generate_from_file(song, options)
     assert len(calls) == 3  # the holey run, its refill, then a whole one
@@ -308,7 +316,7 @@ def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
                           timing_points=[TimingPoint(time=1000.0, beat_length=375.0, uninherited=True)],
                           hit_objects=[HitObject(column=0, time=1000, note_type=NoteType.RICE)],
                           extra_sections={"Metadata": {"BeatmapID": "123", "BeatmapSetID": "45"}})
-    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+    options = GeneratorOptions(target_stars=1.0, model_runner=stream_runner(calls),
                                model_runs=1, reference=reference, timing=reference.timing_points, model_fast=True)
     result = generate_from_file(song, options)
     extra = calls[0][2]
@@ -323,7 +331,7 @@ def test_borrowed_timing_hands_over_the_reference_without_its_online_id(song):
 
 def test_stops_once_the_difficulty_condition_is_at_its_ceiling(song):
     calls = []
-    options = GeneratorOptions(target_stars=60.0, backend="mapperatorinator", model_runner=stream_runner(calls),
+    options = GeneratorOptions(target_stars=60.0, model_runner=stream_runner(calls),
                                model_runs=8)
     result = generate_from_file(song, options)
     assert calls[-1][0] == mt.MAX_DIFFICULTY and len(calls) < 8
@@ -351,7 +359,7 @@ def ln_stream_runner(calls):
 
 def test_a_long_note_stream_is_written_again_without_long_notes(song):
     calls = []
-    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=ln_stream_runner(calls),
+    options = GeneratorOptions(target_stars=1.0, model_runner=ln_stream_runner(calls),
                                model_runs=1, tolerance=50.0)
     raw = parse_osu_7k(ln_stream_runner([])(song, song.parent / "probe", 1.0, 0, []).read_text(encoding="utf-8"))
     assert mt.ln_streams(raw) and mt.ln_streams(raw)[0][0] == 10000
@@ -390,8 +398,7 @@ def test_the_dashboard_asks_the_model_for_no_long_notes_on_a_rice_chart(monkeypa
     config = SimpleNamespace(realm_path=None, lazer_files_dir=None, generated_dir=tmp_path)
     for ln, expected in (("0", 0.0), ("0.35", 0.35)):
         with pytest.raises(RuntimeError):
-            actions.generate_chart(config, {"target_sr": "5", "audio": str(audio), "backend": "mapperatorinator",
-                                            "ln_ratio": ln}, None)
+            actions.generate_chart(config, {"target_sr": "5", "audio": str(audio), "ln_ratio": ln}, None)
         assert seen["ratio"] == expected
 
 
@@ -433,3 +440,20 @@ def test_a_checkout_with_an_older_patch_is_restored_first(tmp_path, monkeypatch)
     mt.patch(tmp_path)
     assert restored and restored[0][3:6] == ["checkout", "--quiet", mt.COMMIT]
     assert mt.patched(tmp_path) and "parallel_keep" not in (repo / "config.py").read_text(encoding="utf-8")
+
+
+def test_evaluation_holds_the_models_chart_against_the_human_one(song):
+    from proj7k.generator.evaluate import bpm_match, row_match, score_chart, summarize
+
+    assert row_match([0.0, 100.0, 200.0], [0.0, 105.0, 400.0]) == (pytest.approx(2 / 3), pytest.approx(2 / 3))
+    assert bpm_match(170.0, 170.3) == "exact" and bpm_match(85.0, 170.0) == "octave" and bpm_match(150.0, 170.0) == "wrong"
+    calls = []
+    runner = stream_runner(calls)
+    # The "human" chart is what the stand-in writes at difficulty 4: the evaluation must find its rows again.
+    content = runner(song, song.parent / "human", 4.0, 0, []).read_text(encoding="utf-8")
+    score = score_chart("probe", parse_osu_7k(content), content, song, runner=runner)
+    assert score.error is None and score.bpm_match == "exact" and score.estimated_bpm == 160.0
+    assert score.precision > 0.9 and score.recall > 0.9
+    summary = summarize([score])
+    assert summary["charts"] == 1 and summary["bpm_exact"] == 1.0
+    assert set(summary["patterns_median"]) == {"human", "generated"}

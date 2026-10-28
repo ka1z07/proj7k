@@ -273,8 +273,9 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
 
 def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     """
-    A new chart from a song (ADR-0027). The song is the game's current chart (`reference` = its MD5: its audio, and its
-    timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timing then from the music).
+    A new chart from a song, written by Mapperatorinator (ADR-0046). The song is the game's current chart (`reference` =
+    its MD5: its audio, and its timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timed by
+    the model, or by the BPM and offset given).
     """
     from proj7k.generator.cli import resolve_reference, resolve_target, run_generate
     from proj7k.generator.generate import GeneratorOptions
@@ -296,27 +297,19 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         seed=_int(params, "seed") or 0,
         title=_text(params, "title"),
         artist=_text(params, "artist"),
-        stems=_flag(params, "stems"),
         log=logger.info,
         ln_ratio=_float(params, "ln_ratio") or 0.0,
         whole_inverse=_flag(params, "inverse"),
-        auto_design=_flag(params, "auto_design"),
-        backend=_text(params, "backend") or "proj7k",
         model_fast=_flag(params, "model_fast"),
         model_reuse=_flag(params, "model_reuse", True),
     )
-    if options.backend == "mapperatorinator" and _float(params, "ln_ratio") is not None:
+    if _float(params, "ln_ratio") is not None or options.whole_inverse:
         # The page always picks a long-note mix, rice (0) included: the model is told it, or it adds its own
         # long notes, 11–22% on a chart asked for none (meow, 2026-10-26).
         options.model_hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
-    if options.backend == "mapperatorinator":
-        from proj7k.generator import mapperatorinator
+    from proj7k.generator import mapperatorinator
 
-        mapperatorinator.install(logger.info)
-    elif options.stems:
-        from proj7k.generator import stems
-
-        stems.install(logger.info)
+    mapperatorinator.install(logger.info)
     output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.generated_dir
     run = run_generate(options, output_dir, audio=audio, reference=reference,
                        auto_timing=_flag(params, "auto_timing"), package=_flag(params, "package", True))
