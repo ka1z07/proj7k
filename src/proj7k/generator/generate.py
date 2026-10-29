@@ -10,7 +10,7 @@ result, and the .osu built from the notes (made playable by `legal`, metadata fr
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union
 
 from proj7k.engine import DifficultyProfile
 from proj7k.generator import legal
@@ -42,6 +42,7 @@ class GeneratorOptions:
     model_args: Optional[List[str]] = None    # extra Hydra overrides (descriptors, mapper_id, ...)
     model_fast: bool = False                  # windows written as batched chains (about 2x faster, fewer long notes)
     model_reuse: bool = True                  # phrases that sound alike charted alike (ADR-0045)
+    pool_mix: Optional[Dict[str, float]] = None  # engine pool -> -1..1, picked and trimmed for (mix.py, ADR-0047)
     model_runner: Optional[Callable] = None   # stands in for the model (tests)
 
 

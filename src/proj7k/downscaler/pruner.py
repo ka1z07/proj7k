@@ -52,6 +52,11 @@ PEAK_MARGIN = 0.10
 #: Thinning is steered toward what the dominant skill does not need, without making it untouchable.
 DOMINANCE_BIAS = 0.35
 
+#: How far a skill weight (`skill_weights`, -1 to 1) moves a note's score by the share of it each skill carries:
+#: a note all of one weighted-up skill scores this much lower (kept longer), one of a weighted-down skill this much
+#: higher (taken first). The generator's technique mix (ADR-0047) steers the trim with it.
+MIX_BIAS = 0.5
+
 #: When the batch halves down to its best note and that note alone breaks validation, how many such notes are
 #: set aside (and the rest of the batch retried) before the loop stops.
 SKIPPED_BLOCKERS = 8
@@ -172,6 +177,7 @@ class ExcessLossPruner:
         window_s: float = 1.0,
         validator: Optional[DualGateValidator] = None,
         balancer: Optional[BimanualFluxBalancer] = None,
+        skill_weights: Optional[Dict[str, float]] = None,
     ):
         # Canonical single-round pruning bounds: 15% ~ 25% of a peak window (ADR-0011)
         self.prune_ratio = max(0.15, min(0.25, prune_ratio))
@@ -180,6 +186,15 @@ class ExcessLossPruner:
         self.window_s = window_s
         self.validator = validator or DualGateValidator()
         self.balancer = balancer or BimanualFluxBalancer()
+        weights = skill_weights or {}
+        self.skill_weights = np.array([min(max(float(weights.get(k, 0.0)), -1.0), 1.0) for k in SKILLS])
+        self._mix_factor: Dict[int, float] = {}   # id(note) -> its (1 - MIX_BIAS * mix), set by `_admit`
+
+    def _mix(self, field: ChartField, i: int) -> float:
+        """The weighted share of a press that the skills the mix asks more of (positive) or less of carry."""
+        if not self.skill_weights.any():
+            return 0.0
+        return min(max(float(field.a[i] @ self.skill_weights), -1.0), 1.0)
 
     # -- scoring ---------------------------------------------------------------------------------
 
@@ -213,17 +228,18 @@ class ExcessLossPruner:
             int(w) for w in np.flatnonzero(win_count) if win_loss[w] / win_count[w] > allowed_rate * (1.0 - PEAK_MARGIN)
         }
 
-        in_peak: List[Tuple[HitObject, float, float]] = []   # (note, first-order benefit, dominant skill's share)
+        # (note, first-order benefit, dominant skill's share, weighted mix share)
+        in_peak: List[Tuple[HitObject, float, float, float]] = []
         for ho in beatmap.hit_objects:
             if int(ho.time // window_ms) not in peak_windows:
                 continue
             i = field.press_index(ho.column, ho.time / 1000.0)
             if i is None:
-                in_peak.append((ho, 0.0, 0.0))
+                in_peak.append((ho, 0.0, 0.0, 0.0))
                 continue
             r = field.release_index(i)
             b = float(benefit[i] + (benefit[r] if r is not None else 0.0))
-            in_peak.append((ho, b, float(field.a[i, k_dom]) if k_dom is not None else 0.0))
+            in_peak.append((ho, b, float(field.a[i, k_dom]) if k_dom is not None else 0.0, self._mix(field, i)))
         return self._admit(beatmap, in_peak, bias, reference)
 
     def burst_scores(
@@ -248,7 +264,7 @@ class ExcessLossPruner:
         bias = DOMINANCE_BIAS if self.validator.preserve_technique else 0.0
         v_mean = float(field.v.mean()) or 1.0
 
-        over: List[Tuple[HitObject, float, float]] = []
+        over: List[Tuple[HitObject, float, float, float]] = []
         for ho in beatmap.hit_objects:
             i = field.press_index(ho.column, ho.time / 1000.0)
             if i is None:
@@ -259,32 +275,38 @@ class ExcessLossPruner:
                 ratio = max(ratio, burst.hand[r] / cap_hand)
             if ratio <= 1.0:
                 continue
-            over.append((ho, float(ratio * field.v[i] / v_mean), float(field.a[i, k_dom]) if k_dom is not None else 0.0))
+            over.append((ho, float(ratio * field.v[i] / v_mean), float(field.a[i, k_dom]) if k_dom is not None else 0.0,
+                         self._mix(field, i)))
         return self._admit(beatmap, over, bias, reference)
 
     def _admit(
-        self, beatmap: Beatmap7K, notes: List[Tuple[HitObject, float, float]], bias: float,
+        self, beatmap: Beatmap7K, notes: List[Tuple[HitObject, float, float, float]], bias: float,
         reference: Optional[Beatmap7K] = None,
     ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
-        """Skeleton filter, dominant-skill damping and the column balance penalty over (note, score, dominant share)."""
+        """Skeleton filter, dominant-skill damping, the skill weights and the column balance penalty over
+        (note, score, dominant share, weighted mix share)."""
         retention = column_retention(beatmap, reference or beatmap)
         # the skeleton keeps a chord's note on the column most thinned so far
         detector = MetricSkeletonDetector(beatmap, column_weight=retention)
-        allowed = {id(ho) for ho in detector.filter_candidate_removals([ho for ho, _, _ in notes])}
+        allowed = {id(ho) for ho in detector.filter_candidate_removals([ho for ho, *_ in notes])}
         # a column thinned more than the chart is protected, one thinned less is taken first
         penalty = np.maximum(retention, 0.05) ** -COLUMN_BALANCE
 
         scored: List[Tuple[float, HitObject]] = []
         refused: List[HitObject] = []
-        for ho, b, share in notes:
+        for ho, b, share, mix in notes:
             if id(ho) not in allowed:
                 refused.append(ho)
                 continue
-            scored.append((b * (1.0 - bias * share) / float(penalty[ho.column]), ho))
+            factor = 1.0 - MIX_BIAS * mix
+            self._mix_factor[id(ho)] = factor
+            scored.append((b * (1.0 - bias * share) * factor / float(penalty[ho.column]), ho))
         return scored, refused
 
     def _batch(self, scored: List[Tuple[float, HitObject]]) -> List[HitObject]:
-        """The top `prune_ratio` of each peak window, best first."""
+        """The top `prune_ratio` of each peak window, best first. With skill weights a window's share follows its
+        notes' mean weighting too: a window of a skill weighted up gives fewer notes, one weighted down more (one
+        technique often fills a whole window, where the order within it can't tell the skills apart)."""
         window_ms = max(100.0, self.window_s * 1000.0)
         by_window: Dict[int, List[Tuple[float, HitObject]]] = {}
         for score, ho in scored:
@@ -292,7 +314,10 @@ class ExcessLossPruner:
         picked: List[Tuple[float, HitObject]] = []
         for items in by_window.values():
             items.sort(key=lambda x: x[0], reverse=True)
-            picked.extend(items[: max(1, int(round(len(items) * self.prune_ratio)))])
+            share = self.prune_ratio
+            if self.skill_weights.any():
+                share *= float(np.mean([self._mix_factor.get(id(ho), 1.0) for _, ho in items]))
+            picked.extend(items[: max(1, int(round(len(items) * share)))])
         picked.sort(key=lambda x: x[0], reverse=True)
         return [ho for _, ho in picked]
 

@@ -82,6 +82,7 @@ class Project:
     model_fast: bool = False
     model_args: List[str] = field(default_factory=list)
     seed: int = 0
+    pool_mix: Optional[Dict[str, float]] = None   # the technique mix it was generated with (mix.py)
     bg: Optional[str] = None
     bg_filename: Optional[str] = None
     base_version: str = ""
@@ -209,11 +210,15 @@ def section_of(sections: Sequence[Section], t: float) -> Optional[int]:
     return None
 
 
+def _profile(objs: Sequence[HitObject]):
+    return evaluate_notes([(o.column, o.time / 1000.0, o.end_time / 1000.0 if o.note_type == NoteType.LN else None)
+                           for o in objs])
+
+
 def _rated(objs: Sequence[HitObject]) -> float:
     if not objs:
         return 0.0
-    return float(evaluate_notes([(o.column, o.time / 1000.0, o.end_time / 1000.0 if o.note_type == NoteType.LN else None)
-                                 for o in objs]).total_stars)
+    return float(_profile(objs).total_stars)
 
 
 def describe(project: Project) -> List[Dict]:
@@ -255,11 +260,11 @@ def to_dict(project: Project) -> Dict:
 def create(chart_path: Path, chart: Beatmap7K, osz_path: Optional[Path], *, audio: Path, audio_filename: str,
            target_stars: float, target_label: str = "", ln_ratio: Optional[float] = None, model_fast: bool = False,
            model_args: Sequence[str] = (), seed: int = 0, bg: Optional[Path] = None,
-           bg_filename: Optional[str] = None) -> Project:
+           bg_filename: Optional[str] = None, pool_mix: Optional[Dict[str, float]] = None) -> Project:
     """The project of a chart just generated, saved beside it with the chart as its first take."""
     project = Project(audio=str(Path(audio).resolve()), audio_filename=audio_filename, target_stars=float(target_stars),
                       target_label=target_label, ln_ratio=ln_ratio, model_fast=model_fast, model_args=list(model_args),
-                      seed=seed, bg=str(bg) if bg else None, bg_filename=bg_filename, base_version=chart.version,
+                      seed=seed, pool_mix=dict(pool_mix) if pool_mix else None, bg=str(bg) if bg else None, bg_filename=bg_filename, base_version=chart.version,
                       sections=cut_sections(chart),
                       takes=[Take(osu=chart_path.name, osz=osz_path.name if osz_path else None, note="generate",
                                   stars=round(_rated(chart.hit_objects), 3))],
@@ -385,9 +390,12 @@ def seam(objs: Sequence[HitObject], start: float, end: float, beats: Beats) -> f
 
 def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[float] = None,
             ln_ratio: Optional[float] = None, seed: Optional[int] = None, candidates: int = DEFAULT_CANDIDATES,
-            model_args: Sequence[str] = (), runner=None, log: Callable[[str], None] = logger.info) -> Project:
-    """Write sections `indices` (one stretch, first to last) again and keep the best of `candidates` model runs."""
+            model_args: Sequence[str] = (), pool_mix=None, runner=None,
+            log: Callable[[str], None] = logger.info) -> Project:
+    """Write sections `indices` (one stretch, first to last) again and keep the best of `candidates` model runs.
+    `pool_mix` (default: the project's) leans the pick toward the pools it weights up, as at generation."""
     from proj7k.generator import mapperatorinator as m
+    from proj7k.generator import mix as mix_mod
 
     idx = _check(project, indices)
     if idx != list(range(idx[0], idx[-1] + 1)):
@@ -418,8 +426,12 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
     context.write_text(dump_osu_7k(chart), encoding="utf-8")
     ratio = project.ln_ratio if ln_ratio is None else ln_ratio
     seed0 = project.seed + 100 * len(project.takes) if seed is None else seed
-    difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
+    ceiling = m.LN_MAX_DIFFICULTY if ratio is not None and ratio >= m.LN_HEAVY else m.MAX_DIFFICULTY
+    difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), ceiling)
     names = "–".join(str(i + 1) for i in sorted({idx[0], idx[-1]}))
+    mix = mix_mod.parse(pool_mix) if pool_mix is not None else mix_mod.parse(project.pool_mix)
+    if mix:
+        log(tr(f"技法配比：{mix_mod.describe(mix)}", f"Technique mix: {mix_mod.describe(mix)}"))
     best = None
     for k in range(max(1, int(candidates))):
         extra = m.overrides(audio, work, difficulty, seed0 + k, hold_note_ratio=ratio, timing_from=context) + \
@@ -430,14 +442,19 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
         written = m._read(runner(audio, work, difficulty, seed0 + k, extra), log)
         inside = [o for o in written.hit_objects if _inside(o, start, end)]
         merged = legal.sanitize(sorted(outside + inside, key=lambda o: (o.time, o.column)), chart.timing_points)[0]
-        stars = _rated([o for o in merged if _inside(o, start, end)])
+        stretch = [o for o in merged if _inside(o, start, end)]
+        profile = _profile(stretch) if stretch else None
+        stars = float(profile.total_stars) if profile else 0.0
         jump = seam(merged, start, end, beats)
         score = abs(stars - target) + SEAM_WEIGHT * jump
+        if mix and profile:
+            score -= mix_mod.WEIGHT * mix_mod.lean(profile, mix)
         log(tr(f"  → 这段 {stars:.2f}★（目标 {target:.2f}★），边缘突变 {jump:.2f}",
-               f"  → {stars:.2f}★ for the stretch (target {target:.2f}★), edge jump {jump:.2f}"))
+               f"  → {stars:.2f}★ for the stretch (target {target:.2f}★), edge jump {jump:.2f}")
+            + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else ""))
         if best is None or score < best[0]:
             best = (score, merged, stars)
-        difficulty = m.next_difficulty(difficulty, stars, target)
+        difficulty = min(m.next_difficulty(difficulty, stars, target), ceiling)
     _, merged, stars = best
     note = tr(f"重写第 {names} 段（{stars:.2f}★）", f"rewrite section {names} ({stars:.2f}★)")
     return new_take(project, merged, note)
@@ -478,6 +495,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument("--ln", type=float, help="这几段的长条比例；默认用生成时的设置")
     r.add_argument("--seed", type=int)
     r.add_argument("--candidates", type=int, default=DEFAULT_CANDIDATES, help=f"生成几个候选，取最好的（默认 {DEFAULT_CANDIDATES}）")
+    r.add_argument("--mix", help="这几段的技法配比，如 rc_jack=1,ln_release=-1（1 多、-1 少）；默认用生成时的配比，none 不用")
     r.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE", help="传给模型的额外条件，可重复")
     for name, text in (("lock", "锁定"), ("unlock", "解锁")):
         q = sub.add_parser(name, help=text)
@@ -498,6 +516,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.op == "rewrite":
             rewrite(project, sections, target_sr=args.target_sr, ln_ratio=args.ln, seed=args.seed,
                     candidates=args.candidates, model_args=args.model_arg,
+                    pool_mix=None if args.mix is None else ({} if args.mix.strip().lower() == "none" else args.mix),
                     log=lambda msg: print(msg, file=sys.stderr, flush=True))
         elif args.op in ("lock", "unlock"):
             lock(project, sections, args.op == "lock")

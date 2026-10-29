@@ -52,6 +52,13 @@ HOME = Path(os.environ.get("PROJ7K_MAPPERATORINATOR", Path.home() / ".cache" / "
 SKIP_REQUIREMENTS = ("pywebview", "pyqtwebengine")
 #: Its difficulty token covers 0–12 stars in 24 classes.
 MIN_DIFFICULTY, MAX_DIFFICULTY = 0.5, 12.0
+#: A chart asked for at least this share of long notes...
+LN_HEAVY = 0.5
+#: ...asks the model for at most this difficulty. On long-note music it writes one note per row whatever it is
+#: asked (Exterminate [FLN], 9.55★ by the engine at 2.62 notes a row: 2.0–2.7★ at 1.00–1.06 notes a row for every
+#: difficulty from 3 to 12), its densest at 5, and from 7 up it leaves 25–44% of the song empty and piles junk
+#: notes at 0 s (meow, 2026-10-29, ADR-0047). Asking more only makes it worse.
+LN_MAX_DIFFICULTY = 5.0
 #: How far one run may move the next run's difficulty (×), so one odd run can't throw the search off.
 MAX_STEP = 1.6
 DEFAULT_RUNS = 4
@@ -487,16 +494,19 @@ def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
     return chart
 
 
-def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None]):
+def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None],
+         mix: Optional[dict] = None):
     """(chart, profile) brought down toward `target` by the downscaler: within `tolerance` if it can (keeping the
-    technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing."""
+    technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing.
+    With a technique `mix` it deletes by the mix instead (the pools weighted down first), free of the dominant
+    technique, which a mix may mean to change."""
     from proj7k.downscaler.pipeline import DownscaleOptions, downscale_beatmap
 
     closest = None
-    for keep_technique in (True, False):
+    for keep_technique in ((False,) if mix else (True, False)):
         try:
             res = downscale_beatmap(chart, DownscaleOptions(target_dan=None, target_sr=target,
-                                                            preserve_technique=keep_technique))
+                                                            preserve_technique=keep_technique, skill_weights=mix))
         except (ValueError, RuntimeError) as e:
             log(tr(f"  降难没成功：{e}", f"  Trimming failed: {e}"))
             break
@@ -529,6 +539,7 @@ def timing_chart(options, audio_filename: str) -> Beatmap7K:
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
+    from proj7k.generator import mix as mix_mod
     from proj7k.generator.generate import GenerationResult, _beatmap
 
     audio_path = Path(audio_path)
@@ -537,12 +548,24 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     runner = runner or _default_runner(home, log)
     work = Path(work_dir) if work_dir else (home or HOME) / "runs" / time.strftime("%Y%m%d-%H%M%S")
     target = float(options.target_stars)
-    difficulty = min(max(target * AIM, MIN_DIFFICULTY), MAX_DIFFICULTY)
     runs = max(1, int(options.model_runs or DEFAULT_RUNS))
     hold_ratio = options.model_hold_ratio
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
+    ceiling = LN_MAX_DIFFICULTY if hold_ratio is not None and hold_ratio >= LN_HEAVY else MAX_DIFFICULTY
+    difficulty = min(max(target * AIM, MIN_DIFFICULTY), ceiling)
     warnings: List[str] = []
+    mix = mix_mod.parse(getattr(options, "pool_mix", None))
+    if mix:
+        log(tr(f"技法配比：{mix_mod.describe(mix)}（{runs} 次都跑完，取最合配比的）",
+               f"Technique mix: {mix_mod.describe(mix)} (all {runs} runs, keeping the one that fits it best)"))
+
+    def rank(holey, stars, profile, good_enough):
+        # Without a mix, the closest to the target. With one, near enough is as good as on target, and the
+        # lean toward the mix trades against stars beyond that (mix.WEIGHT).
+        if not mix:
+            return (holey, abs(stars - target))
+        return (holey, max(0.0, abs(stars - target) - good_enough) - mix_mod.WEIGHT * mix_mod.lean(profile, mix))
 
     reference = getattr(options, "reference", None)
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
@@ -610,29 +633,41 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         stars = float(profile.total_stars)
         tried += 1
         log(tr(f"  → 引擎星级 {stars:.2f}★（目标 {target:.2f}★），{len(chart.hit_objects)} 个音符",
-               f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes"))
+               f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes")
+            + (f"；{mix_mod.pools(profile, mix)}" if mix else ""))
         written = stars
         good_enough = options.tolerance
         if target + options.tolerance < stars <= target + TRIM_MAX:
-            trimmed = trim(chart, target, options.tolerance, log)
+            trimmed = trim(chart, target, options.tolerance, log, mix)
             if trimmed is not None:
                 chart, profile = trimmed
                 stars = float(profile.total_stars)
                 good_enough = max(options.tolerance, TRIM_TOLERANCE)
-        if best is None or (holey, abs(stars - target)) < (best[6], abs(best[2] - target)):
-            best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty)
-        if abs(stars - target) <= good_enough and not holey:
+        key = rank(holey, stars, profile, good_enough)
+        if best is None or key < best[8]:
+            best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty, key)
+        if abs(stars - target) <= good_enough and not holey and not mix:
             break
-        if written < target and difficulty >= MAX_DIFFICULTY:
+        if written < target and difficulty >= ceiling:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
-            warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
-                               f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
-                               f"it can't reach {target:.2f}★ on this song"))
+            if ceiling < MAX_DIFFICULTY:
+                warnings.append(tr(f"长条为主的谱，Mapperatorinator 只会每行写一个音符，难度条件再高也不变密"
+                                   f"（高过 {ceiling:g}★ 反而出空段），写不到 {target:.2f}★",
+                                   f"On a mostly long-note chart Mapperatorinator writes one note per row and asking a "
+                                   f"higher difficulty doesn't make it denser (above {ceiling:g}★ it leaves gaps); "
+                                   f"it can't reach {target:.2f}★"))
+            else:
+                warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
+                                   f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
+                                   f"it can't reach {target:.2f}★ on this song"))
             break
         # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
-        difficulty = next_difficulty(difficulty, written, target)
+        difficulty = min(next_difficulty(difficulty, written, target), ceiling)
 
-    chart, profile, stars, difficulty, seed, good_enough, holey, empty = best
+    chart, profile, stars, difficulty, seed, good_enough, holey, empty, _ = best
+    if mix:
+        log(tr(f"留下种子 {seed}：{stars:.2f}★；{mix_mod.pools(profile, mix)}",
+               f"Kept seed {seed}: {stars:.2f}★; {mix_mod.pools(profile, mix)}"))
     if holey:
         warnings.append(tr(f"{tried} 次生成都有大段空白，这张有 {empty:.0%} 没有音符",
                            f"All {tried} runs have long empty stretches; {empty:.0%} of this one has no notes"))

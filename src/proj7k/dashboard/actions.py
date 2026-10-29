@@ -278,6 +278,7 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     the model, or by the BPM and offset given).
     """
     from proj7k.generator.cli import resolve_reference, resolve_target, run_generate
+    from proj7k.generator import mix as pool_mix
     from proj7k.generator.generate import GeneratorOptions
 
     stars, label = resolve_target(_text(params, "target_dan") or None, _float(params, "target_sr"))
@@ -302,6 +303,7 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         whole_inverse=_flag(params, "inverse"),
         model_fast=_flag(params, "model_fast"),
         model_reuse=_flag(params, "model_reuse", True),
+        pool_mix=pool_mix.parse(params.get("mix") or None),
     )
     if _float(params, "ln_ratio") is not None or options.whole_inverse:
         # The page always picks a long-note mix, rice (0) included: the model is told it, or it adds its own
@@ -328,7 +330,8 @@ def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobC
     """
     One operation on a generated chart's project (ADR-0047): `op` is show, rewrite, lock, unlock, anchor, unanchor,
     undo or redo; `sections` the section numbers (from 1, comma separated); `source` and `mirror` for anchor;
-    `target_sr`, `ln_ratio`, `seed` and `candidates` for rewrite.
+    `target_sr`, `ln_ratio`, `seed`, `candidates` and `mix` (the technique mix; absent: the project's, empty: none)
+    for rewrite.
     """
     from proj7k.generator import project as P
 
@@ -337,7 +340,8 @@ def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobC
     sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
     if op == "rewrite":
         P.rewrite(project, sections, target_sr=_float(params, "target_sr"), ln_ratio=_float(params, "ln_ratio"),
-                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES, log=logger.info)
+                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
+                  pool_mix=(params.get("mix") or {}) if "mix" in params else None, log=logger.info)
     elif op in ("lock", "unlock"):
         P.lock(project, sections, op == "lock")
     elif op == "anchor":
