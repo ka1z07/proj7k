@@ -113,6 +113,11 @@
         <label class="check"><input type="checkbox" id="modelFast"> 快速：分几路同时写</label>
         <label class="check"><input type="checkbox" id="modelReuse" checked> 乐句复用：听起来一样的乐句写成一样</label>
       </div>
+      <div class="field">
+        <span class="label">技法配比</span>
+        <div class="row" id="mix"></div>
+        <div class="hint">每个技法池选「多」或「少」：跑完所有次数，留下技法最合配比的一张；降难时先删「少」的、最后删「多」的。只能挑与删，加不出模型本来不写的技法。重写段落也按这里的配比挑。</div>
+      </div>
       <div class="hint" style="margin-bottom:10px">Mapperatorinator 是一个听音频写谱的模型，节奏和键位一起写。有 timing（借用或手动）时照它写，更快也更准；否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」分几路同时写，约快一倍，行与长条略少。第一次生成会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
       <button class="primary" id="runBtn">生成</button>
       <span class="hint" style="margin-left:10px">同一设置换个种子就是另一张谱。</span>
@@ -227,6 +232,21 @@
           onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
     }
 
+    // --- technique mix (ADR-0047): each engine pool less / as it comes / more -----------------------------------
+    const POOLS = [["rc_jack", "Jack"], ["rc_tech", "Tech"], ["rc_speed", "Speed"], ["rc_stamina", "Stamina"],
+      ["ln_general", tr("LN 综合")], ["ln_tech", "LN Tech"], ["ln_inverse", tr("反键")], ["ln_release", tr("LN 放键")]];
+    for (const [key, name] of POOLS) {
+      const select = el("select", { "data-pool": key, style: "width:auto" },
+        el("option", { value: "-1", text: tr("少") }),
+        el("option", { value: "0", text: tr("照常"), selected: true }),
+        el("option", { value: "1", text: tr("多") }));
+      $("#mix").append(el("label", { class: "check" }, name + " ", select));
+    }
+    function mixValue() {
+      return [...$("#mix").querySelectorAll("select")].filter((s) => s.value !== "0")
+        .map((s) => `${s.dataset.pool}=${s.value}`).join(",");
+    }
+
     $("#runBtn").onclick = () => run();
     async function run() {
       if (running) return;
@@ -249,6 +269,7 @@
         model_reuse: $("#modelReuse").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
         inverse: $("#ln").value === "inverse",
+        mix: mixValue(),
       };
       running = true;
       refresh();
@@ -310,7 +331,7 @@
         el("div", { class: "hint", text: tr("这一版：{note}，{stars}★。点柱子或勾选来选段；重写只改选中的段，其余音符原样保留。", { note: p.take.note, stars: p.take.stars.toFixed(2) }) }),
         bars, table,
         el("div", { class: "controls" },
-          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value }) }),
+          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value, mix: mixValue() }) }),
           el("label", { class: "check" }, tr("目标星级"), target),
           el("label", { class: "check" }, tr("候选数"), candidates)),
         el("div", { class: "controls" },

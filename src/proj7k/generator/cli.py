@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
 from proj7k.generator import project as project_mod
+from proj7k.generator import mix as pool_mix
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
@@ -177,7 +178,7 @@ def run_generate(
     project = project_mod.create(
         osu_path, bm, osz_path, audio=audio_path, audio_filename=audio_name, target_stars=options.target_stars,
         target_label=options.target_label, ln_ratio=_hold_ratio(options), model_fast=options.model_fast,
-        model_args=options.model_args or (), seed=options.seed,
+        model_args=options.model_args or (), seed=options.seed, pool_mix=options.pool_mix,
         bg=reference.bg_path if reference else None, bg_filename=reference.bg_filename if reference else None,
     )
     return GenerateRun(result=result, osu_path=osu_path, osz_path=osz_path, audio_path=audio_path, reference=reference,
@@ -241,6 +242,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Mapperatorinator 所有窗口一起写：约快一倍，行与长条略少")
     p.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
                    help="传给 Mapperatorinator 的额外参数（Hydra 写法，如 descriptors=[\'tech\']、mapper_id=123），可重复")
+    p.add_argument("--mix", help="技法配比：引擎八个池各 -1（少）到 1（多），如 rc_jack=1,ln_release=-1。"
+                                 "跑完所有次数，取最合配比的一张，降难时先删配比要少的技法；加不出模型本来不写的技法")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
     p.add_argument("--no-package", action="store_true", help="只写 .osu，不打 .osz")
@@ -281,7 +284,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             version=args.version, overall_difficulty=args.od, log=_say,
             ln_ratio=args.ln or 0.0, whole_inverse=args.inverse,
             model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
-            model_fast=args.model_fast, model_reuse=not args.no_model_reuse,
+            model_fast=args.model_fast, model_reuse=not args.no_model_reuse, pool_mix=pool_mix.parse(args.mix),
         )
         from proj7k.generator import mapperatorinator
 
