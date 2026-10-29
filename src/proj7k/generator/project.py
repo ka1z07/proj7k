@@ -426,7 +426,8 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
     context.write_text(dump_osu_7k(chart), encoding="utf-8")
     ratio = project.ln_ratio if ln_ratio is None else ln_ratio
     seed0 = project.seed + 100 * len(project.takes) if seed is None else seed
-    difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
+    ceiling = m.LN_MAX_DIFFICULTY if ratio is not None and ratio >= m.LN_HEAVY else m.MAX_DIFFICULTY
+    difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), ceiling)
     names = "–".join(str(i + 1) for i in sorted({idx[0], idx[-1]}))
     mix = mix_mod.parse(pool_mix) if pool_mix is not None else mix_mod.parse(project.pool_mix)
     if mix:
@@ -453,7 +454,7 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
             + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else ""))
         if best is None or score < best[0]:
             best = (score, merged, stars)
-        difficulty = m.next_difficulty(difficulty, stars, target)
+        difficulty = min(m.next_difficulty(difficulty, stars, target), ceiling)
     _, merged, stars = best
     note = tr(f"重写第 {names} 段（{stars:.2f}★）", f"rewrite section {names} ({stars:.2f}★)")
     return new_take(project, merged, note)

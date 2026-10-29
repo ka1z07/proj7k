@@ -457,3 +457,11 @@ def test_evaluation_holds_the_models_chart_against_the_human_one(song):
     summary = summarize([score])
     assert summary["charts"] == 1 and summary["bpm_exact"] == 1.0
     assert set(summary["patterns_median"]) == {"human", "generated"}
+
+
+def test_a_long_note_chart_asks_no_more_than_the_long_note_ceiling(song):
+    calls = []
+    options = GeneratorOptions(target_stars=60.0, model_runner=stream_runner(calls), model_runs=8, whole_inverse=True)
+    result = generate_from_file(song, options)
+    assert max(c[0] for c in calls) == mt.LN_MAX_DIFFICULTY and len(calls) < 8
+    assert any(f"{mt.LN_MAX_DIFFICULTY:g}★" in w for w in result.warnings)
