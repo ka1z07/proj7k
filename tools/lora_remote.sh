@@ -19,6 +19,9 @@ WORK=${WORK:-/scratch0/$USER/proj7k-lora}
 SAVE=${SAVE:-$HOME/proj7k-lora-out}
 mkdir -p "$WORK" "$SAVE"
 export PROJ7K_MAPPERATORINATOR="$WORK/mapperatorinator" HF_HOME="$WORK/hf" UV_CACHE_DIR="$WORK/uv-cache"
+# wandb stages a copy of every checkpoint under ~/.local/share/wandb even with logging off; a 10 GB home fills up
+export WANDB_DIR="$WORK/wandb" WANDB_DATA_DIR="$WORK/wandb" WANDB_ARTIFACT_DIR="$WORK/wandb/artifacts" \
+  WANDB_CACHE_DIR="$WORK/wandb/cache"
 export PATH="$HOME/.local/bin:$PATH"
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 nvidia-smi
