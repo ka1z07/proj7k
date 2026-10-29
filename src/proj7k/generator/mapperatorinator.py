@@ -52,13 +52,6 @@ HOME = Path(os.environ.get("PROJ7K_MAPPERATORINATOR", Path.home() / ".cache" / "
 SKIP_REQUIREMENTS = ("pywebview", "pyqtwebengine")
 #: Its difficulty token covers 0–12 stars in 24 classes.
 MIN_DIFFICULTY, MAX_DIFFICULTY = 0.5, 12.0
-#: A chart asked for at least this share of long notes...
-LN_HEAVY = 0.5
-#: ...asks the model for at most this difficulty. On long-note music it writes one note per row whatever it is
-#: asked (Exterminate [FLN], 9.55★ by the engine at 2.62 notes a row: 2.0–2.7★ at 1.00–1.06 notes a row for every
-#: difficulty from 3 to 12), its densest at 5, and from 7 up it leaves 25–44% of the song empty and piles junk
-#: notes at 0 s (meow, 2026-10-29, ADR-0047). Asking more only makes it worse.
-LN_MAX_DIFFICULTY = 5.0
 #: How far one run may move the next run's difficulty (×), so one odd run can't throw the search off.
 MAX_STEP = 1.6
 DEFAULT_RUNS = 4
@@ -553,8 +546,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     hold_ratio = options.model_hold_ratio
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
-    ceiling = LN_MAX_DIFFICULTY if hold_ratio is not None and hold_ratio >= LN_HEAVY else MAX_DIFFICULTY
-    difficulty = min(max(target * AIM, MIN_DIFFICULTY), ceiling)
+    difficulty = min(max(target * AIM, MIN_DIFFICULTY), MAX_DIFFICULTY)
     warnings: List[str] = []
     mix = mix_mod.parse(getattr(options, "pool_mix", None))
     if mix:
@@ -649,21 +641,14 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty, key)
         if abs(stars - target) <= good_enough and not holey and not mix:
             break
-        if written < target and difficulty >= ceiling:
+        if written < target and difficulty >= MAX_DIFFICULTY:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
-            if ceiling < MAX_DIFFICULTY:
-                warnings.append(tr(f"长条为主的谱，Mapperatorinator 只会每行写一个音符，难度条件再高也不变密"
-                                   f"（高过 {ceiling:g}★ 反而出空段），写不到 {target:.2f}★",
-                                   f"On a mostly long-note chart Mapperatorinator writes one note per row and asking a "
-                                   f"higher difficulty doesn't make it denser (above {ceiling:g}★ it leaves gaps); "
-                                   f"it can't reach {target:.2f}★"))
-            else:
-                warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
-                                   f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
-                                   f"it can't reach {target:.2f}★ on this song"))
+            warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
+                               f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
+                               f"it can't reach {target:.2f}★ on this song"))
             break
         # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
-        difficulty = min(next_difficulty(difficulty, written, target), ceiling)
+        difficulty = min(next_difficulty(difficulty, written, target), MAX_DIFFICULTY)
 
     chart, profile, stars, difficulty, seed, good_enough, holey, empty, _ = best
     if mix:
