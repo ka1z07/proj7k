@@ -32,6 +32,17 @@ def test_wav_decodes_and_resamples_to_the_analysis_rate(tmp_path):
     assert np.abs(audio.samples).max() <= 1.0
 
 
+def test_miniaudio_reads_a_file_whose_name_is_not_ascii(tmp_path):
+    pytest.importorskip("miniaudio")
+    samples, _ = drum_song(bpm=150.0, measures=2, sr=44100)
+    write_wav(tmp_path / "a.wav", samples, sr=44100)
+    named = tmp_path / "tricot - おとずれ.mp3"  # not a .wav suffix, so the wave reader is skipped
+    (tmp_path / "a.wav").rename(named)
+    audio = load_audio(named)
+    assert audio.source == "miniaudio"
+    assert abs(audio.duration_s - len(samples) / 44100) < 0.01
+
+
 def test_a_missing_or_unreadable_file_is_reported(tmp_path):
     with pytest.raises(AudioDecodeError):
         load_audio(tmp_path / "nope.mp3")
