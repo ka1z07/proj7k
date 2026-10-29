@@ -487,16 +487,19 @@ def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
     return chart
 
 
-def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None]):
+def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None],
+         mix: Optional[dict] = None):
     """(chart, profile) brought down toward `target` by the downscaler: within `tolerance` if it can (keeping the
-    technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing."""
+    technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing.
+    With a technique `mix` it deletes by the mix instead (the pools weighted down first), free of the dominant
+    technique, which a mix may mean to change."""
     from proj7k.downscaler.pipeline import DownscaleOptions, downscale_beatmap
 
     closest = None
-    for keep_technique in (True, False):
+    for keep_technique in ((False,) if mix else (True, False)):
         try:
             res = downscale_beatmap(chart, DownscaleOptions(target_dan=None, target_sr=target,
-                                                            preserve_technique=keep_technique))
+                                                            preserve_technique=keep_technique, skill_weights=mix))
         except (ValueError, RuntimeError) as e:
             log(tr(f"  降难没成功：{e}", f"  Trimming failed: {e}"))
             break
@@ -529,6 +532,7 @@ def timing_chart(options, audio_filename: str) -> Beatmap7K:
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
+    from proj7k.generator import mix as mix_mod
     from proj7k.generator.generate import GenerationResult, _beatmap
 
     audio_path = Path(audio_path)
@@ -543,6 +547,17 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
     warnings: List[str] = []
+    mix = mix_mod.parse(getattr(options, "pool_mix", None))
+    if mix:
+        log(tr(f"技法配比：{mix_mod.describe(mix)}（{runs} 次都跑完，取最合配比的）",
+               f"Technique mix: {mix_mod.describe(mix)} (all {runs} runs, keeping the one that fits it best)"))
+
+    def rank(holey, stars, profile, good_enough):
+        # Without a mix, the closest to the target. With one, near enough is as good as on target, and the
+        # lean toward the mix trades against stars beyond that (mix.WEIGHT).
+        if not mix:
+            return (holey, abs(stars - target))
+        return (holey, max(0.0, abs(stars - target) - good_enough) - mix_mod.WEIGHT * mix_mod.lean(profile, mix))
 
     reference = getattr(options, "reference", None)
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
@@ -610,18 +625,20 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         stars = float(profile.total_stars)
         tried += 1
         log(tr(f"  → 引擎星级 {stars:.2f}★（目标 {target:.2f}★），{len(chart.hit_objects)} 个音符",
-               f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes"))
+               f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes")
+            + (f"；{mix_mod.pools(profile, mix)}" if mix else ""))
         written = stars
         good_enough = options.tolerance
         if target + options.tolerance < stars <= target + TRIM_MAX:
-            trimmed = trim(chart, target, options.tolerance, log)
+            trimmed = trim(chart, target, options.tolerance, log, mix)
             if trimmed is not None:
                 chart, profile = trimmed
                 stars = float(profile.total_stars)
                 good_enough = max(options.tolerance, TRIM_TOLERANCE)
-        if best is None or (holey, abs(stars - target)) < (best[6], abs(best[2] - target)):
-            best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty)
-        if abs(stars - target) <= good_enough and not holey:
+        key = rank(holey, stars, profile, good_enough)
+        if best is None or key < best[8]:
+            best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty, key)
+        if abs(stars - target) <= good_enough and not holey and not mix:
             break
         if written < target and difficulty >= MAX_DIFFICULTY:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
@@ -632,7 +649,10 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
         difficulty = next_difficulty(difficulty, written, target)
 
-    chart, profile, stars, difficulty, seed, good_enough, holey, empty = best
+    chart, profile, stars, difficulty, seed, good_enough, holey, empty, _ = best
+    if mix:
+        log(tr(f"留下种子 {seed}：{stars:.2f}★；{mix_mod.pools(profile, mix)}",
+               f"Kept seed {seed}: {stars:.2f}★; {mix_mod.pools(profile, mix)}"))
     if holey:
         warnings.append(tr(f"{tried} 次生成都有大段空白，这张有 {empty:.0%} 没有音符",
                            f"All {tried} runs have long empty stretches; {empty:.0%} of this one has no notes"))

@@ -42,6 +42,9 @@ class DownscaleOptions:
     min_cosine_similarity: float = 0.80
     #: Keep the dominant technique (the dual gate); False is free mode, which only chases the target star.
     preserve_technique: bool = True
+    #: Engine skill -> -1..1: notes carrying a skill weighted up are kept longer, weighted down taken first
+    #: (the generator's technique mix, ADR-0047).
+    skill_weights: Optional[Dict[str, float]] = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +142,7 @@ def downscale_beatmap(
         window_s=options.window_s,
         validator=validator,
         balancer=balancer,
+        skill_weights=options.skill_weights,
     )
     pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr, dominant_skill=dom_skill)
     warnings: List[str] = list(pruning_res.warnings)

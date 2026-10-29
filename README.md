@@ -181,6 +181,8 @@ Notes are written by [Mapperatorinator](https://github.com/OliBomby/Mapperatorin
 
 Below the result, the **Sections** card cuts the chart into 8-bar sections: select some and click "Rewrite selected" to have the model write just those again (at a target star rating if you give one, best of several candidates), lock sections you like so nothing changes them, or anchor a section to another so it is charted the same (or mirrored) and follows it. Every take is its own `.osz`, and Undo / Redo move between them.
 
+**Technique mix**: set any of the engine's eight skill pools (Jack, Tech, Speed, Stamina, LN General, LN Tech, LN Inverse, LN Release) to More or Less. Every run is made and the one whose skills lean most that way is kept; trimming deletes the Less pools' notes first and the More pools' last. Section rewrites pick by the same mix. It can only pick and delete: it can't add a technique the model didn't write (the model's own style tags were tested and don't move a 7K chart, ADR-0047).
+
 > [!NOTE]
 > The first generation downloads and installs the model (Python 3.10, PyTorch and the weights, several GB) into `~/.cache/proj7k/mapperatorinator`. An NVIDIA GPU is strongly recommended: about 1–4 minutes per song; much slower on CPU or Mac.
 
