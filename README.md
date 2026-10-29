@@ -179,6 +179,8 @@ Give it a song and it generates a 7K chart.
 
 Notes are written by [Mapperatorinator](https://github.com/OliBomby/Mapperatorinator) (OliBomby, MIT), a model that listens to the song and writes rhythm and keys together. proj7k aims it a little above your target, measures each take with its own star rating, trims notes down to the target and keeps the closest take; phrases that sound alike are charted alike. Change the "Seed" number to get another chart with the same settings. The result is a new chart of its own and never overwrites the original.
 
+Below the result, the **Sections** card cuts the chart into 8-bar sections: select some and click "Rewrite selected" to have the model write just those again (at a target star rating if you give one, best of several candidates), lock sections you like so nothing changes them, or anchor a section to another so it is charted the same (or mirrored) and follows it. Every take is its own `.osz`, and Undo / Redo move between them.
+
 > [!NOTE]
 > The first generation downloads and installs the model (Python 3.10, PyTorch and the weights, several GB) into `~/.cache/proj7k/mapperatorinator`. An NVIDIA GPU is strongly recommended: about 1–4 minutes per song; much slower on CPU or Mac.
 

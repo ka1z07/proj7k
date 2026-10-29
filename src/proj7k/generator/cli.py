@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
+from proj7k.generator import project as project_mod
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
@@ -50,6 +51,7 @@ class GenerateRun:
     osz_path: Optional[Path]
     audio_path: Path
     reference: Optional[Reference] = None
+    project: Optional[Any] = None             # the chart's project (ADR-0047): sections to rewrite, lock, anchor
 
     def to_dict(self) -> Dict[str, Any]:
         r = self.result
@@ -73,6 +75,7 @@ class GenerateRun:
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
             "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
+            **({"project": project_mod.to_dict(self.project)} if self.project is not None else {}),
         }
 
 
@@ -171,7 +174,23 @@ def run_generate(
             bg_path=reference.bg_path if reference else None,
             bg_filename=reference.bg_filename if reference else None,
         )
-    return GenerateRun(result=result, osu_path=osu_path, osz_path=osz_path, audio_path=audio_path, reference=reference)
+    project = project_mod.create(
+        osu_path, bm, osz_path, audio=audio_path, audio_filename=audio_name, target_stars=options.target_stars,
+        target_label=options.target_label, ln_ratio=_hold_ratio(options), model_fast=options.model_fast,
+        model_args=options.model_args or (), seed=options.seed,
+        bg=reference.bg_path if reference else None, bg_filename=reference.bg_filename if reference else None,
+    )
+    return GenerateRun(result=result, osu_path=osu_path, osz_path=osz_path, audio_path=audio_path, reference=reference,
+                       project=project)
+
+
+def _hold_ratio(options: GeneratorOptions) -> Optional[float]:
+    """The hold_note_ratio the model was given (as `mapperatorinator.generate_from_file` works it out)."""
+    if options.model_hold_ratio is not None:
+        return options.model_hold_ratio
+    if options.whole_inverse:
+        return 1.0
+    return options.ln_ratio or None
 
 
 def format_report(run: GenerateRun) -> str:
@@ -190,6 +209,9 @@ def format_report(run: GenerateRun) -> str:
     lines.append(f"  谱面：{d['output_file']}")
     if d["osz_file"]:
         lines.append(f"  .osz：{d['osz_file']}")
+    if d.get("project"):
+        lines.append(f"  工程：{d['project']['project_file']}（{len(d['project']['sections'])} 段；"
+                     "python -m proj7k.generator.project <工程> show 查看，rewrite / lock / anchor 修改）")
     return "\n".join(lines)
 
 

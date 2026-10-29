@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>proj7k 谱面生成</title>
   <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .timeline { display: flex; gap: 2px; align-items: flex-end; height: 64px; margin: 8px 0 10px; }
+    .timeline .sec { flex: 1 1 0; min-width: 4px; background: var(--accent-blue); opacity: 0.55; border-radius: 3px 3px 0 0; cursor: pointer; position: relative; }
+    .timeline .sec.sel { opacity: 1; outline: 2px solid var(--accent); }
+    .timeline .sec.locked { background: var(--accent-gold); }
+    .timeline .sec.anchored { background: var(--accent-purple); }
+    .sections-table { max-height: 340px; overflow: auto; }
+    .sections-table tr.sel td { background: var(--accent-soft); }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .controls input[type=number] { width: 8em; }
+    .controls select { width: auto; }
+  </style>
 </head>
 <body>
   <div class="page">
@@ -107,6 +119,7 @@
     </div>
 
     <div id="results"></div>
+    <div class="card hidden" id="projectCard"></div>
     <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
   </div>
 
@@ -250,6 +263,81 @@
       refresh();
       if (job.status !== "done") { panel.showLog(); return; }
       $("#results").replaceChildren(resultCard(job.result));
+      if (job.result.project) { selected.clear(); showProject(job.result.project); }
+    }
+
+    // --- sections of the generated chart (ADR-0047): rewrite, lock, anchor, undo ----------------------------
+    let project = null;
+    const selected = new Set();
+    function stateText(s) {
+      const parts = [];
+      if (s.locked) parts.push(tr("锁定"));
+      if (s.anchor !== null && s.anchor !== undefined) parts.push(s.mirror ? tr("镜像第 {n} 段", { n: s.anchor + 1 }) : tr("同第 {n} 段", { n: s.anchor + 1 }));
+      return parts.join(tr("，"));
+    }
+    function toggle(i) { selected.has(i) ? selected.delete(i) : selected.add(i); showProject(project); }
+    function showProject(p) {
+      project = p;
+      const card = $("#projectCard");
+      card.classList.remove("hidden");
+      const top = Math.max(1, ...p.sections.map((s) => s.stars));
+      const bars = el("div", { class: "timeline" }, ...p.sections.map((s) => el("div", {
+        class: `sec${selected.has(s.index) ? " sel" : ""}${s.locked ? " locked" : ""}${s.anchor !== null ? " anchored" : ""}`,
+        style: `height:${Math.max(6, 100 * s.stars / top)}%`,
+        title: tr("第 {n} 段 · {stars}★", { n: s.index + 1, stars: s.stars.toFixed(2) }), onclick: () => toggle(s.index) })));
+      const rows = p.sections.map((s) => el("tr", { class: selected.has(s.index) ? "sel" : "" },
+        el("td", {}, el("input", { type: "checkbox", checked: selected.has(s.index), onchange: () => toggle(s.index) })),
+        el("td", { class: "num", text: String(s.index + 1) }),
+        el("td", { text: `${s.bars[0]}–${s.bars[1]}` }),
+        el("td", { class: "num", text: `${(s.start_ms / 1000).toFixed(1)}s` }),
+        el("td", { class: "num", text: s.nps.toFixed(1) }),
+        el("td", { class: "num", text: s.stars.toFixed(2) }),
+        el("td", { text: s.skill ? P7.skillName(s.skill.replace("rc_", "").replace("stamina", "stream")) : "—" }),
+        el("td", { text: stateText(s) })));
+      const table = el("div", { class: "sections-table" }, el("table", {},
+        el("thead", {}, el("tr", {}, el("th", {}), el("th", { class: "num", text: "#" }), el("th", { text: tr("小节") }),
+          el("th", { class: "num", text: tr("开始") }), el("th", { class: "num", text: tr("音符/秒") }),
+          el("th", { class: "num", text: tr("星级") }), el("th", { text: tr("主技能") }), el("th", { text: tr("状态") }))),
+        el("tbody", {}, ...rows)));
+      const target = el("input", { type: "number", step: "0.1", min: "0.5", placeholder: tr("不变") });
+      const candidates = el("input", { type: "number", step: "1", min: "1", max: "8", value: "3" });
+      const source = el("select", {}, ...p.sections.map((s) => el("option", { value: String(s.index + 1), text: tr("第 {n} 段", { n: s.index + 1 }) })));
+      const mirror = el("input", { type: "checkbox" });
+      const none = selected.size === 0;
+      const sel = () => [...selected].sort((a, b) => a - b).map((i) => i + 1).join(",");
+      card.replaceChildren(
+        el("h2", { text: tr("段落（第 {n}/{total} 版）", { n: p.take.n, total: p.takes }) }),
+        el("div", { class: "hint", text: tr("这一版：{note}，{stars}★。点柱子或勾选来选段；重写只改选中的段，其余音符原样保留。", { note: p.take.note, stars: p.take.stars.toFixed(2) }) }),
+        bars, table,
+        el("div", { class: "controls" },
+          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value }) }),
+          el("label", { class: "check" }, tr("目标星级"), target),
+          el("label", { class: "check" }, tr("候选数"), candidates)),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("锁定所选"), disabled: running || none, onclick: () => projectOp("lock", { sections: sel() }) }),
+          el("button", { class: "small", text: tr("解锁所选"), disabled: running || none, onclick: () => projectOp("unlock", { sections: sel() }) }),
+          el("button", { class: "small", text: tr("所选锚定到"), disabled: running || none, onclick: () => projectOp("anchor", { sections: sel(), source: source.value, mirror: mirror.checked }) }),
+          source, el("label", { class: "check" }, mirror, tr("镜像")),
+          el("button", { class: "small", text: tr("解开锚定"), disabled: running || none, onclick: () => projectOp("unanchor", { sections: sel() }) })),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("撤销"), disabled: running || !p.can_undo, onclick: () => projectOp("undo", {}) }),
+          el("button", { class: "small", text: tr("重做"), disabled: running || !p.can_redo, onclick: () => projectOp("redo", {}) })),
+        el("div", { class: "hint", text: tr("锁定的段之后不会被改动；锚定的段写成来源段的样子（可镜像），来源段每次改动都会同步过去。每一版都是单独的 .osz，导入 osu! 不会覆盖之前的版本。") }));
+    }
+    async function projectOp(op, extra) {
+      if (running || !project) return;
+      running = true;
+      refresh();
+      showProject(project);
+      $("#jobCard").classList.remove("hidden");
+      panel.reset();
+      const job = await P7.startJob("generator_project", { project: project.project_file, op, ...extra },
+        { onUpdate: panel.update, onLog: panel.log });
+      panel.update(job);
+      running = false;
+      refresh();
+      if (job.status !== "done") { panel.showLog(); showProject(project); return; }
+      showProject(job.result);
     }
   </script>
 </body>

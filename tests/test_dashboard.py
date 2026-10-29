@@ -410,6 +410,20 @@ def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
                 assert sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
                 assert all(Path(a["path"]).parent == s.config.generated_dir for a in job["artifacts"])
 
+                # The chart's project: lock a section, rewrite another, go back a take (ADR-0047).
+                project = r["project"]["project_file"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "lock", "sections": "1"})
+                assert job["status"] == "done" and job["result"]["sections"][0]["locked"], job["error"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "sections": "1",
+                                                                  "candidates": "1"})
+                assert job["status"] == "failed" and ("锁定" in job["error"] or "locked" in job["error"])
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "sections": "2",
+                                                                  "candidates": "1"})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["take"]["n"] == 2 and sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "undo"})
+                assert job["result"]["current"] == 0 and job["result"]["can_redo"]
+
                 job, _ = await _run_job(ws, "generate", {"target_dan": "1st"})
                 assert job["status"] == "failed" and "音频" in job["error"]
                 job, _ = await _run_job(ws, "generate", {"audio": str(tmp_path / "song.wav")})

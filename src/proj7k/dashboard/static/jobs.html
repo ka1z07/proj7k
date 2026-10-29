@@ -59,14 +59,18 @@
     const KIND = {
       sync_setup: tr("安装 / 检查 bridge"), sync_once: tr("曲库同步"), sync_revert: tr("还原为官方星级"),
       lazer_control: tr("osu!lazer 开关"), downscale: tr("降阶练习"), generate: tr("谱面生成"),
+      generator_project: tr("修改生成谱"),
       profile_replay: tr("回放诊断"), profile_player: tr("玩家画像"), profile_habits: tr("发力习惯"), import_replays: tr("导入回放"),
     };
     // The page a job's kind is started from, to go back to it for the full result.
     const PAGE = {
       sync_setup: "sync", sync_once: "sync", sync_revert: "sync", downscale: "downscaler", generate: "generator",
+      generator_project: "generator",
       profile_replay: "profiler", profile_player: "profiler", profile_habits: "profiler", import_replays: "profiler",
     };
     const PAGE_NAME = { sync: tr("曲库同步"), downscaler: tr("降阶练习"), generator: tr("谱面生成"), profiler: tr("回放与画像") };
+    const PROJECT_OP = { show: tr("查看"), rewrite: tr("重写"), lock: tr("锁定"), unlock: tr("解锁"), anchor: tr("锚定"),
+      unanchor: tr("解开锚定"), undo: tr("撤销"), redo: tr("重做") };
     const LAZER_MODE = { restart: tr("重启"), close: tr("关闭"), open: tr("打开") };
     const ACTIVE = ["queued", "running"];
 
@@ -84,8 +88,8 @@
         case "sync_once": return p.dry_run ? tr("预演（不写入）") : "";
         case "lazer_control": return LAZER_MODE[p.mode || "restart"] || p.mode;
         case "downscale": return [title || base(p.input), target && `→ ${target}`].filter(Boolean).join(" ");
-        case "generate": return [title || p.title || base(p.audio) || base(p.reference), target && `· ${target}`,
-          p.backend === "mapperatorinator" ? "· Mapperatorinator" : ""].filter(Boolean).join(" ");
+        case "generate": return [title || p.title || base(p.audio) || base(p.reference), target && `· ${target}`].filter(Boolean).join(" ");
+        case "generator_project": return [PROJECT_OP[p.op] || p.op, p.sections && tr("第 {sections} 段", { sections: p.sections })].filter(Boolean).join(" ");
         case "profile_replay": return title || base(p.replay) || (p.source === "current" ? tr("游戏当前谱面") : "");
         default: return p.player || "";
       }

@@ -172,6 +172,17 @@ PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --bpm 174 --offset 1
 ```
 `--seed` 换一个数就是另一张谱；`--ln 0.3` 要三成长条；`--model-fast` 分几路同时写（约快一倍）；`--model-arg` 透传模型的其他条件（如 `descriptors=['style/jumpstream']`、`mapper_id=…`）；`--open` 生成后直接导入 osu!lazer。
 
+### 生成之后：按段修改（ADR-0047）
+每次生成都会在谱面旁边写一个 `.p7kgen.json` 工程文件，把谱按每 8 小节切成段。控制台的结果下方有「段落」卡片；命令行用 `python3 -m proj7k.generator.project <工程文件>`：
+```bash
+python3 -m proj7k.generator.project 工程.p7kgen.json show                       # 列出段落、每段星级与主技能
+python3 -m proj7k.generator.project 工程.p7kgen.json rewrite 5 6 --target-sr 6.2 # 重写第 5–6 段，出 3 个候选取最好
+python3 -m proj7k.generator.project 工程.p7kgen.json lock 1 2                    # 锁定，之后不再改动
+python3 -m proj7k.generator.project 工程.p7kgen.json anchor 9 --to 5 --mirror    # 第 9 段写成第 5 段的镜像
+python3 -m proj7k.generator.project 工程.p7kgen.json undo                        # 退回上一版
+```
+每一版都是单独的 `.osz`，导入 osu! 不会覆盖之前的版本。
+
 ### 已知限制
 - 强烈建议有 NVIDIA 显卡：每首约 1–4 分钟；CPU 或 Mac 会慢很多。
 - 模型的难度条件按 osu! 官方星级，和引擎星级不同；目标很高（约 12★ 条件以上）时可能写不到，结果会提示最接近的是多少。

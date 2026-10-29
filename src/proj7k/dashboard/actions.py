@@ -324,6 +324,41 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     return out
 
 
+def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    """
+    One operation on a generated chart's project (ADR-0047): `op` is show, rewrite, lock, unlock, anchor, unanchor,
+    undo or redo; `sections` the section numbers (from 1, comma separated); `source` and `mirror` for anchor;
+    `target_sr`, `ln_ratio`, `seed` and `candidates` for rewrite.
+    """
+    from proj7k.generator import project as P
+
+    project = P.Project.load(_path(params, "project", tr("工程文件", "project file")))
+    op = _text(params, "op") or "show"
+    sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
+    if op == "rewrite":
+        P.rewrite(project, sections, target_sr=_float(params, "target_sr"), ln_ratio=_float(params, "ln_ratio"),
+                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES, log=logger.info)
+    elif op in ("lock", "unlock"):
+        P.lock(project, sections, op == "lock")
+    elif op == "anchor":
+        source = _int(params, "source")
+        if source is None:
+            raise ValueError(tr("锚定要选一个来源段", "Anchoring needs a source section"))
+        P.anchor(project, sections, source - 1, _flag(params, "mirror"))
+    elif op == "unanchor":
+        P.anchor(project, sections, None)
+    elif op in ("undo", "redo"):
+        P.move(project, -1 if op == "undo" else 1)
+    elif op != "show":
+        raise ValueError(tr(f"未知的操作：{op}", f"Unknown operation: {op}"))
+    out = P.to_dict(project)
+    take = out["take"]
+    if take["osz_file"]:
+        ctx.add_artifact(Path(take["osz_file"]), tr("生成谱 .osz", "Generated chart .osz"))
+    ctx.add_artifact(Path(take["output_file"]), tr("生成谱 .osu", "Generated chart .osu"))
+    return out
+
+
 # --- profiler --------------------------------------------------------------------------------------------------
 
 
@@ -552,6 +587,7 @@ JOB_RESOURCES: Dict[str, FrozenSet[str]] = {
     "lazer_control": frozenset({LAZER}),
     "downscale": frozenset({DOWNSCALER}),  # and LAZER when it adds the charts to the library, below
     "generate": frozenset({GENERATOR}),
+    "generator_project": frozenset({GENERATOR}),
     "profile_replay": frozenset({PROFILER}),
     "profile_player": frozenset({PROFILER}),
     "profile_habits": frozenset({PROFILER}),
@@ -587,6 +623,7 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "lazer_control": bind(lazer_control),
         "downscale": bind(downscale),
         "generate": bind(generate_chart),
+        "generator_project": bind(generator_project),
         "profile_replay": bind(profile_replay),
         "profile_player": bind(profile_player),
         "profile_habits": bind(profile_habits),
