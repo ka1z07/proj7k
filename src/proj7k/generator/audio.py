@@ -60,8 +60,10 @@ def load_audio(path: Union[str, Path]) -> Audio:
         miniaudio = None
     if miniaudio is not None:
         try:
-            decoded = miniaudio.decode_file(
-                str(path), output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1, sample_rate=SAMPLE_RATE
+            # Read the bytes ourselves: on Windows `decode_file` opens the path through an ANSI call and
+            # reports a name with Japanese in it as missing (-7, MA_DOES_NOT_EXIST).
+            decoded = miniaudio.decode(
+                path.read_bytes(), output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1, sample_rate=SAMPLE_RATE
             )
             pcm = np.frombuffer(decoded.samples, dtype=np.int16).astype(np.float32) / 32768.0
             return Audio(pcm, SAMPLE_RATE, "miniaudio")
