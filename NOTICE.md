@@ -12,8 +12,6 @@ covered by that license.
   it is included for difficulty research and testing only.
 - `docs/research/`：Jinjin 7K 段位表与相关谱面的索引和统计。段位体系归其作者所有。
   Indexes and statistics of the Jinjin 7K dan courses and their charts. The dan courses belong to their authors.
-- `src/proj7k/generator/*_model.json.gz`：从谱面中统计、训练出的模型参数，不包含任何谱面或音频本身。
-  Model parameters counted and trained from charts; they contain no chart or audio.
 
 谱师如果不希望自己的谱面出现在这里，请提 [Issue](https://github.com/ka1z07/proj7k/issues)，我们会移除。
 Mappers who want their chart removed: please open an issue.

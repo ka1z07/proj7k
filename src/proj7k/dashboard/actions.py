@@ -273,8 +273,9 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
 
 def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     """
-    A new chart from a song (ADR-0027). The song is the game's current chart (`reference` = its MD5: its audio, and its
-    timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timing then from the music).
+    A new chart from a song, written by Mapperatorinator (ADR-0046). The song is the game's current chart (`reference` =
+    its MD5: its audio, and its timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timed by
+    the model, or by the BPM and offset given).
     """
     from proj7k.generator.cli import resolve_reference, resolve_target, run_generate
     from proj7k.generator.generate import GeneratorOptions
@@ -296,27 +297,19 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         seed=_int(params, "seed") or 0,
         title=_text(params, "title"),
         artist=_text(params, "artist"),
-        stems=_flag(params, "stems"),
         log=logger.info,
         ln_ratio=_float(params, "ln_ratio") or 0.0,
         whole_inverse=_flag(params, "inverse"),
-        auto_design=_flag(params, "auto_design"),
-        backend=_text(params, "backend") or "proj7k",
         model_fast=_flag(params, "model_fast"),
         model_reuse=_flag(params, "model_reuse", True),
     )
-    if options.backend == "mapperatorinator" and _float(params, "ln_ratio") is not None:
+    if _float(params, "ln_ratio") is not None or options.whole_inverse:
         # The page always picks a long-note mix, rice (0) included: the model is told it, or it adds its own
         # long notes, 11–22% on a chart asked for none (meow, 2026-10-26).
         options.model_hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
-    if options.backend == "mapperatorinator":
-        from proj7k.generator import mapperatorinator
+    from proj7k.generator import mapperatorinator
 
-        mapperatorinator.install(logger.info)
-    elif options.stems:
-        from proj7k.generator import stems
-
-        stems.install(logger.info)
+    mapperatorinator.install(logger.info)
     output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.generated_dir
     run = run_generate(options, output_dir, audio=audio, reference=reference,
                        auto_timing=_flag(params, "auto_timing"), package=_flag(params, "package", True))
@@ -328,6 +321,41 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     out = run.to_dict()
     out["skills"] = _profile_skills(run.result.profile)
     out["dominant_skill"] = _tech_key(run.result.profile.dominant_skill)
+    return out
+
+
+def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    """
+    One operation on a generated chart's project (ADR-0047): `op` is show, rewrite, lock, unlock, anchor, unanchor,
+    undo or redo; `sections` the section numbers (from 1, comma separated); `source` and `mirror` for anchor;
+    `target_sr`, `ln_ratio`, `seed` and `candidates` for rewrite.
+    """
+    from proj7k.generator import project as P
+
+    project = P.Project.load(_path(params, "project", tr("工程文件", "project file")))
+    op = _text(params, "op") or "show"
+    sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
+    if op == "rewrite":
+        P.rewrite(project, sections, target_sr=_float(params, "target_sr"), ln_ratio=_float(params, "ln_ratio"),
+                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES, log=logger.info)
+    elif op in ("lock", "unlock"):
+        P.lock(project, sections, op == "lock")
+    elif op == "anchor":
+        source = _int(params, "source")
+        if source is None:
+            raise ValueError(tr("锚定要选一个来源段", "Anchoring needs a source section"))
+        P.anchor(project, sections, source - 1, _flag(params, "mirror"))
+    elif op == "unanchor":
+        P.anchor(project, sections, None)
+    elif op in ("undo", "redo"):
+        P.move(project, -1 if op == "undo" else 1)
+    elif op != "show":
+        raise ValueError(tr(f"未知的操作：{op}", f"Unknown operation: {op}"))
+    out = P.to_dict(project)
+    take = out["take"]
+    if take["osz_file"]:
+        ctx.add_artifact(Path(take["osz_file"]), tr("生成谱 .osz", "Generated chart .osz"))
+    ctx.add_artifact(Path(take["output_file"]), tr("生成谱 .osu", "Generated chart .osu"))
     return out
 
 
@@ -559,6 +587,7 @@ JOB_RESOURCES: Dict[str, FrozenSet[str]] = {
     "lazer_control": frozenset({LAZER}),
     "downscale": frozenset({DOWNSCALER}),  # and LAZER when it adds the charts to the library, below
     "generate": frozenset({GENERATOR}),
+    "generator_project": frozenset({GENERATOR}),
     "profile_replay": frozenset({PROFILER}),
     "profile_player": frozenset({PROFILER}),
     "profile_habits": frozenset({PROFILER}),
@@ -594,6 +623,7 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "lazer_control": bind(lazer_control),
         "downscale": bind(downscale),
         "generate": bind(generate_chart),
+        "generator_project": bind(generator_project),
         "profile_replay": bind(profile_replay),
         "profile_player": bind(profile_player),
         "profile_habits": bind(profile_habits),

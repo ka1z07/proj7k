@@ -1,7 +1,7 @@
 """
 `python3 -m proj7k.generator`: a chart from a song.
 
-    # a song file, timing estimated from the music
+    # a song file, timed by the model
     python3 -m proj7k.generator --audio song.mp3 --target-dan 5th --title "Song" --artist "Artist"
 
     # borrow the timing (and title, artist, background) of a chart of the same song
@@ -10,8 +10,7 @@
     # the same, from osu!lazer's library: an .osu MD5, beatmap id or osu! link
     python3 -m proj7k.generator --timing-from https://osu.ppy.sh/b/5271675 --target-dan 3rd
 
-    # notes written by Mapperatorinator (ADR-0040; installs itself on first use, several GB)
-    python3 -m proj7k.generator --audio song.mp3 --target-dan 5th --backend mapperatorinator
+The notes are written by Mapperatorinator (ADR-0040, ADR-0046), which installs itself on first use (several GB).
 
 The chart is written as an .osu and, unless --no-package, an .osz with the audio (and the reference
 chart's background) that osu! and osu!lazer import directly; --open hands the .osz to the system,
@@ -27,9 +26,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from proj7k.dan import CANONICAL_DAN_SR, parse_dan_tier
-from proj7k.generator import brief, stems
+from proj7k.generator import project as project_mod
 from proj7k.generator.generate import GenerationResult, GeneratorOptions, generate_from_file
-from proj7k.generator.stems import STEM_NAMES
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
 
@@ -53,10 +51,10 @@ class GenerateRun:
     osz_path: Optional[Path]
     audio_path: Path
     reference: Optional[Reference] = None
+    project: Optional[Any] = None             # the chart's project (ADR-0047): sections to rewrite, lock, anchor
 
     def to_dict(self) -> Dict[str, Any]:
         r = self.result
-        tempo = r.tempo
         return {
             "title": f"{r.beatmap.artist} - {r.beatmap.title} [{r.beatmap.version}]",
             "version": r.beatmap.version,
@@ -66,25 +64,18 @@ class GenerateRun:
             "skills": {k: round(v.stars, 3) for k, v in r.profile.skills.items()},
             "notes": r.n_notes,
             "rows": len({o.time for o in r.beatmap.hit_objects}),
-            "intensity": round(r.intensity, 3),
+            "model_difficulty": round(r.difficulty, 3),
+            "model_runs": r.iterations,
             "timing_source": r.timing_source,
-            "onset_shift_ms": r.onset_shift_ms,
             "bpm": round(60000.0 / r.beatmap.timing_points[0].beat_length, 3) if r.beatmap.timing_points else None,
             "offset_ms": r.beatmap.timing_points[0].time if r.beatmap.timing_points else None,
-            "tempo": None if tempo is None else {
-                "bpm": tempo.bpm, "offset_ms": tempo.offset_ms, "confidence": round(tempo.confidence, 3),
-                "steady": tempo.steady, "drift_ms": tempo.drift_ms,
-            },
             "warnings": list(r.warnings),
             "audio": str(self.audio_path),
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
-            "design": [{"bars": [s.first_bar, s.last_bar], "technique": s.technique, "pattern": s.pattern}
-                       for s in (r.design.sections if r.design else [])],
             "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
-            "leads": [{"first_bar": l.first_bar, "last_bar": l.last_bar, "stem": l.stem,
-                       "name": STEM_NAMES.get(l.stem, l.stem)} for l in r.leads],
+            **({"project": project_mod.to_dict(self.project)} if self.project is not None else {}),
         }
 
 
@@ -183,7 +174,23 @@ def run_generate(
             bg_path=reference.bg_path if reference else None,
             bg_filename=reference.bg_filename if reference else None,
         )
-    return GenerateRun(result=result, osu_path=osu_path, osz_path=osz_path, audio_path=audio_path, reference=reference)
+    project = project_mod.create(
+        osu_path, bm, osz_path, audio=audio_path, audio_filename=audio_name, target_stars=options.target_stars,
+        target_label=options.target_label, ln_ratio=_hold_ratio(options), model_fast=options.model_fast,
+        model_args=options.model_args or (), seed=options.seed,
+        bg=reference.bg_path if reference else None, bg_filename=reference.bg_filename if reference else None,
+    )
+    return GenerateRun(result=result, osu_path=osu_path, osz_path=osz_path, audio_path=audio_path, reference=reference,
+                       project=project)
+
+
+def _hold_ratio(options: GeneratorOptions) -> Optional[float]:
+    """The hold_note_ratio the model was given (as `mapperatorinator.generate_from_file` works it out)."""
+    if options.model_hold_ratio is not None:
+        return options.model_hold_ratio
+    if options.whole_inverse:
+        return 1.0
+    return options.ln_ratio or None
 
 
 def format_report(run: GenerateRun) -> str:
@@ -191,36 +198,29 @@ def format_report(run: GenerateRun) -> str:
     lines = [
         f"生成：{d['title']}",
         f"  星级 {d['stars']:.2f}★（目标 {d['target_stars']:.2f}★），主技能 {d['dominant_skill']}",
-        f"  {d['notes']} 个音符 / {d['rows']} 行，长条 {d['ln_share']:.0%}，强度 {d['intensity']:.2f}",
+        f"  {d['notes']} 个音符 / {d['rows']} 行，长条 {d['ln_share']:.0%}，"
+        f"模型难度条件 {d['model_difficulty']:.2f}★（{d['model_runs']} 次生成）",
     ]
-    source = {"reference": "借用参考谱面", "manual": "手动指定", "auto": "自动测得", "model": "Mapperatorinator 生成"}[d["timing_source"]]
+    source = {"reference": "借用参考谱面", "manual": "手动指定", "model": "Mapperatorinator 测得"}[d["timing_source"]]
     if d["bpm"] is not None:
         lines.append(f"  timing：{source}，{d['bpm']:g} BPM，offset {d['offset_ms']:g} ms")
-    t = d["tempo"]
-    if t is not None:
-        lines.append(f"  自动测速：置信度 {t['confidence']:.2f}，前后段拍点差 {t['drift_ms']:g} ms")
-    if d["leads"]:
-        runs = []
-        for l in d["leads"]:
-            if runs and runs[-1][2] == l["name"] and runs[-1][1] + 1 == l["first_bar"]:
-                runs[-1][1] = l["last_bar"]
-            else:
-                runs.append([l["first_bar"], l["last_bar"], l["name"]])
-        lines.append("  主跟层：" + "，".join(f"{a + 1}–{b + 1} 小节{n}" for a, b, n in runs))
     for w in d["warnings"]:
         lines.append(f"  注意：{w}")
     lines.append(f"  谱面：{d['output_file']}")
     if d["osz_file"]:
         lines.append(f"  .osz：{d['osz_file']}")
+    if d.get("project"):
+        lines.append(f"  工程：{d['project']['project_file']}（{len(d['project']['sections'])} 段；"
+                     "python -m proj7k.generator.project <工程> show 查看，rewrite / lock / anchor 修改）")
     return "\n".join(lines)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="python3 -m proj7k.generator", description="从音频生成 osu!mania 7K 谱面（ADR-0027）")
+    p = argparse.ArgumentParser(prog="python3 -m proj7k.generator", description="从音频生成 osu!mania 7K 谱面：Mapperatorinator 落键，引擎定星（ADR-0046）")
     p.add_argument("--audio", help="歌曲音频（mp3/ogg/wav/flac）。不给时用 --timing-from 谱面的音频")
     p.add_argument("--timing-from", dest="timing_from",
                    help="参考谱面：.osu 路径，或 osu!lazer 里的 MD5 / 谱面 ID / 链接。借用它的 timing、标题、背景与音频")
-    p.add_argument("--auto-timing", action="store_true", help="有参考谱面时也自动测 BPM（只借用音频与元数据）")
+    p.add_argument("--auto-timing", action="store_true", help="有参考谱面时也让模型自己测 timing（只借用音频与元数据）")
     target = p.add_mutually_exclusive_group(required=True)
     target.add_argument("--target-dan", help="目标段位：0th … 10th、Gamma、Azimuth、Zenith、Stellium")
     target.add_argument("--target-sr", type=float, help="目标星级（引擎星级）")
@@ -231,18 +231,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--creator", default="proj7k")
     p.add_argument("--version", help="难度名，默认 'Gen <目标> (<星级>)'")
     p.add_argument("--od", type=float, default=8.0, help="OverallDifficulty，默认 8")
-    p.add_argument("--stems", action="store_true",
-                   help="实验：用 Demucs 分轨，每段跟一层（鼓/贝斯/人声/其他）写；首次使用会安装 Demucs 与 PyTorch（数 GB）")
-    p.add_argument("--ln", type=float,
-                   help="长条占音符的比例（0–1，默认 0 只出米键）；按每段声音的延音程度分配到各段。"
-                        "Mapperatorinator 落键时不给就由模型自己定")
-    p.add_argument("--brief", help="谱面设计稿 JSON（ADR-0033，chart-design skill 写的）：每段的主跟层、技法、键形、密度与长条")
-    p.add_argument("--auto-design", action="store_true",
-                   help="没有设计稿时，按人写谱的技法配比给每段定主技法与键形（ADR-0033）")
-    p.add_argument("--inverse", action="store_true", help="整张谱写成反键（几乎全按住，在下一个音前松手）")
-    p.add_argument("--seed", type=int, default=0, help="配键随机种子；换一个数得到另一种配法")
-    p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
-                   help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（实验，ADR-0040；首次使用会安装，数 GB）")
+    p.add_argument("--ln", type=float, help="长条占音符的比例（0–1，模型的 hold_note_ratio 条件）；不给就由模型自己定")
+    p.add_argument("--inverse", action="store_true", help="要求通篇长条（hold_note_ratio=1）")
+    p.add_argument("--seed", type=int, default=0, help="模型的随机种子；换一个数得到另一张谱")
     p.add_argument("--model-runs", type=int, help="Mapperatorinator 最多生成几次，取引擎星级最接近目标的一张（默认 4）")
     p.add_argument("--no-model-reuse", action="store_true",
                    help="Mapperatorinator 不复用乐句（默认把听起来一样的乐句写成第一遍的样子，ADR-0045）")
@@ -287,18 +278,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,
-            version=args.version, overall_difficulty=args.od, stems=args.stems, log=_say,
+            version=args.version, overall_difficulty=args.od, log=_say,
             ln_ratio=args.ln or 0.0, whole_inverse=args.inverse,
-            brief=brief.load(args.brief) if args.brief else None, auto_design=args.auto_design,
-            backend=args.backend, model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
+            model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
             model_fast=args.model_fast, model_reuse=not args.no_model_reuse,
         )
-        if args.backend == "mapperatorinator":
-            from proj7k.generator import mapperatorinator
+        from proj7k.generator import mapperatorinator
 
-            mapperatorinator.install(_say)
-        elif args.stems:
-            stems.install(_say)
+        mapperatorinator.install(_say)
         run = run_generate(options, Path(args.output_dir).expanduser(),
                            audio=Path(args.audio).expanduser() if args.audio else None,
                            reference=reference, auto_timing=args.auto_timing, package=not args.no_package)

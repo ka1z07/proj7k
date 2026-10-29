@@ -173,14 +173,16 @@ Give it a song and it generates a 7K chart.
 
 1. Pick the song: "Song of the current chart in game" (borrows that chart's BPM and offset, for the most accurate timing) or "Specify audio" (mp3 / ogg / wav / flac; you can drop the file in).
 2. Choose a target dan or stars.
-3. Timing: borrowed from the reference chart when there is one; otherwise "Auto-detect"; if auto-detect gets it wrong, choose "Manual" and enter the BPM and the time of the first downbeat.
-4. Choose how much LN: No LN (rice only), A few LN, Rice and LN mixed, Mostly LN; optionally tick "Inverse".
+3. Timing: borrowed from the reference chart when there is one; otherwise "Auto-detect" (the model times the song); if that gets it wrong, choose "Manual" and enter the BPM and the time of the first downbeat.
+4. Choose how much LN: No LN (rice only), A few LN, Rice and LN mixed, Mostly LN, All LN.
 5. Click **"Generate"**. It fine-tunes the chart until its difficulty lands near the target, packs it as an `.osz`, and can import it into the game in one click.
 
-The generator first splits the song into sections (intro, verse, chorus, break…) and sets each section's density and patterns from its loudness and rhythm, so when the chorus comes back, so does its writing. Change the "Key layout seed" number to get another layout with the same settings. The result is a new chart of its own and never overwrites the original.
+Notes are written by [Mapperatorinator](https://github.com/OliBomby/Mapperatorinator) (OliBomby, MIT), a model that listens to the song and writes rhythm and keys together. proj7k aims it a little above your target, measures each take with its own star rating, trims notes down to the target and keeps the closest take; phrases that sound alike are charted alike. Change the "Seed" number to get another chart with the same settings. The result is a new chart of its own and never overwrites the original.
+
+Below the result, the **Sections** card cuts the chart into 8-bar sections: select some and click "Rewrite selected" to have the model write just those again (at a target star rating if you give one, best of several candidates), lock sections you like so nothing changes them, or anchor a section to another so it is charted the same (or mirrored) and follows it. Every take is its own `.osz`, and Undo / Redo move between them.
 
 > [!NOTE]
-> "Experimental: Demucs stems" splits the song into drums, bass, vocals and other, and has each section follow one layer. Ticking it the first time downloads and installs Demucs and PyTorch (several GB), and the first split of each song takes about 1–3 minutes. Nothing is downloaded unless you tick it.
+> The first generation downloads and installs the model (Python 3.10, PyTorch and the weights, several GB) into `~/.cache/proj7k/mapperatorinator`. An NVIDIA GPU is strongly recommended: about 1–4 minutes per song; much slower on CPU or Mac.
 
 ### Library sync
 

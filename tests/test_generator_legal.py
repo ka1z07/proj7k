@@ -102,21 +102,8 @@ def test_mapperatorinator_overlaps_never_reach_the_chart(tmp_path):
         return path
 
     logs = []
-    options = GeneratorOptions(target_stars=1.0, backend="mapperatorinator", model_runner=overlapping, model_runs=1,
+    options = GeneratorOptions(target_stars=1.0, model_runner=overlapping, model_runs=1,
                                log=logs.append)
     result = generate_from_file(song, options)
     assert legal.problems(result.beatmap.hit_objects) == []
     assert any("重叠" in m or "overlapping" in m for m in logs)
-
-
-def test_proj7k_charts_with_long_notes_are_legal_as_generated():
-    from generator_synth import SR, drum_song
-    from proj7k.generator.audio import Audio
-    from proj7k.generator.generate import generate
-
-    samples, _ = drum_song(bpm=170.0, measures=12, seed=5)
-    for inverse in (False, True):
-        result = generate(Audio(samples, SR, "synth"),
-                          GeneratorOptions(target_stars=6.0, ln_ratio=0.4, whole_inverse=inverse, seed=5))
-        assert any(o.note_type == NoteType.LN for o in result.beatmap.hit_objects)
-        assert legal.problems(result.beatmap.hit_objects) == []

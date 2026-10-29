@@ -1,6 +1,6 @@
 # 0040. 借用 Mapperatorinator 作 7K 生成器的落键后端
 
-- **状态**：accepted（2026-10-23；Kai 问：「结合当前 proj7k 的 context 和 Mapperatorinator，是否能开发一个铺面生成模型？」，读完方案后：「试试接入 mappertorinator」）。阶段 0 与阶段 1 一起做：先把后端接上，再在 meow 上用它跑试评。LoRA（阶段 2）另等 Kai 点头。
+- **状态**：accepted（2026-10-23；Kai 问：「结合当前 proj7k 的 context 和 Mapperatorinator，是否能开发一个铺面生成模型？」，读完方案后：「试试接入 mappertorinator」）。阶段 0 与阶段 1 一起做：先把后端接上，再在 meow 上用它跑试评。LoRA（阶段 2）另等 Kai 点头。 **ADR-0046（2026-10-28）起它是唯一的落键方式，`--backend` 与面板勾选项删除。**
 - **背景**：gen-1 到 gen-6（ADR-0027、0030–0033、0039）用的是拼装式模型：节奏 MLP、行掩码 n-gram、长条分类器、段落切分、设计稿，再由引擎闭环到目标星级。Kai 多次觉得谱面僵硬、公式化：段落没有主题，节奏变化少，切叠混合很机械。问题出在结构上：每个小模型只看局部，键形和节奏是分开抽的，谁也没学过「人写谱时整段怎么写」。
 
 ## Mapperatorinator 是什么（2026-10-23 读 main 分支源码）

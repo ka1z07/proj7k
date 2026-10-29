@@ -206,7 +206,7 @@ def test_a_downscale_claims_the_library_only_when_it_writes_it():
 
 
 def test_generation_runs_beside_the_other_tools():
-    gen = job_resources("generate", {"backend": "mapperatorinator"})
+    gen = job_resources("generate", {})
     for kind, params in (("downscale", {"sync_lazer": True}), ("profile_replay", {}), ("sync_once", {}),
                          ("import_replays", {})):
         assert not (gen & job_resources(kind, params)), kind

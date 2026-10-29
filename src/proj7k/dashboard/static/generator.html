@@ -5,13 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>proj7k 谱面生成</title>
   <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .timeline { display: flex; gap: 2px; align-items: flex-end; height: 64px; margin: 8px 0 10px; }
+    .timeline .sec { flex: 1 1 0; min-width: 4px; background: var(--accent-blue); opacity: 0.55; border-radius: 3px 3px 0 0; cursor: pointer; position: relative; }
+    .timeline .sec.sel { opacity: 1; outline: 2px solid var(--accent); }
+    .timeline .sec.locked { background: var(--accent-gold); }
+    .timeline .sec.anchored { background: var(--accent-purple); }
+    .sections-table { max-height: 340px; overflow: auto; }
+    .sections-table tr.sel td { background: var(--accent-soft); }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .controls input[type=number] { width: 8em; }
+    .controls select { width: auto; }
+  </style>
 </head>
 <body>
   <div class="page">
     <div class="page-header">
       <div>
         <div class="page-title">谱面生成</div>
-        <div class="page-sub">从一首歌的音频生成 7K 谱（米键，可选长条与反键），按目标段位或星级自动调密度；输出 .osu 与 .osz，可一键导入 osu!。</div>
+        <div class="page-sub">从一首歌的音频生成 7K 谱：Mapperatorinator 模型听着音乐写节奏与键位，引擎把星级调到目标段位或星级；输出 .osu 与 .osz，可一键导入 osu!。</div>
       </div>
       <a class="standalone-only" href="/#generator">← 返回控制台</a>
     </div>
@@ -36,7 +48,7 @@
         </div>
         <div class="field">
           <label for="reference">参考谱面（可选）：同一首歌的 .osu 路径、谱面 ID 或链接，借用它的 timing 与背景</label>
-          <input type="text" id="reference" placeholder="留空则从音乐自动测 BPM">
+          <input type="text" id="reference" placeholder="留空则由模型测 timing">
         </div>
         <div class="row">
           <div class="field"><label for="title">标题</label><input type="text" id="title" placeholder="默认取参考谱面"></div>
@@ -82,11 +94,11 @@
             <option value="0.15">少量长条</option>
             <option value="0.35">米长混</option>
             <option value="0.65">长条为主</option>
-            <option value="inverse">反键</option>
+            <option value="inverse">通篇长条</option>
           </select>
         </div>
         <div class="field">
-          <label for="seed">配键种子</label>
+          <label for="seed">种子</label>
           <input type="number" id="seed" step="1" min="0" value="0" style="width:6em">
         </div>
       </div>
@@ -98,19 +110,16 @@
       </div>
       <div class="row" style="margin-bottom:10px">
         <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
-        <label class="check"><input type="checkbox" id="stems"> 实验：Demucs 分轨</label>
-        <label class="check"><input type="checkbox" id="autoDesign"> 实验：每段一种主技法（按人写谱配比）</label>
-        <label class="check"><input type="checkbox" id="model"> 实验：Mapperatorinator 模型落键</label>
-        <label class="check"><input type="checkbox" id="modelFast"> 快速：所有窗口一起写</label>
+        <label class="check"><input type="checkbox" id="modelFast"> 快速：分几路同时写</label>
         <label class="check"><input type="checkbox" id="modelReuse" checked> 乐句复用：听起来一样的乐句写成一样</label>
       </div>
-      <div class="hint" style="margin-bottom:10px">分轨：把歌拆成鼓、贝斯、人声、其他，每段只跟一层写。第一次勾选会安装 Demucs 与 PyTorch（数 GB），每首歌第一次分轨在 CPU 上约 1–3 分钟，之后读缓存。</div>
-      <div class="hint" style="margin-bottom:10px">Mapperatorinator：一个听音频写谱的模型，节奏和键位一起写，不读分轨与按段技法。借用参考谱面的 timing 时直接读那张谱的 timing（更快也更准），否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」所有窗口一起写，约快一倍，行与长条略少。第一次勾选会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
+      <div class="hint" style="margin-bottom:10px">Mapperatorinator 是一个听音频写谱的模型，节奏和键位一起写。有 timing（借用或手动）时照它写，更快也更准；否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」分几路同时写，约快一倍，行与长条略少。第一次生成会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
       <button class="primary" id="runBtn">生成</button>
-      <span class="hint" style="margin-left:10px">同一设置换个种子就是另一种配键。</span>
+      <span class="hint" style="margin-left:10px">同一设置换个种子就是另一张谱。</span>
     </div>
 
     <div id="results"></div>
+    <div class="card hidden" id="projectCard"></div>
     <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
   </div>
 
@@ -141,7 +150,7 @@
       $("#bpmField").classList.toggle("hidden", timingMode() !== "manual");
       $("#timingHint").textContent = {
         borrow: tr("借用参考谱面的全部 timing（包括变速），只重新放音符。"),
-        auto: tr("从音乐自动测一个恒定 BPM 与第一个强拍。变速歌、或者节奏明显不对时，改用借用或手动。"),
+        auto: tr("让模型自己从音乐里测 timing。节奏明显不对时，改用借用或手动。"),
         manual: tr("恒定 BPM；offset 填第一个强拍出现的时间（毫秒）。"),
       }[timingMode()];
       $("#srField").classList.toggle("hidden", targetMode() !== "sr");
@@ -197,19 +206,7 @@
       $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.generated_dir });
     });
 
-    const PATTERN_NAME = { stairs: tr("楼梯"), split: tr("切"), trill: tr("颤"), jumptrill: tr("跳颤"), jack: tr("单叠"), chordjack: tr("跳叠"),
-      chordstream: tr("和弦串"), handstream: tr("手流"), free: tr("随意") };
-    const STEM_NAME = { drums: tr("鼓"), bass: tr("贝斯"), vocals: tr("人声"), other: tr("其他") };
-    function leadRuns(leads) {
-      const runs = [];
-      for (const l of leads) {
-        const last = runs[runs.length - 1];
-        if (last && last.name === l.name && last.last_bar + 1 === l.first_bar) last.last_bar = l.last_bar;
-        else runs.push({ ...l });
-      }
-      return runs;
-    }
-    const TIMING_SOURCE = { reference: tr("借用参考谱面"), manual: tr("手动指定"), auto: tr("自动测得"), model: tr("模型生成") };
+    const TIMING_SOURCE = { reference: tr("借用参考谱面"), manual: tr("手动指定"), model: tr("模型测得") };
     function resultCard(r) {
       return el("div", { class: "card" },
         el("h2", { text: r.title }),
@@ -222,15 +219,11 @@
           P7.stat(tr("主技能"), P7.skillName(r.dominant_skill)),
           P7.stat("BPM", Number(r.bpm).toFixed(2)),
           P7.stat("Timing", TIMING_SOURCE[r.timing_source] || r.timing_source),
-          r.tempo ? P7.stat(tr("测速置信度"), tr("{confidence}（前后差 {drift} ms）", { confidence: r.tempo.confidence.toFixed(2), drift: r.tempo.drift_ms })) : null),
-        (r.leads || []).length ? el("div", { class: "hint", style: "margin-top:6px",
-          text: tr("主跟层：") + leadRuns(r.leads).map((l) => tr("{first}–{last} 小节{stem}", { first: l.first_bar + 1, last: l.last_bar + 1, stem: STEM_NAME[l.stem] || l.name })).join(tr("，")) }) : null,
-        (r.design || []).length ? el("div", { class: "hint", style: "margin-top:6px",
-          text: tr("段落设计：") + r.design.map((d) => tr("{first}–{last} 小节 {technique}/{pattern}", { first: d.bars[0] + 1, last: d.bars[1] + 1, technique: P7.skillName(d.technique.replace("rc_", "").replace("stamina", "stream")), pattern: PATTERN_NAME[d.pattern] || d.pattern })).join(tr("，")) }) : null,
+          P7.stat(tr("模型难度条件"), tr("{stars}★（{runs} 次生成）", { stars: r.model_difficulty.toFixed(2), runs: r.model_runs }))),
         el("h3", { text: tr("八项技法星级") }),
         P7.skillBars(r.skills),
         (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join(tr("；"))) : null,
-        el("button", { class: "small", style: "margin-top:8px", text: tr("换一种配键（种子 +1）"), disabled: running,
+        el("button", { class: "small", style: "margin-top:8px", text: tr("换一张（种子 +1）"), disabled: running,
           onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
     }
 
@@ -252,9 +245,6 @@
         artist: fromGame ? "" : $("#artist").value,
         output_dir: $("#outDir").value,
         package: $("#pkg").checked,
-        stems: $("#stems").checked,
-        auto_design: $("#autoDesign").checked,
-        backend: $("#model").checked ? "mapperatorinator" : "proj7k",
         model_fast: $("#modelFast").checked,
         model_reuse: $("#modelReuse").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
@@ -273,6 +263,81 @@
       refresh();
       if (job.status !== "done") { panel.showLog(); return; }
       $("#results").replaceChildren(resultCard(job.result));
+      if (job.result.project) { selected.clear(); showProject(job.result.project); }
+    }
+
+    // --- sections of the generated chart (ADR-0047): rewrite, lock, anchor, undo ----------------------------
+    let project = null;
+    const selected = new Set();
+    function stateText(s) {
+      const parts = [];
+      if (s.locked) parts.push(tr("锁定"));
+      if (s.anchor !== null && s.anchor !== undefined) parts.push(s.mirror ? tr("镜像第 {n} 段", { n: s.anchor + 1 }) : tr("同第 {n} 段", { n: s.anchor + 1 }));
+      return parts.join(tr("，"));
+    }
+    function toggle(i) { selected.has(i) ? selected.delete(i) : selected.add(i); showProject(project); }
+    function showProject(p) {
+      project = p;
+      const card = $("#projectCard");
+      card.classList.remove("hidden");
+      const top = Math.max(1, ...p.sections.map((s) => s.stars));
+      const bars = el("div", { class: "timeline" }, ...p.sections.map((s) => el("div", {
+        class: `sec${selected.has(s.index) ? " sel" : ""}${s.locked ? " locked" : ""}${s.anchor !== null ? " anchored" : ""}`,
+        style: `height:${Math.max(6, 100 * s.stars / top)}%`,
+        title: tr("第 {n} 段 · {stars}★", { n: s.index + 1, stars: s.stars.toFixed(2) }), onclick: () => toggle(s.index) })));
+      const rows = p.sections.map((s) => el("tr", { class: selected.has(s.index) ? "sel" : "" },
+        el("td", {}, el("input", { type: "checkbox", checked: selected.has(s.index), onchange: () => toggle(s.index) })),
+        el("td", { class: "num", text: String(s.index + 1) }),
+        el("td", { text: `${s.bars[0]}–${s.bars[1]}` }),
+        el("td", { class: "num", text: `${(s.start_ms / 1000).toFixed(1)}s` }),
+        el("td", { class: "num", text: s.nps.toFixed(1) }),
+        el("td", { class: "num", text: s.stars.toFixed(2) }),
+        el("td", { text: s.skill ? P7.skillName(s.skill.replace("rc_", "").replace("stamina", "stream")) : "—" }),
+        el("td", { text: stateText(s) })));
+      const table = el("div", { class: "sections-table" }, el("table", {},
+        el("thead", {}, el("tr", {}, el("th", {}), el("th", { class: "num", text: "#" }), el("th", { text: tr("小节") }),
+          el("th", { class: "num", text: tr("开始") }), el("th", { class: "num", text: tr("音符/秒") }),
+          el("th", { class: "num", text: tr("星级") }), el("th", { text: tr("主技能") }), el("th", { text: tr("状态") }))),
+        el("tbody", {}, ...rows)));
+      const target = el("input", { type: "number", step: "0.1", min: "0.5", placeholder: tr("不变") });
+      const candidates = el("input", { type: "number", step: "1", min: "1", max: "8", value: "3" });
+      const source = el("select", {}, ...p.sections.map((s) => el("option", { value: String(s.index + 1), text: tr("第 {n} 段", { n: s.index + 1 }) })));
+      const mirror = el("input", { type: "checkbox" });
+      const none = selected.size === 0;
+      const sel = () => [...selected].sort((a, b) => a - b).map((i) => i + 1).join(",");
+      card.replaceChildren(
+        el("h2", { text: tr("段落（第 {n}/{total} 版）", { n: p.take.n, total: p.takes }) }),
+        el("div", { class: "hint", text: tr("这一版：{note}，{stars}★。点柱子或勾选来选段；重写只改选中的段，其余音符原样保留。", { note: p.take.note, stars: p.take.stars.toFixed(2) }) }),
+        bars, table,
+        el("div", { class: "controls" },
+          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value }) }),
+          el("label", { class: "check" }, tr("目标星级"), target),
+          el("label", { class: "check" }, tr("候选数"), candidates)),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("锁定所选"), disabled: running || none, onclick: () => projectOp("lock", { sections: sel() }) }),
+          el("button", { class: "small", text: tr("解锁所选"), disabled: running || none, onclick: () => projectOp("unlock", { sections: sel() }) }),
+          el("button", { class: "small", text: tr("所选锚定到"), disabled: running || none, onclick: () => projectOp("anchor", { sections: sel(), source: source.value, mirror: mirror.checked }) }),
+          source, el("label", { class: "check" }, mirror, tr("镜像")),
+          el("button", { class: "small", text: tr("解开锚定"), disabled: running || none, onclick: () => projectOp("unanchor", { sections: sel() }) })),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("撤销"), disabled: running || !p.can_undo, onclick: () => projectOp("undo", {}) }),
+          el("button", { class: "small", text: tr("重做"), disabled: running || !p.can_redo, onclick: () => projectOp("redo", {}) })),
+        el("div", { class: "hint", text: tr("锁定的段之后不会被改动；锚定的段写成来源段的样子（可镜像），来源段每次改动都会同步过去。每一版都是单独的 .osz，导入 osu! 不会覆盖之前的版本。") }));
+    }
+    async function projectOp(op, extra) {
+      if (running || !project) return;
+      running = true;
+      refresh();
+      showProject(project);
+      $("#jobCard").classList.remove("hidden");
+      panel.reset();
+      const job = await P7.startJob("generator_project", { project: project.project_file, op, ...extra },
+        { onUpdate: panel.update, onLog: panel.log });
+      panel.update(job);
+      running = false;
+      refresh();
+      if (job.status !== "done") { panel.showLog(); showProject(project); return; }
+      showProject(job.result);
     }
   </script>
 </body>

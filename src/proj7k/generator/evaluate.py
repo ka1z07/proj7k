@@ -2,20 +2,16 @@
 `python3 -m proj7k.generator.evaluate`: how close generated charts come to charts people wrote.
 
 For every 7K chart that has its audio beside it (an osu!stable Songs folder, extracted .osz files) or
-in osu!lazer's library, the song is charted twice by the generator:
-
-1. **with the human chart's timing, at the human chart's engine star rating** — the rows it picks are
-   compared with the human rows: precision (generated rows within ±20 ms of a human row) and recall
-   (human rows within ±20 ms of a generated row), and how far its stars land from the target;
-2. **with the timing estimated from the music** — the estimate is compared with the chart's main BPM
-   (exact, or off by an octave) and, when the BPM is right, with its beat phase.
-
-Both charts' keys are also read by `patterns.pattern_stats` (stairs, trills, jacks, repeated key
-patterns and repeated measures), so the generated chart's patterns can be held against the human one's.
+in osu!lazer's library, Mapperatorinator charts the song at the human chart's engine star rating (ADR-0046),
+timing it itself, and the result is held against the human chart: precision (generated rows within ±20 ms
+of a human row), recall (human rows within ±20 ms of a generated row), how far its stars land from the
+target, the BPM it chose against the chart's main BPM (exact, or off by an octave), and both charts' keys
+as `chartstats.pattern_stats` reads them (stairs, trills, jacks, repeated key patterns and measures).
+The model has seen ranked charts in training: `--skip-ranked` leaves them out (ADR-0040).
 
 Nothing is written into the library; the summary goes to the terminal and, with --output, a JSON file.
 
-    python3 -m proj7k.generator.evaluate --lazer --limit 30
+    python3 -m proj7k.generator.evaluate --lazer --limit 30 --skip-ranked ~/.proj7k/catalog.db
     python3 -m proj7k.generator.evaluate --songs "C:/osu!/Songs" --limit 30 --output eval.json
 """
 
@@ -30,12 +26,8 @@ from typing import Iterator, List, Optional, Tuple
 import numpy as np
 
 from proj7k.engine import evaluate_osu
-from proj7k.generator.audio import load_audio
-from proj7k.generator.generate import GeneratorOptions, generate, generate_from_file
-from proj7k.generator.onset import onset_envelope
-from proj7k.generator.patterns import pattern_stats, rows_of_chart
-from proj7k.generator.rhythm import is_holdout
-from proj7k.generator.tempo import estimate_tempo
+from proj7k.generator.chartstats import pattern_stats, rows_of_chart
+from proj7k.generator.generate import GeneratorOptions, generate_from_file
 from proj7k.parser import Beatmap7K, dominant_timing_point, parse_osu_7k
 
 MATCH_MS = 20.0
@@ -51,12 +43,8 @@ class ChartScore:
     precision: float
     recall: float
     true_bpm: float
-    estimated_bpm: Optional[float]
+    estimated_bpm: Optional[float]   # the main BPM of the timing the model wrote
     bpm_match: str          # "exact", "octave" or "wrong"
-    phase_error_ms: Optional[float]
-    onset_shift_ms: float = 0.0   # music onsets vs the chart's beats (positive: onsets later)
-    onbeat_ratio: Optional[dict] = None  # per band: onset on the chart's beats / onset half a beat away
-    audio: str = ""               # the audio's extension and the decoder that read it
     human_patterns: Optional[dict] = None      # patterns.pattern_stats of the human chart
     generated_patterns: Optional[dict] = None  # and of the generated one
     error: Optional[str] = None
@@ -84,56 +72,25 @@ def bpm_match(estimated: float, true: float) -> str:
 
 
 def score_chart(name: str, chart: Beatmap7K, content: str, audio_path: Path, seed: int = 0,
-                backend: str = "proj7k", contrast: Optional[float] = None) -> ChartScore:
+                runner=None) -> ChartScore:
     human_stars = float(evaluate_osu(content).total_stars)
-    audio = load_audio(audio_path)
-    timing = [tp for tp in chart.timing_points if tp.uninherited]
-    if backend == "mapperatorinator":
-        # The model times the song itself, so its rows are held against the human ones as they fall (ADR-0040).
-        result = generate_from_file(audio_path, GeneratorOptions(target_stars=human_stars, seed=seed, backend=backend))
-    else:
-        result = generate(audio, GeneratorOptions(target_stars=human_stars, timing=timing, seed=seed,
-                                                         contrast=contrast))
+    # The model times the song itself, so its rows are held against the human ones as they fall (ADR-0040).
+    result = generate_from_file(audio_path, GeneratorOptions(target_stars=human_stars, seed=seed, model_runner=runner))
     gen_rows = sorted({o.time for o in result.beatmap.hit_objects})
     human_rows = sorted({o.time for o in chart.hit_objects})
     precision, recall = row_match(gen_rows, human_rows)
 
     main_tp = dominant_timing_point(chart)
     true_bpm = 60000.0 / main_tp.beat_length if main_tp else 0.0
-    est_bpm, match, phase = None, "wrong", None
-    try:
-        est = estimate_tempo(onset_envelope(audio))
-        est_bpm, match = est.bpm, bpm_match(est.bpm, true_bpm) if true_bpm else "wrong"
-        if match == "exact" and main_tp is not None:
-            beat = main_tp.beat_length
-            phase = float((est.offset_ms - main_tp.time + beat / 2) % beat - beat / 2)
-    except ValueError:
-        pass
-    onbeat = None
-    if main_tp is not None:
-        env = onset_envelope(audio)
-        beat_s = main_tp.beat_length / 1000.0
-        on = (main_tp.time + result.onset_shift_ms) / 1000.0 % beat_s
-        off = (on + beat_s / 2) % beat_s
-        onbeat = {}
-        for band, name_ in ((0, "low"), (1, "mid"), (2, "high")):
-            a, b = _beat_sum(env.bands[band], env, on, beat_s), _beat_sum(env.bands[band], env, off, beat_s)
-            onbeat[name_] = round(a / b, 3) if b > 0 else None
-        a, b = _beat_sum(env.total, env, on, beat_s), _beat_sum(env.total, env, off, beat_s)
-        onbeat["total"] = round(a / b, 3) if b > 0 else None
-    ext = Path(chart.audio_filename).suffix.lower() or audio_path.suffix.lower()
+    gen_tp = dominant_timing_point(result.beatmap)
+    est_bpm = round(60000.0 / gen_tp.beat_length, 2) if gen_tp else None
+    match = bpm_match(est_bpm, true_bpm) if est_bpm and true_bpm else "wrong"
     beat_ms = main_tp.beat_length if main_tp else 0.0
     patterns = [{k: round(v, 3) for k, v in pattern_stats(rows_of_chart(c.hit_objects), beat_ms).items()}
                 for c in (chart, result.beatmap)]
     return ChartScore(name, round(human_stars, 3), round(result.stars, 3), len(human_rows), len(gen_rows),
                       round(precision, 3), round(recall, 3), round(true_bpm, 2), est_bpm, match,
-                      None if phase is None else round(phase, 1), result.onset_shift_ms, onbeat, f"{ext} {audio.source}",
                       patterns[0], patterns[1])
-
-
-def _beat_sum(values: np.ndarray, env, start_s: float, step_s: float) -> float:
-    frames = [env.frame_of(t) for t in np.arange(start_s, env.duration_s, step_s)]
-    return float(sum(values[max(0, f - 2):f + 3].max() for f in frames if 0 <= f < env.n))
 
 
 def songs_folder_charts(root: Path) -> Iterator[Tuple[str, Path, Path]]:
@@ -203,7 +160,6 @@ def summarize(scores: List[ChartScore]) -> dict:
     ok = [s for s in scores if s.error is None]
     if not ok:
         return {"charts": 0, "failed": len(scores)}
-    phases = [abs(s.phase_error_ms) for s in ok if s.phase_error_ms is not None]
     return {
         "charts": len(ok),
         "failed": len(scores) - len(ok),
@@ -212,12 +168,6 @@ def summarize(scores: List[ChartScore]) -> dict:
         "star_error_median": float(np.median([abs(s.generated_stars - s.human_stars) for s in ok])),
         "bpm_exact": sum(s.bpm_match == "exact" for s in ok) / len(ok),
         "bpm_octave": sum(s.bpm_match == "octave" for s in ok) / len(ok),
-        "phase_within_10ms": (sum(p <= 10.0 for p in phases) / len(phases)) if phases else None,
-        "onset_shift_median_ms": float(np.median([s.onset_shift_ms for s in ok])),
-        "onbeat_band_wins": {
-            band: sum(1 for s in ok if s.onbeat_ratio and (s.onbeat_ratio.get(band) or 0) > 1.0) / len(ok)
-            for band in ("low", "mid", "high", "total")
-        },
         "patterns_median": {
             who: {k: float(np.median([getattr(s, attr)[k] for s in ok if getattr(s, attr)]))
                   for k in ("roll", "trill", "jack_half", "key_repeat", "rhythm_repeat", "density_cv", "density_floor", "density_peak", "rows_per_s", "notes_per_s",
@@ -229,10 +179,6 @@ def summarize(scores: List[ChartScore]) -> dict:
         # the rating with fewer notes than the person did.
         "notes_ratio_median": _ratio_median(ok, "notes_per_s"),
         "rows_ratio_median": _ratio_median(ok, "rows_per_s"),
-        "onset_shift_by_audio": {
-            kind: float(np.median([s.onset_shift_ms for s in ok if s.audio == kind]))
-            for kind in sorted({s.audio for s in ok})
-        },
     }
 
 
@@ -243,6 +189,8 @@ def _ratio_median(scores: List[ChartScore], key: str) -> Optional[float]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from proj7k.generator import mapperatorinator
+
     p = argparse.ArgumentParser(prog="python3 -m proj7k.generator.evaluate", description=__doc__.split("\n\n")[0])
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--songs", help="osu!stable 的 Songs 文件夹，或解压后的 .osz 所在文件夹")
@@ -250,14 +198,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--realm", help="client.realm 路径")
     p.add_argument("--limit", type=int, default=30, help="最多评测几张谱，默认 30")
     p.add_argument("--one-per-song", action="store_true", help="同一首歌只取一个难度")
-    p.add_argument("--holdout", action="store_true", help="只评测节奏模型训练时留出的歌（rhythm.is_holdout）")
-    p.add_argument("--contrast", type=float, help="段落密度起伏保留多少（0..1，默认 rhythm.CONTRAST）")
     p.add_argument("--output", help="把逐谱结果与汇总写成 JSON")
-    p.add_argument("--backend", choices=("proj7k", "mapperatorinator"), default="proj7k",
-                   help="谁来落键：proj7k（默认）或 Mapperatorinator 模型（ADR-0040）")
     p.add_argument("--skip-ranked", metavar="CATALOG_DB",
                    help="跳过线上谱面库（catalog.db）里 ranked/loved/qualified 的谱：Mapperatorinator 训练时见过它们（ADR-0040）")
     args = p.parse_args(argv)
+    mapperatorinator.install(lambda m: print(m, flush=True))
 
     charts = songs_folder_charts(Path(args.songs).expanduser()) if args.songs else \
         lazer_charts(Path(args.realm).expanduser() if args.realm else None)
@@ -269,21 +214,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             break
         if args.one_per_song and audio in seen_audio:
             continue
-        if args.holdout and not is_holdout(Path(audio).name):
-            continue
         try:
             content = osu.read_text(encoding="utf-8", errors="replace")
             if ranked and set_id(content) in ranked:
                 continue
             seen_audio.add(audio)
-            s = score_chart(name, parse_osu_7k(content), content, audio, backend=args.backend, contrast=args.contrast)
+            s = score_chart(name, parse_osu_7k(content), content, audio)
         except Exception as e:
-            s = ChartScore(name, 0, 0, 0, 0, 0, 0, 0, None, "wrong", None, error=str(e)[:200])
+            s = ChartScore(name, 0, 0, 0, 0, 0, 0, 0, None, "wrong", error=str(e)[:200])
         scores.append(s)
         line = f"[{len(scores):3d}] {name[:60]:60s} "
         print(line + (f"失败：{s.error}" if s.error else
                       f"{s.human_stars:5.2f}★→{s.generated_stars:5.2f}★  准 {s.precision:.2f} 全 {s.recall:.2f}  "
-                      f"BPM {s.true_bpm:g}/{s.estimated_bpm} {s.bpm_match}  偏移 {s.onset_shift_ms:+.0f} ms {s.audio}"), flush=True)
+                      f"BPM {s.true_bpm:g}/{s.estimated_bpm} {s.bpm_match}"), flush=True)
     summary = summarize(scores)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if args.output:

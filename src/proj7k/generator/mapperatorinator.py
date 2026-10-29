@@ -1,12 +1,12 @@
 """
 Notes written by Mapperatorinator, an audio-to-chart transformer, and brought to the target star rating
-by the engine (ADR-0040).
+by the engine (ADR-0040). Since ADR-0046 it is the generator's only writer.
 
 Mapperatorinator (OliBomby, MIT) is a Whisper-style model: the encoder reads the song's mel spectrogram,
 the decoder writes the chart as a sequence of events (time, snap, column, hold note start and end),
 16 seconds of audio at a time. It was trained on every ranked osu! chart of all four modes, so asked for
 `gamemode=3, keycount=7` it writes 7K. Rhythm and keys come out of one model that hears the music
-around them, which is what the pipeline in `generate` lacks (ADR-0040).
+around them, which proj7k's own pipeline never managed (ADR-0040).
 
 It needs Python 3.10 and PyTorch, and proj7k runs on 3.14, so it lives in an environment of its own:
 `install` clones the pinned commit under `~/.cache/proj7k/mapperatorinator/repo` and makes a
@@ -324,10 +324,10 @@ def run_model(audio: Path, output_dir: Path, difficulty: float, seed: int, extra
     """One chart from the model: the .osu its inference.py wrote into `output_dir`."""
     home = home or HOME
     if not available(home):
-        raise ModelUnavailable(tr("没有安装 Mapperatorinator：在面板勾选「实验：Mapperatorinator 模型落键」会自动安装，"
+        raise ModelUnavailable(tr("没有安装 Mapperatorinator：在面板生成一次谱面会自动安装，"
                                   "或运行 python -m proj7k.generator.mapperatorinator --install",
-                                  "Mapperatorinator isn't installed: ticking \"Experimental: Mapperatorinator notes\" "
-                                  "in the dashboard installs it, or run python -m proj7k.generator.mapperatorinator --install"))
+                                  "Mapperatorinator isn't installed: generating a chart from the dashboard installs it, "
+                                  "or run python -m proj7k.generator.mapperatorinator --install"))
     patch(home, log)
     output_dir.mkdir(parents=True, exist_ok=True)
     before = set(output_dir.glob("*.osu"))
@@ -513,6 +513,19 @@ def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str],
     return beatmap, profile
 
 
+def timing_chart(options, audio_filename: str) -> Beatmap7K:
+    """A 7K chart with no notes, only the timing asked for: `options.timing`, or a constant `bpm` from `offset_ms`."""
+    from proj7k.parser import TimingPoint
+
+    if options.timing:
+        points = [TimingPoint(time=tp.time, beat_length=tp.beat_length, meter=tp.meter, uninherited=True)
+                  for tp in options.timing if tp.uninherited]
+    else:
+        points = [TimingPoint(time=float(options.offset_ms or 0.0), beat_length=60000.0 / options.bpm, uninherited=True)]
+    return Beatmap7K(title=options.title or "Untitled", artist=options.artist or "Unknown", creator="proj7k",
+                     version="timing", timing_points=points, hit_objects=[], audio_filename=audio_filename)
+
+
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
@@ -530,15 +543,13 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
     warnings: List[str] = []
-    if options.brief is not None or options.stems or options.auto_design:
-        warnings.append(tr("设计稿、分轨与按段技法只用于 proj7k 自己的落键，Mapperatorinator 不读它们",
-                           "Briefs, stems and per-section techniques apply to proj7k's own notes; Mapperatorinator ignores them"))
 
     reference = getattr(options, "reference", None)
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
     title = options.title or getattr(reference, "title", "") or ""
     artist = options.artist or getattr(reference, "artist", "") or ""
     timing_from = None
+    timing_source = "model"
     if options.timing and reference is not None:
         # Its parser wants a .osu file of the same song. It also takes the chart's online id as a style (that
         # mapper's, and the chart itself if it was in its training set), so the copy goes without one.
@@ -548,9 +559,13 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
                                                 "BeatmapID": "0", "BeatmapSetID": "-1"}
         timing_from = work / "reference.osu"
         timing_from.write_text(dump_osu_7k(anonymous), encoding="utf-8")
+        timing_source = "reference"
     elif options.timing or options.bpm:
-        warnings.append(tr("Mapperatorinator 只能借用参考谱面的 timing，这次用它自己从音乐里测的",
-                           "Mapperatorinator can only borrow a reference chart's timing; it timed the music itself"))
+        # Timing typed in (or borrowed without its chart): a chart of nothing but that timing is the context.
+        work.mkdir(parents=True, exist_ok=True)
+        timing_from = work / "timing.osu"
+        timing_from.write_text(dump_osu_7k(timing_chart(options, audio_path.name)), encoding="utf-8")
+        timing_source = "manual"
     # A human chart's own breaks are not holes.
     allowed = (holes(reference) if reference is not None and reference.hit_objects else 0.0) + HOLE_MAX
     best = None
@@ -637,8 +652,8 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if not (options.reference and options.reference.audio_filename):
         bm.audio_filename = audio_path.name
     return GenerationResult(
-        beatmap=bm, profile=profile, target_stars=target, intensity=difficulty, timing_source="reference" if timing_from else "model",
-        onset_shift_ms=0.0, tempo=None, iterations=tried, warnings=warnings,
+        beatmap=bm, profile=profile, target_stars=target, difficulty=difficulty, timing_source=timing_source,
+        iterations=tried, warnings=warnings,
     )
 
 

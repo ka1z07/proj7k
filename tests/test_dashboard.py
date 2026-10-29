@@ -372,11 +372,29 @@ def test_downscale_action_on_an_uploaded_chart(tmp_path):
     asyncio.run(_run())
 
 
-def test_generate_action_on_an_uploaded_song(tmp_path):
+def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
     from generator_synth import drum_song, write_wav
+    from proj7k.generator import mapperatorinator as mt
+    from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint, dump_osu_7k
 
     samples, _ = drum_song(bpm=170.0, offset_s=0.5, measures=12, seed=2)
     write_wav(tmp_path / "song.wav", samples)
+
+    def model(audio, out, difficulty, seed, extra):
+        # Stands in for Mapperatorinator: an eighth-note stream, denser with the difficulty asked for.
+        beat = 60000.0 / 170.0
+        step = beat / max(1, round(difficulty))
+        objs = [HitObject(column=(3 * k) % 7, time=round(500 + k * step), note_type=NoteType.RICE)
+                for k in range(int(16000 / step))]
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / f"model-{seed}-{difficulty:.2f}.osu"
+        path.write_text(dump_osu_7k(Beatmap7K(timing_points=[TimingPoint(time=500.0, beat_length=beat, uninherited=True)],
+                                              hit_objects=objs)), encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(mt, "install", lambda log=None, home=None: None)
+    monkeypatch.setattr(mt, "_default_runner", lambda home, log: model)
+    monkeypatch.setattr(mt, "HOME", tmp_path / "mt")
 
     async def _run():
         s = _Server(tmp_path)
@@ -388,9 +406,23 @@ def test_generate_action_on_an_uploaded_song(tmp_path):
                 job, _ = await _run_job(ws, "generate", {"target_sr": "2.0", "title": "T", "artist": "A", "auto_timing": True}, upload)
                 assert job["status"] == "done", job["error"]
                 r = job["result"]
-                assert abs(r["stars"] - 2.0) <= 0.1 and r["timing_source"] == "auto" and len(r["skills"]) == 8
+                assert r["timing_source"] == "model" and r["model_runs"] >= 1 and len(r["skills"]) == 8
                 assert sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
                 assert all(Path(a["path"]).parent == s.config.generated_dir for a in job["artifacts"])
+
+                # The chart's project: lock a section, rewrite another, go back a take (ADR-0047).
+                project = r["project"]["project_file"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "lock", "sections": "1"})
+                assert job["status"] == "done" and job["result"]["sections"][0]["locked"], job["error"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "sections": "1",
+                                                                  "candidates": "1"})
+                assert job["status"] == "failed" and ("锁定" in job["error"] or "locked" in job["error"])
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "sections": "2",
+                                                                  "candidates": "1"})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["take"]["n"] == 2 and sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "undo"})
+                assert job["result"]["current"] == 0 and job["result"]["can_redo"]
 
                 job, _ = await _run_job(ws, "generate", {"target_dan": "1st"})
                 assert job["status"] == "failed" and "音频" in job["error"]

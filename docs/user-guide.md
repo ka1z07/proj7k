@@ -154,14 +154,14 @@ PYTHONPATH=src python3 -m proj7k.downscaler -i ./hard_maps/ -d "04th" -o ./dan4_
 
 ## 5. 从音频生成谱面 (Generator)
 
-给一首歌和一个目标段位（或星级），生成一张 7K 米键谱：音符放在音乐的起音上，密度和押数由引擎闭环调到目标星级附近（容差 0.1★）。第一版不出长条。
+给一首歌和一个目标段位（或星级），由 Mapperatorinator 模型写一张 7K 谱（ADR-0046）：它听着音乐把节奏、键位、长条一起写，proj7k 用引擎星级给每一次打分，删音符降到目标（容差 0.1★，降难后 0.2★），最多重写几次。第一次生成会把模型装到 `~/.cache/proj7k/mapperatorinator`（Python 3.10 + PyTorch，数 GB）。
 
 ### 控制台
-`python3 -m proj7k.dashboard` 打开控制台，点「谱面生成」。默认用游戏里当前选中那张谱的歌：借用它的音频、标题、背景与 timing（包括变速），只重新放音符。也可以拖一个音频文件进来，从音乐自动测 BPM。生成后点「导入 osu!」即可。
+`python3 -m proj7k.dashboard` 打开控制台，点「谱面生成」。默认用游戏里当前选中那张谱的歌：借用它的音频、标题、背景与 timing（包括变速），只重新放音符。也可以拖一个音频文件进来，由模型自己测 timing。生成后点「导入 osu!」即可。
 
 ### 命令行
 ```bash
-# 只有音频：自动测 BPM 与第一个强拍
+# 只有音频：模型自己测 timing
 PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --target-dan 2nd --title "Song" --artist "Artist"
 
 # 借用同一首歌已有谱面的 timing（.osu 路径，或 osu!lazer 曲库里的 MD5 / 谱面 ID / 链接）
@@ -170,9 +170,20 @@ PYTHONPATH=src python3 -m proj7k.generator --timing-from "Songs/xxx/Artist - Son
 # 节奏不对时手动给 BPM 与第一个强拍的时间（毫秒）
 PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --bpm 174 --offset 1234 --target-dan 5th
 ```
-`--seed` 换一个数就是另一种配键；`--open` 生成后直接导入 osu!lazer。
+`--seed` 换一个数就是另一张谱；`--ln 0.3` 要三成长条；`--model-fast` 分几路同时写（约快一倍）；`--model-arg` 透传模型的其他条件（如 `descriptors=['style/jumpstream']`、`mapper_id=…`）；`--open` 生成后直接导入 osu!lazer。
+
+### 生成之后：按段修改（ADR-0047）
+每次生成都会在谱面旁边写一个 `.p7kgen.json` 工程文件，把谱按每 8 小节切成段。控制台的结果下方有「段落」卡片；命令行用 `python3 -m proj7k.generator.project <工程文件>`：
+```bash
+python3 -m proj7k.generator.project 工程.p7kgen.json show                       # 列出段落、每段星级与主技能
+python3 -m proj7k.generator.project 工程.p7kgen.json rewrite 5 6 --target-sr 6.2 # 重写第 5–6 段，出 3 个候选取最好
+python3 -m proj7k.generator.project 工程.p7kgen.json lock 1 2                    # 锁定，之后不再改动
+python3 -m proj7k.generator.project 工程.p7kgen.json anchor 9 --to 5 --mirror    # 第 9 段写成第 5 段的镜像
+python3 -m proj7k.generator.project 工程.p7kgen.json undo                        # 退回上一版
+```
+每一版都是单独的 `.osz`，导入 osu! 不会覆盖之前的版本。
 
 ### 已知限制
-- 自动测速只认恒定 BPM；变速歌请借用已有谱面的 timing 或手动指定。BPM 偶尔会测成一半或两倍（极快或极慢的歌），节奏明显不对时同样手动指定。
-- 歌曲本身起音稀疏时到不了很高的目标，结果会提示最高能到多少星。
-- 评测生成谱与人写谱的差距：`python3 -m proj7k.generator.evaluate --lazer --limit 30`。
+- 强烈建议有 NVIDIA 显卡：每首约 1–4 分钟；CPU 或 Mac 会慢很多。
+- 模型的难度条件按 osu! 官方星级，和引擎星级不同；目标很高（约 12★ 条件以上）时可能写不到，结果会提示最接近的是多少。
+- 评测生成谱与人写谱的差距：`python3 -m proj7k.generator.evaluate --lazer --limit 30 --skip-ranked <catalog.db>`。
