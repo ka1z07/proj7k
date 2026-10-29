@@ -15,6 +15,7 @@
 - 导出：1,194 张谱、657 个谱面集（624 训练 / 33 验证），米谱 660、长条为主 188；星级 1–10+ 都有，6–8 最多。复制要 3.3 GB（音频 3.1 GB）。一个谱面集里用了别的音频的难度（合集、剪辑版）单独成集，因为 Mapperatorinator 每集只读一个音频。
 - 试跑（4–8 步）都能训练、写出检查点（LoRA 本身约 43 MB）。每步 32 个序列时，微批 4 约 5.8 秒一步；微批 8 约 19 秒一步，16 GB 显存基本吃满，Kai 的电脑卡到没法用，停掉了（Kai：「先把训练停掉，太卡了」）。
 - 改到 Kai 学校的远程 GPU 工作站（UCL CS，RTX 4090 24 GB，Rocky Linux，浏览器远程桌面，一次最长订 3 天，`/scratch0/$USER` 在会话结束时清空）：`tools/pack_lora_job.py` 在 meow 上把数据集和代码打成一个 tar，Kai 传到学校的 home；在工作站上解压到 scratch，运行 `tools/lora_remote.sh`（装 uv、两个 Python 环境与模型，训练，每 5 分钟把 LoRA 与日志拷回 home）。训完把 `~/proj7k-lora-out`（几百 MB 以内）拿回 meow 做对比。
+- 2026-10-29 在 beachcomber（RTX 4090）上开跑：meow 经 knuckles 跳板用密钥登录，tar 传到 home；工作站能连 pypi 与 huggingface，脚本自己装好 uv 和两个 Python 环境。batch 8 × grad_acc 4 每步约 1.5 秒、显存 16.5 / 24 GB，1000 步约 25 分钟（meow 上每步 19 秒）。两处坑已修进仓库：脚本须是 LF 换行（打包时强制，`.gitattributes` 里 `*.sh eol=lf`）；工作站登录 shell 是 tcsh，tmux 里要 `bash -c "…"` 启动。
 
 ## 风险
 

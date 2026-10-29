@@ -4,6 +4,9 @@
 #   tar -xf ~/lora-job.tar -C /scratch0/$USER/        # the job tools/pack_lora_job.py made: code/, dataset/, this file
 #   bash /scratch0/$USER/lora-job/lora_remote.sh [steps=1000] [batch=8] [grad_acc=4]
 #
+# Detached, so it survives the ssh / remote-desktop session (the UCL login shell is tcsh, hence bash -c):
+#   tmux new -d -s lora bash -c "bash /scratch0/$USER/lora-job/lora_remote.sh 2>&1 | tee /scratch0/$USER/lora-run.log"
+#
 # Everything is built in /scratch0/$USER/proj7k-lora (uv, Python 3.14 for proj7k, Mapperatorinator's Python 3.10 and
 # PyTorch, the model weights). Scratch is wiped when the session ends, so each checkpoint's LoRA (~43 MB) and the log
 # are copied to $SAVE (default ~/proj7k-lora-out) every 5 minutes and once more at the end.
