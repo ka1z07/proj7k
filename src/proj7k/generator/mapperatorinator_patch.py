@@ -10,10 +10,14 @@ Its postprocessor kept one open hold note for all columns, so overlapping long n
 streams) collapsed into one: a second start overwrote the first and the extra ends were dropped (beachcomber,
 2026-10-29: Exterminate [FLN] 3,064 notes written, 1,037 in the .osu, 2.6★; with one open hold per column
 3,035 notes, 7.5★). Holds are now paired by column (ADR-0048).
+
+On long-note songs some windows ended with EOS a token or two in, and an empty window leaves the next one an empty
+lookback, so the song went silent for 30–70 s at a stretch (8–30% of its seconds). A window that comes back with no
+notes is drawn again, up to `empty_retries` times; a draw that is still empty costs a few tokens.
 """
 
 #: Marks a checkout patched with this version; a checkout with another version is restored and patched again.
-MARK = "proj7k patch v4"
+MARK = "proj7k patch v5"
 
 CHAINS_METHOD = '''    # {MARK}
     def generate_chains(
@@ -118,16 +122,47 @@ CHAINS_METHOD = '''    # {MARK}
             context["events"], context["event_times"] = events, times
 '''
 
+#: Fewer generated tokens than this (EOS and padding aside) is a window with no note: one note takes six or more.
+EMPTY_TOKENS = 4
+
+RETRY_METHOD = '''    def model_generate(self, model_kwargs, **generate_kwargs: Any) -> Any:
+        """proj7k: draws a window that came back with no notes again, up to `empty_retries` times."""
+        result, stats = self._model_generate_once(model_kwargs, **generate_kwargs)
+        prompt = model_kwargs.get("decoder_input_ids")
+        if self.empty_retries <= 0 or not isinstance(result, torch.Tensor) or not isinstance(prompt, torch.Tensor):
+            return result, stats
+        n, start = result.shape[0], prompt.shape[1]
+        special = torch.tensor([self.tokenizer.pad_id, self.tokenizer.eos_id, *self.tokenizer.context_eos.values()],
+                               device=result.device)
+        for _ in range(self.empty_retries):
+            todo = ((~torch.isin(result[:, start:], special)).sum(dim=1) < {EMPTY}).nonzero(as_tuple=True)[0]
+            if len(todo) == 0:
+                break
+            sub = model_kwargs if len(todo) == n else {
+                key: (v[todo] if isinstance(v, torch.Tensor) and v.dim() > 0 and v.shape[0] == n else v)
+                for key, v in model_kwargs.items()}
+            again, stats = self._model_generate_once(sub, **generate_kwargs)
+            width = max(result.shape[1], again.shape[1])
+            result = F.pad(result, (0, width - result.shape[1]), value=self.tokenizer.pad_id)
+            result[todo] = F.pad(again, (0, width - again.shape[1]), value=self.tokenizer.pad_id).to(result.device)
+        return result, stats
+
+    def _model_generate_once(self, model_kwargs, **generate_kwargs: Any) -> Any:'''
+
 #: (file, line it replaces, new lines). Each line must occur once in the pinned file.
 PATCHES = (
     ("config.py", "    parallel: bool = False  # Use parallel sampling", [
         "    parallel: bool = False  # Use parallel sampling",
         "    parallel_chains: int = 0  # proj7k: write the windows as this many runs side by side (0: off)",
+        "    empty_retries: int = 0  # proj7k: draw a window that comes back with no notes again, this many times",
     ]),
     ("osuT5/osuT5/inference/processor.py", "        self.parallel = args.parallel", [
         "        self.parallel = args.parallel",
         "        self.parallel_chains = int(getattr(args, 'parallel_chains', 0) or 0)",
+        "        self.empty_retries = int(getattr(args, 'empty_retries', 0) or 0)",
     ]),
+    ("osuT5/osuT5/inference/processor.py", "    def model_generate(self, model_kwargs, **generate_kwargs: Any) -> Any:",
+     RETRY_METHOD.replace("{EMPTY}", str(EMPTY_TOKENS)).split("\n")),
     ("osuT5/osuT5/inference/processor.py",
      "        generate_func = self.generate_parallel if self.parallel else self.generate_sequential", [
         "        generate_func = self.generate_parallel if self.parallel else self.generate_sequential",

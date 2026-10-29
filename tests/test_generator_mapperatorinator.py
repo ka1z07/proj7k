@@ -50,6 +50,7 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     audio = tmp_path / "a b's (c) [d]=e.mp3"
     out = mt.overrides(audio, tmp_path / "out", 5.237, 3, hold_note_ratio=1.4, title="T")
     assert "gamemode=3" in out and "keycount=7" in out and "difficulty=5.24" in out and "seed=3" in out
+    assert f"empty_retries={mt.EMPTY_RETRIES}" in out
     assert "hold_note_ratio=1.00" in out and "title='T'" in out
     audio_arg = next(o for o in out if o.startswith("audio_path="))
     assert audio_arg.startswith("audio_path='") and audio_arg.endswith("'") and "\\'s" in audio_arg

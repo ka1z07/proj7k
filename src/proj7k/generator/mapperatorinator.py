@@ -88,6 +88,9 @@ DEFAULT_YEAR = 2023
 #: 2560 tokens ran out 11–13 s into its 16.4 s (meow, 2026-10-24), and the patterns broke at every window
 #: (2026-10-26). A run's steps go in one batch, so the time is about a run's length.
 FAST_CHAINS = 8
+#: How many times a window that came back with no notes is drawn again (patch v5). On long-note songs early EOS
+#: emptied 8–30% of the seconds, each empty window leaving the next an empty lookback (beachcomber, 2026-10-29).
+EMPTY_RETRIES = 3
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
 Runner = Callable[[Path, Path, float, int, Sequence[str]], Path]
@@ -303,7 +306,7 @@ def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, ho
         f"output_path={quote(Path(output_dir).resolve().as_posix())}",
         "gamemode=3", "keycount=7",
         f"difficulty={difficulty:.2f}", f"seed={int(seed)}", f"year={int(year)}",
-        "export_osz=false",
+        "export_osz=false", f"empty_retries={EMPTY_RETRIES}",
     ]
     if timing_from is not None:
         out += [f"beatmap_path={quote(Path(timing_from).resolve().as_posix())}", "in_context=[TIMING]", "output_type=[MAP]"]

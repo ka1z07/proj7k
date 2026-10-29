@@ -87,3 +87,22 @@ def test_export_writes_the_mmrs_layout_and_leaves_out_what_it_should(library, tm
         assert (folder / r["AudioFile"]).read_bytes() == b"audio bytes" and r["AudioFile"] == "audio.ogg"
         assert (folder / r["BeatmapFile"]).is_file()
     assert summary["sets"] == 2 and summary["train_sets"] + summary["test_sets"] == 2
+
+
+def test_a_subset_keeps_the_long_note_charts_and_links_the_files(tmp_path, monkeypatch):
+    import train_lora as T
+
+    src = tmp_path / "ds"
+    (src / "data" / "1").mkdir(parents=True)
+    rows = [{"BeatmapSetId": i, "Id": i, "LnShare": ln, "DifficultyRating": sr}
+            for i, (ln, sr) in enumerate([(0.9, 5.0), (0.1, 6.0), (0.6, 2.0), (1.0, 7.5)])]
+    (src / "metadata.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    prepared = []
+    monkeypatch.setattr(T, "prepare", lambda args: prepared.append(args.dataset))
+    T.main(["subset", "--dataset", str(src), "--out", str(tmp_path / "ln"), "--min-ln-share", "0.5",
+            "--min-stars", "3"])
+    out = tmp_path / "ln"
+    kept = [json.loads(l)["Id"] for l in (out / "metadata.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert kept == [0, 3] and (out / "data" / "1").is_dir() and prepared == [str(out.resolve())]
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["train_sets"] == 1 and summary["test_sets"] == 1
