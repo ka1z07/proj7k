@@ -217,7 +217,7 @@ def _trim_landing(monkeypatch, offset):
         def __init__(self, stars):
             self.total_stars = stars
 
-    def landing(chart, target, tolerance, log):
+    def landing(chart, target, tolerance, log, mix=None):
         return chart, Profile(target + offset)
     monkeypatch.setattr(mt, "trim", landing)
 
