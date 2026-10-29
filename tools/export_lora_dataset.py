@@ -100,7 +100,7 @@ def export(args):
     backup = original_stars(Path(args.backup).expanduser())
     hold_out = {h.lower() for h in args.hold_out}
     skipped = Counter()
-    rows, seen = [], set()
+    rows, seen, set_audio = [], set(), {}
     for b in library:
         md5 = (b.get("md5_hash") or "").lower()
         text_fields = " ".join(str(b.get(k, "")) for k in ("tags", "creator", "difficulty_name")).lower()
@@ -137,6 +137,11 @@ def export(args):
         seen.add(md5)
         set_online = int(b.get("set_online_id") or -1)
         set_id = set_online if set_online > 0 else small_id(b["audio_hash"])
+        # Mapperatorinator loads one audio per set: a difficulty on other audio than the set's first (packs, cuts)
+        # becomes a set of its own
+        if set_audio.setdefault(set_id, b["audio_hash"]) != b["audio_hash"]:
+            set_id = small_id(f"{set_id}/{b['audio_hash']}")
+            set_audio.setdefault(set_id, b["audio_hash"])
         folder = str(set_id)
         suffix = Path(chart.audio_filename or "audio.mp3").suffix.lower() or ".mp3"
         (out / "data" / folder).mkdir(exist_ok=True)

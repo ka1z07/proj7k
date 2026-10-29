@@ -17,6 +17,7 @@ checkpoint lands in OUT/run/checkpoints/checkpoint_<n>/lora; the generator takes
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -56,7 +57,7 @@ def overrides(args) -> list:
     return [
         f"hydra.run.dir={m.quote(out.joinpath('run').as_posix())}",
         "pretrained_gamemode=3",
-        "lora_metadata.ckpt_subfolders=[gamemode=3]",
+        "lora_metadata.ckpt_subfolders=['gamemode=3']",
         f"compile={'true' if args.compile else 'false'}",
         f"attn_implementation={args.attention}",
         "data.gamemodes=[3]",
@@ -68,13 +69,15 @@ def overrides(args) -> list:
         f"data.test_dataset_end={train_sets + test_sets}",
         "data.dt_augment_prob=0",            # the dataset has a star rating at 1.0x only (the others are scaled)
         f"dataloader.num_workers={args.workers}",
-        f"optim.batch_size={args.batch}",
+        f"optim.batch_size={args.batch * args.grad_acc}",  # Mapperatorinator's batch_size is per optimizer step
         f"optim.grad_acc={args.grad_acc}",
         f"optim.total_steps={args.steps}",
         f"optim.base_lr={args.lr}",
         f"checkpoint.every_steps={every}",
+        f"checkpoint.local_total_limit={args.steps // every + 2}",  # keep them all (the default keeps the last 2)
         f"eval.every_steps={every}",
         f"eval.steps={args.eval_steps}",
+        f"logging.every_steps={math.gcd(every, 10)}",  # the train log has to land on every eval step
         "logging.mode=disabled",
         f"lora.r={args.rank}",
         f"lora.lora_alpha={2 * args.rank}",
