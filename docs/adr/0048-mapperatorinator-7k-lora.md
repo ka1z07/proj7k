@@ -17,6 +17,14 @@
 - 改到 Kai 学校的远程 GPU 工作站（UCL CS，RTX 4090 24 GB，Rocky Linux，浏览器远程桌面，一次最长订 3 天，`/scratch0/$USER` 在会话结束时清空）：`tools/pack_lora_job.py` 在 meow 上把数据集和代码打成一个 tar，Kai 传到学校的 home；在工作站上解压到 scratch，运行 `tools/lora_remote.sh`（装 uv、两个 Python 环境与模型，训练，每 5 分钟把 LoRA 与日志拷回 home）。训完把 `~/proj7k-lora-out`（几百 MB 以内）拿回 meow 做对比。
 - 2026-10-29 在 beachcomber（RTX 4090）上开跑：meow 经 knuckles 跳板用密钥登录，tar 传到 home；工作站能连 pypi 与 huggingface，脚本自己装好 uv 和两个 Python 环境。batch 8 × grad_acc 4 每步约 1.5 秒、显存 16.5 / 24 GB，1000 步约 25 分钟（meow 上每步 19 秒）。两处坑已修进仓库：脚本须是 LF 换行（打包时强制，`.gitattributes` 里 `*.sh eol=lf`）；工作站登录 shell 是 tcsh，tmux 里要 `bash -c "…"` 启动。
 
+## 结果（2026-10-29，beachcomber）
+
+- 训练 1000 步：33 首验证谱上 loss 0.489（原模型）→ 0.358，时间位置准确率 0.777 → 0.811，列准确率 0.527 → 0.587。留出的 Exterminate [FLN] 上逐 token loss 0.192 → 0.149。LoRA 确实加载了（84 个注意力矩阵合并后变了约 4%）。
+- 但生成的长条谱和原模型一样稀（三首留出歌、难度 4/7/10：要全长条时都只有 2–3.7★，人谱 9★+）。连训练集里的密集长条谱也只写到人谱密度的 1/10–1/4；米谱两者都接近人谱。
+- 主因不在模型：Mapperatorinator 的后处理所有列共用一个「未结束的长条」，和弦或重叠的长条互相覆盖，多出来的结尾被丢掉。Exterminate 模型写了 3,064 个音符，.osu 里只剩 1,037 个，每行 ≈1.1 个音符就是这么来的（ADR-0047 的「每行只写一个」诊断也是它）。补丁 v4 改成每列各记一个，同一组 token：Exterminate 2.61★ → 7.50★（13.8 notes/s，人谱 24），Dustwind LN 3.92★ → 7.69★。
+- 次要：长条谱里有些窗口开头一两个 token 就结束（提前 EOS），一旦空了，下一窗的上文也是空的，于是连空 30–70 秒（Exterminate 30% 的秒数空，Dustwind 70%）。没撞到 tgt_seq_len，也没折半 prompt。有音符的地方 Exterminate 已有约 19 notes/s。
+- 待做：用修好的后处理重跑原模型 / LoRA 对比，再定 LoRA 是否接进生成器、`LN_MAX_DIFFICULTY` 是否放开；提前 EOS 另查。
+
 ## 风险
 
 - 曲库只有几千张 7K 谱，可能过拟合到 Kai 收藏的风格；用验证集损失和留出歌盯着，步数宁少勿多。

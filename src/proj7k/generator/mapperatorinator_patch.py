@@ -5,10 +5,15 @@ Fast mode writes the song as `parallel_chains` runs of windows side by side: eac
 window reading the notes before it (as its sequential mode), and all runs take a step together in one batch.
 Its own parallel mode writes every window with no notes before it, so the patterns broke every 8 seconds
 (meow, 2026-10-26: chord size jumped 0.75–0.87 at the seams against ~0.55 elsewhere).
+
+Its postprocessor kept one open hold note for all columns, so overlapping long notes (chords, long-note
+streams) collapsed into one: a second start overwrote the first and the extra ends were dropped (beachcomber,
+2026-10-29: Exterminate [FLN] 3,064 notes written, 1,037 in the .osu, 2.6★; with one open hold per column
+3,035 notes, 7.5★). Holds are now paired by column (ADR-0048).
 """
 
 #: Marks a checkout patched with this version; a checkout with another version is restored and patched again.
-MARK = "proj7k patch v3"
+MARK = "proj7k patch v4"
 
 CHAINS_METHOD = '''    # {MARK}
     def generate_chains(
@@ -131,4 +136,21 @@ PATCHES = (
     ]),
     ("osuT5/osuT5/inference/processor.py", "    def generate_parallel(",
      CHAINS_METHOD.replace("{MARK}", MARK).split("\n") + ["    def generate_parallel("]),
+    # one open hold note per column (keyed by the column's x), not one for the whole chart
+    ("osuT5/osuT5/inference/postprocessor.py", "        hold_note_start = None", [
+        "        hold_note_start = None",
+        "        hold_starts = {}  # proj7k: the open hold note of each column",
+    ]),
+    ("osuT5/osuT5/inference/postprocessor.py", "            elif hit_type == EventType.HOLD_NOTE:", [
+        "            elif hit_type == EventType.HOLD_NOTE:",
+        "                hold_note_start = hold_starts.get(int(round(group.x)))",
+    ]),
+    ("osuT5/osuT5/inference/postprocessor.py", "                hold_note_start = group", [
+        "                hold_starts[int(round(group.x))] = group",
+    ]),
+    ("osuT5/osuT5/inference/postprocessor.py",
+     "            elif hit_type == EventType.HOLD_NOTE_END and hold_note_start is not None:", [
+        "            elif hit_type == EventType.HOLD_NOTE_END and int(round(group.x)) in hold_starts:",
+        "                hold_note_start = hold_starts.pop(int(round(group.x)))",
+    ]),
 )

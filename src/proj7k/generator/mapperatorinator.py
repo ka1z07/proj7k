@@ -226,7 +226,8 @@ def _rehome(home: Path, python: Path, log: Callable[[str], None]) -> None:
 
 
 #: The files an earlier version of our patch changed; a checkout patched by one is restored before patching.
-PATCHED_FILES = ("config.py", "osuT5/osuT5/inference/preprocessor.py", "osuT5/osuT5/inference/processor.py")
+PATCHED_FILES = ("config.py", "osuT5/osuT5/inference/preprocessor.py", "osuT5/osuT5/inference/processor.py",
+                 "osuT5/osuT5/inference/postprocessor.py")
 
 
 def patched(home: Optional[Path] = None) -> bool:
