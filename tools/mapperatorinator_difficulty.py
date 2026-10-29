@@ -6,6 +6,9 @@ Exterminate [FLN], it wrote 2.1–3.6★ at 0.9–0.97 long notes.)
     PYTHONPATH=src python tools/mapperatorinator_difficulty.py run --chart MD5_OR_OSU ... --out DIR \
         --difficulty 4 6 8 10 12 --hold none 1.0 --seeds 1 [--fast]
 
+    # the same with a fine-tuned LoRA (ADR-0048), into another folder
+    PYTHONPATH=src python tools/mapperatorinator_difficulty.py run ... --model-arg lora_path=DIR
+
     # one row per run next to the reference: stars, pools, density and how the holds are written
     PYTHONPATH=src python tools/mapperatorinator_difficulty.py summary --out DIR
 
@@ -96,7 +99,7 @@ def run(args):
                     if (song, difficulty, hold, seed) in done:
                         continue
                     extra = m.overrides(audio, work / "out", difficulty, seed, hold_note_ratio=ratio,
-                                        timing_from=timing, fast=args.fast)
+                                        timing_from=timing, fast=args.fast) + list(args.model_arg)
                     started = time.perf_counter()
                     try:
                         osu = m.run_model(audio, work / "out", difficulty, seed, extra)
@@ -154,6 +157,8 @@ def main():
     r.add_argument("--hold", nargs="+", default=["none", "1.0"], help="long-note share asked for, or none")
     r.add_argument("--seeds", type=int, default=1)
     r.add_argument("--fast", action="store_true", help="the generator's fast mode (batched chains)")
+    r.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
+                   help="more overrides for the model, e.g. lora_path=... (repeatable)")
     s = sub.add_parser("summary")
     s.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
