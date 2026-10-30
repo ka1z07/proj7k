@@ -91,6 +91,9 @@ FAST_CHAINS = 8
 #: How many times a window that came back with no notes is drawn again (patch v5). On long-note songs early EOS
 #: emptied 8–30% of the seconds, each empty window leaving the next an empty lookback (beachcomber, 2026-10-29).
 EMPTY_RETRIES = 3
+#: The long-note LoRA (ADR-0048, 1000 steps on the library's long-note charts): long-note charts 7.07 → 7.77★,
+#: thicker chords rather than more rows, and it turns mixed charts into long-note ones. Off unless asked for.
+LN_LORA = Path(os.environ.get("PROJ7K_LN_LORA", Path.home() / ".cache" / "proj7k" / "lora" / "ln1" / "checkpoint_1" / "lora"))
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
 Runner = Callable[[Path, Path, float, int, Sequence[str]], Path]
@@ -563,6 +566,13 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             return (holey, abs(stars - target))
         return (holey, max(0.0, abs(stars - target) - good_enough) - mix_mod.WEIGHT * mix_mod.lean(profile, mix))
 
+    model_args = list(options.model_args or ())
+    if getattr(options, "model_ln_lora", False):
+        if (LN_LORA / "adapter_config.json").is_file():
+            model_args.append(f"lora_path={quote(LN_LORA.resolve().as_posix())}")
+            log(tr(f"用长条 LoRA：{LN_LORA}", f"Using the long-note LoRA: {LN_LORA}"))
+        else:
+            warnings.append(tr(f"找不到长条 LoRA（{LN_LORA}），用原模型", f"No long-note LoRA at {LN_LORA}; using the base model"))
     reference = getattr(options, "reference", None)
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
     title = options.title or getattr(reference, "title", "") or ""
@@ -592,7 +602,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     for i in range(runs):
         seed = options.seed + i
         extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
-                          timing_from=timing_from, fast=options.model_fast) + list(options.model_args or ())
+                          timing_from=timing_from, fast=options.model_fast) + model_args
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
         chart = _read(runner(audio, work, difficulty, seed, extra), log)
@@ -603,7 +613,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             current.write_text(dump_osu_7k(chart), encoding="utf-8")
             again = overrides(audio, work, difficulty, seed, hold_note_ratio=ratio, title=title, artist=artist,
                               timing_from=current) + ["add_to_beatmap=true", f"start_time={start + 1}",
-                                                      f"end_time={end - 1}"] + list(options.model_args or ())
+                                                      f"end_time={end - 1}"] + model_args
             return _read(runner(audio, work, difficulty, seed, again), log)
 
         for start, end in refill_spans(chart, reference):

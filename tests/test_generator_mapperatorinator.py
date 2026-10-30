@@ -500,3 +500,18 @@ def test_a_long_note_chart_may_ask_up_to_the_models_ceiling(song):
     result = generate_from_file(song, options)
     assert max(c[0] for c in calls) == mt.MAX_DIFFICULTY and len(calls) < 8
     assert any(f"{mt.MAX_DIFFICULTY:g}★" in w for w in result.warnings)
+
+
+def test_the_long_note_lora_is_loaded_only_when_asked_and_present(song, tmp_path, monkeypatch):
+    lora = tmp_path / "lora"
+    monkeypatch.setattr(mt, "LN_LORA", lora)
+    for asked, present, loaded in ((True, False, False), (False, True, False), (True, True, True)):
+        if present:
+            lora.mkdir(exist_ok=True)
+            (lora / "adapter_config.json").write_text("{}", encoding="utf-8")
+        calls = []
+        options = GeneratorOptions(target_stars=3.0, model_runner=stream_runner(calls), model_runs=1,
+                                   model_ln_lora=asked, model_reuse=False)
+        result = generate_from_file(song, options)
+        assert any(a.startswith("lora_path=") for a in calls[0][2]) == loaded
+        assert any("LoRA" in w for w in result.warnings) == (asked and not present)

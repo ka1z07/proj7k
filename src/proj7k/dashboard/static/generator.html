@@ -112,6 +112,7 @@
         <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
         <label class="check"><input type="checkbox" id="modelFast"> 快速：分几路同时写</label>
         <label class="check"><input type="checkbox" id="modelReuse" checked> 乐句复用：听起来一样的乐句写成一样</label>
+        <label class="check"><input type="checkbox" id="lnLora"> 长条 LoRA（试验）：长条谱更难，混合谱会多写长条</label>
       </div>
       <div class="field">
         <span class="label">技法配比</span>
@@ -267,6 +268,7 @@
         package: $("#pkg").checked,
         model_fast: $("#modelFast").checked,
         model_reuse: $("#modelReuse").checked,
+        ln_lora: $("#lnLora").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
         inverse: $("#ln").value === "inverse",
         mix: mixValue(),

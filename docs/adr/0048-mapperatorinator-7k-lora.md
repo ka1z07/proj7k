@@ -40,6 +40,8 @@
   - 不指定比例时把混合谱写成长条谱（Fluorite 长条占比 0.68–0.79，人谱 0.46），空白秒略多（10% 对 8%）。
   - 结论：只适合长条为主的请求，不能当全局模型。检查点在 meow `~/.cache/proj7k/lora/ln1/checkpoint_1/lora`，表格在 `~/.cache/proj7k/lora/cmp3`。
 
+- **接进生成器**（Kai 2026-10-30 选「加开关，默认关」）：命令行 `--ln-lora`、dashboard「长条 LoRA（试验）」复选框，默认关；打开时加载 `LN_LORA`（默认 `~/.cache/proj7k/lora/ln1/checkpoint_1/lora`，可用环境变量 `PROJ7K_LN_LORA` 改），找不到就用原模型并提示。
+
 ## 风险
 
 - 曲库只有几千张 7K 谱，可能过拟合到 Kai 收藏的风格；用验证集损失和留出歌盯着，步数宁少勿多。
