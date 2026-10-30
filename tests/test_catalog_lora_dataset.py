@@ -43,8 +43,12 @@ def test_pick_then_fetch_adds_the_picked_difficulties(tmp_path):
     picks = tmp_path / "picks.json"
     C.main(["pick", "--catalog", str(db), "--exclude", str(have), "--out", str(picks), "--min-ln-share", "0.3"])
     chosen = json.loads(picks.read_text(encoding="utf-8"))["sets"]
-    assert [s["id"] for s in chosen] == [10, 20]
-    assert {d["md5"] for d in chosen[0]["diffs"]} == {md5["fln"], md5["other"]}
+    assert sorted(s["id"] for s in chosen) == [10, 20]
+    assert {d["md5"] for s in chosen if s["id"] == 10 for d in s["diffs"]} == {md5["fln"], md5["other"]}
+    # a held-out chart keeps its whole set out
+    held = tmp_path / "held.json"
+    C.main(["pick", "--catalog", str(db), "--exclude", str(have), "--out", str(held), "--hold-out", md5["rice"]])
+    assert [s["id"] for s in json.loads(held.read_text(encoding="utf-8"))["sets"]] == [20]
 
     def fake(set_id, log):
         buf = io.BytesIO()
@@ -74,3 +78,21 @@ def test_pick_then_fetch_adds_the_picked_difficulties(tmp_path):
     C.fetch(C.argparse.Namespace(picks=str(picks), dataset=str(ds), pause=0),
             fetcher=lambda i, log: calls.append(i) or fake(i, log))
     assert calls == [20]
+
+
+def test_pick_spreads_the_sets_over_the_star_bands(tmp_path):
+    db = tmp_path / "c.sqlite3"
+    con = sqlite3.connect(db)
+    con.executescript("CREATE TABLE beatmapsets (id INTEGER, status TEXT, ranked_date TEXT, submitted_date TEXT,"
+                      " updated_at TEXT, creator_id INTEGER); CREATE TABLE beatmaps (id INTEGER, beatmapset_id INTEGER,"
+                      " checksum TEXT, official_sr REAL, engine_sr REAL, note_count INTEGER, ln_count INTEGER,"
+                      " mapper_id INTEGER);")
+    stars = [11.5, 11.2, 11.1, 10.9, 6.5, 6.2]
+    for i, e in enumerate(stars, 1):
+        con.execute("INSERT INTO beatmapsets VALUES (?, 'graveyard', NULL, NULL, '2020', 1)", (i,))
+        con.execute("INSERT INTO beatmaps VALUES (?, ?, ?, 5.0, ?, 900, 900, 1)", (i * 10, i, f"m{i}", e))
+    con.commit()
+    con.close()
+    out = tmp_path / "p.json"
+    C.main(["pick", "--catalog", str(db), "--out", str(out), "--sets", "3"])
+    assert sorted(s["best"] for s in json.loads(out.read_text(encoding="utf-8"))["sets"]) == [6.5, 10.9, 11.5]

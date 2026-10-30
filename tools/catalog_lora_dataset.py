@@ -56,7 +56,12 @@ def pick(args):
         "WHERE b.beatmapset_id > 0 AND b.official_sr IS NOT NULL AND b.note_count >= ? AND b.engine_sr >= ? "
         "AND b.ln_count >= ? * b.note_count",
         (args.min_notes, args.min_engine, args.min_ln_share)).fetchall()
+    # a held-out chart's whole set stays out: its other difficulties share the song
+    held_sets = {sid for sid, in con.execute(
+        f"SELECT beatmapset_id FROM beatmaps WHERE lower(checksum) IN ({','.join('?' * len(args.hold_out))})",
+        [h.lower() for h in args.hold_out])} if args.hold_out else set()
     con.close()
+    sets_have |= held_sets
     sets = {}
     for set_id, bid, md5, sr, engine, notes, lns, mapper, status, date in rows:
         if md5.lower() in exclude or set_id in sets_have:
@@ -66,14 +71,22 @@ def pick(args):
         entry["diffs"].append({"id": bid, "md5": md5.lower(), "sr": sr, "engine": engine, "mapper": int(mapper or -1),
                                "ln_share": round(lns / notes, 3)})
         entry["best"] = max(entry["best"], engine)
-    chosen = sorted(sets.values(), key=lambda s: -s["best"])[:args.sets]
+    # spread over the engine-star bands (whole stars), hardest set of each band first, taking from each in turn
+    bands = {}
+    for entry in sorted(sets.values(), key=lambda s: -s["best"]):
+        bands.setdefault(int(entry["best"]), []).append(entry)
+    chosen, queues = [], [bands[k] for k in sorted(bands)]
+    while len(chosen) < args.sets and any(queues):
+        for q in queues:
+            if q and len(chosen) < args.sets:
+                chosen.append(q.pop(0))
     out = {"criteria": {k: getattr(args, k) for k in ("min_ln_share", "min_engine", "min_notes", "sets")},
            "sets": chosen}
     Path(args.out).write_text(json.dumps(out, indent=1), encoding="utf-8")
     diffs = sum(len(s["diffs"]) for s in chosen)
-    bands = Counter(min(int(d["engine"]), 12) for s in chosen for d in s["diffs"])
-    print(json.dumps({"sets": len(chosen), "diffs": diffs, "of_sets": len(sets),
-                      "engine_stars": {str(k): bands[k] for k in sorted(bands)}}))
+    spread = Counter(min(int(d["engine"]), 12) for s in chosen for d in s["diffs"])
+    print(json.dumps({"sets": len(chosen), "diffs": diffs, "of_sets": len(sets), "held_out_sets": len(held_sets),
+                      "engine_stars": {str(k): spread[k] for k in sorted(spread)}}))
 
 
 def download(set_id: int, log) -> bytes:
@@ -182,12 +195,12 @@ def main(argv=None):
     a = sub.add_parser("pick")
     a.add_argument("--catalog", default=str(Path.home() / ".cache" / "proj7k" / "catalog.sqlite3"))
     a.add_argument("--exclude", help="a dataset's metadata.jsonl: its charts and sets are not picked again")
-    a.add_argument("--hold-out", nargs="*", default=[], metavar="MD5")
+    a.add_argument("--hold-out", nargs="*", default=[], metavar="MD5", help="charts kept out, with their whole sets")
     a.add_argument("--out", required=True)
     a.add_argument("--min-ln-share", type=float, default=0.3)
     a.add_argument("--min-engine", type=float, default=5.0, help="engine stars")
     a.add_argument("--min-notes", type=int, default=300)
-    a.add_argument("--sets", type=int, default=1000, help="at most this many sets, hardest first")
+    a.add_argument("--sets", type=int, default=1000, help="at most this many sets, spread over the star bands")
     f = sub.add_parser("fetch")
     f.add_argument("--picks", required=True)
     f.add_argument("--dataset", required=True)
