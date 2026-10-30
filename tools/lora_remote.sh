@@ -4,6 +4,7 @@
 #   tar -xf ~/lora-job.tar -C /scratch0/$USER/        # the job tools/pack_lora_job.py made: code/, dataset/, this file
 #   bash /scratch0/$USER/lora-job/lora_remote.sh [steps=1000] [batch=8] [grad_acc=4]
 #   MIN_LN=0.5 RUN=ln1 EVERY=500 bash .../lora_remote.sh 3000 4 8   # long-note charts only, 16 GB card
+#   MIN_LN=0.1 RUN=mix1 RANK=128 EVERY=500 bash .../lora_remote.sh 3000   # long-note and mixed charts
 #
 # Detached, so it survives the ssh / remote-desktop session (the UCL login shell is tcsh, hence bash -c):
 #   tmux new -d -s lora bash -c "bash /scratch0/$USER/lora-job/lora_remote.sh 2>&1 | tee /scratch0/$USER/lora-run.log"
@@ -19,6 +20,7 @@ ACC=${3:-4}
 WORK=${WORK:-/scratch0/$USER/proj7k-lora}
 RUN=${RUN:-run}
 EVERY=${EVERY:-250}
+RANK=${RANK:-64}
 SAVE=${SAVE:-$HOME/proj7k-lora-out}
 [ "$RUN" = run ] || SAVE="$SAVE/$RUN"
 mkdir -p "$WORK" "$SAVE"
@@ -57,6 +59,6 @@ SAVER=$!
 trap 'save; kill $SAVER 2>/dev/null || true' EXIT
 
 "$PY" tools/train_lora.py train --dataset "$DATASET" --out "$WORK/$RUN" \
-  --steps "$STEPS" --batch "$BATCH" --grad-acc "$ACC" --workers 4 --checkpoint-every "$EVERY"
+  --steps "$STEPS" --batch "$BATCH" --grad-acc "$ACC" --workers 4 --checkpoint-every "$EVERY" --rank "$RANK"
 save
 echo "LoRA checkpoints in $SAVE"
