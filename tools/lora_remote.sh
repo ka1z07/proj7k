@@ -5,6 +5,7 @@
 #   bash /scratch0/$USER/lora-job/lora_remote.sh [steps=1000] [batch=8] [grad_acc=4]
 #   MIN_LN=0.5 RUN=ln1 EVERY=500 bash .../lora_remote.sh 3000 4 8   # long-note charts only, 16 GB card
 #   MIN_LN=0.1 RUN=mix1 RANK=128 EVERY=500 bash .../lora_remote.sh 3000   # long-note and mixed charts
+#   PICKS=~/picks.json MIN_LN=0.1 RUN=cat1 ... # first add the catalog's picked sets (downloaded from a mirror)
 #
 # Detached, so it survives the ssh / remote-desktop session (the UCL login shell is tcsh, hence bash -c):
 #   tmux new -d -s lora bash -c "bash /scratch0/$USER/lora-job/lora_remote.sh 2>&1 | tee /scratch0/$USER/lora-run.log"
@@ -40,6 +41,11 @@ cd "$JOB/code"
 "$PY" -m proj7k.generator.mapperatorinator --install
 
 DATASET="$JOB/dataset"
+if [ -n "${PICKS:-}" ]; then
+  # more charts from the online catalog (tools/catalog_lora_dataset.py pick, run where the catalog lives)
+  "$PY" tools/catalog_lora_dataset.py fetch --picks "$PICKS" --dataset "$DATASET"
+  [ -n "${MIN_LN:-}" ] || "$PY" tools/train_lora.py prepare --dataset "$DATASET"
+fi
 if [ -n "${MIN_LN:-}" ]; then
   DATASET="$WORK/dataset-ln"
   "$PY" tools/train_lora.py subset --dataset "$JOB/dataset" --out "$DATASET" --min-ln-share "$MIN_LN" \
