@@ -170,7 +170,7 @@ PYTHONPATH=src python3 -m proj7k.generator --timing-from "Songs/xxx/Artist - Son
 # 节奏不对时手动给 BPM 与第一个强拍的时间（毫秒）
 PYTHONPATH=src python3 -m proj7k.generator --audio song.mp3 --bpm 174 --offset 1234 --target-dan 5th
 ```
-`--mix rc_jack=1,ln_release=-1` 是技法配比（引擎八个池各 -1 少到 1 多；跑完所有次数，取最合配比的一张，降难时先删「少」的）；`--seed` 换一个数就是另一张谱；`--ln 0.3` 要三成长条；`--model-fast` 分几路同时写（约快一倍）；`--model-arg` 透传模型的其他条件（如 `descriptors=['style/jumpstream']`、`mapper_id=…`）；`--open` 生成后直接导入 osu!lazer。
+`--mix rc_jack=1,ln_release=-1` 是技法配比（引擎八个池各 -1 少到 1 多；跑完所有次数，取最合配比的一张，降难时先删「少」的）；`--seed` 换一个数就是另一张谱；`--ln 0.3` 要三成长条；`--model-fast` 分几路同时写（约快一倍）；`--ln-lora` 加载长条 LoRA（试验，要先有 `~/.cache/proj7k/lora/ln1/checkpoint_1/lora`；长条谱更难、和弦更厚，混合谱会多写长条）；`--model-arg` 透传模型的其他条件（如 `descriptors=['style/jumpstream']`、`mapper_id=…`）；`--open` 生成后直接导入 osu!lazer。
 
 ### 生成之后：按段修改（ADR-0047）
 每次生成都会在谱面旁边写一个 `.p7kgen.json` 工程文件，把谱按每 8 小节切成段。控制台的结果下方有「段落」卡片；命令行用 `python3 -m proj7k.generator.project <工程文件>`：

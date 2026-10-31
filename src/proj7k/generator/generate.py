@@ -41,6 +41,7 @@ class GeneratorOptions:
     model_hold_ratio: Optional[float] = None  # its hold_note_ratio condition; None: from ln_ratio, or the model chooses
     model_args: Optional[List[str]] = None    # extra Hydra overrides (descriptors, mapper_id, ...)
     model_fast: bool = False                  # windows written as batched chains (about 2x faster, fewer long notes)
+    model_ln_lora: bool = False               # load the long-note LoRA (ADR-0048, experimental)
     model_reuse: bool = True                  # phrases that sound alike charted alike (ADR-0045)
     pool_mix: Optional[Dict[str, float]] = None  # engine pool -> -1..1, picked and trimmed for (mix.py, ADR-0047)
     model_runner: Optional[Callable] = None   # stands in for the model (tests)

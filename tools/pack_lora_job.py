@@ -4,11 +4,16 @@ Pack the LoRA training job (ADR-0048) into one tar for another GPU machine: the 
 
     PYTHONPATH=src python tools/pack_lora_job.py --dataset ~/.cache/proj7k/lora/dataset --out ~/lora-job.tar
 
-On the other machine: tar -xf lora-job.tar -C /scratch0/$USER/ && bash /scratch0/$USER/lora-job/lora_remote.sh
+On the other machine (its login shell may be tcsh, so the job runs under bash inside tmux):
+
+    mkdir -p /scratch0/$USER && tar -xf ~/lora-job.tar -C /scratch0/$USER/
+    tmux new -d -s lora bash -c "bash /scratch0/$USER/lora-job/lora_remote.sh 2>&1 | tee /scratch0/$USER/lora-run.log"
+
 The dataset's audio is hard-linked from lazer's files; the tar holds full copies (about 3.3 GB for 1,194 charts).
 """
 
 import argparse
+import io
 import sys
 import tarfile
 from pathlib import Path
@@ -31,7 +36,11 @@ def main(argv=None):
         raise SystemExit(f"{dataset} has no metadata.parquet: run tools/train_lora.py prepare first")
     out = Path(a.out).expanduser()
     with tarfile.open(out, "w") as tar:
-        tar.add(ROOT / "tools" / "lora_remote.sh", "lora-job/lora_remote.sh")
+        # with LF line endings whatever the checkout has: bash stops at `set -o pipefail\r`
+        script = (ROOT / "tools" / "lora_remote.sh").read_bytes().replace(b"\r\n", b"\n")
+        info = tarfile.TarInfo("lora-job/lora_remote.sh")
+        info.size, info.mode = len(script), 0o755
+        tar.addfile(info, io.BytesIO(script))
         tar.add(ROOT / "requirements.txt", "lora-job/code/requirements.txt")
         for name in ("src", "tools"):
             tar.add(ROOT / name, f"lora-job/code/{name}", filter=keep)

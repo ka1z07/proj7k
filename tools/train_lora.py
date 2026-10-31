@@ -8,6 +8,8 @@ Fine-tune Mapperatorinator on 7K charts with a LoRA (ADR-0048), on the machine w
     # 3. a few steps to see it runs and how long a step takes, then the real run
     PYTHONPATH=src python tools/train_lora.py train --dataset ... --out ~/.cache/proj7k/lora/smoke --steps 4
     PYTHONPATH=src python tools/train_lora.py train --dataset ... --out ~/.cache/proj7k/lora/run1 --steps 1000
+    # or on part of it: only the long-note charts (shares the audio and .osu files, new split and parquet)
+    PYTHONPATH=src python tools/train_lora.py subset --dataset ... --out ~/.cache/proj7k/lora/dataset-ln --min-ln-share 0.5
 
 The run uses the pinned checkout the generator installed (~/.cache/proj7k/mapperatorinator) and its `lora_v32`
 config, pointed at the mania checkpoint (`gamemode=3`): the LoRA only loads on that checkpoint at inference. Each
@@ -18,11 +20,15 @@ checkpoint lands in OUT/run/checkpoints/checkpoint_<n>/lora; the generator takes
 import argparse
 import json
 import math
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from proj7k.generator import mapperatorinator as m
+
+#: Share of a subset's sets held out for evaluation, as tools/export_lora_dataset.py splits the whole library.
+TEST_SHARE = 0.05
 
 #: Written into the dataset with the model's Python: the jsonl rows as the parquet `MmrsDataset` reads.
 TO_PARQUET = r"""
@@ -46,6 +52,33 @@ def summary(dataset: Path) -> dict:
 def prepare(args):
     dataset = Path(args.dataset).expanduser().resolve()
     subprocess.run([str(m.venv_python()), "-c", TO_PARQUET, dataset.as_posix()], check=True, env=m.child_env())
+
+
+def subset(args):
+    """The charts of DATASET with at least `min_ln_share` long notes and `min_stars` stars, as a dataset of their own
+    in OUT: its data/ links to DATASET's, the sets split anew (TEST_SHARE of them held out), metadata.parquet
+    written."""
+    source = Path(args.dataset).expanduser().resolve()
+    out = Path(args.out).expanduser().resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    rows = [json.loads(line) for line in (source / "metadata.jsonl").read_text(encoding="utf-8").splitlines()]
+    kept = [r for r in rows if r["LnShare"] >= args.min_ln_share and r["DifficultyRating"] >= args.min_stars]
+    if not kept:
+        raise SystemExit("no chart left")
+    link = out / "data"
+    if not link.exists():
+        os.symlink(os.path.relpath(source / "data", out), link, target_is_directory=True)
+    with (out / "metadata.jsonl").open("w", encoding="utf-8") as f:
+        for r in kept:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    sets = sorted({r["BeatmapSetId"] for r in kept})
+    n_test = max(1, round(len(sets) * TEST_SHARE)) if len(sets) > 1 else 0
+    info = {"charts": len(kept), "sets": len(sets), "train_sets": len(sets) - n_test, "test_sets": n_test,
+            "from": source.as_posix(), "min_ln_share": args.min_ln_share, "min_stars": args.min_stars}
+    (out / "summary.json").write_text(json.dumps(info, indent=1), encoding="utf-8")
+    print(json.dumps(info))
+    args.dataset = str(out)
+    prepare(args)
 
 
 def overrides(args) -> list:
@@ -102,6 +135,11 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("prepare")
     a.add_argument("--dataset", required=True)
+    b = sub.add_parser("subset")
+    b.add_argument("--dataset", required=True)
+    b.add_argument("--out", required=True)
+    b.add_argument("--min-ln-share", type=float, default=0.5)
+    b.add_argument("--min-stars", type=float, default=0.0, help="osu!'s official star rating")
     t = sub.add_parser("train")
     t.add_argument("--dataset", required=True)
     t.add_argument("--out", required=True)
@@ -117,8 +155,8 @@ def main(argv=None):
     t.add_argument("--compile", action="store_true", help="torch.compile (needs triton; off on Windows)")
     t.add_argument("--extra", nargs="*", default=[], metavar="KEY=VALUE", help="more Hydra overrides")
     args = p.parse_args(argv)
-    if args.cmd == "prepare":
-        prepare(args)
+    if args.cmd in ("prepare", "subset"):
+        (prepare if args.cmd == "prepare" else subset)(args)
         return 0
     return train(args)
 

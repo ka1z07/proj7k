@@ -7,6 +7,7 @@ for the model that writes a stream whose density follows the difficulty it is as
 import os
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -49,6 +50,7 @@ def test_overrides_quote_paths_and_ask_for_7k(tmp_path):
     audio = tmp_path / "a b's (c) [d]=e.mp3"
     out = mt.overrides(audio, tmp_path / "out", 5.237, 3, hold_note_ratio=1.4, title="T")
     assert "gamemode=3" in out and "keycount=7" in out and "difficulty=5.24" in out and "seed=3" in out
+    assert f"empty_retries={mt.EMPTY_RETRIES}" in out
     assert "hold_note_ratio=1.00" in out and "title='T'" in out
     audio_arg = next(o for o in out if o.startswith("audio_path="))
     assert audio_arg.startswith("audio_path='") and audio_arg.endswith("'") and "\\'s" in audio_arg
@@ -380,8 +382,6 @@ def test_holds_shorter_than_a_third_of_a_beat_are_taps():
 
 
 def test_the_dashboard_asks_the_model_for_no_long_notes_on_a_rice_chart(monkeypatch, tmp_path):
-    from types import SimpleNamespace
-
     from proj7k.dashboard import actions
     from proj7k.generator import cli
 
@@ -442,6 +442,41 @@ def test_a_checkout_with_an_older_patch_is_restored_first(tmp_path, monkeypatch)
     assert mt.patched(tmp_path) and "parallel_keep" not in (repo / "config.py").read_text(encoding="utf-8")
 
 
+#: The hold-note part of the pinned postprocessor's loop, as upstream writes it (osuT5/inference/postprocessor.py).
+UPSTREAM_HOLDS = """def write(groups):
+    out = []
+    hold_note_start = None
+    for group in groups:
+        hit_type = group.event_type
+        if hit_type == "circle":
+            out.append((group.x, group.time, None))
+        elif hit_type == EventType.HOLD_NOTE:
+            if hold_note_start is not None:
+                pass
+            hold_note_start = group
+        elif hit_type == EventType.HOLD_NOTE_END and hold_note_start is not None:
+            out.append((hold_note_start.x, hold_note_start.time, group.time))
+            hold_note_start = None
+    return out
+"""
+
+
+def test_overlapping_long_notes_survive_the_postprocessor(tmp_path):
+    repo = _pinned_files(tmp_path, "\n")
+    # upstream's is a method: one level deeper
+    text = "\n".join(("    " + line if line else line) for line in UPSTREAM_HOLDS.split("\n"))
+    (repo / "osuT5/osuT5/inference/postprocessor.py").write_text(text, encoding="utf-8")
+    mt.patch(tmp_path)
+    patched = (repo / "osuT5/osuT5/inference/postprocessor.py").read_text(encoding="utf-8")
+    scope = {"EventType": SimpleNamespace(HOLD_NOTE="hold", HOLD_NOTE_END="end")}
+    exec("\n".join(line[4:] for line in patched.split("\n")), scope)
+    g = lambda kind, x, t: SimpleNamespace(event_type=kind, x=x, time=t)
+    # a two-column long-note chord, then a long note in column 0 held across a tap in column 2
+    groups = [g("hold", 36, 0), g("hold", 109, 0), g("end", 36, 400), g("end", 109, 500),
+              g("hold", 36, 600), g("circle", 182, 700), g("end", 36, 900)]
+    assert sorted(scope["write"](groups)) == [(36, 0, 400), (36, 600, 900), (109, 0, 500), (182, 700, None)]
+
+
 def test_evaluation_holds_the_models_chart_against_the_human_one(song):
     from proj7k.generator.evaluate import bpm_match, row_match, score_chart, summarize
 
@@ -459,9 +494,24 @@ def test_evaluation_holds_the_models_chart_against_the_human_one(song):
     assert set(summary["patterns_median"]) == {"human", "generated"}
 
 
-def test_a_long_note_chart_asks_no_more_than_the_long_note_ceiling(song):
+def test_a_long_note_chart_may_ask_up_to_the_models_ceiling(song):
     calls = []
     options = GeneratorOptions(target_stars=60.0, model_runner=stream_runner(calls), model_runs=8, whole_inverse=True)
     result = generate_from_file(song, options)
-    assert max(c[0] for c in calls) == mt.LN_MAX_DIFFICULTY and len(calls) < 8
-    assert any(f"{mt.LN_MAX_DIFFICULTY:g}★" in w for w in result.warnings)
+    assert max(c[0] for c in calls) == mt.MAX_DIFFICULTY and len(calls) < 8
+    assert any(f"{mt.MAX_DIFFICULTY:g}★" in w for w in result.warnings)
+
+
+def test_the_long_note_lora_is_loaded_only_when_asked_and_present(song, tmp_path, monkeypatch):
+    lora = tmp_path / "lora"
+    monkeypatch.setattr(mt, "LN_LORA", lora)
+    for asked, present, loaded in ((True, False, False), (False, True, False), (True, True, True)):
+        if present:
+            lora.mkdir(exist_ok=True)
+            (lora / "adapter_config.json").write_text("{}", encoding="utf-8")
+        calls = []
+        options = GeneratorOptions(target_stars=3.0, model_runner=stream_runner(calls), model_runs=1,
+                                   model_ln_lora=asked, model_reuse=False)
+        result = generate_from_file(song, options)
+        assert any(a.startswith("lora_path=") for a in calls[0][2]) == loaded
+        assert any("LoRA" in w for w in result.warnings) == (asked and not present)

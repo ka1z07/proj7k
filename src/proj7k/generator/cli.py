@@ -240,6 +240,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Mapperatorinator 不复用乐句（默认把听起来一样的乐句写成第一遍的样子，ADR-0045）")
     p.add_argument("--model-fast", action="store_true",
                    help="Mapperatorinator 所有窗口一起写：约快一倍，行与长条略少")
+    p.add_argument("--ln-lora", action="store_true",
+                   help="Mapperatorinator 加载长条 LoRA（试验，ADR-0048）：长条谱更难、和弦更厚，混合谱会多写长条")
     p.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
                    help="传给 Mapperatorinator 的额外参数（Hydra 写法，如 descriptors=[\'tech\']、mapper_id=123），可重复")
     p.add_argument("--mix", help="技法配比：引擎八个池各 -1（少）到 1（多），如 rc_jack=1,ln_release=-1。"
@@ -284,7 +286,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             version=args.version, overall_difficulty=args.od, log=_say,
             ln_ratio=args.ln or 0.0, whole_inverse=args.inverse,
             model_runs=args.model_runs, model_hold_ratio=args.ln, model_args=args.model_arg,
-            model_fast=args.model_fast, model_reuse=not args.no_model_reuse, pool_mix=pool_mix.parse(args.mix),
+            model_fast=args.model_fast, model_ln_lora=args.ln_lora, model_reuse=not args.no_model_reuse, pool_mix=pool_mix.parse(args.mix),
         )
         from proj7k.generator import mapperatorinator
 

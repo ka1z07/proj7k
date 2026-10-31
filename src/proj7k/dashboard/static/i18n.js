@@ -480,6 +480,7 @@ const P7I18N = (() => {
     "米长混": "Rice and LN mixed",
     "长条为主": "Mostly LN",
     "乐句复用：听起来一样的乐句写成一样": "Phrase reuse: chart phrases that sound alike the same way",
+    "长条 LoRA（试验）：长条谱更难，混合谱会多写长条": "Long-note LoRA (experimental): harder long-note charts; mixed charts get more long notes",
     "生成": "Generate",
     "proj7k 游玩记录": "proj7k history",
     "游玩记录": "History",

@@ -302,6 +302,7 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
         ln_ratio=_float(params, "ln_ratio") or 0.0,
         whole_inverse=_flag(params, "inverse"),
         model_fast=_flag(params, "model_fast"),
+        model_ln_lora=_flag(params, "ln_lora"),
         model_reuse=_flag(params, "model_reuse", True),
         pool_mix=pool_mix.parse(params.get("mix") or None),
     )

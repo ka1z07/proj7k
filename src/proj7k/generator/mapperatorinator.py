@@ -52,13 +52,6 @@ HOME = Path(os.environ.get("PROJ7K_MAPPERATORINATOR", Path.home() / ".cache" / "
 SKIP_REQUIREMENTS = ("pywebview", "pyqtwebengine")
 #: Its difficulty token covers 0–12 stars in 24 classes.
 MIN_DIFFICULTY, MAX_DIFFICULTY = 0.5, 12.0
-#: A chart asked for at least this share of long notes...
-LN_HEAVY = 0.5
-#: ...asks the model for at most this difficulty. On long-note music it writes one note per row whatever it is
-#: asked (Exterminate [FLN], 9.55★ by the engine at 2.62 notes a row: 2.0–2.7★ at 1.00–1.06 notes a row for every
-#: difficulty from 3 to 12), its densest at 5, and from 7 up it leaves 25–44% of the song empty and piles junk
-#: notes at 0 s (meow, 2026-10-29, ADR-0047). Asking more only makes it worse.
-LN_MAX_DIFFICULTY = 5.0
 #: How far one run may move the next run's difficulty (×), so one odd run can't throw the search off.
 MAX_STEP = 1.6
 DEFAULT_RUNS = 4
@@ -95,6 +88,12 @@ DEFAULT_YEAR = 2023
 #: 2560 tokens ran out 11–13 s into its 16.4 s (meow, 2026-10-24), and the patterns broke at every window
 #: (2026-10-26). A run's steps go in one batch, so the time is about a run's length.
 FAST_CHAINS = 8
+#: How many times a window that came back with no notes is drawn again (patch v5). On long-note songs early EOS
+#: emptied 8–30% of the seconds, each empty window leaving the next an empty lookback (beachcomber, 2026-10-29).
+EMPTY_RETRIES = 3
+#: The long-note LoRA (ADR-0048, 1000 steps on the library's long-note charts): long-note charts 7.07 → 7.77★,
+#: thicker chords rather than more rows, and it turns mixed charts into long-note ones. Off unless asked for.
+LN_LORA = Path(os.environ.get("PROJ7K_LN_LORA", Path.home() / ".cache" / "proj7k" / "lora" / "ln1" / "checkpoint_1" / "lora"))
 
 #: (audio, output dir, difficulty, seed, extra overrides) -> the .osu it wrote. Tests stand in for the model.
 Runner = Callable[[Path, Path, float, int, Sequence[str]], Path]
@@ -226,7 +225,8 @@ def _rehome(home: Path, python: Path, log: Callable[[str], None]) -> None:
 
 
 #: The files an earlier version of our patch changed; a checkout patched by one is restored before patching.
-PATCHED_FILES = ("config.py", "osuT5/osuT5/inference/preprocessor.py", "osuT5/osuT5/inference/processor.py")
+PATCHED_FILES = ("config.py", "osuT5/osuT5/inference/preprocessor.py", "osuT5/osuT5/inference/processor.py",
+                 "osuT5/osuT5/inference/postprocessor.py")
 
 
 def patched(home: Optional[Path] = None) -> bool:
@@ -309,7 +309,7 @@ def overrides(audio: Path, output_dir: Path, difficulty: float, seed: int, *, ho
         f"output_path={quote(Path(output_dir).resolve().as_posix())}",
         "gamemode=3", "keycount=7",
         f"difficulty={difficulty:.2f}", f"seed={int(seed)}", f"year={int(year)}",
-        "export_osz=false",
+        "export_osz=false", f"empty_retries={EMPTY_RETRIES}",
     ]
     if timing_from is not None:
         out += [f"beatmap_path={quote(Path(timing_from).resolve().as_posix())}", "in_context=[TIMING]", "output_type=[MAP]"]
@@ -552,8 +552,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     hold_ratio = options.model_hold_ratio
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
-    ceiling = LN_MAX_DIFFICULTY if hold_ratio is not None and hold_ratio >= LN_HEAVY else MAX_DIFFICULTY
-    difficulty = min(max(target * AIM, MIN_DIFFICULTY), ceiling)
+    difficulty = min(max(target * AIM, MIN_DIFFICULTY), MAX_DIFFICULTY)
     warnings: List[str] = []
     mix = mix_mod.parse(getattr(options, "pool_mix", None))
     if mix:
@@ -567,6 +566,13 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             return (holey, abs(stars - target))
         return (holey, max(0.0, abs(stars - target) - good_enough) - mix_mod.WEIGHT * mix_mod.lean(profile, mix))
 
+    model_args = list(options.model_args or ())
+    if getattr(options, "model_ln_lora", False):
+        if (LN_LORA / "adapter_config.json").is_file():
+            model_args.append(f"lora_path={quote(LN_LORA.resolve().as_posix())}")
+            log(tr(f"用长条 LoRA：{LN_LORA}", f"Using the long-note LoRA: {LN_LORA}"))
+        else:
+            warnings.append(tr(f"找不到长条 LoRA（{LN_LORA}），用原模型", f"No long-note LoRA at {LN_LORA}; using the base model"))
     reference = getattr(options, "reference", None)
     audio = model_audio(audio_path, work, getattr(reference, "audio_filename", "") or "") if real_model else audio_path
     title = options.title or getattr(reference, "title", "") or ""
@@ -596,7 +602,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     for i in range(runs):
         seed = options.seed + i
         extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
-                          timing_from=timing_from, fast=options.model_fast) + list(options.model_args or ())
+                          timing_from=timing_from, fast=options.model_fast) + model_args
         log(tr(f"Mapperatorinator 第 {i + 1}/{runs} 次：难度条件 {difficulty:.2f}★，种子 {seed}……",
                f"Mapperatorinator run {i + 1}/{runs}: difficulty {difficulty:.2f}★, seed {seed}…"))
         chart = _read(runner(audio, work, difficulty, seed, extra), log)
@@ -607,7 +613,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             current.write_text(dump_osu_7k(chart), encoding="utf-8")
             again = overrides(audio, work, difficulty, seed, hold_note_ratio=ratio, title=title, artist=artist,
                               timing_from=current) + ["add_to_beatmap=true", f"start_time={start + 1}",
-                                                      f"end_time={end - 1}"] + list(options.model_args or ())
+                                                      f"end_time={end - 1}"] + model_args
             return _read(runner(audio, work, difficulty, seed, again), log)
 
         for start, end in refill_spans(chart, reference):
@@ -648,21 +654,14 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
             best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty, key)
         if abs(stars - target) <= good_enough and not holey and not mix:
             break
-        if written < target and difficulty >= ceiling:
+        if written < target and difficulty >= MAX_DIFFICULTY:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
-            if ceiling < MAX_DIFFICULTY:
-                warnings.append(tr(f"长条为主的谱，Mapperatorinator 只会每行写一个音符，难度条件再高也不变密"
-                                   f"（高过 {ceiling:g}★ 反而出空段），写不到 {target:.2f}★",
-                                   f"On a mostly long-note chart Mapperatorinator writes one note per row and asking a "
-                                   f"higher difficulty doesn't make it denser (above {ceiling:g}★ it leaves gaps); "
-                                   f"it can't reach {target:.2f}★"))
-            else:
-                warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
-                                   f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
-                                   f"it can't reach {target:.2f}★ on this song"))
+            warnings.append(tr(f"Mapperatorinator 的难度条件已到上限（{MAX_DIFFICULTY:g}★），这首歌写不到 {target:.2f}★",
+                               f"Mapperatorinator's difficulty condition is at its ceiling ({MAX_DIFFICULTY:g}★); "
+                               f"it can't reach {target:.2f}★ on this song"))
             break
         # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
-        difficulty = min(next_difficulty(difficulty, written, target), ceiling)
+        difficulty = min(next_difficulty(difficulty, written, target), MAX_DIFFICULTY)
 
     chart, profile, stars, difficulty, seed, good_enough, holey, empty, _ = best
     if mix:
