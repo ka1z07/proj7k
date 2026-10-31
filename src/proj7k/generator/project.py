@@ -13,12 +13,17 @@ measures from its timing. Operations make a new take from the current one and ne
 - **anchor** a section to another: it is charted as that section, note for note or mirrored, beat for beat on its
   own beats, now and after every later change to the source.
 - **undo** / **redo** move between takes.
+- **audition** (ADR-0050): a rewrite (of sections, or of any measures) may keep all its candidates on the project
+  instead of the best; the chart editor (`/editor`) plays them, and **adopt** makes one the new take, **discard**
+  drops them all.
 
 Each take is an .osu (and an .osz with the song) of its own, its difficulty name ending in "v<n>", so importing one
 into osu!lazer never replaces another (BeatmapSetID -1, as every generated chart).
 
     python3 -m proj7k.generator.project "generated_maps/A - T (proj7k) [Gen 5th (5.12)].p7kgen.json" show
     python3 -m proj7k.generator.project PROJECT rewrite 5 6 --target-sr 6.2 --candidates 3
+    python3 -m proj7k.generator.project PROJECT rewrite --bars 17-20 --audition --candidates 4 --mix rc_jack=4..6
+    python3 -m proj7k.generator.project PROJECT adopt 2
     python3 -m proj7k.generator.project PROJECT lock 1 2
     python3 -m proj7k.generator.project PROJECT anchor 9 --to 5 --mirror
     python3 -m proj7k.generator.project PROJECT undo
@@ -38,6 +43,7 @@ import numpy as np
 from proj7k import cancel
 from proj7k.engine import evaluate_notes
 from proj7k.generator import legal
+from proj7k.generator.mix import to_json as mix_json
 from proj7k.i18n import tr
 from proj7k.parser import Beatmap7K, HitObject, NoteType, TimingPoint, dump_osu_7k, parse_osu_7k
 
@@ -83,13 +89,15 @@ class Project:
     model_fast: bool = False
     model_args: List[str] = field(default_factory=list)
     seed: int = 0
-    pool_mix: Optional[Dict[str, float]] = None   # the technique mix it was generated with (mix.py)
+    pool_mix: Optional[Dict] = None   # the technique mix it was generated with (mix.py; ranges as [low, high])
     bg: Optional[str] = None
     bg_filename: Optional[str] = None
     base_version: str = ""
     sections: List[Section] = field(default_factory=list)
     takes: List[Take] = field(default_factory=list)
     current: int = 0
+    # A rewrite kept for audition (ADR-0050): its candidates wait here until one is adopted or all are discarded.
+    candidates: List[Dict] = field(default_factory=list)
     version: int = VERSION
     path: Optional[Path] = None       # where it is saved (not saved itself)
 
@@ -228,19 +236,23 @@ def describe(project: Project) -> List[Dict]:
     out = []
     for i, s in enumerate(project.sections):
         objs = [o for o in chart.hit_objects if _inside(o, s.start_ms, s.end_ms)]
-        skill, stars = None, 0.0
+        skill, stars, pools = None, 0.0, {}
         if objs:
-            prof = evaluate_notes([(o.column, o.time / 1000.0, o.end_time / 1000.0 if o.note_type == NoteType.LN else None)
-                                   for o in objs])
+            prof = _profile(objs)
             stars, skill = float(prof.total_stars), prof.dominant_skill
+            pools = _pools(prof)
         span = max((s.end_ms - s.start_ms) / 1000.0, 1e-3)
         out.append({
             "index": i, "bars": [s.first_bar + 1, s.last_bar + 1], "start_ms": s.start_ms, "end_ms": s.end_ms,
             "notes": len(objs), "nps": round(len(objs) / span, 2), "stars": round(stars, 2), "skill": skill,
             "ln_share": round(sum(o.note_type == NoteType.LN for o in objs) / max(1, len(objs)), 2),
-            "locked": s.locked, "anchor": s.anchor, "mirror": s.mirror,
+            "locked": s.locked, "anchor": s.anchor, "mirror": s.mirror, "pools": pools,
         })
     return out
+
+
+def _pools(profile) -> Dict[str, float]:
+    return {k: round(float(v.stars), 2) for k, v in profile.skills.items()}
 
 
 def to_dict(project: Project) -> Dict:
@@ -251,7 +263,9 @@ def to_dict(project: Project) -> Dict:
                  "output_file": str(project.folder / take.osu),
                  "osz_file": str(project.folder / take.osz) if take.osz else None},
         "can_undo": project.current > 0, "can_redo": project.current < len(project.takes) - 1,
-        "sections": describe(project),
+        "sections": describe(project), "mix": mix_json(project.pool_mix) if project.pool_mix else None,
+        "target_stars": project.target_stars,
+        "candidates": [{k: v for k, v in c.items() if k != "osu"} for c in project.candidates],
     }
 
 
@@ -261,11 +275,11 @@ def to_dict(project: Project) -> Dict:
 def create(chart_path: Path, chart: Beatmap7K, osz_path: Optional[Path], *, audio: Path, audio_filename: str,
            target_stars: float, target_label: str = "", ln_ratio: Optional[float] = None, model_fast: bool = False,
            model_args: Sequence[str] = (), seed: int = 0, bg: Optional[Path] = None,
-           bg_filename: Optional[str] = None, pool_mix: Optional[Dict[str, float]] = None) -> Project:
+           bg_filename: Optional[str] = None, pool_mix: Optional[Dict] = None) -> Project:
     """The project of a chart just generated, saved beside it with the chart as its first take."""
     project = Project(audio=str(Path(audio).resolve()), audio_filename=audio_filename, target_stars=float(target_stars),
                       target_label=target_label, ln_ratio=ln_ratio, model_fast=model_fast, model_args=list(model_args),
-                      seed=seed, pool_mix=dict(pool_mix) if pool_mix else None, bg=str(bg) if bg else None, bg_filename=bg_filename, base_version=chart.version,
+                      seed=seed, pool_mix=mix_json(pool_mix), bg=str(bg) if bg else None, bg_filename=bg_filename, base_version=chart.version,
                       sections=cut_sections(chart),
                       takes=[Take(osu=chart_path.name, osz=osz_path.name if osz_path else None, note="generate",
                                   stars=round(_rated(chart.hit_objects), 3))],
@@ -327,6 +341,7 @@ def new_take(project: Project, objs: Sequence[HitObject], note: str, package: bo
                                bg_filename=project.bg_filename if bg else None)
     project.takes.append(Take(osu=osu.name, osz=osz.name if osz else None, note=note, stars=round(stars, 3)))
     project.current = len(project.takes) - 1
+    _drop_candidates(project)
     project.save()
     return project
 
@@ -371,6 +386,7 @@ def anchor(project: Project, targets: Sequence[int], source: Optional[int], mirr
 
 def move(project: Project, step: int) -> Project:
     project.current = min(max(project.current + step, 0), len(project.takes) - 1)
+    _drop_candidates(project)
     project.save()
     return project
 
@@ -391,26 +407,70 @@ def seam(objs: Sequence[HitObject], start: float, end: float, beats: Beats) -> f
     return float(np.mean(jumps)) if jumps else 0.0
 
 
-def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[float] = None,
-            ln_ratio: Optional[float] = None, seed: Optional[int] = None, candidates: int = DEFAULT_CANDIDATES,
-            model_args: Sequence[str] = (), pool_mix=None, runner=None,
-            log: Callable[[str], None] = logger.info) -> Project:
-    """Write sections `indices` (one stretch, first to last) again and keep the best of `candidates` model runs.
-    `pool_mix` (default: the project's) leans the pick toward the pools it weights up, as at generation."""
+def bar_span(project: Project, first_bar: int, last_bar: int) -> Tuple[float, float]:
+    """The time (ms) from the start of measure `first_bar` to the end of `last_bar` (measures counted from 0, as
+    sections count them) on the current take's timing."""
+    if last_bar < first_bar or first_bar < 0:
+        raise ValueError(tr("小节范围不对", "That measure range is wrong"))
+    chart = project.chart()
+    end = max([o.end_time if o.end_time is not None else o.time for o in chart.hit_objects] +
+              [s.end_ms for s in project.sections] + [0.0])
+    bars = bar_starts(chart.timing_points, end + 1.0)
+    bar_ms = bars[-1] - bars[-2] if len(bars) > 1 else 2000.0
+    while len(bars) <= last_bar + 1:
+        bars.append(bars[-1] + bar_ms)
+    return bars[first_bar], bars[last_bar + 1]
+
+
+def _stretch(project: Project, indices: Optional[Sequence[int]], bars: Optional[Tuple[int, int]]) -> Tuple[float, float, str]:
+    """(start, end, name) of what a rewrite writes: neighbouring sections or a measure range, none of it locked or
+    anchored."""
+    if bars is not None:
+        first, last = int(bars[0]), int(bars[1])
+        start, end = bar_span(project, first, last)
+        name = tr(f"第 {first + 1}–{last + 1} 小节", f"measures {first + 1}–{last + 1}")
+    else:
+        idx = _check(project, indices or [])
+        if idx != list(range(idx[0], idx[-1] + 1)):
+            raise ValueError(tr("一次只能重写相邻的几段", "Only neighbouring sections can be rewritten together"))
+        start, end = project.sections[idx[0]].start_ms, project.sections[idx[-1]].end_ms
+        names = "–".join(str(i + 1) for i in sorted({idx[0], idx[-1]}))
+        name = tr(f"第 {names} 段", f"section {names}")
+    for i, s in enumerate(project.sections):
+        if s.start_ms < end and start < s.end_ms:
+            if s.locked:
+                raise ValueError(tr(f"第 {i + 1} 段已锁定", f"Section {i + 1} is locked"))
+            if s.anchor is not None:
+                raise ValueError(tr(f"第 {i + 1} 段锚定在第 {s.anchor + 1} 段，先解开锚定再重写",
+                                    f"Section {i + 1} is anchored to section {s.anchor + 1}; free it before rewriting"))
+    return start, end, name
+
+
+def _candidate_dir(project: Project) -> Path:
+    return project.folder / ".p7kgen-work" / "candidates"
+
+
+def _drop_candidates(project: Project) -> None:
+    for c in project.candidates:
+        try:
+            (project.folder / c["osu"]).unlink()
+        except OSError:
+            pass
+    project.candidates = []
+
+
+def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: Optional[Tuple[int, int]] = None,
+            target_sr: Optional[float] = None, ln_ratio: Optional[float] = None, seed: Optional[int] = None,
+            candidates: int = DEFAULT_CANDIDATES, model_args: Sequence[str] = (), pool_mix=None, runner=None,
+            audition: bool = False, log: Callable[[str], None] = logger.info) -> Project:
+    """Write sections `indices` (one stretch, first to last), or the measures `bars` = (first, last), again from
+    `candidates` model runs. Without `audition` the best becomes the new take; with it every candidate is kept on the
+    project, best first, for `adopt` or `discard`. `pool_mix` (default: the project's) leans the pick toward the
+    pools it weights up, or the ranges it names, as at generation."""
     from proj7k.generator import mapperatorinator as m
     from proj7k.generator import mix as mix_mod
 
-    idx = _check(project, indices)
-    if idx != list(range(idx[0], idx[-1] + 1)):
-        raise ValueError(tr("一次只能重写相邻的几段", "Only neighbouring sections can be rewritten together"))
-    for i in idx:
-        s = project.sections[i]
-        if s.locked:
-            raise ValueError(tr(f"第 {i + 1} 段已锁定", f"Section {i + 1} is locked"))
-        if s.anchor is not None:
-            raise ValueError(tr(f"第 {i + 1} 段锚定在第 {s.anchor + 1} 段，先解开锚定再重写",
-                                f"Section {i + 1} is anchored to section {s.anchor + 1}; free it before rewriting"))
-    start, end = project.sections[idx[0]].start_ms, project.sections[idx[-1]].end_ms
+    start, end, names = _stretch(project, indices, bars)
     chart = project.chart()
     beats = Beats(chart.timing_points)
     outside = [o for o in chart.hit_objects if not _inside(o, start, end)]
@@ -430,18 +490,17 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
     ratio = project.ln_ratio if ln_ratio is None else ln_ratio
     seed0 = project.seed + 100 * len(project.takes) if seed is None else seed
     difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
-    names = "–".join(str(i + 1) for i in sorted({idx[0], idx[-1]}))
     mix = mix_mod.parse(pool_mix) if pool_mix is not None else mix_mod.parse(project.pool_mix)
     if mix:
         log(tr(f"技法配比：{mix_mod.describe(mix)}", f"Technique mix: {mix_mod.describe(mix)}"))
-    best = None
+    runs = []
     for k in range(max(1, int(candidates))):
-        cancel.checkpoint()  # a stop leaves the project as it was: the new take is only made after the last candidate
+        cancel.checkpoint()  # a stop leaves the project as it was: nothing is kept before the last candidate
         extra = m.overrides(audio, work, difficulty, seed0 + k, hold_note_ratio=ratio, timing_from=context) + \
             ["add_to_beatmap=true", f"start_time={int(start) + 1}", f"end_time={int(end) - 1}"] + \
             list(project.model_args) + list(model_args)
-        log(tr(f"重写第 {names} 段：候选 {k + 1}/{candidates}，难度条件 {difficulty:.2f}★，种子 {seed0 + k}……",
-               f"Rewriting section {names}: candidate {k + 1}/{candidates}, difficulty {difficulty:.2f}★, seed {seed0 + k}…"))
+        log(tr(f"重写{names}：候选 {k + 1}/{candidates}，难度条件 {difficulty:.2f}★，种子 {seed0 + k}……",
+               f"Rewriting {names}: candidate {k + 1}/{candidates}, difficulty {difficulty:.2f}★, seed {seed0 + k}…"))
         written = m._read(runner(audio, work, difficulty, seed0 + k, extra), log)
         inside = [o for o in written.hit_objects if _inside(o, start, end)]
         merged = legal.sanitize(sorted(outside + inside, key=lambda o: (o.time, o.column)), chart.timing_points)[0]
@@ -449,18 +508,103 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
         profile = _profile(stretch) if stretch else None
         stars = float(profile.total_stars) if profile else 0.0
         jump = seam(merged, start, end, beats)
-        score = abs(stars - target) + SEAM_WEIGHT * jump
-        if mix and profile:
-            score -= mix_mod.WEIGHT * mix_mod.lean(profile, mix)
+        score = abs(stars - target) + SEAM_WEIGHT * jump + mix_mod.penalty(profile, mix)
         log(tr(f"  → 这段 {stars:.2f}★（目标 {target:.2f}★），边缘突变 {jump:.2f}",
                f"  → {stars:.2f}★ for the stretch (target {target:.2f}★), edge jump {jump:.2f}")
             + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else ""))
-        if best is None or score < best[0]:
-            best = (score, merged, stars)
+        runs.append({"merged": merged, "stars": stars, "seam": jump, "score": score, "profile": profile,
+                     "seed": seed0 + k, "notes": len(stretch)})
         difficulty = min(m.next_difficulty(difficulty, stars, target), m.MAX_DIFFICULTY)
-    _, merged, stars = best
-    note = tr(f"重写第 {names} 段（{stars:.2f}★）", f"rewrite section {names} ({stars:.2f}★)")
-    return new_take(project, merged, note)
+    runs.sort(key=lambda r: r["score"])
+    if not audition:
+        best = runs[0]
+        missed = mix_mod.miss_text(best["profile"], mix)
+        if missed:
+            log(tr(f"技法范围没达到：{missed}", f"Technique ranges missed: {missed}"))
+        note = tr(f"重写{names}（{best['stars']:.2f}★）", f"rewrite {names} ({best['stars']:.2f}★)")
+        return new_take(project, best["merged"], note)
+    _drop_candidates(project)
+    folder = _candidate_dir(project)
+    folder.mkdir(parents=True, exist_ok=True)
+    stem = Path(project.path).name[:-len(SUFFIX)] if project.path else "project"
+    for k, r in enumerate(runs):
+        path = folder / f"{stem}.take{project.current + 1}.c{k + 1}.osu"
+        path.write_text(dump_osu_7k(replace(chart, hit_objects=list(r["merged"]))), encoding="utf-8")
+        project.candidates.append({
+            "osu": path.relative_to(project.folder).as_posix(), "base": project.current,
+            "start_ms": start, "end_ms": end, "target": round(target, 2), "stars": round(r["stars"], 2),
+            "seam": round(r["seam"], 2), "score": round(r["score"], 3), "seed": r["seed"], "notes": r["notes"],
+            "pools": _pools(r["profile"]) if r["profile"] else {},
+            "misses": mix_mod.misses(r["profile"], mix),
+            "note": tr(f"重写{names}（{r['stars']:.2f}★）", f"rewrite {names} ({r['stars']:.2f}★)"),
+        })
+    project.save()
+    log(tr(f"留下 {len(runs)} 个候选，按分数排好，等你挑一个", f"Kept {len(runs)} candidates, best first, to pick from"))
+    return project
+
+
+def candidate_notes(project: Project, k: int) -> List[HitObject]:
+    if not 0 <= k < len(project.candidates):
+        raise ValueError(tr("没有这个候选", "No such candidate"))
+    c = project.candidates[k]
+    path = project.folder / c["osu"]
+    return parse_osu_7k(path.read_text(encoding="utf-8", errors="replace")).hit_objects
+
+
+def adopt(project: Project, k: int) -> Project:
+    """Make candidate `k` of the rewrite waiting for audition the new take; the others go."""
+    if not 0 <= k < len(project.candidates):
+        raise ValueError(tr("没有这个候选（可能已经采用或放弃了）", "No such candidate (it may have been adopted or discarded)"))
+    c = project.candidates[k]
+    if c["base"] != project.current:
+        raise ValueError(tr("当前版本已经变了，这些候选作废，请重写一次", "The current take has changed since; rewrite again"))
+    return new_take(project, candidate_notes(project, k), c["note"])
+
+
+def discard(project: Project) -> Project:
+    _drop_candidates(project)
+    project.save()
+    return project
+
+
+def stretch_profile(project: Project, start: float, end: float) -> Dict:
+    """Stars, pools, notes and long-note share of the current take between `start` and `end` (ms)."""
+    objs = [o for o in project.chart().hit_objects if _inside(o, start, end)]
+    out = {"start_ms": start, "end_ms": end, "notes": len(objs), "stars": 0.0, "pools": {}, "skill": None,
+           "ln_share": round(sum(o.note_type == NoteType.LN for o in objs) / max(1, len(objs)), 2)}
+    if objs:
+        prof = _profile(objs)
+        out.update(stars=round(float(prof.total_stars), 2), pools=_pools(prof), skill=prof.dominant_skill)
+    return out
+
+
+def editor_data(project: Project) -> Dict:
+    """Everything the chart editor page draws: the project, the current take's notes ([column, ms, end ms or None]),
+    its timing and measures, and each waiting candidate's notes inside its stretch."""
+    chart = project.chart()
+
+    def note(o: HitObject):
+        return [o.column, round(o.time), round(o.end_time) if o.note_type == NoteType.LN and o.end_time is not None else None]
+
+    objs = sorted(chart.hit_objects, key=lambda o: (o.time, o.column))
+    last = max([o.end_time if o.end_time is not None else o.time for o in objs] + [0.0])
+    end = max([last] + [s.end_ms for s in project.sections])
+    bars = bar_starts(chart.timing_points, end + 1.0)
+    out = to_dict(project)
+    out.update({
+        "title": chart.title, "artist": chart.artist, "version": chart.version,
+        "audio_filename": project.audio_filename, "duration_ms": round(end + 2000.0),
+        "timing": [{"time": tp.time, "beat_length": tp.beat_length, "meter": tp.meter or 4}
+                   for tp in _uninherited(chart.timing_points)],
+        "bars": [round(b, 3) for b in bars],
+        "notes": [note(o) for o in objs],
+    })
+    for c, k in zip(out["candidates"], range(len(project.candidates))):
+        try:
+            c["notes_inside"] = [note(o) for o in candidate_notes(project, k) if _inside(o, c["start_ms"], c["end_ms"])]
+        except OSError:
+            c["notes_inside"] = []
+    return out
 
 
 # --- command line ---------------------------------------------------------------------------------------------
@@ -481,6 +625,8 @@ def _format(project: Project) -> str:
         lines.append(f"  {s['index'] + 1:>3}. {tr('小节', 'bars')} {s['bars'][0]:>3}–{s['bars'][1]:<3} "
                      f"{s['start_ms'] / 1000:6.1f}s  {s['notes']:>4} {tr('音符', 'notes')}  {s['nps']:5.1f}/s  "
                      f"{s['stars']:5.2f}★ {s['skill'] or '':<11} {' '.join(state)}")
+    for k, c in enumerate(d["candidates"]):
+        lines.append(tr(f"  候选 {k + 1}：{c['note']}，边缘突变 {c['seam']:.2f}", f"  candidate {k + 1}: {c['note']}, edge jump {c['seam']:.2f}"))
     return "\n".join(lines)
 
 
@@ -492,13 +638,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("project", help="生成时写在谱面旁边的 .p7kgen.json")
     sub = p.add_subparsers(dest="op", required=True)
     sub.add_parser("show", help="列出段落与当前版本")
-    r = sub.add_parser("rewrite", help="重写相邻的几段")
-    r.add_argument("sections", type=int, nargs="+")
+    r = sub.add_parser("rewrite", help="重写相邻的几段，或 --bars 指定的小节")
+    r.add_argument("sections", type=int, nargs="*")
+    r.add_argument("--bars", help="改写这些小节（从 1 数），如 9-16；给了就不看段落编号")
+    r.add_argument("--audition", action="store_true", help="候选都留着，之后用 adopt N 采用一个或 discard 放弃")
     r.add_argument("--target-sr", type=float, help="这几段的目标星级（引擎星级）；默认保持它们现在的星级")
     r.add_argument("--ln", type=float, help="这几段的长条比例；默认用生成时的设置")
     r.add_argument("--seed", type=int)
     r.add_argument("--candidates", type=int, default=DEFAULT_CANDIDATES, help=f"生成几个候选，取最好的（默认 {DEFAULT_CANDIDATES}）")
-    r.add_argument("--mix", help="这几段的技法配比，如 rc_jack=1,ln_release=-1（1 多、-1 少）；默认用生成时的配比，none 不用")
+    r.add_argument("--mix", help="这几段的技法配比，如 rc_jack=1,ln_release=-1（1 多、-1 少）或 rc_jack=4.5..6（星级范围）；"
+                                 "默认用生成时的配比，none 不用")
+    ad = sub.add_parser("adopt", help="采用 rewrite --audition 留下的第 N 个候选")
+    ad.add_argument("candidate", type=int)
+    sub.add_parser("discard", help="放弃 rewrite --audition 留下的候选")
     r.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE", help="传给模型的额外条件，可重复")
     for name, text in (("lock", "锁定"), ("unlock", "解锁")):
         q = sub.add_parser(name, help=text)
@@ -517,10 +669,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         project = Project.load(args.project)
         sections = [i - 1 for i in getattr(args, "sections", [])]
         if args.op == "rewrite":
-            rewrite(project, sections, target_sr=args.target_sr, ln_ratio=args.ln, seed=args.seed,
+            bars = None
+            if args.bars:
+                first, _, last = args.bars.partition("-")
+                bars = (int(first) - 1, int(last or first) - 1)
+            elif not sections:
+                raise ValueError(tr("给出段落编号或 --bars", "Give section numbers or --bars"))
+            rewrite(project, sections, bars=bars, audition=args.audition, target_sr=args.target_sr, ln_ratio=args.ln, seed=args.seed,
                     candidates=args.candidates, model_args=args.model_arg,
                     pool_mix=None if args.mix is None else ({} if args.mix.strip().lower() == "none" else args.mix),
                     log=lambda msg: print(msg, file=sys.stderr, flush=True))
+        elif args.op == "adopt":
+            adopt(project, args.candidate - 1)
+        elif args.op == "discard":
+            discard(project)
         elif args.op in ("lock", "unlock"):
             lock(project, sections, args.op == "lock")
         elif args.op == "anchor":

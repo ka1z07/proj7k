@@ -566,10 +566,10 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
 
     def rank(holey, stars, profile, good_enough):
         # Without a mix, the closest to the target. With one, near enough is as good as on target, and the
-        # lean toward the mix trades against stars beyond that (mix.WEIGHT).
+        # lean toward the mix, or the stars its ranges are missed by, trade against stars beyond that.
         if not mix:
             return (holey, abs(stars - target))
-        return (holey, max(0.0, abs(stars - target) - good_enough) - mix_mod.WEIGHT * mix_mod.lean(profile, mix))
+        return (holey, max(0.0, abs(stars - target) - good_enough) + mix_mod.penalty(profile, mix))
 
     model_args = list(options.model_args or ())
     if getattr(options, "model_ln_lora", False):
@@ -650,7 +650,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         written = stars
         good_enough = options.tolerance
         if target + options.tolerance < stars <= target + TRIM_MAX:
-            trimmed = trim(chart, target, options.tolerance, log, mix)
+            trimmed = trim(chart, target, options.tolerance, log, mix_mod.skill_weights(mix, profile))
             if trimmed is not None:
                 chart, profile = trimmed
                 stars = float(profile.total_stars)
@@ -673,6 +673,11 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     if mix:
         log(tr(f"留下种子 {seed}：{stars:.2f}★；{mix_mod.pools(profile, mix)}",
                f"Kept seed {seed}: {stars:.2f}★; {mix_mod.pools(profile, mix)}"))
+    missed = mix_mod.miss_text(profile, mix)
+    if missed:
+        warnings.append(tr(f"技法范围没达到：{missed}（模型不听技法指令，只能多跑几次挑选或在编辑器里改）",
+                           f"Technique ranges missed: {missed} (the model can't be told a technique; run more "
+                           "times or edit it in the editor)"))
     if holey:
         warnings.append(tr(f"{tried} 次生成都有大段空白，这张有 {empty:.0%} 没有音符",
                            f"All {tried} runs have long empty stretches; {empty:.0%} of this one has no notes"))

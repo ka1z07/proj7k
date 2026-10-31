@@ -115,9 +115,9 @@
         <label class="check"><input type="checkbox" id="lnLora"> 长条 LoRA（试验）：长条谱更难，混合谱会多写长条</label>
       </div>
       <div class="field">
-        <span class="label">技法配比</span>
-        <div class="row" id="mix"></div>
-        <div class="hint">每个技法池选「多」或「少」：跑完所有次数，留下技法最合配比的一张；降难时先删「少」的、最后删「多」的。只能挑与删，加不出模型本来不写的技法。重写段落也按这里的配比挑。</div>
+        <span class="label">技法难度范围（引擎星级）</span>
+        <div id="mix"></div>
+        <div class="hint">给想管的技法拉一个星级范围（或直接填数字），不管的留空。跑完所有次数，留下最贴近这些范围的一张；降难时先删超出上限的技法、最后删低于下限的。模型不听技法指令，只能挑与删：低于下限的补不上，结果里会标出差多少。重写段落也按这里的范围挑。</div>
       </div>
       <div class="hint" style="margin-bottom:10px">Mapperatorinator 是一个听音频写谱的模型，节奏和键位一起写。有 timing（借用或手动）时照它写，更快也更准；否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」分几路同时写，约快一倍，行与长条略少。第一次生成会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
       <button class="primary" id="runBtn">生成</button>
@@ -233,24 +233,16 @@
           onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
     }
 
-    // --- technique mix (ADR-0047): each engine pool less / as it comes / more -----------------------------------
-    const POOLS = [["rc_jack", "Jack"], ["rc_tech", "Tech"], ["rc_speed", "Speed"], ["rc_stamina", "Stamina"],
-      ["ln_general", tr("LN 综合")], ["ln_tech", "LN Tech"], ["ln_inverse", tr("反键")], ["ln_release", tr("LN 放键")]];
-    for (const [key, name] of POOLS) {
-      const select = el("select", { "data-pool": key, style: "width:auto" },
-        el("option", { value: "-1", text: tr("少") }),
-        el("option", { value: "0", text: tr("照常"), selected: true }),
-        el("option", { value: "1", text: tr("多") }));
-      $("#mix").append(el("label", { class: "check" }, name + " ", select));
-    }
-    function mixValue() {
-      return [...$("#mix").querySelectorAll("select")].filter((s) => s.value !== "0")
-        .map((s) => `${s.dataset.pool}=${s.value}`).join(",");
-    }
+    // --- technique ranges (ADR-0050): a range of stars per engine pool ----------------------------------------
+    const mix = P7.mixControl();
+    $("#mix").append(mix.node);
+    function mixValue() { return mix.value(); }
 
     $("#runBtn").onclick = () => run();
     async function run() {
       if (running) return;
+      let mixText;
+      try { mixText = mixValue(); } catch (e) { alert(e.message); return; }
       const fromGame = source() === "game";
       const timing = timingMode();
       const params = {
@@ -271,7 +263,7 @@
         ln_lora: $("#lnLora").checked,
         ln_ratio: $("#ln").value === "inverse" ? "" : $("#ln").value,
         inverse: $("#ln").value === "inverse",
-        mix: mixValue(),
+        mix: mixText,
       };
       running = true;
       refresh();
@@ -287,6 +279,7 @@
       if (job.status !== "done") { panel.showLog(); return; }
       $("#results").replaceChildren(resultCard(job.result));
       if (job.result.project) { selected.clear(); showProject(job.result.project); }
+      if (job.result.skills) mix.reference(job.result.skills_engine || null);
     }
 
     // --- sections of the generated chart (ADR-0047): rewrite, lock, anchor, undo ----------------------------
@@ -333,7 +326,7 @@
         el("div", { class: "hint", text: tr("这一版：{note}，{stars}★。点柱子或勾选来选段；重写只改选中的段，其余音符原样保留。", { note: p.take.note, stars: p.take.stars.toFixed(2) }) }),
         bars, table,
         el("div", { class: "controls" },
-          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value, mix: mixValue() }) }),
+          el("button", { class: "primary", text: tr("重写所选"), disabled: running || none, onclick: () => { let m; try { m = mixValue(); } catch (e) { alert(e.message); return; } projectOp("rewrite", { sections: sel(), target_sr: target.value, candidates: candidates.value, mix: m }); } }),
           el("label", { class: "check" }, tr("目标星级"), target),
           el("label", { class: "check" }, tr("候选数"), candidates)),
         el("div", { class: "controls" },
@@ -344,7 +337,10 @@
           el("button", { class: "small", text: tr("解开锚定"), disabled: running || none, onclick: () => projectOp("unanchor", { sections: sel() }) })),
         el("div", { class: "controls" },
           el("button", { class: "small", text: tr("撤销"), disabled: running || !p.can_undo, onclick: () => projectOp("undo", {}) }),
-          el("button", { class: "small", text: tr("重做"), disabled: running || !p.can_redo, onclick: () => projectOp("redo", {}) })),
+          el("button", { class: "small", text: tr("重做"), disabled: running || !p.can_redo, onclick: () => projectOp("redo", {}) }),
+          el("button", { class: "small primary", text: tr("在编辑器中打开"), onclick: () => P7.embedded
+            ? P7.navigate("editor", { project: p.project_file })
+            : (location.href = `/editor?project=${encodeURIComponent(p.project_file)}`) })),
         el("div", { class: "hint", text: tr("锁定的段之后不会被改动；锚定的段写成来源段的样子（可镜像），来源段每次改动都会同步过去。每一版都是单独的 .osz，导入 osu! 不会覆盖之前的版本。") }));
     }
     async function projectOp(op, extra) {

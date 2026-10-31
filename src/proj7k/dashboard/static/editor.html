@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 谱面编辑器</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    html, body { height: 100%; }
+    body { overflow: hidden; padding: 0; }
+    .ed-side .mix-row { grid-template-columns: 5.2em 3.9em minmax(80px, 1fr) 3.9em auto 3.4em; gap: 6px; }
+    .ed { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; gap: 8px; padding: 10px 12px; box-sizing: border-box; }
+    .ed-top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .ed-top select { width: auto; max-width: 46ch; }
+    .ed-top .take { color: var(--text-muted); font-size: 0.85rem; }
+    .ed-main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 460px); gap: 10px; min-height: 0; }
+    .ed-field { position: relative; min-height: 0; border-radius: 10px; overflow: hidden; background: #0d0a11; }
+    .ed-field canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .ed-field .hud { position: absolute; right: 10px; top: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; font-size: 0.8rem; color: var(--text-muted); }
+    .ed-field .hud input[type=range] { width: 120px; }
+    .ed-side { overflow: auto; min-height: 0; padding-right: 2px; }
+    .ed-side .card { margin-bottom: 10px; padding: 12px 14px; }
+    .ed-tl { position: relative; height: 86px; border-radius: 10px; overflow: hidden; background: rgba(12, 10, 16, 0.7); }
+    .ed-tl canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+    .ed-transport { display: flex; gap: 8px; align-items: center; }
+    .ed-transport .time { font-family: var(--mono); font-size: 0.85rem; color: var(--text-muted); min-width: 11ch; }
+    .cand { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 6px; cursor: pointer; }
+    .cand.on { border-color: var(--accent); background: var(--accent-soft); }
+    .cand .letter { font-weight: 800; font-size: 1.1rem; text-align: center; }
+    .cand .miss { color: var(--accent-red); font-size: 0.78rem; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .controls input[type=number] { width: 7.5em; }
+    .controls select { width: auto; }
+    .sel-line { font-size: 0.9rem; margin-bottom: 6px; }
+    .job-line { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-line.err { color: var(--accent-red); white-space: normal; }
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); }
+    kbd { font-family: var(--mono); font-size: 0.75rem; padding: 0 4px; border: 1px solid var(--border-color); border-radius: 3px; }
+    @media (max-width: 900px) { .ed-main { grid-template-columns: 1fr; grid-template-rows: 55vh auto; } body { overflow: auto; } .ed { height: auto; } }
+  </style>
+</head>
+<body>
+  <div class="ed">
+    <div class="ed-top">
+      <div class="page-title" style="margin:0">谱面编辑器</div>
+      <select id="projSel" title="生成项目"></select>
+      <span class="take" id="takeLine"></span>
+      <button class="small" id="undoBtn" title="退回上一版">撤销</button>
+      <button class="small" id="redoBtn" title="前进到下一版">重做</button>
+      <span class="grow"></span>
+      <a class="standalone-only" href="/#generator">← 返回控制台</a>
+    </div>
+    <div class="ed-main">
+      <div class="ed-field" id="field">
+        <canvas id="stage"></canvas>
+        <div class="hud">
+          <label>流速 <input type="range" id="speed" min="2" max="40" step="1"> <span id="speedVal"></span></label>
+        </div>
+      </div>
+      <div class="ed-side" id="side">
+        <div class="empty-state" id="loading">加载中…</div>
+      </div>
+    </div>
+    <div>
+      <div class="ed-transport">
+        <button class="small primary" id="playBtn">播放</button>
+        <span class="time" id="timeLine">0:00.0</span>
+        <span class="hint">在下方时间轴或谱面左侧的小节号上拖动来选小节；点时间轴跳到那里。<kbd>空格</kbd> 播放/暂停，滚轮按拍滚动，<kbd>Esc</kbd> 清除选区。</span>
+      </div>
+      <div class="ed-tl" style="margin-top:6px"><canvas id="tl"></canvas></div>
+    </div>
+  </div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    // The chart editor (ADR-0050): a generated chart's project drawn as the replay viewer draws a chart, a stretch
+    // of measures picked on it and written again by the model, its candidates played before one is adopted.
+    const LANE_KIND = [0, 1, 0, 2, 0, 1, 0];
+    const LANE = ["#e8edf4", "#5aa9ff", "#f7c948"];
+    const TINT = ["rgba(255,255,255,0.02)", "rgba(90,169,255,0.03)", "rgba(247,201,72,0.022)"];
+    const LAZER_TIME_RANGE = 11485;
+    const GUTTER = 58;
+    const POOL_SHORT = { rc_jack: "jack", rc_tech: "tech", rc_speed: "speed", rc_stamina: "stream",
+      ln_general: "ln_general", ln_tech: "ln_tech", ln_inverse: "ln_inverse", ln_release: "ln_release" };
+    const LETTERS = "ABCDEFGH";
+    const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+    const lowerBound = (arr, x, f) => { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (f(arr[m]) < x) lo = m + 1; else hi = m; } return lo; };
+    const fmtTime = (ms) => { ms = Math.max(0, ms); const s = ms / 1000; return Math.floor(s / 60) + ":" + (s % 60).toFixed(1).padStart(4, "0"); };
+    const store = { get(k) { try { return localStorage.getItem("proj7k.editor." + k); } catch (e) { return null; } },
+                    set(k, v) { try { localStorage.setItem("proj7k.editor." + k, v); } catch (e) {} } };
+    const shortPools = (p) => Object.fromEntries(Object.entries(p || {}).map(([k, v]) => [POOL_SHORT[k] || k, v]));
+
+    // --- state ---------------------------------------------------------------------------------------------------
+    let path = new URLSearchParams(location.search).get("project") || store.get("project") || "";
+    let data = null;           // /api/editor/project
+    let notes = [];            // the current take: {c, t, e}
+    let shown = [];            // what the field draws: the take, or the take with a candidate in its stretch
+    let maxLN = 0;
+    let preview = null;        // the candidate being played, or null for the take itself
+    let sel = null;            // {first, last}: measures, from 0
+    let selInfo = null;
+    let now = 0, playing = false, baseT = 0, baseTs = 0, needDraw = true;
+    let scroll = clamp(Number(store.get("scroll")) || 6, 2, 40);
+    let busy = false, job = null;
+    const audio = new Audio();
+    audio.preload = "auto";
+    let audioOK = false;
+    audio.addEventListener("canplay", () => { audioOK = true; });
+    audio.addEventListener("error", () => { audioOK = false; });
+
+    const mix = P7.mixControl();
+    const cancel = P7.cancelControl(() => job);
+
+    // --- loading -------------------------------------------------------------------------------------------------
+    async function loadList() {
+      const list = await P7.getJSON("/api/editor/projects").catch(() => ({ projects: [] }));
+      const sel = $("#projSel");
+      sel.replaceChildren(el("option", { value: "", text: list.projects.length ? tr("选择一个生成项目…") : tr("还没有生成项目") }),
+        ...list.projects.map((p) => el("option", { value: p.path, text: `${p.name} · ${tr("{n} 版", { n: p.takes })}${p.candidates ? tr(" · 有候选") : ""}`, selected: p.path === path })));
+      if (path && !list.projects.some((p) => p.path === path)) sel.append(el("option", { value: path, text: path.split(/[\\/]/).pop(), selected: true }));
+      if (!path && list.projects.length) path = list.projects[0].path;
+      sel.value = path;
+      return list;
+    }
+    async function load(keepView) {
+      if (!path) { showEmpty(tr("在「谱面生成」生成一张谱后，它的项目会出现在上面的列表里。")); return; }
+      const res = await fetch(`/api/editor/project?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok || d.error) { showEmpty(d.error || tr("打不开这个项目")); return; }
+      const fresh = !data || data.project_file !== d.project_file;
+      data = d;
+      store.set("project", path);
+      notes = d.notes.map(([c, t, e]) => ({ c, t, e }));
+      if (preview !== null && !d.candidates[preview]) preview = null;
+      rebuild();
+      if (fresh) {
+        audioOK = false;
+        audio.src = `/api/editor/audio?path=${encodeURIComponent(path)}`;
+        if (!keepView) { sel = null; seek(notes.length ? Math.max(0, notes[0].t - 500) : 0); }
+        mix.set(d.mix);
+      }
+      render();
+      if (sel) refreshSel();
+    }
+    function rebuild() {
+      let list = notes;
+      const c = preview !== null && data ? data.candidates[preview] : null;
+      if (c) {
+        list = notes.filter((n) => !(n.t >= c.start_ms && n.t < c.end_ms))
+          .concat(c.notes_inside.map(([cc, t, e]) => ({ c: cc, t, e, cand: true })));
+        list.sort((a, b) => a.t - b.t || a.c - b.c);
+      }
+      shown = list;
+      maxLN = list.reduce((m, n) => Math.max(m, n.e != null ? n.e - n.t : 0), 0);
+      tlDirty = true; needDraw = true;
+    }
+    function showEmpty(text) {
+      data = null; notes = []; shown = [];
+      $("#side").replaceChildren(el("div", { class: "empty-state", text }));
+      $("#takeLine").textContent = "";
+      needDraw = true; tlDirty = true;
+    }
+
+    // --- time and audio ------------------------------------------------------------------------------------------
+    const duration = () => (data ? data.duration_ms : 60000);
+    function rebase(t) { baseT = t; baseTs = performance.now(); }
+    function seek(t) {
+      now = clamp(t, 0, duration());
+      rebase(now);
+      if (audioOK) { try { audio.currentTime = now / 1000; } catch (e) {} }
+      needDraw = true;
+    }
+    function play() {
+      if (now >= duration() - 50) seek(0);
+      playing = true; rebase(now); $("#playBtn").textContent = tr("暂停");
+      if (audioOK) { audio.currentTime = now / 1000; audio.play().catch(() => {}); }
+    }
+    function pause() { playing = false; $("#playBtn").textContent = tr("播放"); audio.pause(); }
+    const toggle = () => (playing ? pause() : play());
+    $("#playBtn").onclick = toggle;
+
+    // --- measures ------------------------------------------------------------------------------------------------
+    const bars = () => (data ? data.bars : []);
+    function barAt(t) { const b = bars(); return clamp(lowerBound(b, t + 0.5, (x) => x) - 1, 0, Math.max(0, b.length - 1)); }
+    function barStart(i) { const b = bars(); return i < b.length ? b[i] : b[b.length - 1] + (b[b.length - 1] - b[b.length - 2]) * (i - b.length + 1); }
+    const selSpan = () => (sel ? [barStart(sel.first), barStart(sel.last + 1)] : null);
+    function beatAt(t) {
+      const tp = data ? data.timing : [];
+      let i = lowerBound(tp, t + 0.5, (p) => p.time) - 1;
+      return tp.length ? tp[Math.max(0, i)].beat_length : 500;
+    }
+    function sectionsIn(span) {
+      if (!data || !span) return [];
+      return data.sections.filter((s) => s.start_ms < span[1] && span[0] < s.end_ms).map((s) => s.index);
+    }
+
+    // --- the field -----------------------------------------------------------------------------------------------
+    const stage = $("#stage"), sctx = stage.getContext("2d", { alpha: false });
+    let dpr = 1;
+    const sizes = new Map();
+    function measure(cv) {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const r = cv.getBoundingClientRect();
+      const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      sizes.set(cv, { w: r.width, h: r.height });
+      needDraw = true; tlDirty = true;
+    }
+    const sizeOf = (cv) => sizes.get(cv) || (measure(cv), sizes.get(cv));
+    new ResizeObserver(() => { measure(stage); measure(tl); }).observe(document.body);
+
+    function geometry() {
+      const { w: W, h: H } = sizeOf(stage);
+      const colW = Math.round(clamp(Math.min(H * 0.055, (W - GUTTER - 30) / 7.3), 18, 64));
+      const fieldW = 7 * colW + 12;
+      const x0 = Math.round(Math.max(GUTTER + 8, (W - fieldW) / 2));
+      const lineY = Math.round(H - 46);
+      const ppm = lineY / (LAZER_TIME_RANGE / scroll);
+      return { W, H, colW, fieldW, x0, lineY, ppm, noteH: Math.max(5, Math.round(colW * 0.3)), colX: (c) => x0 + c * (colW + 2) };
+    }
+
+    function drawStage() {
+      const g = geometry();
+      const { W, H, colW, fieldW, x0, lineY, ppm, noteH, colX } = g;
+      const ctx = sctx;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#0d0a11"; ctx.fillRect(0, 0, W, H);
+      const Y = (t) => lineY - (t - now) * ppm;
+      const t0 = now - (H - lineY) / ppm, t1 = now + lineY / ppm + noteH / ppm;
+      for (let c = 0; c < 7; c++) {
+        ctx.fillStyle = "#0f0c13"; ctx.fillRect(colX(c), 0, colW, H);
+        ctx.fillStyle = TINT[LANE_KIND[c]]; ctx.fillRect(colX(c), 0, colW, H);
+      }
+      if (!data) return;
+      // sections: a stripe in the gutter (gold locked, purple anchored)
+      for (const s of data.sections) {
+        if (s.end_ms < t0 || s.start_ms > t1) continue;
+        const y0 = Y(s.end_ms), y1 = Y(s.start_ms);
+        ctx.fillStyle = s.locked ? "rgba(255,204,34,0.75)" : s.anchor !== null ? "rgba(170,136,255,0.75)" : "rgba(255,255,255,0.10)";
+        ctx.fillRect(x0 - GUTTER, y0 + 1, 4, y1 - y0 - 2);
+        ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.font = "10px sans-serif"; ctx.textAlign = "left";
+        ctx.fillText(tr("段 {n}", { n: s.index + 1 }), x0 - GUTTER + 7, y1 - 16);
+      }
+      // the selection and the stretch a candidate fills
+      const span = selSpan();
+      if (span) {
+        ctx.fillStyle = "rgba(255,102,171,0.13)";
+        ctx.fillRect(x0 - GUTTER + 5, Y(span[1]), fieldW + GUTTER - 3, Y(span[0]) - Y(span[1]));
+        ctx.fillStyle = "rgba(255,102,171,0.9)";
+        ctx.fillRect(x0 - 2, Y(span[1]), fieldW + 4, 2); ctx.fillRect(x0 - 2, Y(span[0]) - 2, fieldW + 4, 2);
+      }
+      const cand = preview !== null ? data.candidates[preview] : null;
+      if (cand) {
+        ctx.strokeStyle = "rgba(170,136,255,0.9)"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x0 - 3, Y(cand.end_ms), fieldW + 6, Y(cand.start_ms) - Y(cand.end_ms));
+        ctx.setLineDash([]);
+      }
+      // measure and beat lines, measure numbers
+      const b = bars();
+      let i = Math.max(0, barAt(t0) - 1);
+      ctx.textAlign = "right"; ctx.font = "11px " + getComputedStyle(document.body).fontFamily;
+      for (; i < b.length + 1; i++) {
+        const bs = barStart(i), be = barStart(i + 1);
+        if (bs > t1) break;
+        const y = Y(bs);
+        ctx.fillStyle = "rgba(255,255,255,0.32)"; ctx.fillRect(x0, Math.round(y), fieldW, 1);
+        ctx.fillStyle = sel && i >= sel.first && i <= sel.last ? "#ff9cc9" : "rgba(255,255,255,0.55)";
+        ctx.fillText(String(i + 1), x0 - 6, y - 2);
+        const bl = beatAt(bs);
+        ctx.fillStyle = "rgba(255,255,255,0.09)";
+        for (let t = bs + bl; t < be - 1; t += bl) ctx.fillRect(x0, Math.round(Y(t)), fieldW, 1);
+      }
+      // notes
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, fieldW, lineY); ctx.clip();
+      const lo = lowerBound(shown, t0 - maxLN, (n) => n.t), hi = lowerBound(shown, t1, (n) => n.t);
+      const lnW = Math.round(colW * 0.86), lnOff = (colW - lnW) / 2;
+      for (let k = lo; k < hi; k++) {
+        const n = shown[k], x = colX(n.c);
+        const col = n.cand ? "#c9b6ff" : LANE[LANE_KIND[n.c]];
+        if (n.e != null) {
+          const yh = Y(n.t), yt = Y(n.e);
+          if (yt > H) continue;
+          ctx.globalAlpha = 0.6; ctx.fillStyle = col; ctx.fillRect(x + lnOff, yt, lnW, Math.max(0, yh - yt));
+          ctx.globalAlpha = 1; ctx.fillRect(x, yt, colW, Math.max(3, noteH * 0.4));
+        }
+        const y = Y(n.t);
+        if (y - noteH > H) continue;
+        ctx.fillStyle = col; ctx.fillRect(x, y - noteH, colW, noteH);
+      }
+      ctx.restore();
+      // judgment line and the time at it
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(x0, lineY - 1, fieldW, 2);
+      for (let c = 0; c < 7; c++) { ctx.fillStyle = "#100d15"; ctx.fillRect(colX(c), lineY + 1, colW, H - lineY); ctx.fillStyle = LANE[LANE_KIND[c]]; ctx.globalAlpha = 0.35; ctx.fillRect(colX(c) + 3, lineY + 8, colW - 6, 3); ctx.globalAlpha = 1; }
+    }
+
+    // --- the timeline --------------------------------------------------------------------------------------------
+    const tl = $("#tl"), tctx = tl.getContext("2d");
+    let tlDirty = true, tlCache = null;
+    function drawTimelineBase(W, H) {
+      tlCache = document.createElement("canvas");
+      tlCache.width = Math.round(W * dpr); tlCache.height = Math.round(H * dpr);
+      const ctx = tlCache.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!data) return;
+      const X = (t) => (t / duration()) * W;
+      const b = bars();
+      const counts = new Array(b.length).fill(0);
+      for (const n of shown) { const i = barAt(n.t); counts[i] += 1; }
+      const dens = counts.map((n, i) => n / Math.max(1, (barStart(i + 1) - barStart(i)) / 1000));
+      const top = Math.max(1, ...dens);
+      ctx.fillStyle = "rgba(102,204,255,0.55)";
+      for (let i = 0; i < b.length; i++) {
+        const h = (dens[i] / top) * (H - 26);
+        ctx.fillRect(X(barStart(i)), H - 18 - h, Math.max(1, X(barStart(i + 1)) - X(barStart(i)) - 0.5), h);
+      }
+      const topStars = Math.max(1, ...data.sections.map((s) => s.stars));
+      for (const s of data.sections) {
+        const x = X(s.start_ms), w = X(s.end_ms) - x;
+        const k = s.stars / topStars;
+        ctx.fillStyle = s.locked ? "#ffcc22" : s.anchor !== null ? "#aa88ff" : `hsl(205, 65%, ${24 + 36 * k}%)`;
+        ctx.fillRect(x + 1, H - 15, w - 2, 12);
+        if (w > 26) { ctx.fillStyle = s.locked || k > 0.6 ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.85)"; ctx.font = "9px sans-serif"; ctx.textAlign = "center"; ctx.fillText(s.stars.toFixed(1), x + w / 2, H - 6); }
+      }
+    }
+    function drawTimeline() {
+      const { w: W, h: H } = sizeOf(tl);
+      if (tlDirty || !tlCache) { drawTimelineBase(W, H); tlDirty = false; }
+      tctx.setTransform(1, 0, 0, 1, 0, 0);
+      tctx.clearRect(0, 0, tl.width, tl.height);
+      tctx.drawImage(tlCache, 0, 0);
+      tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!data) return;
+      const X = (t) => (t / duration()) * W;
+      const span = selSpan();
+      if (span) { tctx.fillStyle = "rgba(255,102,171,0.25)"; tctx.fillRect(X(span[0]), 0, X(span[1]) - X(span[0]), H); }
+      const cand = preview !== null ? data.candidates[preview] : null;
+      if (cand) { tctx.strokeStyle = "#aa88ff"; tctx.lineWidth = 1.5; tctx.strokeRect(X(cand.start_ms), 1, X(cand.end_ms) - X(cand.start_ms), H - 2); }
+      const g = geometry();
+      const v0 = now - (g.H - g.lineY) / g.ppm, v1 = now + g.lineY / g.ppm;
+      tctx.fillStyle = "rgba(255,255,255,0.08)"; tctx.fillRect(X(v0), 0, X(v1) - X(v0), H);
+      tctx.fillStyle = "#fff"; tctx.fillRect(X(now) - 1, 0, 2, H);
+    }
+
+    // --- picking measures ----------------------------------------------------------------------------------------
+    let drag = null;
+    function setSel(a, b) {
+      const first = Math.min(a, b), last = Math.max(a, b);
+      if (sel && sel.first === first && sel.last === last) return;
+      sel = { first, last }; needDraw = true; renderSel();
+    }
+    function finishSel() { refreshSel(); }
+    tl.addEventListener("pointerdown", (e) => {
+      if (!data) return;
+      const r = tl.getBoundingClientRect();
+      const t = ((e.clientX - r.left) / r.width) * duration();
+      drag = { kind: "tl", x: e.clientX, bar: barAt(t), moved: false, t };
+      tl.setPointerCapture(e.pointerId);
+    });
+    tl.addEventListener("pointermove", (e) => {
+      if (!drag || drag.kind !== "tl") return;
+      const r = tl.getBoundingClientRect();
+      if (Math.abs(e.clientX - drag.x) > 4) drag.moved = true;
+      if (drag.moved) setSel(drag.bar, barAt(((e.clientX - r.left) / r.width) * duration()));
+    });
+    tl.addEventListener("pointerup", () => {
+      if (!drag) return;
+      if (drag.moved) finishSel();
+      else { const g = geometry(); seek(drag.t - 0.25 * (g.lineY / g.ppm)); }
+      drag = null;
+    });
+    function timeAtY(y) { const g = geometry(); return now + (g.lineY - y) / g.ppm; }
+    stage.addEventListener("pointerdown", (e) => {
+      if (!data) return;
+      const r = stage.getBoundingClientRect(), g = geometry();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      if (x < g.x0 - GUTTER || x > g.x0 + g.fieldW || y > g.lineY) return;
+      if (x >= g.x0 && !e.shiftKey) return;     // the field itself is for editing notes (next phase)
+      const bar = barAt(timeAtY(y));
+      if (e.shiftKey && sel) setSel(Math.min(sel.first, bar) === bar ? sel.last : sel.first, bar);
+      else setSel(bar, bar);
+      drag = { kind: "field", bar: e.shiftKey && sel ? sel.first : bar };
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener("pointermove", (e) => {
+      const r = stage.getBoundingClientRect(), g = geometry();
+      const x = e.clientX - r.left;
+      stage.style.cursor = data && x >= g.x0 - GUTTER && x < g.x0 ? "row-resize" : "default";
+      if (!drag || drag.kind !== "field") return;
+      setSel(drag.bar, barAt(timeAtY(e.clientY - r.top)));
+    });
+    stage.addEventListener("pointerup", () => { if (drag && drag.kind === "field") { drag = null; finishSel(); } });
+    stage.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (e.ctrlKey) { scroll = clamp(scroll + (e.deltaY < 0 ? 1 : -1), 2, 40); syncSpeed(); return; }
+      if (playing) pause();
+      const steps = Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 100));
+      seek(now - steps * beatAt(now));
+    }, { passive: false });
+    window.addEventListener("keydown", (e) => {
+      if (e.target.closest && e.target.closest("input, select, textarea")) return;
+      if (e.code === "Space") { e.preventDefault(); toggle(); }
+      else if (e.key === "Escape" && sel) { sel = null; selInfo = null; needDraw = true; render(); }
+    });
+    function syncSpeed() { $("#speed").value = String(scroll); $("#speedVal").textContent = String(scroll); store.set("scroll", scroll); needDraw = true; tlDirty = true; }
+    $("#speed").addEventListener("input", () => { scroll = Number($("#speed").value); syncSpeed(); });
+    syncSpeed();
+
+    // --- the side panel ------------------------------------------------------------------------------------------
+    let selSeq = 0;
+    async function refreshSel() {
+      if (!data || !sel) { selInfo = null; renderSel(); return; }
+      const span = selSpan(), seq = ++selSeq;
+      selInfo = null; renderSel();
+      const info = await P7.getJSON(`/api/editor/stretch?path=${encodeURIComponent(path)}&start=${span[0]}&end=${span[1]}`).catch(() => null);
+      if (seq !== selSeq || !info || info.error) return;
+      selInfo = info;
+      mix.reference(info.pools);
+      renderSel();
+    }
+    const selBox = el("div");
+    function renderSel() {
+      if (!data) return;
+      if (!sel) {
+        selBox.replaceChildren(el("div", { class: "hint", text: tr("还没有选区：在时间轴或谱面左侧的小节号上拖动。") }));
+        updateButtons(); needDraw = true; return;
+      }
+      const span = selSpan();
+      const secs = sectionsIn(span);
+      const parts = [el("div", { class: "sel-line" },
+        el("b", { text: tr("第 {a}–{b} 小节", { a: sel.first + 1, b: sel.last + 1 }) }),
+        ` · ${fmtTime(span[0])}–${fmtTime(span[1])} · ${tr("段 {list}", { list: secs.map((i) => i + 1).join(", ") || "—" })}`)];
+      if (selInfo) {
+        parts.push(el("div", { class: "hint", text: tr("{n} 个音符，{stars}★，长条 {ln}%", { n: selInfo.notes, stars: selInfo.stars.toFixed(2), ln: Math.round(selInfo.ln_share * 100) }) }));
+        if (selInfo.notes) parts.push(P7.skillBars(shortPools(selInfo.pools)));
+      } else parts.push(el("div", { class: "hint", text: tr("计算中…") }));
+      selBox.replaceChildren(...parts);
+      if (selInfo && $("#target") && !$("#target").value) $("#target").placeholder = selInfo.stars ? selInfo.stars.toFixed(2) : tr("不变");
+      updateButtons(); needDraw = true;
+    }
+
+    const jobLine = el("div", { class: "job-line" });
+    const candBox = el("div");
+    const secBox = el("div");
+    function render() {
+      if (!data) return;
+      const t = data.take;
+      $("#takeLine").textContent = tr("第 {n}/{total} 版 · {note} · {stars}★", { n: t.n, total: data.takes, note: t.note, stars: t.stars.toFixed(2) });
+      const side = $("#side");
+      if (!side.querySelector("#rewriteCard")) {
+        side.replaceChildren(
+          el("div", { class: "card" }, el("h2", { text: tr("选区") }), selBox),
+          el("div", { class: "card", id: "rewriteCard" }, el("h2", { text: tr("让模型重写选区") }),
+            el("div", { class: "controls" },
+              el("label", { class: "check" }, tr("目标星级"), el("input", { type: "number", id: "target", step: "0.1", min: "0.5", placeholder: tr("不变") })),
+              el("label", { class: "check" }, tr("候选数"), el("input", { type: "number", id: "cands", step: "1", min: "1", max: "8", value: "3" })),
+              el("label", { class: "check" }, tr("长条比例"), el("input", { type: "number", id: "lnRatio", step: "0.05", min: "0", max: "1", placeholder: tr("照生成时") }))),
+            el("div", { class: "hint", style: "margin:8px 0 4px", text: tr("技法难度范围（这段自己的引擎星级；金线是选区现在的值）") }),
+            mix.node,
+            el("div", { class: "controls" },
+              el("button", { class: "primary", id: "rewriteBtn", text: tr("重写所选（出候选试听）"), onclick: rewrite }), cancel.node),
+            jobLine,
+            el("div", { class: "hint", style: "margin-top:6px", text: tr("每个候选在 meow 的显卡上约 1–4 分钟。候选按「星级贴近目标 + 接缝顺 + 技法在范围内」排好，点一个就能在谱面上看、从选区前一小节开始听，满意再采用。模型不听技法指令，范围只能靠挑：达不到的会标红。") })),
+          el("div", { class: "card hidden", id: "candCard" }, el("h2", { text: tr("候选") }), candBox),
+          el("div", { class: "card" }, el("h2", { text: tr("段落") }), secBox));
+      }
+      renderSel(); renderCands(); renderSections(); updateButtons();
+    }
+    function renderCands() {
+      const cs = data.candidates || [];
+      $("#candCard").classList.toggle("hidden", !cs.length);
+      if (!cs.length) { candBox.replaceChildren(); return; }
+      const row = (k) => {
+        const c = cs[k];
+        const misses = (c.misses || []).map((m) => tr("{name} 要 {want}，实际 {stars}★", { name: poolName(m.pool), want: rangeText(m.low, m.high), stars: m.stars.toFixed(2) }));
+        return el("div", { class: `cand${preview === k ? " on" : ""}`, onclick: () => setPreview(k, true) },
+          el("span", { class: "letter", text: LETTERS[k] }),
+          el("div", {},
+            el("div", { text: tr("{stars}★（目标 {target}★）· 接缝 {seam} · {n} 个音符", { stars: c.stars.toFixed(2), target: c.target.toFixed(2), seam: c.seam.toFixed(2), n: c.notes }) }),
+            misses.length ? el("div", { class: "miss", text: misses.join(tr("；")) }) : null),
+          el("button", { class: "small primary", text: tr("采用"), disabled: busy, onclick: (e) => { e.stopPropagation(); op("adopt", { candidate: k + 1 }); } }));
+      };
+      const first = cs[0];
+      candBox.replaceChildren(
+        el("div", { class: "hint", style: "margin-bottom:6px", text: tr("第 {a}–{b} 秒，基于第 {n} 版。", { a: (first.start_ms / 1000).toFixed(1), b: (first.end_ms / 1000).toFixed(1), n: first.base + 1 }) }),
+        ...cs.map((_, k) => row(k)),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("看原版"), disabled: preview === null, onclick: () => setPreview(null, true) }),
+          el("button", { class: "small danger", text: tr("全部放弃"), disabled: busy, onclick: () => op("discard", {}) })));
+    }
+    function setPreview(k, listen) {
+      preview = k; rebuild(); renderCands();
+      const c = data.candidates[k === null ? 0 : k];
+      if (listen && c) {
+        const before = barStart(Math.max(0, barAt(c.start_ms) - 1));
+        const g = geometry();
+        seek(before - 0.05 * (g.lineY / g.ppm)); if (!playing) play();
+      }
+    }
+    function renderSections() {
+      const span = selSpan();
+      const secs = sectionsIn(span);
+      const none = !secs.length;
+      const source = el("select", { id: "anchorSrc" }, ...data.sections.map((s) => el("option", { value: String(s.index + 1), text: tr("第 {n} 段", { n: s.index + 1 }) })));
+      const mirror = el("input", { type: "checkbox" });
+      const list = secs.map((i) => i + 1).join(",");
+      const states = data.sections.filter((s) => s.locked || s.anchor !== null).map((s) =>
+        s.locked ? tr("第 {n} 段锁定", { n: s.index + 1 }) : s.mirror ? tr("第 {n} 段镜像第 {m} 段", { n: s.index + 1, m: s.anchor + 1 }) : tr("第 {n} 段同第 {m} 段", { n: s.index + 1, m: s.anchor + 1 }));
+      secBox.replaceChildren(
+        el("div", { class: "hint", text: none ? tr("选区碰到的段可以锁定或锚定到另一段。") : tr("选区碰到第 {list} 段。", { list }) }),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("锁定所选"), disabled: busy || none, onclick: () => op("lock", { sections: list }) }),
+          el("button", { class: "small", text: tr("解锁所选"), disabled: busy || none, onclick: () => op("unlock", { sections: list }) }),
+          el("button", { class: "small", text: tr("所选锚定到"), disabled: busy || none, onclick: () => op("anchor", { sections: list, source: source.value, mirror: mirror.checked }) }),
+          source, el("label", { class: "check" }, mirror, tr("镜像")),
+          el("button", { class: "small", text: tr("解开锚定"), disabled: busy || none, onclick: () => op("unanchor", { sections: list }) })),
+        states.length ? el("div", { class: "hint", style: "margin-top:6px", text: states.join(tr("；")) }) : null);
+    }
+    function updateButtons() {
+      const b = $("#rewriteBtn");
+      if (b) b.disabled = busy || !sel;
+      $("#undoBtn").disabled = busy || !data || !data.can_undo;
+      $("#redoBtn").disabled = busy || !data || !data.can_redo;
+    }
+    const poolName = (k) => (P7.MIX_POOLS.find((p) => p[0] === k) || [k, k])[1];
+    function rangeText(lo, hi) {
+      if (lo !== null && hi !== null) return `${lo}–${hi}★`;
+      return lo !== null ? `≥ ${lo}★` : `≤ ${hi}★`;
+    }
+
+    // --- operations (jobs) ---------------------------------------------------------------------------------------
+    async function op(name, extra) {
+      if (busy || !data) return;
+      busy = true; updateButtons(); renderCands(); renderSections();
+      jobLine.className = "job-line"; jobLine.textContent = tr("提交中");
+      job = null; cancel.update(null);
+      const done = await P7.startJob("generator_project", { project: data.project_file, op: name, ...extra }, {
+        onUpdate: (j) => { job = j; cancel.update(j); if (j.status !== "running") jobLine.textContent = P7.statusText(j); },
+        onLog: (line) => { jobLine.textContent = line; },
+      });
+      job = done; cancel.update(done);
+      busy = false;
+      if (done.status !== "done") {
+        jobLine.className = "job-line err";
+        jobLine.textContent = done.error || P7.statusText(done);
+      } else {
+        jobLine.textContent = "";
+        if (name === "adopt" || name === "discard") preview = null;
+      }
+      await load(true);
+      await loadList();
+      if (name === "rewrite" && data && data.candidates.length) setPreview(0, true);
+      updateButtons();
+    }
+    function rewrite() {
+      if (!sel) return;
+      let m;
+      try { m = mix.value(); } catch (e) { jobLine.className = "job-line err"; jobLine.textContent = e.message; return; }
+      op("rewrite", { bars: `${sel.first + 1}-${sel.last + 1}`, audition: true, target_sr: $("#target").value,
+        candidates: $("#cands").value, ln_ratio: $("#lnRatio").value, mix: m });
+    }
+    $("#undoBtn").onclick = () => op("undo", {});
+    $("#redoBtn").onclick = () => op("redo", {});
+    $("#projSel").onchange = () => { path = $("#projSel").value; preview = null; sel = null; data = null; load(); };
+    P7.onNav((params) => { if (params.project && params.project !== path) { path = params.project; preview = null; sel = null; data = null; loadList().then(() => load()); } });
+
+    // --- the clock -----------------------------------------------------------------------------------------------
+    function frame() {
+      if (playing) {
+        let t = baseT + (performance.now() - baseTs);
+        if (audioOK && !audio.paused) {
+          const a = audio.currentTime * 1000;
+          if (Math.abs(a - t) > 80) { rebase(a); t = a; } else { baseT += (a - t) * 0.05; t = baseT + (performance.now() - baseTs); }
+        }
+        now = t;
+        if (now >= duration()) { now = duration(); pause(); }
+        needDraw = true;
+      }
+      if (needDraw) {
+        needDraw = false;
+        drawStage(); drawTimeline();
+        $("#timeLine").textContent = `${fmtTime(now)} / ${fmtTime(duration())}`;
+      }
+      requestAnimationFrame(frame);
+    }
+    window.__editor = { seek, setSel: (a, b) => { setSel(a, b); finishSel(); }, setPreview, get data() { return data; }, get sel() { return sel; } };
+    loadList().then(() => load());
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

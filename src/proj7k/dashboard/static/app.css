@@ -295,3 +295,25 @@ button:active:not(:disabled) { transform: scale(0.97); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* technique ranges (ADR-0050): a two-handled slider per engine pool */
+.mix-ranges { display: grid; gap: 6px; margin: 4px 0; }
+.mix-row { display: grid; grid-template-columns: 6.5em 4.6em minmax(120px, 1fr) 4.6em auto 9em; gap: 8px; align-items: center; }
+.mix-row .mix-name { font-size: 0.85rem; font-weight: 700; }
+.mix-row.open .mix-name { color: var(--text-muted); font-weight: 500; }
+.mix-row input.mix-num { width: 100%; padding: 3px 6px; font-size: 0.82rem; }
+.mix-row .mix-clear { padding: 1px 7px; }
+.mix-row.open .mix-clear { visibility: hidden; }
+.mix-row .mix-ref { font-size: 0.75rem; white-space: nowrap; }
+.mix-track { position: relative; height: 22px; }
+.mix-track .mix-rail { position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.10); }
+.mix-track .mix-fill { position: absolute; top: 9px; height: 4px; border-radius: 2px; background: var(--accent); }
+.mix-row.open .mix-fill { background: rgba(255, 255, 255, 0.18); }
+.mix-track .mix-mark { position: absolute; top: 4px; width: 2px; height: 14px; margin-left: -1px; background: var(--accent-gold); border-radius: 1px; pointer-events: none; }
+.mix-track input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 22px; padding: 0; border: 0; }
+.mix-track input[type=range]::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: pointer; }
+.mix-track input[type=range]::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: pointer; }
+.mix-track input[type=range]::-webkit-slider-runnable-track { background: none; }
+.mix-track input[type=range]::-moz-range-track { background: none; }
+.mix-row.open input[type=range]::-webkit-slider-thumb { border-color: var(--text-dim); }
+@media (max-width: 640px) { .mix-row { grid-template-columns: 5.5em 4em 1fr 4em auto; } .mix-row .mix-ref { display: none; } }

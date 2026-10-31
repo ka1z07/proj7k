@@ -16,7 +16,8 @@ replay source. `/api/current` answers the same.
 
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
 `/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its tools, `/jobs` lists every job, `/home`, `/history`, `/library`, `/chart`
-and `/play` its player pages (ADR-0034), `/api/*` is read-only state, and `/files/<job>/<index>/<name>` serves a
+and `/play` its player pages (ADR-0034), `/editor` the chart editor (ADR-0050, reading `/api/editor/*`), `/api/*` is
+read-only state, and `/files/<job>/<index>/<name>` serves a
 job's registered outputs.
 
 The player pages read `/api/me/*` (`proj7k.dashboard.player`): `players`, `overview`, `history`, `library`,
@@ -70,7 +71,14 @@ PAGES = {
     "/library": "library.html",
     "/chart": "chart.html",
     "/play": "play.html",
+    "/editor": "editor.html",
 }
+
+#: The chart editor's API (ADR-0050): `projects`, `project`, `stretch` and `audio`, each but `projects` given
+#: `path`, a generated chart's .p7kgen.json.
+_EDITOR_API = re.compile(r"^/api/editor/(projects|project|stretch|audio)$")
+#: How many projects the editor lists, newest first.
+EDITOR_PROJECTS_MAX = 300
 
 #: Uploads ride the WebSocket base64-encoded, so this caps an upload at about 190 MB (a long lossless audio file fits).
 MAX_MESSAGE_BYTES = 256 * 2**20
@@ -218,11 +226,64 @@ class DashboardServer(LiveServer):
         match = _FILES_PATH.match(path)
         if match:
             return self._serve_artifact(match.group(1), int(match.group(2)), unquote(match.group(3)), request)
+        match = _EDITOR_API.match(path)
+        if match:
+            return asyncio.to_thread(self._editor_route, match.group(1), query, request)
         match = _PLAYER_API.match(path)
         if match:
             # websockets awaits a coroutine here; the work runs on a thread so the live radar keeps its frames.
             return asyncio.to_thread(self._player_route, match.group(1), unquote(match.group(2) or ""), query, request)
         return super()._process_request(connection, request)
+
+    # --- the chart editor (ADR-0050) ----------------------------------------------------------------------------
+
+    def _editor_projects(self) -> Dict[str, Any]:
+        from proj7k.generator import project as P
+
+        root = self.config.generated_dir
+        found = []
+        if root.is_dir():
+            for f in root.rglob("*" + P.SUFFIX):
+                try:
+                    found.append((f.stat().st_mtime, f))
+                except OSError:
+                    pass
+        found.sort(reverse=True)
+        out = []
+        for mtime, f in found[:EDITOR_PROJECTS_MAX]:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                takes = data.get("takes") or []
+                take = takes[data.get("current", 0)] if takes else {}
+            except (OSError, ValueError, IndexError):
+                continue
+            out.append({"path": str(f), "name": f.name[:-len(P.SUFFIX)], "takes": len(takes), "mtime": mtime,
+                        "stars": take.get("stars"), "note": take.get("note"),
+                        "candidates": len(data.get("candidates") or [])})
+        return {"projects": out, "folder": str(root)}
+
+    def _editor_route(self, what: str, query: str, request: Request) -> Response:
+        from proj7k.generator import project as P
+
+        params = {k: v[-1] for k, v in parse_qs(query).items()}
+        set_language(from_cookie(request.headers.get("Cookie")))
+        try:
+            if what == "projects":
+                return self._json_response(self._editor_projects())
+            path = Path(params.get("path") or "")
+            # Only a generated chart's project file opens here, never any other file the server can read.
+            if not path.name.endswith(P.SUFFIX) or not path.is_file():
+                return self._json_response({"error": tr("找不到这个生成项目", "No such generated chart project")}, 404, "Not Found")
+            project = P.Project.load(path)
+            if what == "project":
+                return self._json_response(P.editor_data(project))
+            if what == "stretch":
+                return self._json_response(P.stretch_profile(project, float(params["start"]), float(params["end"])))
+            work = project.folder / ".p7kgen-work"
+            return self._file_response(project.audio_path(work), request, "audio/mpeg")
+        except Exception as e:
+            logger.exception("editor %s", what)
+            return self._json_response({"error": str(e)}, 500, "Internal Server Error")
 
     # --- the player pages (ADR-0034) ----------------------------------------------------------------------------
 
