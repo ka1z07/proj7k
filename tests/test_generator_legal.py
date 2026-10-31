@@ -107,3 +107,35 @@ def test_mapperatorinator_overlaps_never_reach_the_chart(tmp_path):
     result = generate_from_file(song, options)
     assert legal.problems(result.beatmap.hit_objects) == []
     assert any("重叠" in m or "overlapping" in m for m in logs)
+
+
+def scroll(timing, t):
+    """The speed osu! scrolls at time t, as a multiple of the main BPM's: red line BPM ratio times green line."""
+    red = [tp for tp in timing if tp.uninherited and tp.time <= t][-1]
+    green = [tp for tp in timing if not tp.uninherited and red.time <= tp.time <= t]
+    main = legal._main_beat([tp for tp in timing if tp.uninherited], 10_000)
+    sv = -100.0 / green[-1].beat_length if green else 1.0
+    return main / red.beat_length * sv
+
+
+def test_constant_scroll_keeps_one_speed_through_bpm_changes_and_drops_green_lines():
+    timing = [TimingPoint(time=0.0, beat_length=400.0),                       # 150 BPM, most of the chart
+              TimingPoint(time=500.0, beat_length=-50.0, uninherited=False),  # a 2x green line
+              TimingPoint(time=4000.0, beat_length=300.0),                    # 200 BPM
+              TimingPoint(time=5000.0, beat_length=1e7),                      # a stop: no green line can undo it
+              TimingPoint(time=5001.0, beat_length=600.0),                    # 100 BPM
+              TimingPoint(time=6000.0, beat_length=400.0)]
+    out = legal.constant_scroll(timing, 10_000)
+    assert [tp.beat_length for tp in out if tp.uninherited] == [400.0, 300.0, 600.0, 400.0]
+    for t in (0, 600, 4000, 4500, 5500, 6000, 9000):
+        assert abs(scroll(out, t) - 1.0) < 1e-9
+    # Written red line first at the same time, so osu! reads the green line after the red one resets it.
+    text = dump_osu_7k(Beatmap7K(timing_points=out, hit_objects=[tap(0, 1000)]))
+    back = parse_osu_7k(text).timing_points
+    assert [(tp.time, tp.uninherited) for tp in back][:3] == [(0.0, True), (4000.0, True), (4000.0, False)]
+    # Running it again changes nothing.
+    assert legal.constant_scroll(out, 10_000) == out
+
+
+def test_constant_scroll_leaves_one_bpm_alone():
+    assert legal.constant_scroll(TIMING, 10_000) == TIMING

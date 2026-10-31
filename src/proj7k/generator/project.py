@@ -311,7 +311,9 @@ def new_take(project: Project, objs: Sequence[HitObject], note: str, package: bo
     objs = apply_anchors(project, objs, chart.timing_points)
     stars = _rated(objs)
     n = len(project.takes) + 1
-    bm = replace(chart, hit_objects=list(objs), version=f"{project.base_version} v{n}")
+    # A project made before generated charts kept one scroll speed gets it here too.
+    bm = replace(chart, hit_objects=list(objs), version=f"{project.base_version} v{n}",
+                 timing_points=legal.constant_scroll(chart.timing_points, legal.end_ms(objs)))
     stem = safe_filename(f"{base.artist} - {base.title} ({base.creator}) [{bm.version}]")
     osu = project.folder / f"{stem}.osu"
     osu.write_text(dump_osu_7k(bm), encoding="utf-8")

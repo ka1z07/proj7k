@@ -6,6 +6,10 @@ The generator's own notes keep this by construction (`holds.settle`); Mapperator
 each window on its own and the windows overlap, so a note can come back twice, or land under a hold an earlier
 window wrote. Every chart the generator hands out goes through `sanitize` first, on the millisecond times the
 .osu file will carry.
+
+Its timing goes through `constant_scroll`: the notes scroll at one speed from start to end. osu! (stable and
+lazer) scrolls a red line faster or slower by its BPM against the chart's most common one, so a chart whose red
+lines change BPM (the model's own timing, or a borrowed chart's) changes speed even with no green line at all.
 """
 
 import bisect
@@ -21,6 +25,9 @@ MIN_GAP = 0.125
 MIN_HOLD = 0.125
 #: The beat when a chart has no timing.
 DEFAULT_BEAT_MS = 500.0
+#: The scroll multipliers a green line can carry in osu!. A red line that would need more to scroll at the
+#: chart's speed is a gimmick (a stop, a jump) rather than the song's tempo, and is dropped.
+SV_RANGE = (0.01, 10.0)
 
 
 @dataclass(frozen=True)
@@ -112,3 +119,37 @@ def sanitize(objs: Sequence[HitObject], timing: Sequence[TimingPoint] = ()) -> T
             kept.append(n)
         out.extend(kept)
     return sorted(out, key=lambda o: (o.time, o.column)), changed
+
+
+def _main_beat(red: Sequence[TimingPoint], end_ms: float) -> float:
+    """The beat length the chart spends most time in, up to `end_ms`: the one osu! scrolls at multiplier 1."""
+    spans: dict = {}
+    for tp, nxt in zip(red, list(red[1:]) + [None]):
+        until = nxt.time if nxt is not None else max(end_ms, tp.time)
+        key = round(tp.beat_length, 3)
+        spans[key] = spans.get(key, 0.0) + max(0.0, until - tp.time)
+    return max(spans, key=lambda k: (spans[k], -k)) if spans else DEFAULT_BEAT_MS
+
+
+def constant_scroll(timing: Sequence[TimingPoint], end_ms: float = 0.0) -> List[TimingPoint]:
+    """The red lines only, each one that changes BPM followed by the green line that brings the scroll back to the
+    main BPM's speed (`_main_beat`); a red line needing a multiplier outside `SV_RANGE` is dropped. Any green line
+    in `timing` is dropped: the chart has no scroll speed change of its own."""
+    red = sorted((tp for tp in timing if tp.uninherited and tp.beat_length > 0), key=lambda tp: tp.time)
+    if not red:
+        return []
+    main = _main_beat(red, end_ms)
+    out: List[TimingPoint] = []
+    for tp in red:
+        sv = tp.beat_length / main
+        if not SV_RANGE[0] <= sv <= SV_RANGE[1]:
+            continue
+        out.append(TimingPoint(time=tp.time, beat_length=tp.beat_length, meter=tp.meter, uninherited=True))
+        if abs(sv - 1.0) > 1e-6:
+            out.append(TimingPoint(time=tp.time, beat_length=-100.0 / sv, meter=tp.meter, uninherited=False))
+    return out
+
+
+def end_ms(objs: Sequence[HitObject]) -> float:
+    """When the last note (or hold) ends."""
+    return float(max((_end(o) for o in objs), default=0))
