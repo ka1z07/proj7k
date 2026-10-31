@@ -155,12 +155,42 @@ const P7 = (() => {
 
   // --- widgets ----------------------------------------------------------------------------------------------
   const STATUS_TEXT = { queued: tr("排队中"), running: tr("运行中"), done: tr("完成"), failed: tr("失败"), cancelled: tr("已取消") };
+  // A running job that was asked to stop runs on to its next safe point (ADR-0049).
+  const statusText = (job) => (job.stopping ? tr("取消中") : STATUS_TEXT[job.status] || job.status);
+
+  // The cancel button of the job `getJob()` returns. A queued job is dropped at once; a running one asks for a second
+  // click first (it may have run for minutes), then shows that it is stopping. Returns {node, update(job)}.
+  function cancelControl(getJob) {
+    let armed = null;  // the timer while a running job's cancel waits for its confirming click
+    const disarm = () => { clearTimeout(armed); armed = null; };
+    const node = el("button", { class: "small danger hidden", text: tr("取消"), onclick: (e) => {
+      e.stopPropagation();
+      const job = getJob();
+      if (!job || job.stopping) return;
+      if (job.status === "running" && !armed) {
+        node.textContent = tr("确定取消？");
+        armed = setTimeout(() => { armed = null; update(getJob()); }, 4000);
+        return;
+      }
+      disarm();
+      send({ type: "job_cancel", id: job.id });
+    } });
+    function update(job) {
+      const active = !!job && (job.status === "queued" || job.status === "running");
+      if (!active || job.stopping) disarm();
+      node.classList.toggle("hidden", !active);
+      node.disabled = !!(job && job.stopping);
+      node.title = job && job.status === "running" ? tr("在下一个安全点停下，不会停在写入中途") : "";
+      if (!armed) node.textContent = job && job.stopping ? tr("取消中…") : tr("取消");
+    }
+    return { node, update };
+  }
 
   // A card that follows one job: status, log, error and output files. Returns {update(job), log(line), reset()}.
   function jobPanel(container) {
     const badge = el("span", { class: "badge queued", text: "" });
     const title = el("span", { class: "hint" });
-    const cancel = el("button", { class: "small hidden", text: tr("取消"), onclick: () => current && send({ type: "job_cancel", id: current.id }) });
+    const cancel = cancelControl(() => current);
     const error = el("div", { class: "job-error hidden" });
     const files = el("div", { class: "artifacts" });
     const logBox = el("div", { class: "log hidden" });
@@ -169,24 +199,24 @@ const P7 = (() => {
       toggle.textContent = logBox.classList.contains("hidden") ? tr("显示日志") : tr("隐藏日志");
     } });
     const root = el("div", { class: "hidden" },
-      el("div", { class: "job-head" }, el("div", { class: "row" }, badge, title), el("div", { class: "row" }, cancel, toggle)),
+      el("div", { class: "job-head" }, el("div", { class: "row" }, badge, title), el("div", { class: "row" }, cancel.node, toggle)),
       error, files, logBox);
     container.appendChild(root);
     let current = null;
 
     return {
       reset() {
-        current = null; root.classList.remove("hidden");
+        current = null; cancel.update(null); root.classList.remove("hidden");
         logBox.textContent = ""; files.innerHTML = ""; error.classList.add("hidden");
         badge.className = "badge queued"; badge.textContent = tr("提交中"); title.textContent = "";
       },
       update(job) {
         current = job;
         badge.className = `badge ${job.status}`;
-        badge.textContent = STATUS_TEXT[job.status] || job.status;
+        badge.textContent = statusText(job);
         const secs = job.started_at ? ((job.finished_at || Date.now() / 1000) - job.started_at) : 0;
         title.textContent = job.id ? `${tr("任务 {id}", { id: job.id })}${secs ? ` · ${secs.toFixed(1)}s` : ""}` : "";
-        cancel.classList.toggle("hidden", job.status !== "queued");
+        cancel.update(job);
         if (job.error) { error.textContent = job.error; error.classList.remove("hidden"); }
         files.innerHTML = "";
         (job.artifacts || []).forEach((a, i) => files.appendChild(artifactRow(job.id, i, a)));
@@ -429,7 +459,7 @@ const P7 = (() => {
 
   connect();
   return {
-    el, $, on, send, startJob, getJSON, jobPanel, artifactRow, STATUS_TEXT, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
+    el, $, on, send, startJob, getJSON, jobPanel, artifactRow, STATUS_TEXT, statusText, cancelControl, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
     onGameChart, gameChartLine, chartName,
     navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
     modBadges, chartTitle, chartLink, query, playRow, tip, svg,

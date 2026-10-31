@@ -16,6 +16,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from proj7k import cancel
 from proj7k.parser import Beatmap7K, dump_osu_7k, parse_osu_7k
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.lazer.annotator import (
@@ -670,6 +671,7 @@ def run_downscale(
     failed_count = 0
 
     for idx, path in enumerate(beatmap_files, start=1):
+        cancel.checkpoint()
         try:
             res, out_path = process_beatmap_file(
                 path,
@@ -773,6 +775,8 @@ def run_downscale(
     # Synchronization with osu!lazer if requested
     sync_result: Optional[LazerPracticeSyncResult] = None
     if sync_lazer and not dry_run:
+        # The last point a dashboard job can stop at: past it, the charts go into the library (ADR-0049).
+        cancel.checkpoint()
         # Trigger native OS import through the .osz file association (Q3 - A)
         for osz_file in osz_map.values():
             if osz_file.exists():

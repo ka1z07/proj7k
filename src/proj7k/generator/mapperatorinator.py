@@ -33,6 +33,7 @@ from typing import Callable, List, Optional, Sequence, Union
 
 import numpy as np
 
+from proj7k import cancel
 from proj7k.engine import evaluate_notes
 from proj7k.generator import legal
 from proj7k.generator import mapperatorinator_patch as patches
@@ -180,6 +181,9 @@ def child_env(**extra: str) -> dict:
 
 
 def _run(cmd: Sequence[str], log: Callable[[str], None], cwd: Optional[Path] = None, **env: str) -> None:
+    # An install step is never killed halfway (a half-written venv would outlive the job); a stop waits for it to
+    # end and takes effect before the next one, and the next install starts over from the steps left (ADR-0049).
+    cancel.checkpoint()
     proc = subprocess.run(list(map(str, cmd)), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env=child_env(**GIT_ENV, **env))
     if proc.returncode != 0:
@@ -340,8 +344,9 @@ def run_model(audio: Path, output_dir: Path, difficulty: float, seed: int, extra
     before = set(output_dir.glob("*.osu"))
     cmd = [str(venv_python(home)), "inference.py", "-cn", CONFIG, *extra]
     env = child_env(PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
-    proc = subprocess.run(cmd, cwd=repo_dir(home), capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", env=env)
+    # Killed at once when the job is cancelled: it writes only into this run's scratch folder (ADR-0049).
+    proc = cancel.run(cmd, cwd=repo_dir(home), capture_output=True, text=True, encoding="utf-8",
+                      errors="replace", env=env)
     made = sorted(set(output_dir.glob("*.osu")) - before, key=lambda p: p.stat().st_mtime)
     if proc.returncode != 0 or not made:
         tail = (proc.stderr or proc.stdout or "").strip()[-800:]
@@ -600,6 +605,7 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     best = None
     tried = 0
     for i in range(runs):
+        cancel.checkpoint()
         seed = options.seed + i
         extra = overrides(audio, work, difficulty, seed, hold_note_ratio=hold_ratio, title=title, artist=artist,
                           timing_from=timing_from, fast=options.model_fast) + model_args

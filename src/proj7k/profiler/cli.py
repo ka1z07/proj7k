@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional, Sequence
 
+from proj7k import cancel
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.field import ChartField, trace_beatmap
 from proj7k.parser import Beatmap7K, parse_osu_7k
@@ -651,6 +652,8 @@ def run_replay_import(
 
     with ProfilerStorage(db_path=db_path) as storage:
         for item in scores:
+            # Between replays only: a stale one is deleted and saved again with no stop in between (ADR-0049).
+            cancel.checkpoint()
             b_hash = item.get("beatmap_file_hash", "")
             r_hash = item.get("replay_file_hash", "")
 

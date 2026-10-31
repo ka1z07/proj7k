@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger("proj7k.lazer.daemon")
 
+from proj7k import cancel
 from proj7k.cache import TwoLayerCache
 from proj7k.engine import evaluate_osu
 from proj7k.engine.skills import SKILL_TECH_KEY
@@ -235,6 +236,7 @@ class LazerSyncManager:
 
         total_maps = len(mania_7k)
         for idx, rec in enumerate(mania_7k, start=1):
+            cancel.checkpoint()
             if idx % 500 == 0 or idx == total_maps:
                 logger.info(
                     f"Processing 7K beatmaps: {idx}/{total_maps} "
@@ -335,6 +337,9 @@ class LazerSyncManager:
                     "is held by the game process."
                 ),
             )
+
+        # The last point a dashboard job can stop at: from here the library is backed up and written (ADR-0049).
+        cancel.checkpoint()
 
         # 3. Enter safe flush window for atomic write transactions
         with SafeFlushWindow(self.lock_path, timeout_s=timeout, raise_on_busy=False) as window:
