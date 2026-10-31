@@ -82,9 +82,9 @@ def _beatmap(objs: List[HitObject], timing: List[TimingPoint], options: Generato
         creator=options.creator,
         version=version,
         overall_difficulty=options.overall_difficulty,
-        timing_points=[TimingPoint(time=tp.time, beat_length=tp.beat_length, meter=tp.meter, uninherited=True)
-                       for tp in timing if tp.uninherited],
-        # The model's windows overlap: the file osu! gets is made playable (legal.py).
+        # Red lines only, at one scroll speed (legal.constant_scroll); the model's windows overlap: the file osu!
+        # gets is made playable (legal.py).
+        timing_points=legal.constant_scroll(timing, legal.end_ms(objs)),
         hit_objects=legal.sanitize(objs, timing)[0],
         audio_filename=ref.audio_filename if ref else "",
         tags=f"proj7k {GENERATOR_VERSION} seed{options.seed}",
