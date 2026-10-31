@@ -11,6 +11,7 @@ from pathlib import Path
 import socket
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import pytest
@@ -423,6 +424,34 @@ def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
                 assert job["result"]["take"]["n"] == 2 and sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
                 job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "undo"})
                 assert job["result"]["current"] == 0 and job["result"]["can_redo"]
+
+                # The chart editor (ADR-0050): measures written again with candidates to audition, one adopted.
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "bars": "11-12",
+                                                                  "candidates": "2", "audition": True,
+                                                                  "mix": "rc_jack=..9"})
+                assert job["status"] == "done", job["error"]
+                assert len(job["result"]["candidates"]) == 2 and job["result"]["takes"] == 2
+                q = urllib.parse.quote(project)
+                status, _, body = await s.get(f"/api/editor/project?path={q}")
+                data = json.loads(body)
+                assert status == 200 and data["notes"] and data["bars"] and data["timing"]
+                assert len(data["candidates"]) == 2 and "notes_inside" in data["candidates"][0]
+                listed = json.loads((await s.get("/api/editor/projects"))[2])["projects"]
+                assert listed[0]["path"] == project and listed[0]["candidates"] == 2
+                c = data["candidates"][0]
+                info = json.loads((await s.get(f"/api/editor/stretch?path={q}&start={c['start_ms']}&end={c['end_ms']}"))[2])
+                assert info["notes"] > 0 and len(info["pools"]) == 8
+                status, headers, body = await s.get(f"/api/editor/audio?path={q}", {"Range": "bytes=0-3"})
+                assert status == 206 and body == b"RIFF"
+                # Only a project file opens: nothing else the server could read.
+                for bad in ("/etc/passwd", str(tmp_path / "song.wav"), project + ".x"):
+                    assert (await s.get(f"/api/editor/project?path={urllib.parse.quote(bad)}"))[0] == 404, bad
+                    assert (await s.get(f"/api/editor/audio?path={urllib.parse.quote(bad)}"))[0] == 404, bad
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "adopt", "candidate": "2"})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["takes"] == 3 and job["result"]["current"] == 2 and not job["result"]["candidates"]
+                status, _, body = await s.get("/editor")
+                assert status == 200 and "谱面编辑器" in body.decode("utf-8")
 
                 job, _ = await _run_job(ws, "generate", {"target_dan": "1st"})
                 assert job["status"] == "failed" and "音频" in job["error"]

@@ -330,10 +330,11 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
 def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     """
-    One operation on a generated chart's project (ADR-0047): `op` is show, rewrite, lock, unlock, anchor, unanchor,
-    undo or redo; `sections` the section numbers (from 1, comma separated); `source` and `mirror` for anchor;
-    `target_sr`, `ln_ratio`, `seed`, `candidates` and `mix` (the technique mix; absent: the project's, empty: none)
-    for rewrite.
+    One operation on a generated chart's project (ADR-0047, ADR-0050): `op` is show, rewrite, adopt, discard, lock,
+    unlock, anchor, unanchor, undo or redo; `sections` the section numbers (from 1, comma separated); `source` and
+    `mirror` for anchor; for rewrite either `sections` or `bars` ("first-last" measures, from 1), `target_sr`,
+    `ln_ratio`, `seed`, `candidates`, `mix` (the technique mix; absent: the project's, empty: none) and `audition`
+    (keep every candidate for adopt, by its number `candidate` from 1, or discard).
     """
     from proj7k.generator import project as P
 
@@ -341,9 +342,23 @@ def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobC
     op = _text(params, "op") or "show"
     sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
     if op == "rewrite":
-        P.rewrite(project, sections, target_sr=_float(params, "target_sr"), ln_ratio=_float(params, "ln_ratio"),
-                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
-                  pool_mix=(params.get("mix") or {}) if "mix" in params else None, log=logger.info)
+        bars = None
+        span = _text(params, "bars").replace("–", "-").replace("—", "-")
+        if span:
+            first, _, last = span.partition("-")
+            bars = (int(first) - 1, int(last or first) - 1)
+        P.rewrite(project, sections, bars=bars, target_sr=_float(params, "target_sr"),
+                  ln_ratio=_float(params, "ln_ratio"), seed=_int(params, "seed"),
+                  candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
+                  pool_mix=(params.get("mix") or {}) if "mix" in params else None,
+                  audition=_flag(params, "audition"), log=logger.info)
+    elif op == "adopt":
+        k = _int(params, "candidate")
+        if k is None:
+            raise ValueError(tr("要选一个候选", "Pick a candidate"))
+        P.adopt(project, k - 1)
+    elif op == "discard":
+        P.discard(project)
     elif op in ("lock", "unlock"):
         P.lock(project, sections, op == "lock")
     elif op == "anchor":

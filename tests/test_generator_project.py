@@ -178,3 +178,92 @@ def test_command_line(project, capsys):
     assert P.main([path, "undo"]) == 0 and P.main([path, "show"]) == 0
     assert P.main([path, "rewrite", "1"]) == 1
     assert "锁定" in capsys.readouterr().err
+
+
+# --- ADR-0050: measure ranges, audition, the editor's data ---------------------------------------------------------
+
+
+def test_a_measure_range_rewrites_only_those_measures(project):
+    run, calls = project
+    p = run.project
+    before = p.chart()
+    calls.clear()
+    first, last = p.sections[1].first_bar + 2, p.sections[1].first_bar + 4
+    start, end = P.bar_span(p, first, last)
+    assert end - start == pytest.approx(3 * 4 * BEAT)
+    P.rewrite(p, bars=(first, last), candidates=1, runner=model(calls))
+    after = p.chart()
+    outside = lambda c: sorted((o.time, o.column) for o in c.hit_objects if not start <= o.time < end)
+    inside = lambda c: sorted((o.time, o.column) for o in c.hit_objects if start <= o.time < end)
+    assert outside(after) == outside(before) and inside(after) != inside(before)
+    assert _arg(calls[0][2], "start_time") == str(int(start) + 1)
+    assert "小节" in p.takes[-1].note or "measures" in p.takes[-1].note
+
+
+def test_a_measure_range_touching_a_locked_section_is_refused(project):
+    run, calls = project
+    p = run.project
+    P.lock(p, [2])
+    with pytest.raises(ValueError, match="锁定|locked"):
+        P.rewrite(p, bars=(p.sections[1].last_bar, p.sections[2].first_bar), runner=model(calls))
+
+
+def test_audition_keeps_every_candidate_until_one_is_adopted(project):
+    run, calls = project
+    p = run.project
+    calls.clear()
+    P.rewrite(p, [1], candidates=3, audition=True, runner=model(calls))
+    assert len(p.takes) == 1 and len(p.candidates) == 3
+    scores = [c["score"] for c in p.candidates]
+    assert scores == sorted(scores)
+    assert all((p.folder / c["osu"]).is_file() for c in p.candidates)
+    loaded = P.Project.load(p.path)
+    assert len(loaded.candidates) == 3
+    data = P.editor_data(loaded)
+    assert data["candidates"][0]["notes_inside"] and "osu" not in data["candidates"][0]
+    s = p.sections[1]
+    assert all(s.start_ms <= n[1] < s.end_ms for n in data["candidates"][1]["notes_inside"])
+    want = sorted((n[1], n[0]) for n in data["candidates"][1]["notes_inside"])
+    files = [p.folder / c["osu"] for c in p.candidates]
+    P.adopt(loaded, 1)
+    assert len(loaded.takes) == 2 and loaded.candidates == []
+    assert not any(f.exists() for f in files)
+    assert notes_in(loaded.chart(), s) == want
+
+
+def test_candidates_go_when_the_take_changes(project):
+    run, calls = project
+    p = run.project
+    P.rewrite(p, [1], candidates=2, audition=True, runner=model(calls))
+    P.discard(p)
+    assert p.candidates == [] and P.Project.load(p.path).candidates == []
+    P.rewrite(p, [1], candidates=2, audition=True, runner=model(calls))
+    P.lock(p, [3])                       # a lock keeps them: the take is the same
+    assert len(p.candidates) == 2
+    P.rewrite(p, [2], candidates=1, runner=model(calls))
+    assert p.candidates == []
+    with pytest.raises(ValueError):
+        P.adopt(p, 0)
+
+
+def test_editor_data_has_notes_timing_measures_and_pools(project):
+    run, _ = project
+    p = run.project
+    data = P.editor_data(p)
+    chart = p.chart()
+    assert len(data["notes"]) == len(chart.hit_objects)
+    assert data["timing"][0]["beat_length"] == pytest.approx(BEAT)
+    assert data["bars"][1] - data["bars"][0] == pytest.approx(4 * BEAT)
+    assert set(data["sections"][1]["pools"]) >= {"rc_jack", "ln_release"}
+    assert data["duration_ms"] > max(n[1] for n in data["notes"])
+    sp = P.stretch_profile(p, p.sections[1].start_ms, p.sections[1].end_ms)
+    assert sp["notes"] == data["sections"][1]["notes"] and sp["stars"] == data["sections"][1]["stars"]
+
+
+def test_command_line_measures_and_audition(project, capsys):
+    run, _ = project
+    path = str(run.project.path)
+    # The stand-in model is not on the command line; the real one is not installed in tests.
+    assert P.main([path, "rewrite"]) == 1
+    assert P.main([path, "adopt", "1"]) == 1
+    assert P.main([path, "discard"]) == 0

@@ -168,3 +168,48 @@ def test_the_dashboard_hands_the_pages_mix_to_the_generator(monkeypatch, tmp_pat
         with pytest.raises(RuntimeError):
             actions.generate_chart(config, {"target_sr": "5", "audio": str(audio), "mix": value}, None)
         assert seen["mix"] == expected
+
+
+def test_ranges_parse_in_every_spelling():
+    assert mix.parse("rc_jack=4.5..6") == {"rc_jack": (4.5, 6.0)}
+    assert mix.parse("jack=..6;stream=4..") == {"rc_jack": (None, 6.0), "rc_stamina": (4.0, None)}
+    assert mix.parse("rc_jack=4.5-6, rc_tech=-1") == {"rc_jack": (4.5, 6.0), "rc_tech": -1.0}
+    assert mix.parse({"rc_jack": [None, 6], "rc_tech": {"min": 3}, "rc_speed": [None, None]}) == \
+        {"rc_jack": (None, 6.0), "rc_tech": (3.0, None)}
+    assert mix.to_json(mix.parse("rc_jack=4..6,rc_tech=1")) == {"rc_jack": [4.0, 6.0], "rc_tech": 1.0}
+    with pytest.raises(ValueError):
+        mix.parse("rc_jack=6..4")
+    with pytest.raises(ValueError):
+        mix.parse("rc_jack=4..99")
+    with pytest.raises(ValueError):
+        mix.parse("rc_jack=a..b")
+
+
+def test_a_range_scores_by_the_stars_outside_it_and_steers_the_trim():
+    objs = [HitObject(column=0, time=1000 + 100 * i, note_type=NoteType.RICE) for i in range(200)]
+    p = evaluate_notes([(o.column, o.time / 1000.0, None) for o in objs])
+    jack = float(p.skills["rc_jack"].stars)
+    assert mix.miss(p, {"rc_jack": (None, jack + 1)}) == 0.0
+    assert mix.miss(p, {"rc_jack": (jack + 1, None)}) == pytest.approx(1.0)
+    assert mix.miss(p, {"rc_jack": (None, jack - 0.5)}) == pytest.approx(0.5)
+    assert mix.penalty(p, {"rc_jack": (jack + 1, None)}) > mix.penalty(p, {"rc_jack": (None, jack + 1)})
+    assert mix.misses(p, {"rc_jack": (jack + 1, None)})[0]["pool"] == "rc_jack"
+    assert "Jack" in mix.miss_text(p, {"rc_jack": (jack + 1, None)})
+    assert mix.skill_weights({"rc_jack": (None, jack - 1)}, p) == {"rc_jack": -1.0}
+    assert mix.skill_weights({"rc_jack": (jack + 1, None)}, p) == {"rc_jack": 1.0}
+    assert mix.skill_weights({"rc_jack": (0.0, jack + 5)}, p) is None
+    assert mix.skill_weights({"rc_jack": (None, 3.0), "rc_tech": 1}) == {"rc_jack": -0.5, "rc_tech": 1.0}
+
+
+def test_a_rewrite_keeps_the_candidate_inside_the_range(tmp_path, song):
+    calls = []
+    options = GeneratorOptions(target_stars=1.0, tolerance=50.0, model_runs=1, model_runner=styled_runner(calls),
+                               model_reuse=False, title="T", artist="A")
+    run = run_generate(options, tmp_path / "out", audio=song)
+    p = run.project
+    P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=..0.5")
+    jacks = [c["pools"]["rc_jack"] for c in p.candidates]
+    assert jacks[0] <= jacks[1]
+    P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=8..")
+    jacks = [c["pools"]["rc_jack"] for c in p.candidates]
+    assert jacks[0] >= jacks[1] and p.candidates[0]["misses"]
