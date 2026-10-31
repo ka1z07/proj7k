@@ -111,12 +111,15 @@
         now: el("div", { class: "job-now ellipsis" }), started: el("div", { class: "hint" }), took: el("div"),
         error: el("div", { class: "job-error hidden" }), files: el("div", { class: "artifacts" }),
         actions: el("div", { class: "row", style: "margin:6px 0" }), log: el("div", { class: "log hidden" }),
+        // On the line itself, so a job can be cancelled without opening it.
+        cancel: P7.cancelControl(() => jobs.get(j.id)),
       };
       r.detail = el("div", { class: "job-detail hidden" }, r.error, r.files, r.actions, r.log);
       r.root = el("div", { class: "job-row" },
         el("div", { class: "job-line", onclick: () => toggle(j.id) },
           r.badge,
           el("div", { class: "grow" }, el("div", { class: "ellipsis" }, r.kind, r.desc), r.now),
+          r.cancel.node,
           el("div", { class: "job-when" }, r.took, r.started)),
         r.detail);
       rows.set(j.id, r);
@@ -127,7 +130,7 @@
       const r = rows.get(j.id) || makeRow(j);
       r.root.className = `job-row ${j.status}`;
       r.badge.className = `badge ${j.status}`;
-      r.badge.textContent = P7.STATUS_TEXT[j.status] || j.status;
+      r.badge.textContent = P7.statusText(j);
       r.kind.textContent = KIND[j.kind] || j.kind;
       r.desc.textContent = describe(j);
       r.desc.title = r.desc.textContent;
@@ -139,9 +142,9 @@
       r.took.textContent = elapsed(j);
       r.error.textContent = j.error || "";
       r.error.classList.toggle("hidden", !j.error);
+      r.cancel.update(j);
       r.files.replaceChildren(...(j.artifacts || []).map((a, i) => P7.artifactRow(j.id, i, a)));
       r.actions.replaceChildren(...[
-        j.status === "queued" ? el("button", { class: "small danger", text: tr("取消"), onclick: () => P7.send({ type: "job_cancel", id: j.id }) }) : null,
         PAGE[j.kind] ? el("button", { class: "small", text: tr("去「{page}」", { page: PAGE_NAME[PAGE[j.kind]] }), onclick: () => P7.navigate(PAGE[j.kind]) }) : null,
         el("span", { class: "hint", text: tr("任务 {id}", { id: j.id }) })].filter(Boolean));
       return r;

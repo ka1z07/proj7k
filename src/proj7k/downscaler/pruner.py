@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
+from proj7k import cancel
 from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.field import ChartField, d_of_stars, trace_beatmap
@@ -363,6 +364,7 @@ class ExcessLossPruner:
 
         bursts_stuck = False
         for it in range(1, self.max_iterations + 1):
+            cancel.checkpoint()
             star = field.profile.total_stars
             bursting = not bursts_stuck and max(excess(burst, D_star).values()) > 1.0
             if star <= upper and not bursting:

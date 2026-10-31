@@ -35,6 +35,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from proj7k import cancel
 from proj7k.engine import evaluate_notes
 from proj7k.generator import legal
 from proj7k.i18n import tr
@@ -435,6 +436,7 @@ def rewrite(project: Project, indices: Sequence[int], *, target_sr: Optional[flo
         log(tr(f"技法配比：{mix_mod.describe(mix)}", f"Technique mix: {mix_mod.describe(mix)}"))
     best = None
     for k in range(max(1, int(candidates))):
+        cancel.checkpoint()  # a stop leaves the project as it was: the new take is only made after the last candidate
         extra = m.overrides(audio, work, difficulty, seed0 + k, hold_note_ratio=ratio, timing_from=context) + \
             ["add_to_beatmap=true", f"start_time={int(start) + 1}", f"end_time={int(end) - 1}"] + \
             list(project.model_args) + list(model_args)

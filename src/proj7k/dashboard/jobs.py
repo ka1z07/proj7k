@@ -29,7 +29,8 @@ import traceback
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 from urllib.parse import quote
 
-from proj7k import claims, i18n
+from proj7k import cancel as cancellation, claims, i18n
+from proj7k.i18n import tr
 
 logger = logging.getLogger("proj7k.dashboard.jobs")
 
@@ -43,8 +44,8 @@ MAX_PARALLEL_JOBS = 4
 SERIAL: FrozenSet[str] = frozenset({"serial"})
 
 
-class JobCancelled(Exception):
-    """Raised inside an action that saw its job's stop flag."""
+#: Raised inside an action that saw its job's stop flag (`proj7k.cancel`, ADR-0049).
+JobCancelled = cancellation.Cancelled
 
 
 @dataclass
@@ -119,6 +120,8 @@ class Job:
             # What it is doing now, for a list of jobs that doesn't follow every log line.
             "last_log": self.logs[-1] if self.logs else None,
             "resources": sorted(self.resources),
+            # Asked to stop, still running until its next safe point (ADR-0049).
+            "stopping": self.status == "running" and self.stop_event.is_set(),
         }
         if with_logs:
             data["logs"] = list(self.logs)
@@ -293,11 +296,15 @@ class JobManager:
         return job
 
     def cancel(self, job_id: str) -> bool:
-        """Cancel a queued job, or ask a running one to stop (only long loops, such as the daemon, check)."""
+        """
+        Cancel a queued job, or ask a running one to stop: it stops at its next safe point (`proj7k.cancel`, ADR-0049),
+        never in the middle of a write, and a job that reaches none before it ends simply finishes.
+        """
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None or job.finished:
                 return False
+            asked = job.stop_event.is_set()
             job.stop_event.set()
             dropped = self._scheduler.remove(job.id)
             if dropped:
@@ -306,6 +313,11 @@ class JobManager:
         if dropped:
             self._publish(job)
             self._dispatch()  # a later job it held back may start now
+        elif not asked:
+            with i18n.language(job.lang):
+                self.append_log(job, tr("正在取消：到下一个安全点停下（不会停在写入中途）……",
+                                        "Cancelling: stopping at the next safe point (never in the middle of a write)…"))
+            self._publish(job)
         return True
 
     def _dispatch(self) -> None:
@@ -335,12 +347,13 @@ class JobManager:
             job.uploads = {}
             # A job that runs alone (no resource function) may write anything; otherwise only what it claimed.
             guard = claims.holding(job.resources) if self._claims_checked else contextlib.nullcontext()
-            with guard:
+            with guard, cancellation.watching(job.stop_event):
                 result = self.actions[job.kind](job.params, JobContext(job=job, workdir=job.workdir))
             job.result = result or {}
             job.status = "done"
         except JobCancelled:
             job.status = "cancelled"
+            self.append_log(job, tr("已取消。", "Cancelled."))
         except Exception as e:
             job.status = "failed"
             job.error = str(e) or type(e).__name__

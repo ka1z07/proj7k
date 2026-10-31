@@ -17,6 +17,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 from proj7k.lazer.backup import DEFAULT_CACHE_DIR
 from proj7k.lazer.bridge import DEFAULT_REALM_PATH, RealmBridgeClient
 
+from proj7k import cancel
 from proj7k.claims import ALL as ALL_RESOURCES, DOWNSCALER, GENERATOR, LAZER, PROFILER
 from proj7k.dashboard.jobs import Action, JobContext
 from proj7k.i18n import tr
@@ -457,6 +458,7 @@ def profile_replay(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
 
     logger.info("Aligning the replay against the chart and running the diagnosis...")
     report = run_ingestion(replay_path, beatmap_path)
+    cancel.checkpoint()  # before anything is saved or written (ADR-0049)
     audio_name = ""
     if source in ("lazer", "current"):
         found_audio = _lazer_audio(config, Path(beatmap_path)) if _flag(params, "view", True) else None
