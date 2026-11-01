@@ -56,7 +56,8 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #:
 #: Re-baselined for the spec v0.2 engine (ADR-0017/0018): the engine was replaced, so every rating moved.
 #: Re-baselined for the same-finger weight (ADR-0044): `k_same` and the refitted star line move every rating.
-EXPECTED_STAR_RATING_CHECKSUM = "sha256:004cd19bb3485bf479b8062f615514d83d98fde5699979e8c199fa74e2ec3bad"
+#: Re-baselined for the jack speed-limit surcharge (ADR-0051): the refitted star line moves every rating.
+EXPECTED_STAR_RATING_CHECKSUM = "sha256:f7608a4a01078ba372ad1db85f80fbac846f996b370f2b24df5f52620925e78b"
 
 #: The ladder-level acceptance bar itself lives in `guard`, next to the per-technique gates it
 #: complements, so the calibration tools can weigh the same numbers this module asserts. It was

@@ -47,6 +47,7 @@ class Events:
     held: np.ndarray          # [rows, 7] column is held strictly between head and tail rows (§2.6, R2)
     h: np.ndarray             # held columns other than the event's own (§2.6)
     j: np.ndarray             # same-finger rate (§4.1)
+    j_run: np.ndarray         # the slowest of a press's last jack_run same-finger rates on its column, 0 if fewer (ADR-0051)
     last: np.ndarray          # [rows, 7] time of the latest event on each column at or before the row
     delta_0: np.ndarray       # [rows] psi time scale from the local rhythm (§4.2–4.3)
     U_rhy: np.ndarray         # [rows] rhythm surprise (§5.2)
@@ -113,6 +114,26 @@ def preprocess(notes: Notes, p: Params) -> Events:
             j[i] = 1.0 / max(p.delta_floor, ev_t[i] - e_prime + p.delta_h)
         last_obj[c] = k
 
+    # ADR-0051 j_run: the slowest of the press's last jack_run same-finger rates. Only a jack sustained over
+    # all of them reaches the speed-limit surcharge; a minijack has a slow interval in the window, and a
+    # stray short interval (a grace note, a doubled note) splits one interval without raising the slowest
+    # (the robustness `v_cap` gives the rest of v, §14 T5)
+    j_run = np.zeros(n)
+    m = p.jack_run
+    recent = [[] for _ in range(7)]
+    for i in range(n):
+        if ev_rel[i]:
+            continue
+        c = ev_col[i]
+        if j[i] > 0:
+            recent[c].append(1.0 / j[i])
+            if len(recent[c]) > m:
+                recent[c].pop(0)
+        else:
+            recent[c] = []
+        if len(recent[c]) == m:
+            j_run[i] = 1.0 / max(recent[c])
+
     # last[r, c]: time of the latest event on column c at or before row r
     has = np.zeros((n_rows, 7), dtype=bool)
     has[ev_row, ev_col] = True
@@ -122,7 +143,7 @@ def preprocess(notes: Notes, p: Params) -> Events:
 
     return Events(
         n=n, n_rows=n_rows, T=T, row=ev_row, col=ev_col, rel=ev_rel, obj=ev_obj, tail_row=tail_row,
-        is_ln=is_ln, held=held, h=h, j=j, last=last, delta_0=_local_delta_0(T, p), U_rhy=rhythm_surprise(T, p),
+        is_ln=is_ln, held=held, h=h, j=j, j_run=j_run, last=last, delta_0=_local_delta_0(T, p), U_rhy=rhythm_surprise(T, p),
     )
 
 

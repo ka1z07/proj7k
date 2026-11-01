@@ -31,6 +31,13 @@ def _psi(dt: np.ndarray, d0) -> np.ndarray:
     return np.where(np.isfinite(dt), out, 0.0)
 
 
+def _jack_surcharge(j: np.ndarray, p: Params) -> np.ndarray:
+    """ADR-0051: the extra cost of a finger repeating near its speed limit, in the units of v (Hz)."""
+    jt = np.minimum(j, p.jack_top)
+    s = (jt / p.jack_hz) ** p.jack_pow
+    return p.k_same * p.jack_gain * s / (1.0 + s) * jt
+
+
 def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     hand = hand_of(thumb)
     K = kappa_matrix(p, thumb)
@@ -51,6 +58,9 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     # a press's j is the finger repeating itself; a release's j is its LN's length and is not weighted
     k_j = np.where(rel, 1.0, p.k_same)
     v = np.minimum(omega * (k_j * ev.j + x + o) * c, p.v_cap)
+    # ADR-0051: near the speed limit a jack costs more than its rate; added above the cap, which is
+    # there for one stray short interval, not for a sustained jack (jack_top bounds this term instead)
+    v = v + np.where(rel, 0.0, _jack_surcharge(ev.j_run, p) * c)
 
     # r stays the unweighted share: it is what membership's thresholds were set on (§8.1)
     with np.errstate(invalid="ignore", divide="ignore"):

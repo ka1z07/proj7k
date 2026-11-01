@@ -39,7 +39,7 @@ from proj7k.dan import CANONICAL_DAN_SR, estimate_canonical_dan  # noqa: E402
 
 def test_the_dan_table_is_the_engines_regular_tier_levels_and_strictly_increasing():
     assert [CANONICAL_DAN_SR[t] for t in CANONICAL_DAN_TIERS] == [
-        3.42, 3.89, 4.47, 5.02, 5.36, 5.75, 6.08, 6.52, 6.86, 7.32, 7.79, 8.61, 9.09, 10.00, 10.99,
+        3.43, 3.89, 4.47, 5.02, 5.35, 5.75, 6.07, 6.51, 6.85, 7.30, 7.78, 8.59, 9.08, 10.00, 10.99,
     ]
 
 

@@ -3,9 +3,9 @@ The constants of the spec-v0.2 engine (`osu-mania-7k-difficulty-spec.md` §12), 
 
 Every number that can move a result lives here; the other modules read it from a `Params`.
 Names follow the spec's symbols so a constant can be traced to its section. They are priors: the
-§13 calibration was tried on v0.2 and not adopted (ADR-0017), so nothing here was fitted. The one
-departure from the prototype is `k_same` (ADR-0044), chosen against the benchmark ladder and the
-owner's anchors, not fitted.
+§13 calibration was tried on v0.2 and not adopted (ADR-0017), so nothing here was fitted. The
+departures from the prototype are `k_same` (ADR-0044) and the jack speed-limit surcharge `jack_*`
+(ADR-0051), chosen against the benchmark ladder and the owner's anchors, not fitted.
 
 Not carried over from the prototype: its experiment switches, and the cognitive terms
 (`M`, `R`), the fatigue factor `Phi` and the accumulators `E^f`, `E^g`. In v0.2 none of them
@@ -36,6 +36,12 @@ class Params:
     # §4 instantaneous demand
     delta_h: float = 0.050
     k_same: float = 1.75              # weight of the same-finger rate j in v against the other fingers' coupling (§4.5)
+    # ADR-0051 speed-limit surcharge: a sustained jack costs more than its rate as the rate nears jack_hz
+    jack_hz: float = 13.3             # Hz (200 BPM 1/4); a press's same-finger cost is (1 + jack_gain / 2) x here
+    jack_pow: float = 10.0            # how sharply the surcharge rises towards jack_hz
+    jack_gain: float = 2.0            # the most the surcharge multiplies the same-finger cost by, on top of 1
+    jack_run: int = 3                 # same-finger repeats a press needs behind it (a 4-note jack) for the surcharge
+    jack_top: float = 20.0            # Hz; a faster repeat (a grace note, a flam) is charged as this rate
     delta_floor: float = 0.020
     delta_0: float = 0.040            # psi time scale of the first row, before any rhythm is known
     delta_0_rel: float = 0.5          # psi time scale = this * median row interval over the past delta_0_window
@@ -73,6 +79,7 @@ class Params:
 
 DEFAULT = Params()
 
-#: The constants of the frozen spec-v0.2 prototype, before ADR-0044 weighted the same-finger rate.
+#: The constants of the frozen spec-v0.2 prototype, before ADR-0044 weighted the same-finger rate and
+#: ADR-0051 added the jack speed-limit surcharge.
 #: `tests/engine/test_engine_golden.py` checks the port against the prototype's output under these.
-V02 = Params(k_same=1.0)
+V02 = Params(k_same=1.0, jack_gain=0.0)
