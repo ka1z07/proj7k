@@ -16,7 +16,8 @@ replay source. `/api/current` answers the same.
 
 HTTP: `/` is the dashboard shell (or the live page itself for `?mode=overlay`, the OBS URL ADR-0010 published),
 `/live`, `/sync`, `/downscaler`, `/generator`, `/profiler` are its tools, `/jobs` lists every job, `/home`, `/history`, `/library`, `/chart`
-and `/play` its player pages (ADR-0034), `/api/*` is read-only state, and `/files/<job>/<index>/<name>` serves a
+and `/play` its player pages (ADR-0034), `/editor` the chart editor (ADR-0050, reading `/api/editor/*`), `/api/*` is
+read-only state, and `/files/<job>/<index>/<name>` serves a
 job's registered outputs.
 
 The player pages read `/api/me/*` (`proj7k.dashboard.player`): `players`, `overview`, `history`, `library`,
@@ -70,7 +71,14 @@ PAGES = {
     "/library": "library.html",
     "/chart": "chart.html",
     "/play": "play.html",
+    "/editor": "editor.html",
 }
+
+#: The chart editor's API (ADR-0050): `projects`, `project`, `stretch`, `audio`, `take` (`n`, from 1) and `lazer`
+#: (the project's charts in osu!lazer's library), each but `projects` given `path`, a project's .p7kgen.json.
+_EDITOR_API = re.compile(r"^/api/editor/(projects|project|stretch|audio|take|lazer)$")
+#: How many projects the editor lists, newest first.
+EDITOR_PROJECTS_MAX = 300
 
 #: Uploads ride the WebSocket base64-encoded, so this caps an upload at about 190 MB (a long lossless audio file fits).
 MAX_MESSAGE_BYTES = 256 * 2**20
@@ -218,11 +226,96 @@ class DashboardServer(LiveServer):
         match = _FILES_PATH.match(path)
         if match:
             return self._serve_artifact(match.group(1), int(match.group(2)), unquote(match.group(3)), request)
+        match = _EDITOR_API.match(path)
+        if match:
+            return asyncio.to_thread(self._editor_route, match.group(1), query, request)
         match = _PLAYER_API.match(path)
         if match:
             # websockets awaits a coroutine here; the work runs on a thread so the live radar keeps its frames.
             return asyncio.to_thread(self._player_route, match.group(1), unquote(match.group(2) or ""), query, request)
         return super()._process_request(connection, request)
+
+    # --- the chart editor (ADR-0050) ----------------------------------------------------------------------------
+
+    def _editor_projects(self) -> Dict[str, Any]:
+        from proj7k.generator import project as P
+
+        root = self.config.generated_dir
+        found = []
+        if root.is_dir():
+            for f in root.rglob("*" + P.SUFFIX):
+                try:
+                    found.append((f.stat().st_mtime, f))
+                except OSError:
+                    pass
+        found.sort(reverse=True)
+        out = []
+        for mtime, f in found[:EDITOR_PROJECTS_MAX]:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                takes = data.get("takes") or []
+                take = takes[data.get("current", 0)] if takes else {}
+            except (OSError, ValueError, IndexError):
+                continue
+            out.append({"path": str(f), "name": f.name[:-len(P.SUFFIX)], "takes": len(takes), "mtime": mtime,
+                        "stars": take.get("stars"), "note": take.get("note"),
+                        "candidates": len(data.get("candidates") or [])})
+        return {"projects": out, "folder": str(root)}
+
+    def _editor_lazer(self, project) -> Dict[str, Any]:
+        """The project's charts in osu!lazer's library: same song and creator, a difficulty name of one of its takes
+        (an edit in lazer's editor keeps the name and changes the file). `edited` = not any take's file as written."""
+        import hashlib
+
+        first = project.chart(0)
+        takes = {}
+        for i, t in enumerate(project.takes):
+            try:
+                takes[hashlib.md5((project.folder / t.osu).read_bytes()).hexdigest()] = i + 1
+            except OSError:
+                pass
+        snapshot = self.library.snapshot(force=True)
+        out = []
+        for c in snapshot.charts.values():
+            if c.get("title") != first.title or c.get("artist") != first.artist or c.get("creator") != first.creator:
+                continue
+            if not str(c.get("version", "")).startswith(project.base_version):
+                continue
+            out.append({"md5": c["md5"], "version": c.get("version"), "stars": c.get("stars"),
+                        "date_added": c.get("date_added"), "take": takes.get(c["md5"]), "edited": c["md5"] not in takes})
+        out.sort(key=lambda c: str(c.get("date_added") or ""), reverse=True)
+        out.sort(key=lambda c: not c["edited"])
+        return {"charts": out, "error": snapshot.error}
+
+    def _editor_route(self, what: str, query: str, request: Request) -> Response:
+        from proj7k.generator import project as P
+
+        params = {k: v[-1] for k, v in parse_qs(query).items()}
+        set_language(from_cookie(request.headers.get("Cookie")))
+        try:
+            if what == "projects":
+                return self._json_response(self._editor_projects())
+            path = Path(params.get("path") or "")
+            # Only a generated chart's project file opens here, never any other file the server can read.
+            if not path.name.endswith(P.SUFFIX) or not path.is_file():
+                return self._json_response({"error": tr("找不到这个生成项目", "No such generated chart project")}, 404, "Not Found")
+            project = P.Project.load(path)
+            if what == "project":
+                return self._json_response(P.editor_data(project))
+            if what == "stretch":
+                return self._json_response(P.stretch_profile(project, float(params["start"]), float(params["end"])))
+            if what == "take":
+                n = int(params.get("n") or 0) - 1
+                return self._json_response({"n": n + 1, "notes": P.take_notes(project, n)})
+            if what == "lazer":
+                return self._json_response(self._editor_lazer(project))
+            work = project.folder / ".p7kgen-work"
+            return self._file_response(project.audio_path(work), request, "audio/mpeg")
+        except (KeyError, ValueError) as e:
+            return self._json_response({"error": str(e)}, 400, "Bad Request")
+        except Exception as e:
+            logger.exception("editor %s", what)
+            return self._json_response({"error": str(e)}, 500, "Internal Server Error")
 
     # --- the player pages (ADR-0034) ----------------------------------------------------------------------------
 
@@ -490,6 +583,20 @@ class DashboardServer(LiveServer):
                 await asyncio.to_thread(self.opener, target)
             except Exception as e:
                 await connection.send(json.dumps({"type": "error", "message": tr(f"无法打开 {target}: {e}", f"Can't open {target}: {e}")}, ensure_ascii=False))
+
+        elif msg_type == "editor_rate":
+            # The chart editor's live reading of notes not saved yet (ADR-0050): stars, pools and what is unplayable.
+            from proj7k.generator import project as P
+
+            try:
+                start, end = data.get("start"), data.get("end")
+                reading = await asyncio.to_thread(P.rate_rows, data.get("notes") or [],
+                                                  float(start) if start is not None else None,
+                                                  float(end) if end is not None else None)
+                reply = {"type": "editor_rated", "request_id": data.get("request_id"), **reading}
+            except Exception as e:
+                reply = {"type": "editor_rated", "request_id": data.get("request_id"), "error": str(e)}
+            await connection.send(json.dumps(reply, ensure_ascii=False))
 
         elif msg_type == "open_replay":
             try:

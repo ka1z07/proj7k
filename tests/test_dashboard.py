@@ -11,6 +11,7 @@ from pathlib import Path
 import socket
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import pytest
@@ -423,6 +424,91 @@ def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
                 assert job["result"]["take"]["n"] == 2 and sorted(a["kind"] for a in job["artifacts"]) == ["osu", "osz"]
                 job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "undo"})
                 assert job["result"]["current"] == 0 and job["result"]["can_redo"]
+
+                # The chart editor (ADR-0050): measures written again with candidates to audition, one adopted.
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "rewrite", "bars": "11-12",
+                                                                  "candidates": "2", "audition": True,
+                                                                  "mix": "rc_jack=..9"})
+                assert job["status"] == "done", job["error"]
+                assert len(job["result"]["candidates"]) == 2 and job["result"]["takes"] == 2
+                q = urllib.parse.quote(project)
+                status, _, body = await s.get(f"/api/editor/project?path={q}")
+                data = json.loads(body)
+                assert status == 200 and data["notes"] and data["bars"] and data["timing"]
+                assert len(data["candidates"]) == 2 and "notes_inside" in data["candidates"][0]
+                listed = json.loads((await s.get("/api/editor/projects"))[2])["projects"]
+                assert listed[0]["path"] == project and listed[0]["candidates"] == 2
+                c = data["candidates"][0]
+                info = json.loads((await s.get(f"/api/editor/stretch?path={q}&start={c['start_ms']}&end={c['end_ms']}"))[2])
+                assert info["notes"] > 0 and len(info["pools"]) == 8
+                status, headers, body = await s.get(f"/api/editor/audio?path={q}", {"Range": "bytes=0-3"})
+                assert status == 206 and body == b"RIFF"
+                # Only a project file opens: nothing else the server could read.
+                for bad in ("/etc/passwd", str(tmp_path / "song.wav"), project + ".x"):
+                    assert (await s.get(f"/api/editor/project?path={urllib.parse.quote(bad)}"))[0] == 404, bad
+                    assert (await s.get(f"/api/editor/audio?path={urllib.parse.quote(bad)}"))[0] == 404, bad
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "adopt", "candidate": "2"})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["takes"] == 3 and job["result"]["current"] == 2 and not job["result"]["candidates"]
+                status, _, body = await s.get("/editor")
+                assert status == 200 and "谱面编辑器" in body.decode("utf-8")
+
+                # Hand edits (ADR-0050 phase 2): rated live over the socket, then saved as a take of their own.
+                data = json.loads((await s.get(f"/api/editor/project?path={q}"))[2])
+                rows = data["notes"]
+                bar = data["bars"][3]
+                free = [c for c in range(7) if not any(r[0] == c and abs(r[1] - bar) < 30 for r in rows)][0]
+                edited = rows + [[free, round(bar), None]]
+                await ws.send(json.dumps({"type": "editor_rate", "request_id": "x1", "notes": edited,
+                                          "start": bar, "end": data["bars"][4]}))
+                while (msg := json.loads(await asyncio.wait_for(ws.recv(), timeout=60)))["type"] != "editor_rated":
+                    pass
+                assert msg["request_id"] == "x1" and msg["notes"] == len(edited) and not msg["problems"]
+                assert len(msg["pools"]) == 8 and msg["stretch"]["notes"] > 0
+                await ws.send(json.dumps({"type": "editor_rate", "request_id": "x2", "notes": edited + [edited[-1]]}))
+                while (msg := json.loads(await asyncio.wait_for(ws.recv(), timeout=60)))["type"] != "editor_rated":
+                    pass
+                assert msg["problems"] and msg["problems"][0]["kind"] == "duplicate"
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "edit",
+                                                                  "notes": json.dumps(edited + [edited[-1]])})
+                assert job["status"] == "failed"
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "edit", "notes": edited})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["takes"] == 4 and job["result"]["current"] == 3 and 3 in job["result"]["hand_bars"]
+                take = json.loads((await s.get(f"/api/editor/take?path={q}&n=1"))[2])
+                assert take["n"] == 1 and take["notes"]
+                assert (await s.get(f"/api/editor/take?path={q}&n=99"))[0] >= 400
+
+                # Sections (phase 3): split at a measure, merged back, a boundary moved.
+                n = len(job["result"]["sections"])
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "split", "section": "1", "bar": "3"})
+                assert job["status"] == "done", job["error"]
+                assert len(job["result"]["sections"]) == n + 1
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "merge", "section": "1"})
+                assert job["status"] == "done" and len(job["result"]["sections"]) == n, job["error"]
+                first2 = job["result"]["sections"][1]["bars"][0]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "boundary", "section": "2",
+                                                                  "bar": str(first2 + 1)})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["sections"][1]["bars"][0] == first2 + 1
+
+                # No osu!lazer here: the read-back list is empty and says why, it never fails the page.
+                status, _, body = await s.get(f"/api/editor/lazer?path={q}")
+                assert status == 200 and json.loads(body)["charts"] == []
+
+                # Any 7K chart becomes a project of its own; the original is left as it was.
+                (tmp_path / "osu").mkdir()
+                chart_file = tmp_path / "osu" / "sample.osu"
+                chart_file.write_bytes(SAMPLE_OSU.read_bytes())
+                (tmp_path / "osu" / "audio.mp3").write_bytes((tmp_path / "song.wav").read_bytes())
+                before = chart_file.read_bytes()
+                job, _ = await _run_job(ws, "editor_open", {"chart": str(chart_file)})
+                assert job["status"] == "done", job["error"]
+                opened = job["result"]["project_file"]
+                assert Path(opened).is_relative_to(s.config.generated_dir / "edits") and chart_file.read_bytes() == before
+                assert json.loads((await s.get(f"/api/editor/project?path={urllib.parse.quote(opened)}"))[2])["notes"]
+                job, _ = await _run_job(ws, "editor_open", {"chart": ""})
+                assert job["status"] == "failed"
 
                 job, _ = await _run_job(ws, "generate", {"target_dan": "1st"})
                 assert job["status"] == "failed" and "音频" in job["error"]

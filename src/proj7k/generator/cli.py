@@ -244,8 +244,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Mapperatorinator 加载长条 LoRA（试验，ADR-0048）：长条谱更难、和弦更厚，混合谱会多写长条")
     p.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE",
                    help="传给 Mapperatorinator 的额外参数（Hydra 写法，如 descriptors=[\'tech\']、mapper_id=123），可重复")
-    p.add_argument("--mix", help="技法配比：引擎八个池各 -1（少）到 1（多），如 rc_jack=1,ln_release=-1。"
-                                 "跑完所有次数，取最合配比的一张，降难时先删配比要少的技法；加不出模型本来不写的技法")
+    p.add_argument("--mix", help="技法配比：引擎八个池各 -1（少）到 1（多），或一个星级范围（下限..上限，可只写一头），"
+                                 "如 rc_jack=1,ln_release=-1 或 rc_jack=4.5..6,rc_speed=..5。跑完所有次数，取最合配比的一张，"
+                                 "降难时先删配比要少（或超出上限）的技法；加不出模型本来不写的技法，没达到的范围会提示")
     p.add_argument("--tolerance", type=float, default=0.10, help="星级容差，默认 0.10")
     p.add_argument("--output-dir", default="generated_maps", help="输出目录，默认 generated_maps")
     p.add_argument("--no-package", action="store_true", help="只写 .osu，不打 .osz")

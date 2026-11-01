@@ -290,6 +290,90 @@ const P7 = (() => {
     }));
   }
 
+  // --- technique ranges (ADR-0050) ----------------------------------------------------------------------------
+  // The engine's eight pools, each with a range of stars: a two-handled slider and a box at each end; an empty box
+  // (or a handle at its end of the track) leaves that side open. Used by the generator page and the chart editor.
+  const MIX_POOLS = [["rc_jack", "Jack"], ["rc_tech", "Tech"], ["rc_speed", "Speed"], ["rc_stamina", "Stamina"],
+    ["ln_general", tr("LN 综合")], ["ln_tech", "LN Tech"], ["ln_inverse", tr("反键")], ["ln_release", tr("LN 放键")]];
+  const MIX_MAX = 15;
+  // Returns {node, value() -> "rc_jack=4.5..6,..." ("" for none), set(mix), reference(pools, label)}.
+  function mixControl() {
+    const rows = {};
+    const node = el("div", { class: "mix-ranges" });
+    const fmt = (v) => (v === null ? "" : String(Math.round(v * 10) / 10));
+    for (const [key, name] of MIX_POOLS) {
+      const lo = el("input", { type: "number", step: "0.1", min: "0", max: String(MIX_MAX), placeholder: tr("不限"), class: "mix-num" });
+      const hi = el("input", { type: "number", step: "0.1", min: "0", max: String(MIX_MAX), placeholder: tr("不限"), class: "mix-num" });
+      const a = el("input", { type: "range", min: "0", max: String(MIX_MAX), step: "0.1", value: "0", "aria-label": tr("{name} 下限", { name }) });
+      const b = el("input", { type: "range", min: "0", max: String(MIX_MAX), step: "0.1", value: String(MIX_MAX), "aria-label": tr("{name} 上限", { name }) });
+      const fill = el("div", { class: "mix-fill" });
+      const mark = el("div", { class: "mix-mark hidden" });
+      const ref = el("span", { class: "mix-ref hint" });
+      const clear = el("button", { class: "small mix-clear", text: "×", title: tr("清除这一行"), type: "button" });
+      const r = { lo, hi, a, b, fill, mark, ref };
+      const paint = () => {
+        const x0 = Number(a.value) / MIX_MAX * 100, x1 = Number(b.value) / MIX_MAX * 100;
+        fill.style.left = `${x0}%`; fill.style.width = `${Math.max(0, x1 - x0)}%`;
+        const open = lo.value === "" && hi.value === "";
+        row.classList.toggle("open", open);
+      };
+      const fromBoxes = () => {
+        a.value = lo.value === "" ? "0" : String(Math.min(Number(lo.value), MIX_MAX));
+        b.value = hi.value === "" ? String(MIX_MAX) : String(Math.min(Number(hi.value), MIX_MAX));
+        paint();
+      };
+      const fromSliders = (moved) => {
+        if (Number(a.value) > Number(b.value)) (moved === a ? b : a).value = moved.value;
+        lo.value = Number(a.value) <= 0 ? "" : fmt(Number(a.value));
+        hi.value = Number(b.value) >= MIX_MAX ? "" : fmt(Number(b.value));
+        paint();
+      };
+      a.addEventListener("input", () => fromSliders(a));
+      b.addEventListener("input", () => fromSliders(b));
+      lo.addEventListener("input", fromBoxes);
+      hi.addEventListener("input", fromBoxes);
+      clear.addEventListener("click", () => { lo.value = ""; hi.value = ""; fromBoxes(); });
+      const row = el("div", { class: "mix-row open" },
+        el("span", { class: "mix-name", text: name }), lo,
+        el("div", { class: "mix-track" }, el("div", { class: "mix-rail" }), fill, mark, a, b), hi, clear, ref);
+      r.paint = paint; r.fromBoxes = fromBoxes;
+      rows[key] = r;
+      node.appendChild(row);
+      paint();
+    }
+    function value() {
+      const parts = [];
+      for (const [key] of MIX_POOLS) {
+        const r = rows[key];
+        const lo = r.lo.value === "" ? null : Number(r.lo.value), hi = r.hi.value === "" ? null : Number(r.hi.value);
+        if (lo === null && hi === null) continue;
+        if (lo !== null && hi !== null && lo > hi) throw new Error(tr("{name} 的下限高于上限", { name: MIX_POOLS.find((p) => p[0] === key)[1] }));
+        parts.push(`${key}=${lo === null ? "" : lo}..${hi === null ? "" : hi}`);
+      }
+      return parts.join(",");
+    }
+    // A mix as the server keeps it: {pool: [lo, hi]} ranges (a lean of -1..1 has no slider and is left out).
+    function set(mix) {
+      for (const [key] of MIX_POOLS) {
+        const v = mix && Array.isArray(mix[key]) ? mix[key] : [null, null];
+        rows[key].lo.value = v[0] === null || v[0] === undefined ? "" : fmt(v[0]);
+        rows[key].hi.value = v[1] === null || v[1] === undefined ? "" : fmt(v[1]);
+        rows[key].fromBoxes();
+      }
+    }
+    // Each pool's stars in the chart (or the selection) now, as a mark on its track and a number beside it.
+    function reference(pools, label) {
+      for (const [key] of MIX_POOLS) {
+        const r = rows[key], v = pools ? pools[key] : undefined;
+        r.mark.classList.toggle("hidden", v === undefined);
+        r.ref.textContent = v === undefined ? "" : `${Number(v).toFixed(2)}★`;
+        r.ref.title = v === undefined ? "" : `${label || tr("现在")} ${Number(v).toFixed(2)}★`;
+        if (v !== undefined) r.mark.style.left = `${Math.min(v, MIX_MAX) / MIX_MAX * 100}%`;
+      }
+    }
+    return { node, value, set, reference };
+  }
+
   // Motion is decoration: a system set to reduce motion gets every number and bar in its final state at once.
   const motion = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   // A number that counts up from zero to `value` (formatted by `fmt`) once it is on the page.
@@ -462,7 +546,7 @@ const P7 = (() => {
     el, $, on, send, startJob, getJSON, jobPanel, artifactRow, STATUS_TEXT, statusText, cancelControl, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
     onGameChart, gameChartLine, chartName,
     navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
-    modBadges, chartTitle, chartLink, query, playRow, tip, svg,
+    modBadges, chartTitle, chartLink, query, playRow, tip, svg, mixControl, MIX_POOLS,
     get player() { return playerName; }, set player(v) { playerName = v || ""; },
   };
 })();

@@ -8,6 +8,7 @@ page shows. Every action here calls the same functions as `proj7k.sync`, `proj7k
 """
 
 from dataclasses import asdict, dataclass
+import json
 import logging
 from pathlib import Path
 import re
@@ -328,12 +329,36 @@ def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobCont
     return out
 
 
+def editor_open(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
+    """
+    Any 7K chart opened in the chart editor (ADR-0050): `chart` is an .osu path or anything osu!lazer's library is
+    searched by (MD5, beatmap id, link). It is copied with its song into a project of its own under the generated
+    charts' `edits` folder; the original is never touched.
+    """
+    from proj7k.generator import project as P
+    from proj7k.generator.cli import resolve_reference
+
+    spec = _text(params, "chart").strip('"')
+    if not spec:
+        raise ValueError(tr("要选一张谱：.osu 路径、谱面 ID 或游戏当前谱面", "Pick a chart: an .osu path, a beatmap id or the game's chart"))
+    ref = resolve_reference(spec, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
+    if ref.osu_path is None:
+        raise FileNotFoundError(tr("找不到这张谱的 .osu 文件", "The chart's .osu file is missing"))
+    project = P.open_chart(ref.osu_path, config.generated_dir / "edits", audio=ref.audio_path, bg=ref.bg_path,
+                           bg_filename=ref.bg_filename)
+    logger.info(tr(f"建好了项目：{project.path}", f"Project made: {project.path}"))
+    return P.to_dict(project)
+
+
 def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     """
-    One operation on a generated chart's project (ADR-0047): `op` is show, rewrite, lock, unlock, anchor, unanchor,
-    undo or redo; `sections` the section numbers (from 1, comma separated); `source` and `mirror` for anchor;
-    `target_sr`, `ln_ratio`, `seed`, `candidates` and `mix` (the technique mix; absent: the project's, empty: none)
-    for rewrite.
+    One operation on a generated chart's project (ADR-0047, ADR-0050): `op` is show, rewrite, adopt, discard, lock,
+    unlock, anchor, unanchor, undo or redo; `sections` the section numbers (from 1, comma separated); `source` and
+    `mirror` for anchor; for rewrite either `sections` or `bars` ("first-last" measures, from 1), `target_sr`,
+    `ln_ratio`, `seed`, `candidates`, `mix` (the technique mix; absent: the project's, empty: none) and `audition`
+    (keep every candidate for adopt, by its number `candidate` from 1, or discard). `edit` saves `notes` ([column,
+    ms, end ms or null] rows) edited by hand as a new take; `readback` reads chart `md5` back from osu!lazer;
+    `split` / `boundary` take `section` and `bar` (from 1), `merge` joins `section` with the next.
     """
     from proj7k.generator import project as P
 
@@ -341,9 +366,48 @@ def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobC
     op = _text(params, "op") or "show"
     sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
     if op == "rewrite":
-        P.rewrite(project, sections, target_sr=_float(params, "target_sr"), ln_ratio=_float(params, "ln_ratio"),
-                  seed=_int(params, "seed"), candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
-                  pool_mix=(params.get("mix") or {}) if "mix" in params else None, log=logger.info)
+        bars = None
+        span = _text(params, "bars").replace("–", "-").replace("—", "-")
+        if span:
+            first, _, last = span.partition("-")
+            bars = (int(first) - 1, int(last or first) - 1)
+        P.rewrite(project, sections, bars=bars, target_sr=_float(params, "target_sr"),
+                  ln_ratio=_float(params, "ln_ratio"), seed=_int(params, "seed"),
+                  candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
+                  pool_mix=(params.get("mix") or {}) if "mix" in params else None,
+                  audition=_flag(params, "audition"), log=logger.info)
+    elif op == "adopt":
+        k = _int(params, "candidate")
+        if k is None:
+            raise ValueError(tr("要选一个候选", "Pick a candidate"))
+        P.adopt(project, k - 1)
+    elif op == "discard":
+        P.discard(project)
+    elif op == "edit":
+        rows = params.get("notes")
+        if isinstance(rows, str):
+            rows = json.loads(rows or "[]")
+        if not isinstance(rows, list):
+            raise ValueError(tr("没有收到音符", "No notes were sent"))
+        P.edit(project, P.notes_from(rows), log=logger.info)
+    elif op == "readback":
+        from proj7k.generator.cli import resolve_reference
+
+        md5 = _text(params, "md5")
+        if not md5:
+            raise ValueError(tr("要选一张 osu!lazer 里的谱", "Pick a chart in osu!lazer"))
+        ref = resolve_reference(md5, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
+        P.readback(project, ref.beatmap, log=logger.info)
+    elif op in ("split", "boundary"):
+        index, bar = _int(params, "section"), _int(params, "bar")
+        if index is None or bar is None:
+            raise ValueError(tr("要给出段落和小节", "Give a section and a measure"))
+        (P.split_section if op == "split" else P.move_boundary)(project, index - 1, bar - 1)
+    elif op == "merge":
+        index = _int(params, "section")
+        if index is None:
+            raise ValueError(tr("要给出段落", "Give a section"))
+        P.merge_sections(project, index - 1)
     elif op in ("lock", "unlock"):
         P.lock(project, sections, op == "lock")
     elif op == "anchor":
@@ -595,6 +659,7 @@ JOB_RESOURCES: Dict[str, FrozenSet[str]] = {
     "downscale": frozenset({DOWNSCALER}),  # and LAZER when it adds the charts to the library, below
     "generate": frozenset({GENERATOR}),
     "generator_project": frozenset({GENERATOR}),
+    "editor_open": frozenset({GENERATOR}),   # writes only a new project folder
     "profile_replay": frozenset({PROFILER}),
     "profile_player": frozenset({PROFILER}),
     "profile_habits": frozenset({PROFILER}),
@@ -631,6 +696,7 @@ def build_actions(config: DashboardConfig) -> Dict[str, Action]:
         "downscale": bind(downscale),
         "generate": bind(generate_chart),
         "generator_project": bind(generator_project),
+        "editor_open": bind(editor_open),
         "profile_replay": bind(profile_replay),
         "profile_player": bind(profile_player),
         "profile_habits": bind(profile_habits),
