@@ -267,3 +267,117 @@ def test_command_line_measures_and_audition(project, capsys):
     assert P.main([path, "rewrite"]) == 1
     assert P.main([path, "adopt", "1"]) == 1
     assert P.main([path, "discard"]) == 0
+
+
+# --- ADR-0050 phases 2–3: hand edits, opened charts, section boundaries -------------------------------------------
+
+
+def rows_of(chart):
+    return [[o.column, round(o.time), round(o.end_time) if o.note_type == NoteType.LN else None] for o in chart.hit_objects]
+
+
+def test_a_hand_edit_is_a_new_take_and_its_measures_refuse_a_rewrite(project):
+    run, calls = project
+    p = run.project
+    rows = rows_of(p.chart())
+    s = p.sections[1]
+    target = next(r for r in rows if s.start_ms <= r[1] < s.end_ms)
+    rows.remove(target)
+    rows.append([(target[0] + 1) % 7, target[1] + 1, target[1] + 300])   # a note moved and made a hold
+    P.edit(p, P.notes_from(rows))
+    assert len(p.takes) == 2 and p.hand_bars and all(s.first_bar <= b <= s.last_bar for b in p.hand_bars)
+    assert "手改" in p.takes[-1].note or "hand edit" in p.takes[-1].note
+    loaded = P.Project.load(p.path)
+    assert loaded.hand_bars == p.hand_bars
+    assert P.describe(loaded)[1]["hand"] == len(p.hand_bars)
+    with pytest.raises(ValueError, match="手改|by hand"):
+        P.rewrite(loaded, [1], runner=model(calls))
+    P.lock(loaded, [1], False)          # unlocking frees them
+    assert loaded.hand_bars == []
+    P.rewrite(loaded, [1], candidates=1, runner=model(calls))
+
+
+def test_an_unplayable_or_unchanged_edit_is_refused(project):
+    run, _ = project
+    p = run.project
+    rows = rows_of(p.chart())
+    with pytest.raises(ValueError, match="没有改动|Nothing"):
+        P.edit(p, P.notes_from(rows))
+    first = rows[0]
+    with pytest.raises(ValueError, match="不能玩|can't be played"):
+        P.edit(p, P.notes_from(rows + [[first[0], first[1] - 200, first[1] + 50]]))
+    assert len(p.takes) == 1
+    assert P.check_notes(P.notes_from(rows + [[first[0], first[1] - 200, first[1] + 50]]))[0]["kind"] == "inside_hold"
+
+
+def test_editing_an_anchored_section_frees_it(project):
+    run, _ = project
+    p = run.project
+    P.anchor(p, [3], 1)
+    rows = rows_of(p.chart())
+    s = p.sections[3]
+    rows = [r for r in rows if not s.start_ms <= r[1] < s.end_ms]
+    P.edit(p, P.notes_from(rows))
+    assert p.sections[3].anchor is None
+    assert not [o for o in p.chart().hit_objects if s.start_ms <= o.time < s.end_ms]
+
+
+def test_live_rating_of_rows(project):
+    run, _ = project
+    p = run.project
+    rows = rows_of(p.chart())
+    s = p.sections[1]
+    r = P.rate_rows(rows, s.start_ms, s.end_ms)
+    assert r["stars"] == pytest.approx(p.takes[0].stars, abs=0.01) and r["problems"] == []
+    assert r["stretch"]["notes"] == P.describe(p)[1]["notes"]
+    bad = P.rate_rows(rows + [rows[0]])
+    assert bad["problems"][0]["kind"] == "duplicate"
+
+
+def test_sections_split_merge_and_move(project):
+    run, _ = project
+    p = run.project
+    n = len(p.sections)
+    P.lock(p, [2])
+    P.anchor(p, [4], 3)
+    s1 = p.sections[1]
+    P.split_section(p, 1, s1.first_bar + 3)
+    assert len(p.sections) == n + 1 and p.sections[1].last_bar == s1.first_bar + 2
+    assert p.sections[3].locked                         # section 2 (old) moved to index 3, same span
+    assert p.sections[5].anchor == 4                    # its anchor followed its source's new index
+    P.merge_sections(p, 1)
+    assert len(p.sections) == n and p.sections[1].last_bar == s1.last_bar
+    P.move_boundary(p, 4, p.sections[4].first_bar + 2)  # the anchored section changes span: anchor goes
+    assert p.sections[4].anchor is None
+    assert all(a.end_ms == b.start_ms for a, b in zip(p.sections, p.sections[1:]))
+    with pytest.raises(ValueError):
+        P.move_boundary(p, 0, 3)
+    with pytest.raises(ValueError):
+        P.split_section(p, 1, p.sections[1].first_bar)
+    assert len(P.Project.load(p.path).sections) == n
+
+
+def test_any_chart_opens_as_a_project_of_its_own(tmp_path):
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "audio.mp3").write_bytes(b"song")
+    objs = [HitObject(column=k % 7, time=1000 + 250 * k, note_type=NoteType.RICE) for k in range(120)]
+    bm = Beatmap7K(title="T", artist="A", creator="Someone", version="Hard",
+                   timing_points=[TimingPoint(time=1000.0, beat_length=500.0, uninherited=True)],
+                   hit_objects=objs, audio_filename="audio.mp3")
+    bm.extra_sections["Metadata"] = {"BeatmapID": "123", "BeatmapSetID": "45"}
+    src = folder / "A - T (Someone) [Hard].osu"
+    src.write_text(dump_osu_7k(bm), encoding="utf-8")
+    before = src.read_bytes()
+    p = P.open_chart(src, tmp_path / "edits")
+    assert src.read_bytes() == before and p.folder != folder
+    assert (p.folder / "audio.mp3").read_bytes() == b"song"
+    text = (p.folder / p.takes[0].osu).read_text("utf-8")
+    assert "BeatmapSetID:-1" in text and len(p.chart().hit_objects) == 120 and p.sections
+    again = P.open_chart(src, tmp_path / "edits")
+    assert again.folder != p.folder
+    assert P.main(["--open", str(src), str(tmp_path / "cli")]) == 0
+    bm.circle_size = 4
+    (folder / "4k.osu").write_text(dump_osu_7k(bm), encoding="utf-8")
+    with pytest.raises(ValueError):
+        P.open_chart(folder / "4k.osu", tmp_path / "edits")

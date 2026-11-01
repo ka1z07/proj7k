@@ -74,9 +74,9 @@ PAGES = {
     "/editor": "editor.html",
 }
 
-#: The chart editor's API (ADR-0050): `projects`, `project`, `stretch` and `audio`, each but `projects` given
-#: `path`, a generated chart's .p7kgen.json.
-_EDITOR_API = re.compile(r"^/api/editor/(projects|project|stretch|audio)$")
+#: The chart editor's API (ADR-0050): `projects`, `project`, `stretch`, `audio`, `take` (`n`, from 1) and `lazer`
+#: (the project's charts in osu!lazer's library), each but `projects` given `path`, a project's .p7kgen.json.
+_EDITOR_API = re.compile(r"^/api/editor/(projects|project|stretch|audio|take|lazer)$")
 #: How many projects the editor lists, newest first.
 EDITOR_PROJECTS_MAX = 300
 
@@ -262,6 +262,31 @@ class DashboardServer(LiveServer):
                         "candidates": len(data.get("candidates") or [])})
         return {"projects": out, "folder": str(root)}
 
+    def _editor_lazer(self, project) -> Dict[str, Any]:
+        """The project's charts in osu!lazer's library: same song and creator, a difficulty name of one of its takes
+        (an edit in lazer's editor keeps the name and changes the file). `edited` = not any take's file as written."""
+        import hashlib
+
+        first = project.chart(0)
+        takes = {}
+        for i, t in enumerate(project.takes):
+            try:
+                takes[hashlib.md5((project.folder / t.osu).read_bytes()).hexdigest()] = i + 1
+            except OSError:
+                pass
+        snapshot = self.library.snapshot(force=True)
+        out = []
+        for c in snapshot.charts.values():
+            if c.get("title") != first.title or c.get("artist") != first.artist or c.get("creator") != first.creator:
+                continue
+            if not str(c.get("version", "")).startswith(project.base_version):
+                continue
+            out.append({"md5": c["md5"], "version": c.get("version"), "stars": c.get("stars"),
+                        "date_added": c.get("date_added"), "take": takes.get(c["md5"]), "edited": c["md5"] not in takes})
+        out.sort(key=lambda c: str(c.get("date_added") or ""), reverse=True)
+        out.sort(key=lambda c: not c["edited"])
+        return {"charts": out, "error": snapshot.error}
+
     def _editor_route(self, what: str, query: str, request: Request) -> Response:
         from proj7k.generator import project as P
 
@@ -279,8 +304,15 @@ class DashboardServer(LiveServer):
                 return self._json_response(P.editor_data(project))
             if what == "stretch":
                 return self._json_response(P.stretch_profile(project, float(params["start"]), float(params["end"])))
+            if what == "take":
+                n = int(params.get("n") or 0) - 1
+                return self._json_response({"n": n + 1, "notes": P.take_notes(project, n)})
+            if what == "lazer":
+                return self._json_response(self._editor_lazer(project))
             work = project.folder / ".p7kgen-work"
             return self._file_response(project.audio_path(work), request, "audio/mpeg")
+        except (KeyError, ValueError) as e:
+            return self._json_response({"error": str(e)}, 400, "Bad Request")
         except Exception as e:
             logger.exception("editor %s", what)
             return self._json_response({"error": str(e)}, 500, "Internal Server Error")
@@ -551,6 +583,20 @@ class DashboardServer(LiveServer):
                 await asyncio.to_thread(self.opener, target)
             except Exception as e:
                 await connection.send(json.dumps({"type": "error", "message": tr(f"无法打开 {target}: {e}", f"Can't open {target}: {e}")}, ensure_ascii=False))
+
+        elif msg_type == "editor_rate":
+            # The chart editor's live reading of notes not saved yet (ADR-0050): stars, pools and what is unplayable.
+            from proj7k.generator import project as P
+
+            try:
+                start, end = data.get("start"), data.get("end")
+                reading = await asyncio.to_thread(P.rate_rows, data.get("notes") or [],
+                                                  float(start) if start is not None else None,
+                                                  float(end) if end is not None else None)
+                reply = {"type": "editor_rated", "request_id": data.get("request_id"), **reading}
+            except Exception as e:
+                reply = {"type": "editor_rated", "request_id": data.get("request_id"), "error": str(e)}
+            await connection.send(json.dumps(reply, ensure_ascii=False))
 
         elif msg_type == "open_replay":
             try:

@@ -16,6 +16,9 @@ measures from its timing. Operations make a new take from the current one and ne
 - **audition** (ADR-0050): a rewrite (of sections, or of any measures) may keep all its candidates on the project
   instead of the best; the chart editor (`/editor`) plays them, and **adopt** makes one the new take, **discard**
   drops them all.
+- **edit** (ADR-0050): notes changed by hand (the editor, or osu!lazer's editor read back) become a new take; the
+  measures that changed are marked hand-made and rewrites leave them alone until their section is unlocked.
+- **split** / **merge** / **boundary**: sections need not stay 8 measures.
 
 Each take is an .osu (and an .osz with the song) of its own, its difficulty name ending in "v<n>", so importing one
 into osu!lazer never replaces another (BeatmapSetID -1, as every generated chart).
@@ -24,6 +27,8 @@ into osu!lazer never replaces another (BeatmapSetID -1, as every generated chart
     python3 -m proj7k.generator.project PROJECT rewrite 5 6 --target-sr 6.2 --candidates 3
     python3 -m proj7k.generator.project PROJECT rewrite --bars 17-20 --audition --candidates 4 --mix rc_jack=4..6
     python3 -m proj7k.generator.project PROJECT adopt 2
+    python3 -m proj7k.generator.project PROJECT split 3 --at 21      (merge 3, boundary 4 --at 30)
+    python3 -m proj7k.generator.project --open "Song [Hard].osu"        any 7K chart as a project
     python3 -m proj7k.generator.project PROJECT lock 1 2
     python3 -m proj7k.generator.project PROJECT anchor 9 --to 5 --mirror
     python3 -m proj7k.generator.project PROJECT undo
@@ -98,6 +103,8 @@ class Project:
     current: int = 0
     # A rewrite kept for audition (ADR-0050): its candidates wait here until one is adopted or all are discarded.
     candidates: List[Dict] = field(default_factory=list)
+    # Measures (from 0) edited by hand, in the editor or osu!lazer's (ADR-0050): rewrites leave them alone.
+    hand_bars: List[int] = field(default_factory=list)
     version: int = VERSION
     path: Optional[Path] = None       # where it is saved (not saved itself)
 
@@ -247,6 +254,7 @@ def describe(project: Project) -> List[Dict]:
             "notes": len(objs), "nps": round(len(objs) / span, 2), "stars": round(stars, 2), "skill": skill,
             "ln_share": round(sum(o.note_type == NoteType.LN for o in objs) / max(1, len(objs)), 2),
             "locked": s.locked, "anchor": s.anchor, "mirror": s.mirror, "pools": pools,
+            "hand": sum(s.first_bar <= b <= s.last_bar for b in project.hand_bars),
         })
     return out
 
@@ -264,7 +272,7 @@ def to_dict(project: Project) -> Dict:
                  "osz_file": str(project.folder / take.osz) if take.osz else None},
         "can_undo": project.current > 0, "can_redo": project.current < len(project.takes) - 1,
         "sections": describe(project), "mix": mix_json(project.pool_mix) if project.pool_mix else None,
-        "target_stars": project.target_stars,
+        "target_stars": project.target_stars, "hand_bars": sorted(project.hand_bars),
         "candidates": [{k: v for k, v in c.items() if k != "osu"} for c in project.candidates],
     }
 
@@ -354,8 +362,12 @@ def _check(project: Project, indices: Sequence[int]) -> List[int]:
 
 
 def lock(project: Project, indices: Sequence[int], locked: bool = True) -> Project:
+    """Lock sections, or unlock them: unlocking also frees the measures in them edited by hand."""
     for i in _check(project, indices):
-        project.sections[i].locked = locked
+        s = project.sections[i]
+        s.locked = locked
+        if not locked:
+            project.hand_bars = [b for b in project.hand_bars if not s.first_bar <= b <= s.last_bar]
     project.save()
     return project
 
@@ -436,6 +448,12 @@ def _stretch(project: Project, indices: Optional[Sequence[int]], bars: Optional[
         start, end = project.sections[idx[0]].start_ms, project.sections[idx[-1]].end_ms
         names = "–".join(str(i + 1) for i in sorted({idx[0], idx[-1]}))
         name = tr(f"第 {names} 段", f"section {names}")
+    if project.hand_bars:
+        bars = measures(project)
+        hand = [b for b in project.hand_bars if b < len(bars) and start <= bars[b] < end]
+        if hand:
+            raise ValueError(tr(f"第 {_bar_names(hand)} 小节是手改的；先解锁它们所在的段再重写",
+                                f"Measures {_bar_names(hand)} were edited by hand; unlock their section before rewriting"))
     for i, s in enumerate(project.sections):
         if s.start_ms < end and start < s.end_ms:
             if s.locked:
@@ -598,12 +616,242 @@ def editor_data(project: Project) -> Dict:
                    for tp in _uninherited(chart.timing_points)],
         "bars": [round(b, 3) for b in bars],
         "notes": [note(o) for o in objs],
+        "hand_bars": list(project.hand_bars),
+        "take_list": [{"n": i + 1, "note": t.note, "stars": t.stars} for i, t in enumerate(project.takes)],
+        "problems": check_notes(objs),
     })
     for c, k in zip(out["candidates"], range(len(project.candidates))):
         try:
             c["notes_inside"] = [note(o) for o in candidate_notes(project, k) if _inside(o, c["start_ms"], c["end_ms"])]
         except OSError:
             c["notes_inside"] = []
+    return out
+
+
+# --- hand edits, opened charts, section boundaries, lazer read-back (ADR-0050 phases 2–3) -------------------------
+
+
+def notes_from(rows: Sequence[Sequence]) -> List[HitObject]:
+    """Notes from [column, ms, end ms or None] rows, as the editor sends them."""
+    out = []
+    for r in rows:
+        c, t = int(r[0]), float(r[1])
+        e = r[2] if len(r) > 2 else None
+        if e is not None and float(e) > t:
+            out.append(HitObject(column=c, time=float(round(t)), note_type=NoteType.LN, end_time=float(round(float(e)))))
+        else:
+            out.append(HitObject(column=c, time=float(round(t)), note_type=NoteType.RICE))
+    return sorted(out, key=lambda o: (o.time, o.column))
+
+
+def _key(o: HitObject) -> Tuple[int, int, Optional[int]]:
+    return (o.column, int(round(o.time)), int(round(o.end_time)) if o.note_type == NoteType.LN and o.end_time is not None else None)
+
+
+def measures(project: Project, chart: Optional[Beatmap7K] = None, until: float = 0.0) -> List[float]:
+    """Measure starts of the current take, reaching past its last note, its sections and `until`."""
+    chart = chart or project.chart()
+    end = max([o.end_time if o.end_time is not None else o.time for o in chart.hit_objects] +
+              [s.end_ms for s in project.sections] + [until, 0.0])
+    return bar_starts(chart.timing_points, end + 1.0)
+
+
+#: A note this close before a measure start is on its line: .osu times are whole milliseconds, measure starts are not.
+BAR_SLACK_MS = 2.0
+
+
+def _bar_of(bars: Sequence[float], t: float) -> int:
+    return max(0, int(np.searchsorted(bars, t + BAR_SLACK_MS, side="right")) - 1)
+
+
+def changed_bars(before: Sequence[HitObject], after: Sequence[HitObject], bars: Sequence[float]) -> List[int]:
+    """The measures whose notes differ (by head; a changed hold counts at its head)."""
+    a, b = {_key(o) for o in before}, {_key(o) for o in after}
+    return sorted({_bar_of(bars, k[1]) for k in a ^ b})
+
+
+def _bar_names(bars: Sequence[int]) -> str:
+    """1-based runs: "3–5, 9"."""
+    runs, out = [], []
+    for b in sorted(set(bars)):
+        if runs and b == runs[-1][1] + 1:
+            runs[-1][1] = b
+        else:
+            runs.append([b, b])
+    for lo, hi in runs:
+        out.append(f"{lo + 1}" if lo == hi else f"{lo + 1}–{hi + 1}")
+    return ", ".join(out)
+
+
+def check_notes(objs: Sequence[HitObject]) -> List[Dict]:
+    """What makes the notes unplayable, for the editor to mark: kind, column, ms (and the earlier head)."""
+    return [asdict(p) for p in legal.problems(objs)]
+
+
+def edit(project: Project, objs: Sequence[HitObject], note: Optional[str] = None, *,
+         log: Callable[[str], None] = logger.info) -> Project:
+    """The notes edited by hand as a new take. The measures that changed are marked hand-made (`hand_bars`): a
+    rewrite refuses them until their section is unlocked. A changed section that was anchored is freed (else the
+    anchor would chart over the edit)."""
+    objs = sorted(objs, key=lambda o: (o.time, o.column))
+    bad = legal.problems(objs)
+    if bad:
+        p = bad[0]
+        raise ValueError(tr(f"有 {len(bad)} 处音符不能玩（第一处：第 {p.column + 1} 列 {p.time} ms，{p.kind}），先改好再保存",
+                            f"{len(bad)} notes can't be played (first: column {p.column + 1} at {p.time} ms, {p.kind}); "
+                            "fix them before saving"))
+    chart = project.chart()
+    bars = measures(project, chart, legal.end_ms(objs))
+    changed = changed_bars(chart.hit_objects, objs, bars)
+    if not changed:
+        raise ValueError(tr("没有改动", "Nothing changed"))
+    for i, s in enumerate(project.sections):
+        if s.anchor is not None and any(s.start_ms <= bars[b] < s.end_ms for b in changed):
+            log(tr(f"第 {i + 1} 段改过了，解开它对第 {s.anchor + 1} 段的锚定",
+                   f"Section {i + 1} was edited; freeing it from section {s.anchor + 1}"))
+            s.anchor, s.mirror = None, False
+    project.hand_bars = sorted(set(project.hand_bars) | set(changed))
+    note = note or tr(f"手改第 {_bar_names(changed)} 小节", f"hand edit, measures {_bar_names(changed)}")
+    return new_take(project, objs, note)
+
+
+def readback(project: Project, chart: Beatmap7K, log: Callable[[str], None] = logger.info) -> Project:
+    """A chart edited elsewhere (osu!lazer's editor) as a new take, its changed measures marked hand-made."""
+    if [round(tp.time) for tp in _uninherited(chart.timing_points)] != \
+            [round(tp.time) for tp in _uninherited(project.chart().timing_points)]:
+        log(tr("读回的谱 timing 不同；照工程原来的 timing 保存音符", "The chart read back has other timing; its notes are kept on the project's timing"))
+    return edit(project, chart.hit_objects, tr("从 osu!lazer 读回", "read back from osu!lazer"), log=log)
+
+
+def take_notes(project: Project, n: int) -> List[List]:
+    if not 0 <= n < len(project.takes):
+        raise ValueError(tr("没有这一版", "No such take"))
+    return [[o.column, round(o.time), round(o.end_time) if o.note_type == NoteType.LN and o.end_time is not None else None]
+            for o in sorted(project.chart(n).hit_objects, key=lambda o: (o.time, o.column))]
+
+
+def open_chart(osu_path: Path, out_dir: Path, *, audio: Optional[Path] = None, bg: Optional[Path] = None,
+               bg_filename: Optional[str] = None) -> Project:
+    """A project of any 7K chart (an official one too): the .osu and its song are copied into a folder of their own
+    under `out_dir`, the chart is the first take, and nothing of the original is touched."""
+    import shutil
+    from proj7k.generator.cli import safe_filename
+    from proj7k.profiler.replay_view import find_audio
+
+    osu_path = Path(osu_path)
+    chart = parse_osu_7k(osu_path.read_text(encoding="utf-8", errors="replace"))
+    if chart.mode != 3 or int(chart.circle_size) != 7:
+        raise ValueError(tr("只能打开 osu!mania 7K 谱", "Only osu!mania 7K charts open here"))
+    if not chart.hit_objects:
+        raise ValueError(tr("这张谱没有音符", "This chart has no notes"))
+    audio = Path(audio) if audio else find_audio(osu_path, chart.audio_filename)
+    if audio is None or not Path(audio).is_file():
+        raise FileNotFoundError(tr(f"找不到这张谱的音频：{chart.audio_filename}", f"The chart's audio is missing: {chart.audio_filename}"))
+    stem = safe_filename(f"{chart.artist} - {chart.title} ({chart.creator}) [{chart.version}]") or "chart"
+    folder = Path(out_dir) / stem
+    k = 1
+    while (folder / (stem + ".osu")).exists():
+        k += 1
+        folder = Path(out_dir) / f"{stem} ({k})"
+    folder.mkdir(parents=True, exist_ok=True)
+    audio_name = chart.audio_filename or Path(audio).name
+    song = folder / Path(audio_name).name
+    shutil.copyfile(audio, song)
+    # The copy is a chart of its own in osu!lazer: no online ids, so importing a take never replaces the original.
+    meta = dict(chart.extra_sections.get("Metadata", {}))
+    meta.update({"BeatmapID": "0", "BeatmapSetID": "-1"})
+    chart.extra_sections["Metadata"] = meta
+    copy_osu = folder / (stem + ".osu")
+    copy_osu.write_text(dump_osu_7k(chart), encoding="utf-8")
+    bg_copy = None
+    if bg and Path(bg).is_file():
+        bg_copy = folder / (bg_filename or Path(bg).name)
+        shutil.copyfile(bg, bg_copy)
+    return create(copy_osu, chart, None, audio=song, audio_filename=Path(audio_name).name,
+                  target_stars=_rated(chart.hit_objects), target_label="", bg=bg_copy,
+                  bg_filename=bg_copy.name if bg_copy else None)
+
+
+def set_boundaries(project: Project, firsts: Sequence[int]) -> Project:
+    """Sections starting at the measures `firsts` (from 0; the first one is where the chart starts, the last
+    section ends where it ends now). A section keeps its lock if the old sections it covers were all locked, and its
+    anchor if its span is unchanged; a section whose span changed loses its anchor and any anchor to it."""
+    if not project.sections:
+        raise ValueError(tr("这张谱没有段落", "This chart has no sections"))
+    first0, last = project.sections[0].first_bar, project.sections[-1].last_bar
+    starts = sorted({int(b) for b in firsts if first0 < int(b) <= last} | {first0})
+    bars = measures(project)
+    while len(bars) <= last + 1:
+        bars.append(bars[-1] + (bars[-1] - bars[-2] if len(bars) > 1 else 2000.0))
+    old = project.sections
+    span_of = {(s.first_bar, s.last_bar): i for i, s in enumerate(old)}
+    new: List[Section] = []
+    keep: Dict[int, int] = {}
+    for k, b in enumerate(starts):
+        e = (starts[k + 1] - 1) if k + 1 < len(starts) else last
+        covered = [s for s in old if s.first_bar <= e and b <= s.last_bar]
+        s = Section(first_bar=b, last_bar=e, start_ms=bars[b], end_ms=bars[e + 1],
+                    locked=bool(covered) and all(c.locked for c in covered))
+        if (b, e) in span_of:
+            keep[span_of[(b, e)]] = len(new)
+            s.anchor, s.mirror = old[span_of[(b, e)]].anchor, old[span_of[(b, e)]].mirror
+        new.append(s)
+    for s in new:
+        if s.anchor is not None:
+            if s.anchor in keep:
+                s.anchor = keep[s.anchor]
+            else:
+                s.anchor, s.mirror = None, False
+    project.sections = new
+    project.save()
+    return project
+
+
+def split_section(project: Project, index: int, at_bar: int) -> Project:
+    """Cut section `index` in two, the second starting at measure `at_bar`."""
+    _check(project, [index])
+    s = project.sections[index]
+    if not s.first_bar < at_bar <= s.last_bar:
+        raise ValueError(tr(f"拆开的位置要在第 {s.first_bar + 2}–{s.last_bar + 1} 小节之间",
+                            f"Split inside measures {s.first_bar + 2}–{s.last_bar + 1}"))
+    return set_boundaries(project, [x.first_bar for x in project.sections] + [at_bar])
+
+
+def merge_sections(project: Project, index: int) -> Project:
+    """Join section `index` with the one after it."""
+    _check(project, [index, index + 1])
+    return set_boundaries(project, [x.first_bar for i, x in enumerate(project.sections) if i != index + 1])
+
+
+def move_boundary(project: Project, index: int, at_bar: int) -> Project:
+    """Move the start of section `index` (not the first) to measure `at_bar`, between its neighbours' starts."""
+    _check(project, [index])
+    if index == 0:
+        raise ValueError(tr("第一段的起点不能动", "The first section's start can't move"))
+    lo = project.sections[index - 1].first_bar + 1
+    hi = project.sections[index + 1].first_bar - 1 if index + 1 < len(project.sections) else project.sections[index].last_bar
+    if not lo <= at_bar <= hi:
+        raise ValueError(tr(f"边界要在第 {lo + 1}–{hi + 1} 小节之间", f"The boundary goes between measures {lo + 1} and {hi + 1}"))
+    firsts = [x.first_bar for x in project.sections]
+    firsts[index] = at_bar
+    return set_boundaries(project, firsts)
+
+
+def rate_rows(rows: Sequence[Sequence], start: Optional[float] = None, end: Optional[float] = None) -> Dict:
+    """The editor's live reading of notes not yet saved: total stars and pools, those of [start, end) if given, and
+    what is unplayable."""
+    objs = notes_from(rows)
+    out: Dict = {"notes": len(objs), "stars": 0.0, "pools": {}, "problems": check_notes(objs)}
+    if objs:
+        prof = _profile(objs)
+        out.update(stars=round(float(prof.total_stars), 2), pools=_pools(prof))
+    if start is not None and end is not None:
+        part = [o for o in objs if _inside(o, start, end)]
+        out["stretch"] = {"notes": len(part), "stars": 0.0, "pools": {},
+                          "ln_share": round(sum(o.note_type == NoteType.LN for o in part) / max(1, len(part)), 2)}
+        if part:
+            prof = _profile(part)
+            out["stretch"].update(stars=round(float(prof.total_stars), 2), pools=_pools(prof))
     return out
 
 
@@ -635,7 +883,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     utf8_console()
     p = argparse.ArgumentParser(prog="python3 -m proj7k.generator.project", description=__doc__.split("\n\n")[1])
-    p.add_argument("project", help="生成时写在谱面旁边的 .p7kgen.json")
+    p.add_argument("project", help="生成时写在谱面旁边的 .p7kgen.json；或用 --open 给一张 .osu 建项目")
     sub = p.add_subparsers(dest="op", required=True)
     sub.add_parser("show", help="列出段落与当前版本")
     r = sub.add_parser("rewrite", help="重写相邻的几段，或 --bars 指定的小节")
@@ -661,8 +909,30 @@ def main(argv: Optional[List[str]] = None) -> int:
     a.add_argument("--mirror", action="store_true")
     u = sub.add_parser("unanchor", help="解开锚定")
     u.add_argument("sections", type=int, nargs="+")
+    sp = sub.add_parser("split", help="把一段从某小节拆成两段")
+    sp.add_argument("section", type=int)
+    sp.add_argument("--at", type=int, required=True, help="第二段从第几小节开始（从 1 数）")
+    mg = sub.add_parser("merge", help="把一段和下一段合成一段")
+    mg.add_argument("section", type=int)
+    bd = sub.add_parser("boundary", help="把一段的起点挪到某小节")
+    bd.add_argument("section", type=int)
+    bd.add_argument("--at", type=int, required=True)
     sub.add_parser("undo", help="退回上一版")
     sub.add_parser("redo", help="前进到下一版")
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "--open":
+        # python3 -m proj7k.generator.project --open CHART.osu [OUT_DIR]: any 7K chart as a project of its own.
+        if len(argv) < 2:
+            print(tr("用法：--open 谱面.osu [输出文件夹]", "Usage: --open CHART.osu [OUT_DIR]"), file=sys.stderr)
+            return 2
+        try:
+            project = open_chart(Path(argv[1]), Path(argv[2]) if len(argv) > 2 else Path("generated_maps") / "edits")
+        except Exception as e:
+            print(tr(f"失败：{e}", f"Failed: {e}"), file=sys.stderr)
+            return 1
+        print(_format(project))
+        return 0
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
@@ -681,6 +951,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                     log=lambda msg: print(msg, file=sys.stderr, flush=True))
         elif args.op == "adopt":
             adopt(project, args.candidate - 1)
+        elif args.op == "split":
+            split_section(project, args.section - 1, args.at - 1)
+        elif args.op == "merge":
+            merge_sections(project, args.section - 1)
+        elif args.op == "boundary":
+            move_boundary(project, args.section - 1, args.at - 1)
         elif args.op == "discard":
             discard(project)
         elif args.op in ("lock", "unlock"):
