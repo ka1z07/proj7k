@@ -29,7 +29,7 @@ import time
 import wave
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, List, Optional, Sequence, Union
+from typing import Callable, Dict, List, Optional, Sequence, Union
 
 import numpy as np
 
@@ -62,6 +62,11 @@ DEFAULT_RUNS = 4
 AIM = 1.15
 #: A run at most this far above the target is brought down to it by the downscaler (pure deletion, technique kept).
 TRIM_MAX = 1.5
+#: With star ranges per pool (ADR-0051) the run is written this much above both the target and the highest floor,
+#: and anything up to `TRIM_MAX_RANGES` stars over is brought down pool by pool: deletion can lower a pool into its
+#: range but never raise one, so a run written high reaches the floors that one written at the target misses.
+AIM_RANGES = 1.3
+TRIM_MAX_RANGES = 4.0
 #: Deleting notes moves the stars in steps, so a trimmed run this close to the target is kept and the loop stops
 #: (meow, 2026-10-23: trims landed 0.14–0.17★ off and each miss cost another ~50 s run).
 TRIM_TOLERANCE = 0.2
@@ -366,6 +371,19 @@ def _stars(bm: Beatmap7K):
     return evaluate_notes(notes)
 
 
+def aim_for(target: float, ranges: Optional[dict] = None) -> float:
+    """The stars the first run asks for: `AIM` over the target, or with pool ranges `AIM_RANGES` over the target and
+    over the highest floor (a pool's own stars sit at or under the total's)."""
+    if not ranges:
+        return target * AIM
+    floors = [lo for lo, _ in ranges.values() if lo is not None]
+    return max([target] + floors) * AIM_RANGES
+
+
+def _pool_stars(profile) -> Dict[str, float]:
+    return {k: float(v.stars) for k, v in getattr(profile, "skills", {}).items()}
+
+
 def next_difficulty(difficulty: float, stars: float, target: float) -> float:
     """The difficulty to ask for next, assuming the engine's stars scale with it."""
     if stars <= 0:
@@ -500,18 +518,22 @@ def _read(osu: Union[str, Path], log: Callable[[str], None]) -> Beatmap7K:
 
 
 def trim(chart: Beatmap7K, target: float, tolerance: float, log: Callable[[str], None],
-         mix: Optional[dict] = None):
+         mix: Optional[dict] = None, ranges: Optional[dict] = None):
     """(chart, profile) brought down toward `target` by the downscaler: within `tolerance` if it can (keeping the
     technique first, then not), else the closest it got below the chart's own stars; None when it removes nothing.
-    With a technique `mix` it deletes by the mix instead (the pools weighted down first), free of the dominant
-    technique, which a mix may mean to change."""
+    With a technique `mix` (skill weights) it deletes by the mix instead (the pools weighted down first), free of the
+    dominant technique, which a mix may mean to change. With star `ranges` per pool it brings each pool into its own
+    range as well as the total to the target (`downscaler.pools`, ADR-0051)."""
     from proj7k.downscaler.pipeline import DownscaleOptions, downscale_beatmap
 
     closest = None
-    for keep_technique in ((False,) if mix else (True, False)):
+    for keep_technique in ((False,) if mix or ranges else (True, False)):
         try:
             res = downscale_beatmap(chart, DownscaleOptions(target_dan=None, target_sr=target,
-                                                            preserve_technique=keep_technique, skill_weights=mix))
+                                                            preserve_technique=keep_technique,
+                                                            skill_weights=None if ranges else mix,
+                                                            pool_ranges=ranges or None,
+                                                            max_iterations=60 if ranges else 25))
         except (ValueError, RuntimeError) as e:
             log(tr(f"  降难没成功：{e}", f"  Trimming failed: {e}"))
             break
@@ -544,6 +566,7 @@ def timing_chart(options, audio_filename: str) -> Beatmap7K:
 def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[Runner] = None,
                        work_dir: Optional[Path] = None, home: Optional[Path] = None):
     """A `GenerationResult` from the model's runs, the one whose engine stars come closest to the target."""
+    from proj7k.downscaler import pools as pools_mod
     from proj7k.generator import mix as mix_mod
     from proj7k.generator.generate import GenerationResult, _beatmap
 
@@ -557,10 +580,17 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
     hold_ratio = options.model_hold_ratio
     if hold_ratio is None and (options.ln_ratio or options.whole_inverse):
         hold_ratio = 1.0 if options.whole_inverse else options.ln_ratio
-    difficulty = min(max(target * AIM, MIN_DIFFICULTY), MAX_DIFFICULTY)
     warnings: List[str] = []
     mix = mix_mod.parse(getattr(options, "pool_mix", None))
-    if mix:
+    ranges = pools_mod.ranges_of(mix)
+    # only ranges: a run that lands in all of them is final; a leaning has no "in", so every run is tried
+    ranges_only = bool(mix) and len(ranges) == len(mix)
+    aim = aim_for(target, ranges)
+    difficulty = min(max(aim, MIN_DIFFICULTY), MAX_DIFFICULTY)
+    if ranges_only:
+        log(tr(f"技法配比：{mix_mod.describe(mix)}（先写到约 {aim:.2f}★，再按各技法范围降阶）",
+               f"Technique mix: {mix_mod.describe(mix)} (written at about {aim:.2f}★, then trimmed pool by pool)"))
+    elif mix:
         log(tr(f"技法配比：{mix_mod.describe(mix)}（{runs} 次都跑完，取最合配比的）",
                f"Technique mix: {mix_mod.describe(mix)} (all {runs} runs, keeping the one that fits it best)"))
 
@@ -647,10 +677,11 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         log(tr(f"  → 引擎星级 {stars:.2f}★（目标 {target:.2f}★），{len(chart.hit_objects)} 个音符",
                f"  → engine {stars:.2f}★ (target {target:.2f}★), {len(chart.hit_objects)} notes")
             + (f"；{mix_mod.pools(profile, mix)}" if mix else ""))
-        written = stars
+        written, written_profile = stars, profile
         good_enough = options.tolerance
-        if target + options.tolerance < stars <= target + TRIM_MAX:
-            trimmed = trim(chart, target, options.tolerance, log, mix_mod.skill_weights(mix, profile))
+        over = stars > target + options.tolerance or bool(pools_mod.misses(_pool_stars(profile), ranges))
+        if over and stars <= target + (TRIM_MAX_RANGES if ranges else TRIM_MAX):
+            trimmed = trim(chart, target, options.tolerance, log, mix_mod.skill_weights(mix, profile), ranges)
             if trimmed is not None:
                 chart, profile = trimmed
                 stars = float(profile.total_stars)
@@ -658,7 +689,8 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
         key = rank(holey, stars, profile, good_enough)
         if best is None or key < best[8]:
             best = (chart, profile, stars, difficulty, seed, good_enough, holey, empty, key)
-        if abs(stars - target) <= good_enough and not holey and not mix:
+        in_ranges = not pools_mod.misses(_pool_stars(profile), ranges)
+        if abs(stars - target) <= good_enough and not holey and (not mix or (ranges_only and in_ranges)):
             break
         if written < target and difficulty >= MAX_DIFFICULTY:
             # Asked for all it has and still short: further runs only redraw the same ceiling.
@@ -667,7 +699,12 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
                                f"it can't reach {target:.2f}★ on this song"))
             break
         # Steered by what the model wrote, not by the trim: a trim that undershoots would otherwise push it harder.
-        difficulty = min(next_difficulty(difficulty, written, target), MAX_DIFFICULTY)
+        difficulty = min(next_difficulty(difficulty, written, aim if ranges else target), MAX_DIFFICULTY)
+        short = [lo / max(written_profile.skills[k].stars, 0.01) for k, (lo, _) in ranges.items()
+                 if lo is not None and k in written_profile.skills and written_profile.skills[k].stars < lo]
+        if short:
+            # a floor the run was written under: no trim reaches it, so the next run is asked for more
+            difficulty = min(difficulty * min(max(short), MAX_STEP), MAX_DIFFICULTY)
 
     chart, profile, stars, difficulty, seed, good_enough, holey, empty, _ = best
     if mix:
@@ -675,9 +712,10 @@ def generate_from_file(audio_path: Union[str, Path], options, runner: Optional[R
                f"Kept seed {seed}: {stars:.2f}★; {mix_mod.pools(profile, mix)}"))
     missed = mix_mod.miss_text(profile, mix)
     if missed:
-        warnings.append(tr(f"技法范围没达到：{missed}（模型不听技法指令，只能多跑几次挑选或在编辑器里改）",
-                           f"Technique ranges missed: {missed} (the model can't be told a technique; run more "
-                           "times or edit it in the editor)"))
+        warnings.append(tr(f"技法范围没达到：{missed}（降阶只能把技法往下压；低于下限的是模型没写出那么多，"
+                           "可以多跑几次或在编辑器里改）",
+                           f"Technique ranges missed: {missed} (trimming can only bring a pool down; one under its "
+                           "floor is more than the model wrote: run more times or edit it in the editor)"))
     if holey:
         warnings.append(tr(f"{tried} 次生成都有大段空白，这张有 {empty:.0%} 没有音符",
                            f"All {tried} runs have long empty stretches; {empty:.0%} of this one has no notes"))

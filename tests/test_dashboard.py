@@ -360,6 +360,14 @@ def test_downscale_action_on_an_uploaded_chart(tmp_path):
                 assert job["status"] == "done", job["error"]
                 chart = job["result"]["charts"][0]
                 assert chart["mode"] == "free" and chart["downscaled_stars"] < chart["original_stars"]
+                # Star ranges per pool (ADR-0051): each pool brought into its own, the dominant technique let go.
+                job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU), "target_sr": "1.2",
+                                                          "ranges": "rc_jack=..1", "package": False})
+                assert job["status"] == "done", job["error"]
+                chart = job["result"]["charts"][0]
+                assert chart["skills_downscaled"]["jack"] <= 1.02
+                job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU), "target_sr": "1.2", "ranges": "rc_jack=1"})
+                assert job["status"] == "failed"
                 job, _ = await _run_job(ws, "downscale", {"input": str(SAMPLE_OSU), "target_sr": "1.2", "mode": "fast"})
                 assert job["status"] == "failed" and "降阶方式" in job["error"]
 

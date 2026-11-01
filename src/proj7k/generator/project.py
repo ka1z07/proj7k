@@ -485,6 +485,7 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
     `candidates` model runs. Without `audition` the best becomes the new take; with it every candidate is kept on the
     project, best first, for `adopt` or `discard`. `pool_mix` (default: the project's) leans the pick toward the
     pools it weights up, or the ranges it names, as at generation."""
+    from proj7k.downscaler import pools as pools_mod
     from proj7k.generator import mapperatorinator as m
     from proj7k.generator import mix as mix_mod
 
@@ -507,8 +508,10 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
     context.write_text(dump_osu_7k(chart), encoding="utf-8")
     ratio = project.ln_ratio if ln_ratio is None else ln_ratio
     seed0 = project.seed + 100 * len(project.takes) if seed is None else seed
-    difficulty = min(max(target * m.AIM, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
     mix = mix_mod.parse(pool_mix) if pool_mix is not None else mix_mod.parse(project.pool_mix)
+    ranges = pools_mod.ranges_of(mix)
+    aim = m.aim_for(target, ranges)
+    difficulty = min(max(aim, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
     if mix:
         log(tr(f"技法配比：{mix_mod.describe(mix)}", f"Technique mix: {mix_mod.describe(mix)}"))
     runs = []
@@ -524,7 +527,16 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
         merged = legal.sanitize(sorted(outside + inside, key=lambda o: (o.time, o.column)), chart.timing_points)[0]
         stretch = [o for o in merged if _inside(o, start, end)]
         profile = _profile(stretch) if stretch else None
-        stars = float(profile.total_stars) if profile else 0.0
+        stars = written = float(profile.total_stars) if profile else 0.0
+        if ranges and profile and (stars > target * 1.05 or pools_mod.misses(m._pool_stars(profile), ranges)):
+            # written above the ranges on purpose: the stretch alone is brought down pool by pool (ADR-0051)
+            trimmed = m.trim(Beatmap7K(timing_points=list(chart.timing_points), hit_objects=list(stretch)),
+                             target, 0.05 * target, log, None, ranges)
+            if trimmed is not None:
+                stretch = sorted(trimmed[0].hit_objects, key=lambda o: (o.time, o.column))
+                merged = sorted(outside + stretch, key=lambda o: (o.time, o.column))
+                profile = trimmed[1]
+                stars = float(profile.total_stars)
         jump = seam(merged, start, end, beats)
         score = abs(stars - target) + SEAM_WEIGHT * jump + mix_mod.penalty(profile, mix)
         log(tr(f"  → 这段 {stars:.2f}★（目标 {target:.2f}★），边缘突变 {jump:.2f}",
@@ -532,7 +544,7 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
             + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else ""))
         runs.append({"merged": merged, "stars": stars, "seam": jump, "score": score, "profile": profile,
                      "seed": seed0 + k, "notes": len(stretch)})
-        difficulty = min(m.next_difficulty(difficulty, stars, target), m.MAX_DIFFICULTY)
+        difficulty = min(m.next_difficulty(difficulty, written, aim if ranges else target), m.MAX_DIFFICULTY)
     runs.sort(key=lambda r: r["score"])
     if not audition:
         best = runs[0]
