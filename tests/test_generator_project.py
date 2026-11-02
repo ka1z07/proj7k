@@ -381,3 +381,71 @@ def test_any_chart_opens_as_a_project_of_its_own(tmp_path):
     (folder / "4k.osu").write_text(dump_osu_7k(bm), encoding="utf-8")
     with pytest.raises(ValueError):
         P.open_chart(folder / "4k.osu", tmp_path / "edits")
+
+
+# --- motifs (ADR-0055) ------------------------------------------------------------------------------------------
+
+
+def _jack_motif(p):
+    """Section 1 written by hand as jacks: each row the same column as the one before, twice, then over one."""
+    s = p.sections[0]
+    chart = p.chart()
+    rows = sorted({o.time for o in chart.hit_objects if s.start_ms <= o.time < s.end_ms})
+    others = [o for o in chart.hit_objects if not s.start_ms <= o.time < s.end_ms]
+    mine = [HitObject(column=(k // 2) % 7, time=t, note_type=NoteType.RICE) for k, t in enumerate(rows)]
+    return P.edit(p, sorted(others + mine, key=lambda o: (o.time, o.column)), log=lambda m: None)
+
+
+def _likeness(p, s, motif_bars):
+    from proj7k.generator import motif as M
+
+    chart = p.chart()
+    beats = P.Beats(chart.timing_points)
+    here = [o for o in chart.hit_objects if s.start_ms <= o.time < s.end_ms]
+    return M.similarity(M.features(here, beats.beat), M.features(P.motif_notes(p, motif_bars), beats.beat))
+
+
+def test_imitating_a_motif_keeps_the_rhythm_and_takes_its_columns(project):
+    run, _ = project
+    p = _jack_motif(run.project)
+    motif = (p.sections[0].first_bar, p.sections[0].last_bar)
+    s = p.sections[2]
+    times = [t for t, _ in notes_in(p.chart(), s)]
+    before = _likeness(p, s, motif)
+    P.imitate(p, [2], motif=motif)
+    assert [t for t, _ in notes_in(p.chart(), s)] == times          # the model's rhythm stays
+    assert _likeness(p, s, motif) > before + 0.1
+    assert notes_in(p.chart(), p.sections[1]) == notes_in(p.chart(p.current - 1), p.sections[1])
+    assert "模仿" in p.takes[-1].note or "after" in p.takes[-1].note
+    with pytest.raises(ValueError):
+        P.imitate(p, [0], motif=motif)                              # the motif can't restyle itself
+
+
+def test_a_section_tied_to_a_motif_is_restyled_and_its_rewrites_follow_it(project):
+    run, calls = project
+    p = _jack_motif(run.project)
+    motif = (p.sections[0].first_bar, p.sections[0].last_bar)
+    P.set_motif(p, [2, 3], motif, strength=1.0)
+    loaded = P.Project.load(p.path)
+    assert loaded.sections[2].motif == list(motif) and loaded.sections[3].motif == list(motif)
+    assert P.describe(loaded)[2]["motif"] == [motif[0] + 1, motif[1] + 1]
+    s = p.sections[2]
+    P.rewrite(p, [2], candidates=2, runner=model(calls), audition=True)
+    assert all(c["like"] is not None for c in p.candidates)
+    P.adopt(p, 0)
+    assert _likeness(p, s, motif) > 0.75
+    # boundaries that keep the tied sections' measures keep the tie; freeing it leaves the notes
+    P.split_section(p, 3, p.sections[3].first_bar + 4)
+    assert p.sections[3].motif == list(motif) and p.sections[4].motif == list(motif)
+    P.set_motif(p, [3, 4], None)
+    assert p.sections[3].motif is None
+
+
+def test_command_line_motif(project, capsys):
+    run, _ = project
+    p = _jack_motif(run.project)
+    assert P.main([str(p.path), "imitate", "3", "--motif", "1-8", "--strength", "0.5"]) == 0
+    assert P.main([str(p.path), "motif", "4", "--motif", "1-8", "--chords"]) == 0
+    loaded = P.Project.load(p.path)
+    assert loaded.sections[3].motif == [0, 7] and loaded.sections[3].motif_chords
+    assert P.main([str(p.path), "imitate", "1", "--motif", "1-8"]) == 1
