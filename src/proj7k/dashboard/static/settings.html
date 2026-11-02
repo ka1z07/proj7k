@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 设置</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title" data-en="Settings">设置</div>
+        <div class="page-sub">界面、任务提醒与各工具的默认选项。设置保存在这台电脑的窗口里，改动立即生效，不需要重启看板。</div>
+      </div>
+      <a class="standalone-only" href="/#settings">← 返回控制台</a>
+    </div>
+
+    <div class="card">
+      <h2>界面</h2>
+      <div class="setting">
+        <div class="what"><div class="name">语言</div><div class="hint">切换后会重新载入所有页面；正在运行的任务在后台继续。</div></div>
+        <div class="ctl"><select id="lang"><option value="zh">简体中文</option><option value="en">English</option></select></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">动画</div><div class="hint">关闭后页面切换、数字滚动与背景三角形都直接显示最终状态，适合配置较低或开着游戏时使用。</div></div>
+        <div class="ctl"><select id="motion"><option value="system">跟随系统</option><option value="off">关闭</option></select></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">悬停提示</div><div class="hint">鼠标停在按钮、选项或数值上时显示说明。关闭后改用浏览器自带的提示。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="tips"> 开启</label></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>任务提醒</h2>
+      <div class="setting">
+        <div class="what"><div class="name">任务结束时提示</div><div class="hint">任务完成、失败或被取消时在窗口右下角显示一条提示，点击可跳到「任务」页。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="toast"> 开启</label></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">提示音</div><div class="hint">完成时上行两声，失败时下行两声。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="sound"> 开启</label><button class="small" id="testSound">试听</button></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">系统通知</div><div class="hint" id="osHint">窗口不在前台（例如正在游戏）时，用系统通知告诉你任务结束了。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="osNotify"> 开启</label></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>游玩</h2>
+      <div class="setting">
+        <div class="what"><div class="name">打崩后给出建议</div><div class="hint">在 osu!lazer 里没过或打出 D 时，右下角提示崩在哪里、卡在哪项技法，并可一键做一张低一档的练习谱或诊断这局回放。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="fail_hint"> 开启</label></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>直播叠加层</h2>
+      <p class="hint" style="margin-bottom:8px">把下面的地址加到 OBS 的「浏览器」来源，或在浏览器里单独打开放在游戏旁边：它跟随 osu!lazer 当前选中的谱，显示星级、段位、八项技法（粉色竖线是你的实力，黄色是这张谱超过你的项）和个人最好成绩，背景透明。</p>
+      <div class="row" style="gap:14px;flex-wrap:wrap;margin-bottom:8px">
+        <label class="check" title="卡片：竖排完整信息；横条：一行，适合放在画面边缘"><span>样式</span>
+          <select id="ovLayout"><option value="card">卡片</option><option value="bar">横条</option></select></label>
+        <label class="check"><input type="checkbox" id="ovSkills" checked> 八项技法</label>
+        <label class="check"><input type="checkbox" id="ovYou" checked> 我的实力标记</label>
+        <label class="check"><input type="checkbox" id="ovBest" checked> 个人最好</label>
+        <label class="check"><input type="checkbox" id="ovCover" checked> 封面</label>
+        <label class="check" title="没有选中谱面时完全隐藏，不显示等待提示"><input type="checkbox" id="ovIdle"> 无谱时隐藏</label>
+        <label class="check" title="文字与整体大小，OBS 里画布较大时调大"><span>大小</span>
+          <select id="ovScale"><option value="0.85">小</option><option value="1" selected>中</option><option value="1.3">大</option><option value="1.7">特大</option></select></label>
+        <label class="check" title="卡片背景的不透明度"><span>背景</span>
+          <select id="ovAlpha"><option value="0">透明</option><option value="0.55">半透明</option><option value="0.82" selected>深色</option></select></label>
+      </div>
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <input type="text" id="ovUrl" readonly style="flex:1;min-width:220px" title="OBS → 来源 → 浏览器 → URL；宽 460、高 360 左右">
+        <button class="small primary" id="ovCopy">复制地址</button>
+        <button class="small" id="ovOpen" title="在新窗口打开叠加层，可放在游戏旁边">单独打开</button>
+      </div>
+      <iframe id="ovPreview" title="叠加层预览" style="width:100%;max-width:480px;height:340px;border:1px dashed var(--border-color);border-radius:10px;background:transparent"></iframe>
+    </div>
+
+    <div class="card">
+      <h2>工具默认值</h2>
+      <div class="setting">
+        <div class="what"><div class="name">降阶练习输出文件夹</div><div class="hint">留空使用看板的默认位置。</div></div>
+        <div class="ctl"><input type="text" id="downscaler_out"></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">谱面生成输出文件夹</div><div class="hint">留空使用看板的默认位置。</div></div>
+        <div class="ctl"><input type="text" id="generator_out"></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">默认打包 .osz</div><div class="hint">降阶与生成默认附带音频与背景打包成 .osz，可直接导入 osu!。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="package"> 开启</label></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">降阶后默认加入 osu!lazer 收藏夹</div><div class="hint">练习谱导入 osu!lazer 并放进「7K Practice」收藏夹（需要先关闭 osu!lazer）。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="sync_lazer"> 开启</label></div>
+      </div>
+      <div class="setting">
+        <div class="what"><div class="name">记住各工具上次的选择</div><div class="hint">目标方式、降阶方式、长条比例、快速模式等，下次打开时保持上次的选择。种子与谱面来源不记。</div></div>
+        <div class="ctl"><label class="check"><input type="checkbox" id="remember"> 开启</label><button class="small" id="forget">清除已记住的选择</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <span class="hint" id="saved">改动会自动保存。</span>
+        <button class="small danger" id="resetAll">全部恢复默认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { $ } = P7;
+    const S = P7.settings;
+    const CHECKS = ["tips", "toast", "sound", "osNotify", "fail_hint", "package", "sync_lazer", "remember"];
+    const TEXTS = ["downscaler_out", "generator_out"];
+
+    function fill() {
+      $("#lang").value = P7I18N.lang;
+      $("#motion").value = S.get("motion");
+      CHECKS.forEach((k) => { $(`#${k}`).checked = !!S.get(k); });
+      TEXTS.forEach((k) => { $(`#${k}`).value = S.get(k) || ""; });
+      $("#testSound").disabled = !S.get("sound");
+    }
+    let savedTimer = null;
+    function saved() {
+      $("#saved").textContent = tr("已保存。");
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => { $("#saved").textContent = tr("改动会自动保存。"); }, 1800);
+    }
+    const reloadAll = () => (P7.embedded ? window.top.location.reload() : location.reload());
+
+    $("#lang").onchange = (e) => { P7I18N.remember(e.target.value); reloadAll(); };
+    $("#motion").onchange = (e) => {
+      S.set("motion", e.target.value);
+      // The shell's backdrop and every loaded page read it once, when they load.
+      if (confirm(tr("动画设置在页面重新载入后完全生效。现在重新载入吗？正在运行的任务在后台继续。"))) reloadAll();
+      saved();
+    };
+    CHECKS.forEach((k) => $(`#${k}`).addEventListener("change", async (e) => {
+      if (k === "osNotify" && e.target.checked) {
+        const ok = await askNotify();
+        if (!ok) { e.target.checked = false; return; }
+      }
+      S.set(k, e.target.checked);
+      $("#testSound").disabled = !S.get("sound");
+      if (k === "sound" && e.target.checked) P7.chime(true);
+      saved();
+    }));
+    TEXTS.forEach((k) => $(`#${k}`).addEventListener("change", (e) => { S.set(k, e.target.value.trim()); saved(); }));
+    $("#testSound").onclick = () => P7.chime(true);
+    $("#forget").onclick = () => { P7.forgetForms(); $("#saved").textContent = tr("已清除。各工具下次打开时回到默认选择。"); };
+    $("#resetAll").onclick = () => {
+      if (!confirm(tr("把所有设置恢复为默认，并清除各工具记住的选择？语言不变。"))) return;
+      S.reset(); P7.forgetForms(); fill(); saved();
+    };
+
+    // System notifications need the window's permission, asked once, when switched on.
+    const canNotify = "Notification" in window;
+    if (!canNotify) {
+      $("#osNotify").disabled = true;
+      $("#osHint").textContent = tr("这个窗口不支持系统通知；右下角提示与提示音仍然可用。");
+    }
+    async function askNotify() {
+      if (!canNotify) return false;
+      if (Notification.permission === "granted") return true;
+      if (Notification.permission === "denied") {
+        alert(tr("系统通知已被拒绝。请在系统或浏览器的通知设置里允许后再开启。"));
+        return false;
+      }
+      return (await Notification.requestPermission()) === "granted";
+    }
+
+    P7.getJSON("/api/config").then((cfg) => {
+      $("#downscaler_out").placeholder = tr("默认：{dir}", { dir: cfg.practice_dir });
+      $("#generator_out").placeholder = tr("默认：{dir}", { dir: cfg.generated_dir });
+    }).catch(() => {});
+    // The overlay's address, built from its options (overlay.html reads them from the URL).
+    const OV = ["ovLayout", "ovSkills", "ovYou", "ovBest", "ovCover", "ovIdle", "ovScale", "ovAlpha"];
+    let previewed = "";
+    function overlayUrl() {
+      const q = new URLSearchParams();
+      if ($("#ovLayout").value !== "card") q.set("layout", $("#ovLayout").value);
+      [["ovSkills", "skills"], ["ovYou", "you"], ["ovBest", "best"], ["ovCover", "cover"]].forEach(([id, k]) => { if (!$(`#${id}`).checked) q.set(k, "0"); });
+      if ($("#ovIdle").checked) q.set("idle", "hide");
+      if ($("#ovScale").value !== "1") q.set("scale", $("#ovScale").value);
+      if ($("#ovAlpha").value !== "0.82") q.set("alpha", $("#ovAlpha").value);
+      q.set("lang", P7I18N.lang);
+      return `${location.origin}/overlay?${q}`;
+    }
+    function showOverlayUrl() {
+      const url = overlayUrl();
+      $("#ovUrl").value = url;
+      if (url !== previewed) { previewed = url; $("#ovPreview").src = url; }
+      try { localStorage.setItem("p7.overlay", url); } catch (e) { /* not remembered */ }
+    }
+    // The options as last chosen come back from the saved address.
+    try {
+      const saved = new URL(localStorage.getItem("p7.overlay") || "", location.origin).searchParams;
+      if (saved.has("layout")) $("#ovLayout").value = saved.get("layout");
+      [["ovSkills", "skills"], ["ovYou", "you"], ["ovBest", "best"], ["ovCover", "cover"]].forEach(([id, k]) => { $(`#${id}`).checked = saved.get(k) !== "0"; });
+      $("#ovIdle").checked = saved.get("idle") === "hide";
+      if (saved.has("scale")) $("#ovScale").value = saved.get("scale");
+      if (saved.has("alpha")) $("#ovAlpha").value = saved.get("alpha");
+    } catch (e) { /* defaults */ }
+    OV.forEach((id) => $(`#${id}`).addEventListener("change", showOverlayUrl));
+    $("#ovCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText($("#ovUrl").value); $("#ovCopy").textContent = tr("已复制"); }
+      catch (e) { $("#ovUrl").select(); document.execCommand("copy"); $("#ovCopy").textContent = tr("已复制"); }
+      setTimeout(() => { $("#ovCopy").textContent = tr("复制地址"); }, 1500);
+    };
+    $("#ovOpen").onclick = () => window.open($("#ovUrl").value, "p7overlay", "width=480,height=380");
+    showOverlayUrl();
+
+    S.onChange(fill);
+    fill();
+  </script>
+</body>
+</html>

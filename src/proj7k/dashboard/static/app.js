@@ -32,6 +32,95 @@ const P7 = (() => {
   }
   const $ = (sel, root) => (root || document).querySelector(sel);
 
+  // --- settings (the 设置 page) -------------------------------------------------------------------------------
+  // One JSON object in localStorage, shared by the shell and every page in it (one origin); a change on the 设置 page
+  // reaches the other pages through the storage event. Storage may be blocked: the defaults then hold.
+  const SETTINGS_KEY = "p7.settings";
+  const SETTINGS_DEFAULTS = {
+    motion: "system",      // "system": follow the system's reduce-motion switch; "off": no animation at all
+    tips: true,            // styled hover tips instead of the browser's own
+    remember: true,        // each tool keeps its last choices (P7.rememberForm)
+    toast: true,           // a note in the corner when a job finishes
+    sound: false,          // a short chime with it
+    osNotify: false,       // a system notification too, while the window is in the background
+    downscaler_out: "", generator_out: "",  // default output folders ("" = the dashboard's own)
+    package: true,         // pack an .osz by default
+    sync_lazer: false,     // add practice charts to osu!lazer's collection by default
+    goal_dan: "",          // the progress page's target tier ("" = none)
+    fail_hint: true,       // after a failed or D-rank play, a note offering a practice chart and a replay diagnosis
+  };
+  const settings = (() => {
+    let values = {};
+    const load = () => { try { values = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") || {}; } catch (e) { values = {}; } };
+    load();
+    const followers = [];
+    const get = (k) => (k in values ? values[k] : SETTINGS_DEFAULTS[k]);
+    function set(k, v) {
+      values[k] = v;
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(values)); } catch (e) { /* this page still has it */ }
+      followers.forEach((fn) => fn(k, v));
+    }
+    function reset() {
+      values = {};
+      try { localStorage.removeItem(SETTINGS_KEY); } catch (e) { /* nothing stored */ }
+      followers.forEach((fn) => fn(null));
+    }
+    window.addEventListener("storage", (e) => {
+      if (e.key !== SETTINGS_KEY) return;
+      load();
+      followers.forEach((fn) => fn(null));
+    });
+    return { get, set, reset, onChange: (fn) => followers.push(fn), defaults: SETTINGS_DEFAULTS };
+  })();
+  if (settings.get("motion") === "off") document.documentElement.classList.add("no-motion");
+
+  // A tool's form remembered between visits (settings.remember): the value of each listed input, select and radio
+  // group, saved when it changes and put back by restore(), which fires `change` so the page's own handlers follow.
+  // A select whose options load later is restored once they are there: call restore() again then.
+  const FORM_PREFIX = "p7.form.";
+  function rememberForm(page, fields) {
+    const key = FORM_PREFIX + page;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (e) { saved = {}; }
+    const nodes = (f) => [...document.querySelectorAll(f.startsWith("@") ? `input[name="${f.slice(1)}"]` : `#${f}`)];
+    const read = (f) => {
+      const ns = nodes(f);
+      if (f.startsWith("@")) { const c = ns.find((n) => n.checked); return c ? c.value : undefined; }
+      if (!ns[0]) return undefined;
+      return ns[0].type === "checkbox" ? ns[0].checked : ns[0].value;
+    };
+    function save() {
+      if (!settings.get("remember")) return;
+      fields.forEach((f) => { const v = read(f); if (v !== undefined) saved[f] = v; });
+      try { localStorage.setItem(key, JSON.stringify(saved)); } catch (e) { /* not remembered this time */ }
+    }
+    fields.forEach((f) => nodes(f).forEach((n) => n.addEventListener("change", save)));
+    function restore(only) {
+      if (!settings.get("remember")) return;
+      (only ? [].concat(only) : fields).forEach((f) => {
+        if (!(f in saved)) return;
+        const v = saved[f];
+        const ns = nodes(f);
+        let target = null;
+        if (f.startsWith("@")) {
+          target = ns.find((n) => n.value === v && !n.disabled);
+          if (target && !target.checked) target.checked = true; else target = null;
+        } else if (ns[0] && ns[0].type === "checkbox") {
+          if (ns[0].checked !== !!v) { ns[0].checked = !!v; target = ns[0]; }
+        } else if (ns[0] && (ns[0].tagName !== "SELECT" || [...ns[0].options].some((o) => o.value === v))) {
+          if (ns[0].value !== v) { ns[0].value = v; target = ns[0]; }
+        }
+        if (target) target.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+    return { restore, has: (f) => settings.get("remember") && f in saved };
+  }
+  function forgetForms() {
+    try {
+      Object.keys(localStorage).filter((k) => k.startsWith(FORM_PREFIX)).forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* nothing stored */ }
+  }
+
   // --- WebSocket --------------------------------------------------------------------------------------------
   let ws = null;
   let queue = [];
@@ -186,6 +275,21 @@ const P7 = (() => {
     return { node, update };
   }
 
+  // How long a job has waited or run, live: "排队 0:12" while queued, "已运行 1:23" while running, "用时 1:23" after.
+  // Times are the server's clock; the page's may differ a little, so a negative wait shows as zero.
+  function jobClock(job) {
+    if (!job) return "";
+    const now = Date.now() / 1000;
+    if (job.status === "queued") return job.created_at ? tr("排队 {t}", { t: duration(Math.max(0, now - job.created_at)) }) : "";
+    if (!job.started_at) return "";
+    const secs = Math.max(0, (job.finished_at || now) - job.started_at);
+    return job.status === "running" ? tr("已运行 {t}", { t: duration(secs) }) : tr("用时 {t}", { t: duration(secs) });
+  }
+  // Every live clock on the page, ticked once a second together. `fn` returns false once it no longer needs ticks.
+  const clocks = new Set();
+  setInterval(() => clocks.forEach((fn) => { if (fn() === false) clocks.delete(fn); }), 1000);
+  const tick = (fn) => { if (fn() !== false) clocks.add(fn); };
+
   // A card that follows one job: status, log, error and output files. Returns {update(job), log(line), reset()}.
   function jobPanel(container) {
     const badge = el("span", { class: "badge queued", text: "" });
@@ -214,8 +318,14 @@ const P7 = (() => {
         current = job;
         badge.className = `badge ${job.status}`;
         badge.textContent = statusText(job);
-        const secs = job.started_at ? ((job.finished_at || Date.now() / 1000) - job.started_at) : 0;
-        title.textContent = job.id ? `${tr("任务 {id}", { id: job.id })}${secs ? ` · ${secs.toFixed(1)}s` : ""}` : "";
+        const shown = job;
+        const paint = () => {
+          if (current !== shown) return false;
+          const t = jobClock(job);
+          title.textContent = job.id ? [tr("任务 {id}", { id: job.id }), t].filter(Boolean).join(" · ") : "";
+          return job.status === "queued" || job.status === "running";
+        };
+        tick(paint);
         cancel.update(job);
         if (job.error) { error.textContent = job.error; error.classList.remove("hidden"); }
         files.innerHTML = "";
@@ -228,6 +338,132 @@ const P7 = (() => {
       showLog() { logBox.classList.remove("hidden"); toggle.textContent = tr("隐藏日志"); },
     };
   }
+
+  // A page's own queue of jobs (each tool's batch queue): every run gets an entry, in the order submitted, with its
+  // job card and a slot for its results, so a second run can be queued while the first is still going (the dashboard
+  // runs jobs that share data one after another, ADR-0043). Returns {add(label) -> entry, active()}; an entry is
+  // {update(job), log(line), showLog(), results, label}.
+  function jobQueue(container, title) {
+    const count = el("span", { class: "hint" });
+    const clear = el("button", { class: "small", text: tr("清除已结束"), title: tr("从这里移走已完成、失败或已取消的任务；「任务」页仍然保留它们"),
+      onclick: () => { entries.filter((e) => !e.active()).forEach((e) => { e.root.remove(); entries.splice(entries.indexOf(e), 1); }); refresh(); } });
+    const list = el("div", { class: "queue-list" });
+    const root = el("div", { class: "card hidden" },
+      el("div", { class: "queue-head" }, el("h2", { text: title || tr("任务队列") }), count, el("span", { class: "grow" }), clear), list);
+    container.appendChild(root);
+    const entries = [];
+    function refresh() {
+      const n = entries.filter((e) => e.active()).length;
+      count.textContent = entries.length ? tr("{n} 个进行中 · 共 {total} 个", { n, total: entries.length }) : "";
+      clear.disabled = n === entries.length;
+      root.classList.toggle("hidden", !entries.length);
+    }
+    function add(label) {
+      const jobBox = el("div");
+      const results = el("div", { class: "queue-results" });
+      const entryRoot = el("div", { class: "queue-item" }, el("div", { class: "queue-label ellipsis", text: label, title: label }), jobBox, results);
+      list.append(entryRoot);
+      const panel = jobPanel(jobBox);
+      panel.reset();
+      let status = "submitting";
+      const entry = {
+        root: entryRoot, results, label,
+        active: () => ["submitting", "queued", "running"].includes(status),
+        update(job) { status = job.status; panel.update(job); refresh(); },
+        log: (line) => panel.log(line),
+        showLog: () => panel.showLog(),
+      };
+      entries.push(entry);
+      refresh();
+      return entry;
+    }
+    return { add, active: () => entries.filter((e) => e.active()).length };
+  }
+
+  // What each kind of job is called, for the jobs page and the shell's notes.
+  const JOB_KIND = {
+    sync_setup: tr("安装 / 检查 bridge"), sync_once: tr("曲库同步"), sync_revert: tr("还原为官方星级"),
+    lazer_control: tr("osu!lazer 开关"), downscale: tr("降阶练习"), generate: tr("谱面生成"),
+    generator_project: tr("修改生成谱"),
+    profile_replay: tr("回放诊断"), profile_player: tr("玩家画像"), profile_habits: tr("发力习惯"), import_replays: tr("导入回放"),
+  };
+
+  // A short note in the corner (the shell shows one when a job ends). `onclick` makes it a link; it fades on its own.
+  // `actions` [{text, onclick, primary}] are buttons on the note; clicking one also closes it.
+  function toast(text, { kind = "", sub = "", onclick = null, ms = 6000, actions = [] } = {}) {
+    let box = document.querySelector(".p7-toasts");
+    if (!box) { box = el("div", { class: "p7-toasts", role: "status", "aria-live": "polite" }); document.body.appendChild(box); }
+    const close = el("button", { class: "small plain", text: "✕", title: tr("关闭"), onclick: (e) => { e.stopPropagation(); gone(); } });
+    const node = el("div", { class: `p7-toast ${kind}${onclick ? " link" : ""}`, onclick: onclick ? () => { onclick(); gone(); } : null },
+      el("div", { class: "grow" }, el("div", { class: "t", text }), sub ? el("div", { class: "hint ellipsis", text: sub, title: sub }) : null,
+        actions.length ? el("div", { class: "row toast-actions" }, ...actions.map((a) => el("button", { class: `small${a.primary ? " primary" : ""}`, text: a.text, title: a.title || null,
+          onclick: (e) => { e.stopPropagation(); a.onclick(); gone(); } }))) : null), close);
+    box.appendChild(node);
+    while (box.children.length > 4) box.firstChild.remove();
+    let timer = setTimeout(gone, ms);
+    node.addEventListener("mouseenter", () => clearTimeout(timer));
+    node.addEventListener("mouseleave", () => { timer = setTimeout(gone, 2500); });
+    function gone() { clearTimeout(timer); node.classList.add("out"); setTimeout(() => node.remove(), motion ? 220 : 0); }
+    return node;
+  }
+  // Two soft notes, rising for a job that finished, falling for one that failed.
+  let audio = null;
+  function chime(ok = true) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audio.currentTime;
+      (ok ? [660, 880] : [520, 390]).forEach((f, i) => {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0 + i * 0.14);
+        g.gain.exponentialRampToValueAtTime(0.12, t0 + i * 0.14 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.14 + 0.3);
+        o.connect(g).connect(audio.destination);
+        o.start(t0 + i * 0.14); o.stop(t0 + i * 0.14 + 0.32);
+      });
+    } catch (e) { /* no audio here */ }
+  }
+
+  // Hover tips: an element's title shows in the dashboard's own bubble (settings.tips) a moment after the pointer
+  // settles on it. While it shows, the text moves to data-p7tip so the browser's own tooltip stays away.
+  (() => {
+    let bubble = null, timer = null, owner = null;
+    function hide() {
+      clearTimeout(timer); timer = null;
+      if (bubble) bubble.classList.remove("on");
+      if (owner && owner.dataset.p7tip !== undefined) {
+        // The page may have set a new title meanwhile; that one wins.
+        if (!owner.hasAttribute("title")) owner.setAttribute("title", owner.dataset.p7tip);
+        delete owner.dataset.p7tip;
+      }
+      owner = null;
+    }
+    function show(t, text) {
+      if (!document.body.contains(t)) return hide();
+      if (!bubble) { bubble = el("div", { class: "p7-tip", role: "tooltip" }); document.body.appendChild(bubble); }
+      bubble.textContent = text;
+      bubble.style.left = "0px"; bubble.style.top = "0px";
+      bubble.classList.add("on");
+      const r = t.getBoundingClientRect(), b = bubble.getBoundingClientRect();
+      let top = r.top - b.height - 8;
+      if (top < 6) top = r.bottom + 8;
+      const left = Math.max(6, Math.min(window.innerWidth - b.width - 6, r.left + r.width / 2 - b.width / 2));
+      bubble.style.left = `${left}px`; bubble.style.top = `${Math.min(top, window.innerHeight - b.height - 6)}px`;
+    }
+    document.addEventListener("pointerover", (e) => {
+      if (!settings.get("tips") || e.pointerType === "touch") return;
+      const t = e.target.closest && e.target.closest("[title]");
+      if (!t || t === owner || t.tagName === "IFRAME" || t.tagName === "HTML") return;
+      const text = (t.getAttribute("title") || "").trim();
+      hide();
+      if (!text) return;
+      owner = t; t.dataset.p7tip = text; t.removeAttribute("title");
+      timer = setTimeout(() => show(t, text), 350);
+    });
+    document.addEventListener("pointerout", (e) => { if (owner && !(e.relatedTarget && owner.contains(e.relatedTarget))) hide(); });
+    ["pointerdown", "keydown", "blur"].forEach((k) => window.addEventListener(k, hide));
+    window.addEventListener("scroll", hide, true);
+  })();
 
   function artifactRow(jobId, index, a) {
     const buttons = [];
@@ -374,8 +610,9 @@ const P7 = (() => {
     return { node, value, set, reference };
   }
 
-  // Motion is decoration: a system set to reduce motion gets every number and bar in its final state at once.
-  const motion = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  // Motion is decoration: a system set to reduce motion, or the 设置 page's switch, gets every number and bar in its
+  // final state at once.
+  const motion = settings.get("motion") !== "off" && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   // A number that counts up from zero to `value` (formatted by `fmt`) once it is on the page.
   function counter(value, fmt, ms = 700) {
     const node = el("span", { text: fmt(motion ? 0 : value) });
@@ -543,7 +780,7 @@ const P7 = (() => {
 
   connect();
   return {
-    el, $, on, send, startJob, getJSON, jobPanel, artifactRow, STATUS_TEXT, statusText, cancelControl, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
+    el, $, on, send, startJob, getJSON, jobPanel, jobQueue, jobClock, tick, settings, rememberForm, forgetForms, toast, chime, JOB_KIND, artifactRow, STATUS_TEXT, statusText, cancelControl, dropZone, skillBars, stat, kv, skillName, pct, embedded, SKILL_LABELS, motion, counter,
     onGameChart, gameChartLine, chartName,
     navigate, openChart, openPlay, onNav, onShown, api, coverUrl, rankBadge, cover, acc, stars, num, ago, fullDate, duration,
     modBadges, chartTitle, chartLink, query, playRow, tip, svg, mixControl, MIX_POOLS,
