@@ -295,6 +295,54 @@ button:active:not(:disabled) { transform: scale(0.97); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+/* The 设置 page's "no animation" switch, for a system that does not ask for it. */
+html.no-motion *, html.no-motion *::before, html.no-motion *::after { animation: none !important; transition: none !important; }
+
+/* hover tips (app.js): the dashboard's own bubble for any [title] */
+.p7-tip {
+  position: fixed; z-index: 1000; pointer-events: none; max-width: min(340px, calc(100vw - 12px));
+  background: rgba(24, 20, 30, 0.97); color: var(--text-main); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px; padding: 6px 10px; font-size: 0.78rem; line-height: 1.45; white-space: pre-line;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); opacity: 0; transform: translateY(2px); transition: opacity 0.12s, transform 0.12s;
+  visibility: hidden;
+}
+.p7-tip.on { opacity: 1; transform: none; visibility: visible; }
+
+/* notes in the corner (app.js toast) */
+.p7-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 900; display: flex; flex-direction: column; gap: 8px; width: min(360px, calc(100vw - 32px)); }
+.p7-toast {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+  background: rgba(30, 25, 38, 0.97); border: 1px solid var(--border-color); border-left: 3px solid var(--accent-blue);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5); animation: p7-rise 0.25s ease-out both; transition: opacity 0.2s;
+}
+.p7-toast.done { border-left-color: var(--accent-green); }
+.p7-toast.failed { border-left-color: var(--accent-red); }
+.p7-toast.cancelled { border-left-color: var(--text-dim); }
+.p7-toast.link { cursor: pointer; }
+.p7-toast.link:hover { background: rgba(44, 37, 55, 0.98); }
+.p7-toast .t { font-weight: 700; font-size: 0.86rem; }
+.p7-toast .grow { flex: 1; min-width: 0; }
+.p7-toast.out { opacity: 0; }
+button.plain { background: none; border: none; color: var(--text-muted); padding: 0 4px; }
+button.plain:hover { color: var(--text-main); }
+
+/* a tool page's own queue of jobs (app.js jobQueue) */
+.queue-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.queue-head h2 { margin-bottom: 8px; }
+.queue-head .grow { flex: 1; }
+.queue-item { border-top: 1px solid var(--border-color); padding: 10px 0; }
+.queue-item:first-child { border-top: none; padding-top: 2px; }
+.queue-label { font-weight: 700; font-size: 0.86rem; margin-bottom: 6px; }
+.queue-results > .card { background: none; border: none; padding: 10px 0 0; box-shadow: none; }
+
+/* the 设置 page */
+.setting { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border-color); }
+.setting:first-of-type { border-top: none; }
+.setting .what { flex: 1; min-width: 0; }
+.setting .what .name { font-weight: 700; }
+.setting .ctl { flex: none; display: flex; gap: 8px; align-items: center; }
+.setting .ctl input[type=text] { width: min(360px, 40vw); }
+@media (max-width: 640px) { .setting { flex-direction: column; align-items: stretch; } .setting .ctl input[type=text] { width: 100%; } }
 
 /* technique ranges (ADR-0050): a two-handled slider per engine pool */
 .mix-ranges { display: grid; gap: 6px; margin: 4px 0; }

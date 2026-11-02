@@ -72,6 +72,7 @@ PAGES = {
     "/chart": "chart.html",
     "/play": "play.html",
     "/editor": "editor.html",
+    "/settings": "settings.html",
 }
 
 #: The chart editor's API (ADR-0050): `projects`, `project`, `stretch`, `audio`, `take` (`n`, from 1) and `lazer`

@@ -38,9 +38,9 @@
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <div class="tabs" id="filters">
-          <button class="small active" data-filter="all">全部</button>
-          <button class="small" data-filter="active">进行中</button>
-          <button class="small" data-filter="failed">失败</button>
+          <button class="small active" data-filter="all" title="正在跑的、排队的和最近结束的全部任务">全部</button>
+          <button class="small" data-filter="active" title="只看运行中与排队中的任务">进行中</button>
+          <button class="small" data-filter="failed" title="只看失败的任务，展开可看错误与日志">失败</button>
         </div>
         <span class="hint" id="count"></span>
       </div>
@@ -56,12 +56,7 @@
   <script>
     "use strict";
     const { el, $ } = P7;
-    const KIND = {
-      sync_setup: tr("安装 / 检查 bridge"), sync_once: tr("曲库同步"), sync_revert: tr("还原为官方星级"),
-      lazer_control: tr("osu!lazer 开关"), downscale: tr("降阶练习"), generate: tr("谱面生成"),
-      generator_project: tr("修改生成谱"),
-      profile_replay: tr("回放诊断"), profile_player: tr("玩家画像"), profile_habits: tr("发力习惯"), import_replays: tr("导入回放"),
-    };
+    const KIND = P7.JOB_KIND;
     // The page a job's kind is started from, to go back to it for the full result.
     const PAGE = {
       sync_setup: "sync", sync_once: "sync", sync_revert: "sync", downscale: "downscaler", generate: "generator",
@@ -100,10 +95,8 @@
       return d.toDateString() === new Date().toDateString()
         ? d.toLocaleTimeString(P7I18N.locale, { hour12: false }) : d.toLocaleString(P7I18N.locale, { hour12: false });
     }
-    function elapsed(j) {
-      if (!j.started_at) return j.status === "queued" ? tr("等待中") : "";
-      return P7.duration((j.finished_at || Date.now() / 1000) - j.started_at);
-    }
+    // Live: how long a queued job has waited, a running one has run, a finished one took.
+    const elapsed = (j) => P7.jobClock(j);
 
     function makeRow(j) {
       const r = {
@@ -138,7 +131,9 @@
       r.now.textContent = j.status === "failed" ? (j.error || "") : ACTIVE.includes(j.status) ? (j.last_log || "") : "";
       r.now.classList.toggle("bad", j.status === "failed");
       r.started.textContent = clock(j.started_at || j.created_at);
-      r.started.title = tr("任务 {id}", { id: j.id });
+      r.started.title = [tr("任务 {id}", { id: j.id }), tr("提交 {t}", { t: clock(j.created_at) }),
+        j.started_at ? tr("开始 {t}", { t: clock(j.started_at) }) : null, j.finished_at ? tr("结束 {t}", { t: clock(j.finished_at) }) : null]
+        .filter(Boolean).join("\n");
       r.took.textContent = elapsed(j);
       r.error.textContent = j.error || "";
       r.error.classList.toggle("hidden", !j.error);
@@ -199,8 +194,8 @@
       r.log.textContent = (msg.logs || []).length ? msg.logs.join("\n") + "\n" : tr("（没有日志）");
       r.log.scrollTop = r.log.scrollHeight;
     });
-    // Running jobs' durations tick.
-    setInterval(() => jobs.forEach((j) => { if (j.status === "running" && rows.has(j.id)) rows.get(j.id).took.textContent = elapsed(j); }), 1000);
+    // Queued and running jobs' clocks tick.
+    P7.tick(() => jobs.forEach((j) => { if (ACTIVE.includes(j.status) && rows.has(j.id)) rows.get(j.id).took.textContent = elapsed(j); }));
 
     document.querySelectorAll("#filters button").forEach((b) => b.addEventListener("click", () => {
       filter = b.dataset.filter;

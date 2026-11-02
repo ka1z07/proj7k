@@ -31,8 +31,8 @@
     <div class="card">
       <h2>歌曲</h2>
       <div class="choice">
-        <label><input type="radio" name="src" value="game" checked> 游戏当前谱面的歌</label>
-        <label><input type="radio" name="src" value="manual"> 指定音频</label>
+        <label title="用 osu!lazer 当前选中谱面的音频、标题与背景"><input type="radio" name="src" value="game" checked> 游戏当前谱面的歌</label>
+        <label title="上传或填写一个音频文件，可选一张同曲谱面作为 timing 与背景来源"><input type="radio" name="src" value="manual"> 指定音频</label>
       </div>
       <div id="gameSrc" class="field">
         <div id="gameLine"></div>
@@ -60,8 +60,8 @@
         <div class="field">
           <span class="label">目标</span>
           <div class="row">
-            <label class="check"><input type="radio" name="mode" value="dan" checked> 段位</label>
-            <label class="check"><input type="radio" name="mode" value="sr"> 星级</label>
+            <label class="check" title="按锦锦 7K 段位表的标准星级定目标"><input type="radio" name="mode" value="dan" checked> 段位</label>
+            <label class="check" title="直接给出目标星级（本项目引擎的标尺，与 osu! 官方星级不同）"><input type="radio" name="mode" value="sr"> 星级</label>
           </div>
         </div>
         <div class="field" id="danField">
@@ -75,9 +75,9 @@
         <div class="field">
           <span class="label">Timing</span>
           <div class="row">
-            <label class="check"><input type="radio" name="timing" value="borrow" checked> 借用参考谱面</label>
-            <label class="check"><input type="radio" name="timing" value="auto"> 自动测</label>
-            <label class="check"><input type="radio" name="timing" value="manual"> 手动</label>
+            <label class="check" title="沿用参考谱面的全部红线（BPM、offset 与变速），只重新放音符"><input type="radio" name="timing" value="borrow" checked> 借用参考谱面</label>
+            <label class="check" title="由模型从音频推断 timing；节奏明显偏移时改用借用或手动"><input type="radio" name="timing" value="auto"> 自动测</label>
+            <label class="check" title="恒定 BPM，自己填 BPM 与第一个强拍的时间"><input type="radio" name="timing" value="manual"> 手动</label>
           </div>
         </div>
         <div class="field hidden" id="bpmField">
@@ -89,7 +89,7 @@
         </div>
         <div class="field">
           <label for="ln">长条</label>
-          <select id="ln">
+          <select id="ln" title="长条（LN）在音符中的大致比例；通篇长条即反键（inverse）风格">
             <option value="0">不出长条（米谱）</option>
             <option value="0.15">少量长条</option>
             <option value="0.35">米长混</option>
@@ -99,20 +99,31 @@
         </div>
         <div class="field">
           <label for="seed">种子</label>
-          <input type="number" id="seed" step="1" min="0" value="0" style="width:6em">
+          <input type="number" id="seed" step="1" min="0" value="0" style="width:6em" title="随机种子：设置相同、种子不同就是另一张谱；相同种子可复现同一结果">
+        </div>
+        <div class="field">
+          <label for="count">份数</label>
+          <select id="count" title="一次提交几张，种子依次加一，每张一个任务，按顺序排队">
+            <option value="1">1 张</option>
+            <option value="2">2 张</option>
+            <option value="3">3 张</option>
+            <option value="4">4 张</option>
+            <option value="6">6 张</option>
+            <option value="8">8 张</option>
+          </select>
         </div>
       </div>
       <div class="hint" id="timingHint" style="margin-bottom:10px"></div>
 
       <div class="field">
         <label for="outDir">输出文件夹</label>
-        <input type="text" id="outDir" placeholder="">
+        <input type="text" id="outDir" placeholder="" title="生成的 .osu 与 .osz 写到这里；默认位置可在「设置」里改">
       </div>
       <div class="row" style="margin-bottom:10px">
-        <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
-        <label class="check"><input type="checkbox" id="modelFast"> 快速：分几路同时写</label>
-        <label class="check"><input type="checkbox" id="modelReuse" checked> 乐句复用：听起来一样的乐句写成一样</label>
-        <label class="check"><input type="checkbox" id="lnLora"> 长条 LoRA（试验）：长条谱更难，混合谱会多写长条</label>
+        <label class="check" title="把生成的谱面与音频、背景打包成 .osz，双击即可导入 osu!"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
+        <label class="check" title="把整首歌分成 8 条链批量解码，约快一倍；行数与长条略少，段落衔接处偶有空白"><input type="checkbox" id="modelFast"> 快速：分几路同时写</label>
+        <label class="check" title="音频相似度达到 0.9 的乐句复制（或镜像）第一次出现时的写法，让整张谱前后一致"><input type="checkbox" id="modelReuse" checked> 乐句复用：听起来一样的乐句写成一样</label>
+        <label class="check" title="加载针对 7K 长条谱微调的 LoRA 权重：长条谱星级更高、和弦更厚，但混合谱会写出过多长条"><input type="checkbox" id="lnLora"> 长条 LoRA（试验）：长条谱更难，混合谱会多写长条</label>
       </div>
       <div class="field">
         <span class="label">技法难度范围（引擎星级）</span>
@@ -120,13 +131,13 @@
         <div class="hint">给想管的技法拉一个星级范围（或直接填数字），不管的留空。跑完所有次数，留下最贴近这些范围的一张；降难时先删超出上限的技法、最后删低于下限的。模型不听技法指令，只能挑与删：低于下限的补不上，结果里会标出差多少。重写段落也按这里的范围挑。</div>
       </div>
       <div class="hint" style="margin-bottom:10px">Mapperatorinator 是一个听音频写谱的模型，节奏和键位一起写。有 timing（借用或手动）时照它写，更快也更准；否则自己测。先写得比目标略难，再删音符降到目标星级，不够时重写，最多几次。勾「快速」分几路同时写，约快一倍，行与长条略少。第一次生成会安装它的 Python 3.10 环境与 PyTorch（数 GB）；有 NVIDIA 显卡时每首约 1–4 分钟。</div>
-      <button class="primary" id="runBtn">生成</button>
-      <span class="hint" style="margin-left:10px">同一设置换个种子就是另一张谱。</span>
+      <button class="primary" id="runBtn" title="按当前设置提交生成任务；已有任务在跑时会排在它后面">生成</button>
+      <span class="hint" style="margin-left:10px">同一设置换个种子就是另一张谱。可以连续提交，每次按当时的设置排进下方队列。</span>
     </div>
 
-    <div id="results"></div>
+    <div id="queue"></div>
     <div class="card hidden" id="projectCard"></div>
-    <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
+    <div class="card hidden" id="jobCard"><h2>段落任务</h2><div id="job"></div></div>
   </div>
 
   <script src="/static/i18n.js"></script>
@@ -134,7 +145,9 @@
   <script>
     "use strict";
     const { el, $ } = P7;
-    const panel = P7.jobPanel($("#job"));
+    const panel = P7.jobPanel($("#job"));   // the sections card's own operations, one at a time
+    const queue = P7.jobQueue($("#queue"), tr("生成队列"));
+    const form = P7.rememberForm("generator", ["@mode", "dan", "sr", "@timing", "ln", "count", "modelFast", "modelReuse", "lnLora"]);
     const drop = P7.dropZone($("#drop"), ".mp3,.ogg,.wav,.flac,audio/*", (f) => { $("#audio").disabled = !!f; });
     const source = () => document.querySelector("input[name=src]:checked").value;
     const timingMode = () => document.querySelector("input[name=timing]:checked").value;
@@ -161,7 +174,8 @@
       }[timingMode()];
       $("#srField").classList.toggle("hidden", targetMode() !== "sr");
       $("#danField").classList.toggle("hidden", targetMode() === "sr");
-      $("#runBtn").disabled = running || (game && !gameChart);
+      $("#runBtn").disabled = game && !gameChart;
+      $("#runBtn").textContent = queue.active() ? tr("加入队列") : tr("生成");
     }
     function setSource(value) {
       document.querySelector(`input[name=src][value=${value}]`).checked = true;
@@ -208,6 +222,7 @@
     P7.getJSON("/api/config").then((cfg) => {
       cfg.dan_tiers.forEach((t) => $("#dan").appendChild(el("option", { value: t.name, text: tr("{dan}（{stars}★）", { dan: t.name, stars: t.stars.toFixed(2) }) })));
       $("#dan").value = "2nd";
+      form.restore("dan");
       applyDan();
       $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.generated_dir });
     });
@@ -229,18 +244,24 @@
         el("h3", { text: tr("八项技法星级") }),
         P7.skillBars(r.skills),
         (r.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, r.warnings.join(tr("；"))) : null,
-        el("button", { class: "small", style: "margin-top:8px", text: tr("换一张（种子 +1）"), disabled: running,
-          onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(); } }));
+        el("button", { class: "small", style: "margin-top:8px", text: tr("换一张（种子 +1）"), title: tr("用当前设置、下一个种子再生成一张"),
+          onclick: () => { $("#seed").value = String((Number($("#seed").value) || 0) + 1); run(1); } }));
     }
 
     // --- technique ranges (ADR-0050): a range of stars per engine pool ----------------------------------------
     const mix = P7.mixControl();
     $("#mix").append(mix.node);
+
+    // The 设置 page's defaults, then this page's own last choices over them.
+    $("#outDir").value = P7.settings.get("generator_out") || "";
+    $("#pkg").checked = !!P7.settings.get("package");
+    form.restore();
+    refresh();
     function mixValue() { return mix.value(); }
 
     $("#runBtn").onclick = () => run();
-    async function run() {
-      if (running) return;
+    // Queue `count` charts (the 份数 field by default), seeds counting up from the seed field.
+    function run(count) {
       let mixText;
       try { mixText = mixValue(); } catch (e) { alert(e.message); return; }
       const fromGame = source() === "game";
@@ -253,7 +274,6 @@
         offset: timing === "manual" ? $("#offset").value : "",
         target_dan: targetMode() === "dan" ? $("#dan").value : "",
         target_sr: targetMode() === "sr" ? $("#sr").value : "",
-        seed: $("#seed").value,
         title: fromGame ? "" : $("#title").value,
         artist: fromGame ? "" : $("#artist").value,
         output_dir: $("#outDir").value,
@@ -265,20 +285,27 @@
         inverse: $("#ln").value === "inverse",
         mix: mixText,
       };
-      running = true;
+      const uploads = !fromGame && drop.file ? { audio: drop.file } : {};
+      const song = fromGame ? (gameChart ? gameChart.title : "") : $("#title").value || (drop.file ? drop.file.name : String($("#audio").value).split(/[\\/]/).pop());
+      const target = params.target_dan || `${params.target_sr}★`;
+      const seed0 = Number($("#seed").value) || 0;
+      const n = count || Math.max(1, Number($("#count").value) || 1);
+      for (let k = 0; k < n; k++) {
+        const seed = seed0 + k;
+        submit({ ...params, seed: String(seed) }, uploads,
+          tr("{song} · {target} · 种子 {seed}", { song: song || tr("（未命名）"), target, seed }));
+      }
+    }
+    async function submit(params, uploads, label) {
+      const entry = queue.add(label);
       refresh();
-      $("#jobCard").classList.remove("hidden");
-      $("#results").replaceChildren();
-      panel.reset();
-      const job = await P7.startJob("generate", params, {
-        uploads: !fromGame && drop.file ? { audio: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
-      });
-      panel.update(job);
-      running = false;
+      const job = await P7.startJob("generate", params, { uploads, onUpdate: entry.update, onLog: entry.log });
+      entry.update(job);
       refresh();
-      if (job.status !== "done") { panel.showLog(); return; }
-      $("#results").replaceChildren(resultCard(job.result));
-      if (job.result.project) { selected.clear(); showProject(job.result.project); }
+      if (job.status !== "done") { entry.showLog(); return; }
+      entry.results.replaceChildren(resultCard(job.result));
+      // The sections card follows the chart that finished last.
+      if (job.result.project && !running) { selected.clear(); showProject(job.result.project); }
       if (job.result.skills) mix.reference(job.result.skills_engine || null);
     }
 

@@ -167,6 +167,7 @@
       <a href="#jobs" data-page="jobs" title="全部任务"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2"/><circle cx="5" cy="18" r="1.2"/></svg><span class="label" data-en="Jobs">任务</span><span class="nav-count hidden" id="jobCount"></span></a>
       <span class="group">设置</span>
       <a href="#sync" data-page="sync" title="曲库同步"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3"/><path d="M4 4v4h4M20 20v-4h-4"/></svg><span class="label" data-en="Sync">曲库同步</span></a>
+      <a href="#settings" data-page="settings" title="界面、任务提醒与各工具的默认选项"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="label" data-en="Settings">设置</span></a>
     </nav>
     <div class="side-foot">
       <select id="playerSel" class="hidden" title="看哪位玩家的主页和记录"></select>
@@ -212,7 +213,7 @@
     // game and a running job keeps streaming while another tab is open.
     const PAGES = {
       home: "/home", history: "/history", library: "/library",
-      live: "/live", sync: "/sync", downscaler: "/downscaler", generator: "/generator", editor: "/editor", profiler: "/profiler", jobs: "/jobs",
+      live: "/live", sync: "/sync", downscaler: "/downscaler", generator: "/generator", editor: "/editor", profiler: "/profiler", jobs: "/jobs", settings: "/settings",
     };
     const PLAYER_PAGES = ["home", "history", "library"];
     const frames = {};
@@ -388,9 +389,35 @@
       count.textContent = running + queued;
       count.classList.toggle("hidden", !(running + queued));
     }
+    // The side bar's job line names each job and its live clock on hover.
+    P7.tick(() => {
+      const node = document.getElementById("jobState");
+      const lines = [...active.values()].map((j) => `${P7.JOB_KIND[j.kind] || j.kind} · ${P7.jobClock(j)}`);
+      const text = lines.length ? `${lines.join("\n")}\n${tr("点击查看全部任务")}` : "";
+      if (node.dataset.p7tip !== undefined) node.dataset.p7tip = text; else if (text) node.title = text; else node.removeAttribute("title");
+    });
     P7.on("jobs", (msg) => { active.clear(); msg.jobs.forEach((j) => { if (j.status === "queued" || j.status === "running") active.set(j.id, j); }); renderJobs(); });
+    // A job that ends while the shell watched it run tells the player (设置 → 任务提醒): a note in the corner, a chime,
+    // and a system notification while the window is behind the game.
+    const ENDED = { done: tr("{kind}完成"), failed: tr("{kind}失败"), cancelled: tr("{kind}已取消") };
+    function jobEnded(j) {
+      const S = P7.settings;
+      const text = tr(ENDED[j.status], { kind: P7.JOB_KIND[j.kind] || j.kind });
+      const title = (j.result && (j.result.title || (j.result.charts && j.result.charts[0] && j.result.charts[0].title))) || "";
+      const sub = j.status === "failed" ? (j.error || "") : [title, P7.jobClock(j)].filter(Boolean).join(" · ");
+      if (S.get("toast")) P7.toast(text, { kind: j.status, sub, onclick: () => { location.hash = "#jobs"; } });
+      if (S.get("sound") && j.status !== "cancelled") P7.chime(j.status === "done");
+      if (S.get("osNotify") && "Notification" in window && Notification.permission === "granted" && (document.hidden || !document.hasFocus())) {
+        try {
+          const n = new Notification(`proj7k · ${text}`, { body: sub, tag: `p7-job-${j.id}` });
+          n.onclick = () => { window.focus(); location.hash = "#jobs"; n.close(); };
+        } catch (e) { /* not allowed here */ }
+      }
+    }
     P7.on("job_update", (msg) => {
       const j = msg.job;
+      // lazer_control is the side bar's own restart button, which reports itself.
+      if (active.has(j.id) && ["done", "failed", "cancelled"].includes(j.status) && j.kind !== "lazer_control") jobEnded(j);
       if (j.status === "queued" || j.status === "running") active.set(j.id, j); else active.delete(j.id);
       renderJobs();
       if (!["queued", "running"].includes(j.status) && (j.kind.startsWith("sync") || j.kind === "lazer_control")) refreshLazer();

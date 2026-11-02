@@ -19,9 +19,9 @@
     <div class="card">
       <h2>输入</h2>
       <div class="choice">
-        <label><input type="radio" name="src" value="game" checked> 游戏当前谱面</label>
+        <label title="跟随 osu!lazer 里当前选中的谱面"><input type="radio" name="src" value="game" checked> 游戏当前谱面</label>
         <label class="hidden" id="pickedOpt"><input type="radio" name="src" value="picked"> <span id="pickedName">选中的谱</span></label>
-        <label><input type="radio" name="src" value="manual"> 指定谱面</label>
+        <label title=".osu 文件、整个文件夹（批量降阶其中所有 7K 谱）、谱面 ID 或链接"><input type="radio" name="src" value="manual"> 指定谱面</label>
       </div>
       <div id="gameSrc" class="field">
         <div id="gameLine"></div>
@@ -41,8 +41,8 @@
         <div class="field">
           <span class="label">目标</span>
           <div class="row">
-            <label class="check"><input type="radio" name="mode" value="dan" checked> 段位</label>
-            <label class="check"><input type="radio" name="mode" value="sr"> 星级</label>
+            <label class="check" title="按锦锦 7K 段位表的标准星级定目标"><input type="radio" name="mode" value="dan" checked> 段位</label>
+            <label class="check" title="直接给出目标星级（本项目引擎的标尺，与 osu! 官方星级不同）"><input type="radio" name="mode" value="sr"> 星级</label>
           </div>
         </div>
         <div class="field" id="danField">
@@ -56,31 +56,40 @@
         <div class="field">
           <span class="label">降阶方式</span>
           <div class="row">
-            <label class="check"><input type="radio" name="keep" value="technique" checked> 保留主技法</label>
-            <label class="check"><input type="radio" name="keep" value="free"> 只追难度</label>
+            <label class="check" title="只删除音符，并要求练习谱的主技法与原谱一致（技法向量余弦相似度达标）"><input type="radio" name="keep" value="technique" checked> 保留主技法</label>
+            <label class="check" title="不要求保留主技法，只把星级降到目标附近；仍保留强拍、和弦骨架与左右手平衡"><input type="radio" name="keep" value="free"> 只追难度</label>
           </div>
         </div>
         <div class="field" id="skillField">
           <label for="skill">保留的主技法</label>
-          <select id="skill"><option value="">自动（谱面自身主技法）</option></select>
+          <select id="skill" title="降阶时优先保住的技法池；自动即原谱星级贡献最大的一项"><option value="">自动（谱面自身主技法）</option></select>
+        </div>
+        <div class="field" id="ladderField">
+          <label for="ladder">阶梯</label>
+          <select id="ladder" title="从目标段位起往下连做几档练习谱，每档一个任务，按顺序排队">
+            <option value="1">只做目标这一档</option>
+            <option value="2">往下连做 2 档</option>
+            <option value="3">往下连做 3 档</option>
+            <option value="4">往下连做 4 档</option>
+            <option value="5">往下连做 5 档</option>
+          </select>
         </div>
       </div>
       <div class="hint hidden" id="freeHint" style="margin-bottom:10px">只追难度：不再要求练习谱保留原谱的主技法，只把星级降到目标附近；仍然只删不改，保住强拍与和弦骨架、左右手平衡，也不会删出超过一小节的新空白。</div>
 
       <div class="field">
         <label for="outDir">输出文件夹</label>
-        <input type="text" id="outDir" placeholder="">
+        <input type="text" id="outDir" placeholder="" title="练习谱 .osu 与 .osz 写到这里；默认位置可在「设置」里改">
       </div>
       <div class="row" style="margin-bottom:10px">
-        <label class="check"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
-        <label class="check"><input type="checkbox" id="syncLazer"> 导入 osu!lazer 并加入「7K Practice」收藏夹</label>
+        <label class="check" title="把练习谱与原谱的音频、背景打包成 .osz，双击即可导入 osu!"><input type="checkbox" id="pkg" checked> 打包 .osz（带音频与背景）</label>
+        <label class="check" title="写入 osu!lazer 的数据库，需要先关闭 osu!lazer；与其他写 lazer 曲库的任务按顺序执行"><input type="checkbox" id="syncLazer"> 导入 osu!lazer 并加入「7K Practice」收藏夹</label>
       </div>
-      <button class="primary" id="runBtn">开始降阶</button>
-      <span class="hint" style="margin-left:10px">导入收藏夹需要 osu!lazer 先导入 .osz 再关闭；也可以稍后点结果里的「导入 osu!」。</span>
+      <button class="primary" id="runBtn" title="按当前设置提交降阶任务；已有任务在跑时会排在它后面">开始降阶</button>
+      <span class="hint" style="margin-left:10px">可以连续提交：每次提交按当时的设置排进下方队列，依次执行。加入收藏夹需要 osu!lazer 处于关闭状态；也可以稍后点结果里的「导入 osu!」。</span>
     </div>
 
-    <div id="results"></div>
-    <div class="card hidden" id="jobCard"><h2>任务</h2><div id="job"></div></div>
+    <div id="queue"></div>
   </div>
 
   <script src="/static/i18n.js"></script>
@@ -88,7 +97,8 @@
   <script>
     "use strict";
     const { el, $ } = P7;
-    const panel = P7.jobPanel($("#job"));
+    const queue = P7.jobQueue($("#queue"), tr("降阶队列"));
+    const form = P7.rememberForm("downscaler", ["@mode", "@keep", "ladder"]);
     const drop = P7.dropZone($("#drop"), ".osu", (f) => { $("#input").disabled = !!f; });
     const source = () => document.querySelector("input[name=src]:checked").value;
     let gameChart = null;
@@ -119,9 +129,10 @@
       if (f) { sourceTouched = true; setSource("manual"); drop.set(f); }
     });
 
-    let running = false;
+    // Runs queue up: the button only waits for a chart to run on.
     function refreshRunButton() {
-      $("#runBtn").disabled = running || (source() === "game" && !gameChart);
+      $("#runBtn").disabled = source() === "game" && !gameChart;
+      $("#runBtn").textContent = queue.active() ? tr("加入队列") : tr("开始降阶");
     }
 
     // A practice chart one tier below the game's chart, until the player picks a tier themselves.
@@ -169,6 +180,7 @@
       const sr = document.querySelector('input[name=mode]:checked').value === "sr";
       $("#srField").classList.toggle("hidden", !sr);
       $("#danField").classList.toggle("hidden", sr);
+      $("#ladderField").classList.toggle("hidden", sr);
     }));
 
     P7.getJSON("/api/config").then((cfg) => {
@@ -179,13 +191,19 @@
       $("#outDir").placeholder = tr("默认：{dir}", { dir: cfg.practice_dir });
       suggestDan();
     });
+    // The 设置 page's defaults, then this page's own last choices over them.
+    $("#outDir").value = P7.settings.get("downscaler_out") || "";
+    $("#pkg").checked = !!P7.settings.get("package");
+    $("#syncLazer").checked = !!P7.settings.get("sync_lazer");
+    form.restore();
+    showKeepMode();
 
     // The technique-keeping run stopped above the target: offer the same run in free mode, one click away.
     function freeModeOffer(c) {
       return el("div", { class: "warn", style: "margin-top:8px" },
         el("div", { text: tr("保留主技法时只能降到 {stars}★，没到目标 {target}★：再删就会改变这张谱的主技法。", { stars: c.downscaled_stars.toFixed(2), target: Number(c.target.target_sr).toFixed(2) }) +
           tr("改用「只追难度」可以继续往下降，练习谱仍然保持节奏骨架与左右手平衡。") }),
-        el("button", { class: "small", style: "margin-top:6px", text: tr("改用只追难度重新降阶"), disabled: running,
+        el("button", { class: "small", style: "margin-top:6px", text: tr("改用只追难度重新降阶"),
           onclick: () => { document.querySelector("input[name=keep][value=free]").checked = true; showKeepMode(); run(); } }));
     }
 
@@ -216,39 +234,51 @@
     }
 
     $("#runBtn").onclick = () => run();
-    async function run() {
-      if (running) return;
+    // The chart this run is on, for its queue entry.
+    function sourceName() {
+      if (source() === "game") return gameChart ? `${gameChart.title} [${gameChart.version}]` : "";
+      if (source() === "picked") return picked.title || picked.md5;
+      return drop.file ? drop.file.name : String($("#input").value).split(/[\\/]/).pop();
+    }
+    // One job per target: the target itself, then (阶梯) the tiers below it, queued in that order.
+    function targets() {
       const mode = document.querySelector('input[name=mode]:checked').value;
+      if (mode === "sr") return [{ target_dan: "", target_sr: $("#sr").value, label: `${$("#sr").value}★` }];
+      const i = danTiers.findIndex((t) => t.name === $("#dan").value);
+      const n = Math.max(1, Number($("#ladder").value) || 1);
+      const names = i < 0 ? [$("#dan").value] : danTiers.slice(Math.max(0, i - n + 1), i + 1).map((t) => t.name).reverse();
+      return names.map((d) => ({ target_dan: d, target_sr: "", label: d }));
+    }
+    function run() {
       const fromGame = source() === "game";
-      const params = {
+      const base = {
         // The game's chart goes by its MD5: osu!lazer finds it, with its audio and background for the .osz.
         input: fromGame ? gameChart.md5_hash : source() === "picked" ? picked.md5 : $("#input").value,
-        target_dan: mode === "dan" ? $("#dan").value : "",
-        target_sr: mode === "sr" ? $("#sr").value : "",
         mode: keepMode(),
         dominant_skill: keepMode() === "free" ? "" : $("#skill").value,
         output_dir: $("#outDir").value,
         package: $("#pkg").checked,
         sync_lazer: $("#syncLazer").checked,
       };
-      running = true;
+      const uploads = source() === "manual" && drop.file ? { input: drop.file } : {};
+      const name = sourceName();
+      targets().forEach((t) => submit({ ...base, target_dan: t.target_dan, target_sr: t.target_sr }, uploads,
+        tr("{chart} → {target}", { chart: name || tr("（未命名）"), target: t.label })
+          + (keepMode() === "free" ? tr("（只追难度）") : "")));
+    }
+    async function submit(params, uploads, label) {
+      const entry = queue.add(label);
       refreshRunButton();
-      $("#jobCard").classList.remove("hidden");
-      $("#results").replaceChildren();
-      panel.reset();
-      const job = await P7.startJob("downscale", params, {
-        uploads: source() === "manual" && drop.file ? { input: drop.file } : {}, onUpdate: panel.update, onLog: panel.log,
-      });
-      panel.update(job);
-      running = false;
+      const job = await P7.startJob("downscale", params, { uploads, onUpdate: entry.update, onLog: entry.log });
+      entry.update(job);
       refreshRunButton();
-      if (job.status !== "done") { panel.showLog(); return; }
+      if (job.status !== "done") { entry.showLog(); return; }
       const r = job.result;
       const nodes = r.charts.map(chartCard);
       if (r.failed_count) nodes.push(el("div", { class: "warn", text: tr("{n} 张谱面降阶失败，详见日志。", { n: r.failed_count }) }));
       if (r.sync) nodes.push(el("div", { class: r.sync.success ? "good" : "bad",
         text: r.sync.success ? tr("已加入 osu!lazer「{name}」收藏夹（{n} 张）。", { name: r.sync.collection, n: r.sync.synced_hashes.length }) : tr("osu!lazer 同步失败。") }));
-      $("#results").replaceChildren(...nodes);
+      entry.results.replaceChildren(...nodes);
     }
   </script>
 </body>
