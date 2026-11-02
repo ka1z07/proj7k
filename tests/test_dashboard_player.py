@@ -366,3 +366,57 @@ def test_app_window_command_and_icon(tmp_path):
     out = tmp_path / "proj7k.ico"
     assert icon_main([str(out)]) == 0
     assert Image.open(out).format == "ICO"
+
+
+def _skill_snapshot(t, stars, replay_hash):
+    from proj7k.profiler.storage import SNAPSHOT_ENGINE
+    return MatchSnapshot(
+        player_name="inawah", timestamp=t, beatmap_hash="md5a", replay_hash=replay_hash, play_duration_s=60.0,
+        completion_rate=1.0, is_valid_play=True, is_failed=False, overall_ur=100.0,
+        capacities={"jack": {"effective_capacity": 9.0, "star_rating": stars, "tested": True}},
+        summary={"engine": SNAPSHOT_ENGINE},
+    )
+
+
+def test_progress_series_reads_the_level_over_rolling_windows(tmp_path):
+    day = 86400.0
+    with ProfilerStorage(db_path=tmp_path / "p.db") as storage:
+        assert player_api.progress_series(storage, "inawah") == []
+        # Three replays 40 days apart: each 30-day window ending at one holds that one only.
+        for i, stars in enumerate((4.0, 5.0, 6.0)):
+            storage.save_snapshot(_skill_snapshot(1_700_000_000.0 + i * 40 * day, stars, f"r{i}"))
+        series = player_api.progress_series(storage, "inawah")
+    assert series[-1]["t"] == pytest.approx(1_700_000_000.0 + 80 * day)
+    assert [p["t"] for p in series] == sorted(p["t"] for p in series)
+    assert all(series[i + 1]["t"] - series[i]["t"] >= 7 * day - 1 for i in range(len(series) - 1))
+    jack = [p["skills"]["jack"] for p in series]
+    assert jack[0] == pytest.approx(4.0) and jack[-1] == pytest.approx(6.0)
+    assert set(series[-1]["skills"]) == {"jack"}  # untested skills are left out
+    assert all(p["matches"] >= 1 for p in series)  # windows with no replay are left out
+
+
+def test_latest_plays_carry_what_a_bad_run_hint_needs(lazer):
+    snap = _library(lazer).snapshot()
+    rows = player_api.latest_plays(snap, "inawah", n=2)
+    assert [r["id"] for r in rows] == ["s2", "s1"]
+    assert {"chart_dan", "fatal_time_ms", "break_skill", "passed", "rank_label", "md5", "replay_hash"} <= set(rows[0])
+
+
+def test_progress_and_latest_routes(lazer, tmp_path):
+    lib = _library(lazer)
+
+    async def _run():
+        s = _Server(tmp_path)
+        s.server.library = lib
+        await s.server.start()
+        try:
+            status, _, body = await s.get("/api/me/latest")
+            assert status == 200 and json.loads(body)["plays"][0]["id"] == "s2"
+            status, _, body = await s.get("/api/me/progress")
+            d = json.loads(body)
+            assert status == 200 and d["player"] == "inawah" and isinstance(d["series"], list)
+            assert len(d["plays"]) == 3 and d["dan_stars"][0]["name"]
+        finally:
+            await s.server.stop()
+
+    asyncio.run(_run())
