@@ -61,6 +61,8 @@
       <span class="take" id="takeLine"></span>
       <button class="small" id="undoBtn" title="退回上一版">上一版</button>
       <button class="small" id="redoBtn" title="前进到下一版">下一版</button>
+      <button class="small primary" id="importBtn" title="把正在看的这一版（.osz）导入 osu!lazer，是一张新谱，不覆盖原谱">导入 osu!</button>
+      <button class="small" id="folderBtn" title="打开这个项目的文件夹">打开文件夹</button>
       <label class="take">对照 <select id="cmpSel" title="在右边并排显示另一版"></select></label>
       <span class="grow"></span>
       <a class="standalone-only" href="/#generator">← 返回控制台</a>
@@ -955,6 +957,10 @@
       if (b) { b.disabled = busy || !sel || !!dirty; b.title = dirty ? tr("有手改没保存：先保存或放弃") : ""; }
       $("#undoBtn").disabled = busy || !!dirty || !data || !data.can_undo;
       $("#redoBtn").disabled = busy || !!dirty || !data || !data.can_redo;
+      // the saved take is what is imported: unsaved hand edits are not in it
+      $("#importBtn").disabled = busy || !!dirty || !data;
+      $("#importBtn").title = dirty ? tr("有手改没保存：先保存或放弃") : tr("把正在看的这一版（.osz）导入 osu!lazer，是一张新谱，不覆盖原谱");
+      $("#folderBtn").disabled = !data;
     }
     const poolName = (k) => (P7.MIX_POOLS.find((p) => p[0] === k) || [k, k])[1];
     function rangeText(lo, hi) {
@@ -996,6 +1002,8 @@
       op("rewrite", { bars: `${sel.first + 1}-${sel.last + 1}`, audition: true, target_sr: $("#target").value,
         candidates: $("#cands").value, ln_ratio: $("#lnRatio").value, mix: m });
     }
+    $("#importBtn").onclick = () => { if (data) P7.send({ type: "editor_open_take", path: data.project_file, n: data.take.n }); };
+    $("#folderBtn").onclick = () => { if (data) P7.send({ type: "editor_open_take", path: data.project_file, reveal: true }); };
     $("#undoBtn").onclick = () => op("undo", {});
     $("#redoBtn").onclick = () => op("redo", {});
     function switchTo(p) {

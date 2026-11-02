@@ -200,7 +200,7 @@ def _profile_skills(profile) -> Dict[str, float]:
 
 
 def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
-    from proj7k.downscaler.cli import run_downscale
+    from proj7k.downscaler.cli import parse_ranges, run_downscale
     from proj7k.downscaler.pipeline import DownscaleOptions
 
     source = _text(params, "input").strip('"')
@@ -219,6 +219,7 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
         target_sr=target_sr,
         dominant_skill=_text(params, "dominant_skill") or None,
         preserve_technique=mode == "technique",
+        pool_ranges=parse_ranges(params.get("ranges") or None),
     )
     output_dir = Path(_text(params, "output_dir").strip('"')).expanduser() if _text(params, "output_dir") else config.practice_dir
     run = run_downscale(

@@ -19,6 +19,8 @@ ranking does not have to be exact. It does not see second-order effects (a delet
 the gaps its neighbours are read against); those the re-evaluation catches.
 """
 
+from typing import Optional
+
 import numpy as np
 
 from proj7k.engine.skills import hand_of
@@ -26,15 +28,18 @@ from proj7k.engine.solver import loss
 from proj7k.field import ChartField
 
 
-def removal_benefit(field: ChartField, theta: float) -> np.ndarray:
+def removal_benefit(field: ChartField, theta: float, weights: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Per event: the first-order drop in the chart's expected loss at level `theta` if the event's own
-    demand were taken out of its hand's accumulator.
+    demand were taken out of its hand's accumulator. With `weights` (per event, e.g. one skill's membership
+    `field.w[:, k]`) the loss is that weighted sum, the one the skill's own `D_k` is solved on.
     """
     ev, p = field.events, field.params
     pl = loss(field.d, theta, p)
     with np.errstate(divide="ignore", invalid="ignore"):
         c = np.where(field.d > 0, p.beta * pl * (1.0 - pl) / (p.gamma * field.d ** p.gamma), 0.0)
+    if weights is not None:
+        c = c * weights
     vg = field.v ** p.gamma
     hand = hand_of(field.thumb)[ev.col]
     benefit = np.zeros(ev.n)
