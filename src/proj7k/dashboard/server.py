@@ -40,7 +40,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, quote, unquote
 
 from websockets.asyncio.server import ServerConnection
@@ -73,6 +73,8 @@ PAGES = {
     "/play": "play.html",
     "/editor": "editor.html",
     "/settings": "settings.html",
+    "/progress": "progress.html",
+    "/overlay": "overlay.html",
 }
 
 #: The chart editor's API (ADR-0050): `projects`, `project`, `stretch`, `audio`, `take` (`n`, from 1) and `lazer`
@@ -88,7 +90,7 @@ MAX_MESSAGE_BYTES = 256 * 2**20
 PLAYER_API_TIMEOUT_S = 120.0
 
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
-_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar|online)(?:/([\w.-]+))?$")
+_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar|online|progress|latest)(?:/([\w.-]+))?$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -146,6 +148,7 @@ class DashboardServer(LiveServer):
         self._chart_engine = LiveEngine(max_mem_entries=64)
         self.osu_account = player_api.OsuAccount(port=port)
         self._profiles: Dict[Tuple[str, float], Dict[str, Any]] = {}
+        self._progress: Dict[Tuple[str, float], List[Dict[str, Any]]] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._game_chart: Dict[str, Any] = {"type": "game_chart", "chart": None, "unresolved": None}
         # Every page and asset is read once: the set of servable static paths is fixed at start.
@@ -349,6 +352,21 @@ class DashboardServer(LiveServer):
             self._profiles = {key: out}
         return self._profiles[key] or None
 
+    def _progress_series(self, player: str) -> List[Dict[str, Any]]:
+        """The progress page's curves (`player.progress_series`), recomputed when the profiler's database changes."""
+        from proj7k.profiler.storage import ProfilerStorage
+
+        db = self.config.db_path or ProfilerStorage().db_path
+        try:
+            mtime = Path(db).stat().st_mtime
+        except OSError:
+            return []
+        key = (player.lower(), mtime)
+        if key not in self._progress:
+            with ProfilerStorage(db_path=self.config.db_path) as storage:
+                self._progress = {key: player_api.progress_series(storage, player)}
+        return self._progress[key]
+
     def _player_route(self, what: str, arg: str, query: str, request: Request) -> Response:
         params = {k: v[-1] for k, v in parse_qs(query).items()}
         set_language(from_cookie(request.headers.get("Cookie")))  # this thread's copy of the context only
@@ -367,14 +385,33 @@ class DashboardServer(LiveServer):
                     # The shell's backdrop when the game has no chart selected: the cover of the last play.
                     "last_md5": snapshot.plays[0]["md5"] if snapshot.plays else None,
                 })
+            if what == "latest":   # the shell's hint after a bad run (ADR-0053): polled, so kept small
+                return self._json_response({"player": player, "plays": player_api.latest_plays(snapshot, player)})
             profile = None
-            if what in ("overview", "library") and player:
+            if what in ("overview", "library", "progress") and player:
                 try:
                     profile = self._profile_summary(player)
                 except Exception as e:
                     logger.info(f"Profiler summary unavailable: {e}")
             if what == "overview":
                 return self._json_response({**player_api.overview(snapshot, player, profile=profile), "error": snapshot.error})
+            if what == "progress":
+                series: List[Dict[str, Any]] = []
+                if player:
+                    try:
+                        series = self._progress_series(player)
+                    except Exception as e:
+                        logger.info(f"Profiler progress unavailable: {e}")
+                plays = snapshot.plays_of(player)
+                return self._json_response({
+                    "player": player, "series": series, "profile": profile,
+                    "window_days": player_api.PROGRESS_WINDOW_DAYS,
+                    "dan_stars": [{"name": k, "stars": round(v, 2)} for k, v in player_api.CANONICAL_DAN_SR.items()],
+                    # Without replays read, the curve falls back on the stars of the charts played.
+                    "plays": [{"t": p["timestamp"], "stars": p["stars"], "passed": p["passed"], "accuracy": round(p["accuracy"], 4)}
+                              for p in reversed(plays) if p["timestamp"]],
+                    "error": snapshot.error,
+                })
             if what == "history":
                 return self._json_response({**player_api.history(snapshot, player), "error": snapshot.error})
             if what == "library":

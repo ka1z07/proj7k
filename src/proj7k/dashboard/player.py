@@ -884,6 +884,64 @@ def chart_detail(snapshot: LibrarySnapshot, md5: str, player: Optional[str], fil
 _TECH_KEYS = ("jack", "tech", "speed", "stream", "ln_general", "ln_tech", "ln_inverse", "ln_release")
 
 
+#: The progress page's curves: each point is the profiler's level over the window ending there (ADR-0053).
+PROGRESS_WINDOW_DAYS = 30.0
+PROGRESS_MAX_POINTS = 40
+
+
+def progress_series(storage: Any, player: str, window_days: float = PROGRESS_WINDOW_DAYS,
+                    max_points: int = PROGRESS_MAX_POINTS) -> List[Dict[str, Any]]:
+    """
+    The player's overall and per-skill levels over time, oldest first: at each point, the profiler's fit
+    (`aggregate_macro_profile`, ADR-0028) over the `window_days` of replays ending there. Points are at least a
+    week apart and at most `max_points`, the last one at the newest replay; a point whose window holds no replay
+    is left out. A skill appears at a point only when a play in that window tested it.
+    """
+    from proj7k.profiler.aggregate import aggregate_macro_profile
+
+    snaps = storage.get_snapshots(player)
+    if not snaps:
+        return []
+    stamps = [s.timestamp for s in snaps]
+    first, last = min(stamps), max(stamps)
+    step = max(7 * 86400.0, (last - first) / max(1, max_points - 1))
+    refs: List[float] = []
+    t = last
+    while t >= first - 1e-6 and len(refs) < max_points:
+        refs.append(t)
+        t -= step
+    out: List[Dict[str, Any]] = []
+    for ref in reversed(refs):
+        p = aggregate_macro_profile(storage=storage, player_name=player, horizon_days=window_days, reference_timestamp=ref)
+        if not p.total_matches:
+            continue
+        out.append({
+            "t": round(ref, 1),
+            "matches": p.total_matches,
+            "overall": round(p.overall_star_rating, 2),
+            "dan": p.overall_dan,
+            "skills": {k: round(d.star_rating, 2) for k, d in p.dimensions.items() if d.match_count and k in _TECH_KEYS},
+        })
+    return out
+
+
+def latest_plays(snapshot: LibrarySnapshot, player: Optional[str], n: int = 5) -> List[Dict[str, Any]]:
+    """The player's newest plays with what a hint after a bad run needs: the chart's dan and main skill, and, when
+    the profiler has read the replay, where and on what it broke."""
+    out = []
+    for p in snapshot.plays_of(player)[:n]:
+        prof = p.get("profiler") or {}
+        chart = snapshot.charts.get(p["md5"]) or {}
+        out.append({
+            **play_row(snapshot, p),
+            "chart_dan": chart.get("dan"),
+            "fatal_time_ms": prof.get("fatal_time_ms"),
+            "break_skill": prof.get("break_skill"),
+            "completion": prof.get("completion"),
+        })
+    return out
+
+
 def thumbnail(path: Path, width: int) -> Tuple[bytes, str]:
     """A cover scaled to `width` as JPEG (Pillow), or the original file when it cannot be read."""
     try:

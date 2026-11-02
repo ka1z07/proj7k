@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 叠加层</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    /* An OBS browser source or a small window over the game: see-through, no page chrome. */
+    html, body { background: transparent !important; }
+    body { padding: 10px; font-size: calc(14px * var(--scale, 1)); overflow: hidden; }
+    .ov { display: inline-flex; flex-direction: column; gap: 8px; width: min(440px, 100%); padding: 12px 14px; border-radius: 14px;
+          background: rgba(22, 18, 28, var(--alpha, 0.82)); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+    .ov.bar { flex-direction: row; align-items: center; width: auto; max-width: 100%; gap: 14px; padding: 8px 14px; }
+    .ov.hidden-idle { display: none; }
+    .ov-head { display: flex; gap: 10px; align-items: center; min-width: 0; }
+    .ov-cover { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; flex: none; background: var(--bg-raised); }
+    .bar .ov-cover { width: 36px; height: 36px; }
+    .ov-title { font-weight: 800; font-size: 1em; line-height: 1.25; }
+    .ov-ver { color: var(--text-muted); font-size: 0.82em; }
+    .ov-stars { font-size: 1.6em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+    .bar .ov-stars { font-size: 1.25em; }
+    .ov-dan { color: var(--accent); font-weight: 800; margin-left: 6px; font-size: 0.9em; }
+    .ov-meta { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .ov-skills { display: grid; grid-template-columns: 64px 1fr 44px; gap: 3px 8px; align-items: center; font-size: 0.78em; }
+    .ov-track { position: relative; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); }
+    .ov-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--accent-blue); }
+    .ov-fill.over { background: var(--accent-gold); }
+    .ov-you { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; }
+    .ov-val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .ov-best { font-size: 0.8em; color: var(--text-muted); }
+    .ov-best b { color: var(--text-main); }
+    .ov-idle { color: var(--text-muted); font-size: 0.85em; }
+    .bar .ov-head > div { max-width: 260px; }
+    .bar .ov-meta { flex-wrap: nowrap; white-space: nowrap; }
+    .bar .ov-best { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="ov" id="ov"><div class="ov-idle">正在连接看板…</div></div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    // Options ride the URL (the 设置 page builds it): layout=card|bar, skills/you/best/cover=0 to hide a part,
+    // scale (text size), alpha (background opacity), idle=hide to vanish while no chart is selected, lang=zh|en.
+    const { el, $ } = P7;
+    const q = new URLSearchParams(location.search);
+    const opt = (k, d) => (q.has(k) ? q.get(k) : d);
+    if (q.get("lang") && q.get("lang") !== P7I18N.lang && ["zh", "en"].includes(q.get("lang"))) {
+      P7I18N.remember(q.get("lang"));
+      location.reload();
+    }
+    const show = { skills: opt("skills", "1") !== "0", you: opt("you", "1") !== "0", best: opt("best", "1") !== "0", cover: opt("cover", "1") !== "0" };
+    const layout = opt("layout", "card") === "bar" ? "bar" : "card";
+    document.documentElement.style.setProperty("--scale", String(Math.min(3, Math.max(0.6, Number(opt("scale", "1")) || 1))));
+    document.documentElement.style.setProperty("--alpha", String(Math.min(1, Math.max(0, Number(opt("alpha", "0.82"))))));
+    const ov = $("#ov");
+    ov.classList.toggle("bar", layout === "bar");
+
+    let you = null;       // the player's skill levels, re-read every few minutes
+    let shownMd5 = null, seq = 0;
+    async function loadYou() {
+      if (!show.you) return;
+      try {
+        const d = await P7.api("overview");
+        const prof = d.profile && (d.profile.recent || d.profile.all_time);
+        you = prof ? { overall: prof.overall_stars, skills: prof.skills || {} } : null;
+      } catch (e) { /* keep what we had */ }
+    }
+
+    function idle(text) {
+      ov.classList.toggle("hidden-idle", opt("idle", "") === "hide");
+      ov.replaceChildren(el("div", { class: "ov-idle", text }));
+    }
+
+    function render(c, detail) {
+      ov.classList.remove("hidden-idle");
+      const eng = (detail && detail.engine) || {};
+      const stars = eng.stars !== undefined ? eng.stars : Number(c.star_rating);
+      const dan = eng.dan || c.dan_tier || "";
+      const best = detail && detail.best;
+      const head = el("div", { class: "ov-head" },
+        show.cover && detail && detail.chart && detail.chart.has_cover ? el("img", { class: "ov-cover", src: P7.coverUrl(c.md5_hash, 160), alt: "" }) : null,
+        el("div", { style: "min-width:0" },
+          el("div", { class: "ov-title ellipsis", text: `${c.artist} - ${c.title}` }),
+          el("div", { class: "ov-ver ellipsis", text: `[${c.version}]` })));
+      const meta = el("div", { class: "ov-meta" },
+        el("span", {}, el("span", { class: "ov-stars", text: `${stars.toFixed(2)}★` }), el("span", { class: "ov-dan", text: dan })),
+        eng.dominant ? el("span", { class: "ov-ver", text: tr("主技法 {skill}", { skill: P7.skillName(eng.dominant) }) }) : null,
+        show.you && you && you.overall ? el("span", { class: "ov-ver", text: tr("你 {stars}★", { stars: you.overall.toFixed(2) }) }) : null);
+      const parts = [head, meta];
+      if (show.skills && layout === "card" && eng.skills) {
+        const keys = Object.keys(P7.SKILL_LABELS).filter((k) => eng.skills[k] > 0.05);
+        const top = Math.max(1, ...keys.map((k) => Math.max(eng.skills[k], (you && you.skills[k]) || 0))) * 1.05;
+        parts.push(el("div", { class: "ov-skills" }, ...keys.flatMap((k) => {
+          const v = eng.skills[k], mine = you && you.skills[k];
+          return [el("span", { text: P7.SKILL_LABELS[k] }),
+            el("div", { class: "ov-track" },
+              el("div", { class: `ov-fill${mine && v > mine ? " over" : ""}`, style: `width:${(v / top) * 100}%` }),
+              show.you && mine ? el("div", { class: "ov-you", style: `left:${(mine / top) * 100}%` }) : null),
+            el("span", { class: "ov-val", text: v.toFixed(2) })];
+        })));
+      }
+      if (show.best) {
+        parts.push(el("div", { class: "ov-best" }, best
+          ? [tr("个人最好 "), el("b", { text: `${best.rank_label} · ${P7.acc(best.accuracy)}` }), tr(" · {n} 局", { n: detail.plays.length })]
+          : tr("还没打过这张")));
+      }
+      ov.replaceChildren(...parts);
+    }
+
+    let lastState = null;
+    async function follow(state) {
+      lastState = state;
+      const c = state.chart;
+      if (!c) { shownMd5 = null; idle(tr("等待 osu!lazer 选谱…")); return; }
+      if (c.md5_hash === shownMd5) return;
+      shownMd5 = c.md5_hash;
+      const mine = ++seq;
+      render(c, null);
+      let detail = null;
+      try { detail = await P7.api(`chart/${c.md5_hash}`); } catch (e) { /* the library may not know it yet */ }
+      if (mine === seq) render(c, detail && !detail.error ? detail : null);
+    }
+    P7.onGameChart(follow);
+    P7.on("connection", (up) => { if (!up) { shownMd5 = null; idle(tr("看板未连接")); } });
+    // Once the player's levels are in, the open chart is drawn again with their markers.
+    const refreshYou = () => loadYou().then(() => { if (lastState && lastState.chart) { shownMd5 = null; follow(lastState); } });
+    refreshYou();
+    setInterval(refreshYou, 5 * 60 * 1000);
+  </script>
+</body>
+</html>

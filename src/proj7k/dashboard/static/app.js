@@ -46,6 +46,8 @@ const P7 = (() => {
     downscaler_out: "", generator_out: "",  // default output folders ("" = the dashboard's own)
     package: true,         // pack an .osz by default
     sync_lazer: false,     // add practice charts to osu!lazer's collection by default
+    goal_dan: "",          // the progress page's target tier ("" = none)
+    fail_hint: true,       // after a failed or D-rank play, a note offering a practice chart and a replay diagnosis
   };
   const settings = (() => {
     let values = {};
@@ -387,12 +389,15 @@ const P7 = (() => {
   };
 
   // A short note in the corner (the shell shows one when a job ends). `onclick` makes it a link; it fades on its own.
-  function toast(text, { kind = "", sub = "", onclick = null, ms = 6000 } = {}) {
+  // `actions` [{text, onclick, primary}] are buttons on the note; clicking one also closes it.
+  function toast(text, { kind = "", sub = "", onclick = null, ms = 6000, actions = [] } = {}) {
     let box = document.querySelector(".p7-toasts");
     if (!box) { box = el("div", { class: "p7-toasts", role: "status", "aria-live": "polite" }); document.body.appendChild(box); }
     const close = el("button", { class: "small plain", text: "✕", title: tr("关闭"), onclick: (e) => { e.stopPropagation(); gone(); } });
     const node = el("div", { class: `p7-toast ${kind}${onclick ? " link" : ""}`, onclick: onclick ? () => { onclick(); gone(); } : null },
-      el("div", { class: "grow" }, el("div", { class: "t", text }), sub ? el("div", { class: "hint ellipsis", text: sub, title: sub }) : null), close);
+      el("div", { class: "grow" }, el("div", { class: "t", text }), sub ? el("div", { class: "hint ellipsis", text: sub, title: sub }) : null,
+        actions.length ? el("div", { class: "row toast-actions" }, ...actions.map((a) => el("button", { class: `small${a.primary ? " primary" : ""}`, text: a.text, title: a.title || null,
+          onclick: (e) => { e.stopPropagation(); a.onclick(); gone(); } }))) : null), close);
     box.appendChild(node);
     while (box.children.length > 4) box.firstChild.remove();
     let timer = setTimeout(gone, ms);

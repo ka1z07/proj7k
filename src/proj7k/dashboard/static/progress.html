@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 进步</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .goal-head { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+    .goal-head .field { margin: 0; }
+    .goal-num { font-size: 1.9rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .goal-num.small { font-size: 1.25rem; }
+    .gap-row { display: grid; grid-template-columns: 82px 1fr 150px 92px; gap: 10px; align-items: center; padding: 5px 0; }
+    .gap-track { position: relative; height: 10px; border-radius: 5px; background: var(--bg-raised); overflow: visible; }
+    .gap-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: var(--accent-blue); }
+    .gap-fill.short { background: var(--accent-gold); }
+    .gap-fill.met { background: var(--accent-green); }
+    .gap-goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent); border-radius: 1px; }
+    .gap-val { font-variant-numeric: tabular-nums; font-size: 0.82rem; text-align: right; }
+    .minis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    .mini-chart { background: var(--bg-raised); border-radius: 10px; padding: 10px 12px 6px; }
+    .mini-chart .top { display: flex; justify-content: space-between; align-items: baseline; }
+    .mini-chart .name { font-weight: 700; }
+    .mini-chart .now { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .delta.up { color: var(--accent-green); }
+    .delta.down { color: var(--accent-red); }
+    @media (max-width: 640px) { .gap-row { grid-template-columns: 70px 1fr 80px; } .gap-row .act { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title" data-en="Progress">进步</div>
+        <div class="page-sub">定一个目标段位，看总实力与八项技法离它还差多少，以及每一项随时间的变化。曲线上每个点是截至当时 30 天内回放的实力拟合（与「回放与画像」同一算法）。</div>
+      </div>
+      <a class="standalone-only" href="/#progress">← 返回控制台</a>
+    </div>
+    <div id="page"><div class="empty" id="loading">正在读取…</div></div>
+  </div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    const KEYS = Object.keys(P7.SKILL_LABELS);
+    const WEEK = 7 * 86400;
+    let data = null;
+
+    const goalDan = () => P7.settings.get("goal_dan") || "";
+    const danStars = (name) => { const t = data.dan_stars.find((d) => d.name === name); return t ? t.stars : null; };
+    // The lowest tier at or above `stars`: what a skill at that level should practise next.
+    const tierAbove = (stars) => (data.dan_stars.find((d) => d.stars >= stars) || data.dan_stars[data.dan_stars.length - 1]).name;
+    const fmt = (v) => (v === null || v === undefined ? "—" : `${v.toFixed(2)}★`);
+
+    // Where the player stands now: the newest point of the curve, else the all-time profile.
+    function current() {
+      const last = data.series[data.series.length - 1];
+      const all = data.profile && data.profile.all_time;
+      return {
+        overall: last ? last.overall : all ? all.overall_stars : null,
+        skills: last ? last.skills : all ? all.skills : {},
+        source: last ? "series" : all ? "profile" : null,
+      };
+    }
+    // Stars gained per week over the last eight points of a curve (least squares), or null when too few.
+    function slope(points) {
+      const p = points.slice(-8);
+      if (p.length < 3) return null;
+      const n = p.length, mt = p.reduce((a, q) => a + q.t, 0) / n, mv = p.reduce((a, q) => a + q.v, 0) / n;
+      const num = p.reduce((a, q) => a + (q.t - mt) * (q.v - mv), 0), den = p.reduce((a, q) => a + (q.t - mt) ** 2, 0);
+      return den ? (num / den) * WEEK : null;
+    }
+
+    // A line over time. `points` [{t, v}], `goal` a level drawn dashed, dan tiers as faint reference lines.
+    function lineChart(points, { goal = null, H = 220, mini = false, label = "" } = {}) {
+      const W = mini ? 300 : 900, L = 6, R = mini ? 6 : 52, T = 8, B = mini ? 6 : 22;
+      const vs = points.map((p) => p.v).concat(goal ? [goal] : []);
+      const vmax = Math.max(...vs) + (mini ? 0.3 : 0.4), vmin = Math.max(0, Math.min(...vs) - (mini ? 0.3 : 0.4));
+      const t0 = points[0].t, t1 = points[points.length - 1].t > t0 ? points[points.length - 1].t : t0 + WEEK;
+      const x = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R);
+      const y = (v) => T + (1 - (v - vmin) / Math.max(0.1, vmax - vmin)) * (H - T - B);
+      const svg = P7.svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart-svg", role: "img", "aria-label": label });
+      if (!mini) {
+        let lastLabel = Infinity;
+        data.dan_stars.filter((d) => d.stars >= vmin && d.stars <= vmax).forEach((d) => {
+          svg.append(P7.svg("line", { x1: L, x2: W - R, y1: y(d.stars), y2: y(d.stars), stroke: "rgba(255, 255, 255, 0.06)" }));
+          if (lastLabel - y(d.stars) >= 13) { svg.append(P7.svg("text", { x: W - R + 4, y: y(d.stars) + 4 }, d.name)); lastLabel = y(d.stars); }
+        });
+        for (let i = 0; i <= 4; i++) {
+          const t = t0 + ((t1 - t0) * i) / 4;
+          svg.append(P7.svg("text", { x: x(t), y: H - 5, "text-anchor": i === 0 ? "start" : i === 4 ? "end" : "middle" },
+            new Date(t * 1000).toLocaleDateString(P7I18N.locale, { month: "numeric", day: "numeric" })));
+        }
+      }
+      if (goal) svg.append(P7.svg("line", { x1: L, x2: W - R, y1: y(goal), y2: y(goal), stroke: "#ff66ab", "stroke-width": mini ? 1.2 : 1.5, "stroke-dasharray": "5 4", "stroke-opacity": 0.8 }));
+      svg.append(P7.svg("polyline", { points: points.map((p) => `${x(p.t)},${y(p.v)}`).join(" "), fill: "none", stroke: "#66ccff",
+        "stroke-width": mini ? 2 : 2.5, "stroke-linejoin": "round", pathLength: 1, class: "draw-in" }));
+      points.forEach((p) => {
+        const dot = P7.svg("circle", { cx: x(p.t), cy: y(p.v), r: mini ? 2.2 : 3.4, fill: "#66ccff" });
+        dot.addEventListener("mousemove", (e) => P7.tip.show(e, [`${p.v.toFixed(2)}★${p.dan ? ` · ${p.dan}` : ""}`,
+          tr("截至 {date}", { date: new Date(p.t * 1000).toLocaleDateString(P7I18N.locale) }), p.n ? tr("窗口内 {n} 局回放", { n: p.n }) : ""].filter(Boolean)));
+        dot.addEventListener("mouseleave", P7.tip.hide);
+        svg.append(dot);
+      });
+      return svg;
+    }
+
+    function goalCard() {
+      const now = current();
+      const select = el("select", { id: "goal", title: tr("目标段位按锦锦 7K 段位表的标准星级换算；保存在这台电脑上") },
+        el("option", { value: "", text: tr("未设定") }),
+        ...data.dan_stars.map((d) => el("option", { value: d.name, text: tr("{dan}（{stars}★）", { dan: d.name, stars: d.stars.toFixed(2) }) })));
+      select.value = goalDan();
+      select.onchange = () => { P7.settings.set("goal_dan", select.value); render(); };
+      const goal = danStars(goalDan());
+      const card = el("div", { class: "card" }, el("h2", { text: tr("目标") }));
+      const head = el("div", { class: "goal-head" },
+        el("div", { class: "field" }, el("label", { for: "goal", text: tr("目标段位") }), select),
+        el("div", {}, el("div", { class: "hint", text: tr("当前实力") }),
+          el("div", { class: "goal-num", text: fmt(now.overall), title: now.source === "series" ? tr("最近 30 天回放的实力拟合") : tr("全部回放的实力拟合") })));
+      card.append(head);
+      if (now.overall === null) {
+        card.append(el("p", { class: "hint", style: "margin-top:10px", text: tr("实力来自回放分析：导入回放后这里会显示当前实力、离目标的差距和八项技法曲线。") }),
+          el("button", { class: "small primary", text: tr("去导入回放"), onclick: () => P7.navigate("profiler", { tab: "import" }) }));
+        return card;
+      }
+      if (!goal) {
+        card.append(el("p", { class: "hint", style: "margin-top:10px", text: tr("选一个目标段位，就能看到总实力与每项技法还差多少。") }));
+        return card;
+      }
+      const gap = goal - now.overall;
+      const rate = slope(data.series.map((p) => ({ t: p.t, v: p.overall })));
+      let eta = "";
+      if (gap <= 0) eta = tr("已经达到目标，可以把目标往上调一档。");
+      else if (rate && rate > 0.005) eta = tr("按最近 8 个点的速度（每周 +{rate}★），约 {weeks} 周后达到。", { rate: rate.toFixed(2), weeks: Math.ceil(gap / rate) });
+      else if (rate !== null) eta = tr("最近 8 个点没有上升趋势；先补下面差距最大的技法。");
+      head.append(
+        el("div", {}, el("div", { class: "hint", text: tr("还差") }),
+          el("div", { class: `goal-num ${gap <= 0 ? "good" : ""}`, text: gap <= 0 ? tr("已达到") : `${gap.toFixed(2)}★` })),
+        el("div", { class: "hint", style: "flex:1;min-width:220px", text: eta }));
+
+      // Each skill against the goal, the widest gap first.
+      const rows = KEYS.filter((k) => now.skills[k] !== undefined && now.skills[k] > 0)
+        .map((k) => ({ k, v: now.skills[k], gap: goal - now.skills[k] })).sort((a, b) => b.gap - a.gap);
+      const top = Math.max(goal * 1.15, ...rows.map((r) => r.v));
+      card.append(el("h3", { text: tr("八项技法离目标的差距") }),
+        ...rows.map((r) => el("div", { class: "gap-row" },
+          el("span", { text: P7.skillName(r.k) }),
+          el("div", { class: "gap-track", title: tr("{skill}：{now}，目标 {goal}", { skill: P7.skillName(r.k), now: fmt(r.v), goal: fmt(goal) }) },
+            el("div", { class: `gap-fill ${r.gap <= 0 ? "met" : r.gap > 0.75 ? "short" : ""}`, style: `width:${(r.v / top) * 100}%` }),
+            el("div", { class: "gap-goal", style: `left:${(goal / top) * 100}%` })),
+          el("span", { class: "gap-val", text: r.gap <= 0 ? tr("{v} · 已达到", { v: fmt(r.v) }) : tr("{v} · 差 {gap}★", { v: fmt(r.v), gap: r.gap.toFixed(2) }) }),
+          el("span", { class: "act" }, r.gap > 0 ? el("button", { class: "small", text: tr("找谱练"), title: tr("在曲库里找以这项为主技法、比你这项高一档的谱"),
+            onclick: () => P7.navigate("library", { skill: r.k, dan: tierAbove(r.v + 0.01) }) }) : null))),
+        el("p", { class: "hint", style: "margin-top:6px", text: tr("粉色竖线是目标段位的星级；黄色表示差距超过 0.75★。没出现的技法是近期回放里没测到的。") }));
+      return card;
+    }
+
+    function overallCard() {
+      const card = el("div", { class: "card" }, el("h2", { text: tr("总实力曲线") }));
+      const goal = danStars(goalDan());
+      if (data.series.length >= 2) {
+        card.append(lineChart(data.series.map((p) => ({ t: p.t, v: p.overall, dan: p.dan, n: p.matches })), { goal, label: tr("总实力随时间变化") }),
+          el("div", { class: "judge-legend" },
+            el("span", {}, el("span", { class: "sw", style: "background:#66ccff" }), tr("截至当时 30 天的实力")),
+            goal ? el("span", {}, el("span", { class: "sw", style: "background:#ff66ab" }), tr("目标")) : null,
+            el("span", { class: "muted", text: tr("横线是段位星级") })));
+        return card;
+      }
+      // No replays read yet: the hardest clear of each week stands in.
+      const weeks = new Map();
+      data.plays.filter((p) => p.passed).forEach((p) => {
+        const w = Math.floor(p.t / WEEK) * WEEK;
+        weeks.set(w, Math.max(weeks.get(w) || 0, p.stars));
+      });
+      const pts = [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ t, v }));
+      if (pts.length < 2) { card.append(el("p", { class: "hint", text: tr("多打几周就会有曲线。") })); return card; }
+      card.append(lineChart(pts, { goal, label: tr("每周通关的最高星级") }),
+        el("p", { class: "hint", text: tr("还没有回放分析，这里先画每周通关的最高星级；导入回放后改为实力拟合。") }));
+      return card;
+    }
+
+    function skillsCard() {
+      const card = el("div", { class: "card" }, el("h2", { text: tr("八项技法曲线") }));
+      if (data.series.length < 2) {
+        card.append(el("p", { class: "hint", text: tr("需要至少两个时间点的回放分析。") }));
+        return card;
+      }
+      const goal = danStars(goalDan());
+      const recent = data.series[data.series.length - 1].t - 90 * 86400;
+      card.append(el("div", { class: "minis" }, ...KEYS.map((k) => {
+        const pts = data.series.filter((p) => p.skills[k] !== undefined).map((p) => ({ t: p.t, v: p.skills[k], n: p.matches }));
+        if (!pts.length) return null;
+        const now = pts[pts.length - 1].v;
+        const base = (pts.find((p) => p.t >= recent) || pts[0]).v;
+        const d = now - base;
+        return el("div", { class: "mini-chart" },
+          el("div", { class: "top" }, el("span", { class: "name", text: P7.skillName(k) }),
+            el("span", {}, el("span", { class: "now", text: fmt(now) }), " ",
+              el("span", { class: `delta ${d > 0.04 ? "up" : d < -0.04 ? "down" : "muted"}`, text: `${d >= 0 ? "+" : ""}${d.toFixed(2)}`, title: tr("与 90 天前相比") }))),
+          pts.length >= 2 ? lineChart(pts, { goal, H: 80, mini: true, label: P7.skillName(k) }) : el("div", { class: "hint", text: tr("只有一个点") }));
+      })), el("p", { class: "hint", style: "margin-top:8px", text: tr("右上角的增减是与 90 天前相比；虚线是目标段位。") }));
+      return card;
+    }
+
+    function render() {
+      $("#page").replaceChildren(el("div", { class: "page", style: "padding:0" }, goalCard(), overallCard(), skillsCard()));
+    }
+    async function load() {
+      try {
+        data = await P7.api("progress");
+        render();
+      } catch (e) {
+        $("#page").replaceChildren(el("div", { class: "empty", text: tr("读取失败：{error}", { error: e }) }));
+      }
+    }
+    P7.settings.onChange((k) => { if (data && (k === null || k === "goal_dan")) render(); });
+    load();
+    P7.onShown(load);
+  </script>
+</body>
+</html>
