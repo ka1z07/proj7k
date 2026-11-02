@@ -7,7 +7,7 @@ The engine's public entry (spec §9.6, §11): a chart in, a difficulty profile o
 The thumb goes to whichever hand gives the lower total difficulty (ties: the left).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, Tuple
 
 import numpy as np
@@ -76,6 +76,25 @@ def evaluate_notes(notes: Notes, params: Params = DEFAULT) -> DifficultyProfile:
     return _profile(preprocess(notes, params), params)
 
 
+def _burst(ev: Events, dem, D: float, eps: float, p: Params) -> float:
+    """
+    ADR-0052: burst_kappa times the hardest window's difficulty. Each window of burst_window seconds is solved
+    on its own, with the short-memory reading and pseudo-count burst_N0, so a dense section that is only a few
+    percent of the chart is not forgiven by the whole chart's tolerance. A chart with nothing to solve stays 0.
+    """
+    if p.burst_kappa <= 0 or D <= 0:
+        return 0.0
+    pw = replace(p, N0=p.burst_N0)
+    t_ev = ev.T[ev.row]
+    starts = np.arange(ev.T[0], ev.T[-1] + 1e-9, p.burst_window / 4)
+    best = 0.0
+    for t0 in starts:
+        idx = (t_ev >= t0) & (t_ev < t0 + p.burst_window)
+        if idx.any():
+            best = max(best, solve(dem.d_burst[idx], np.ones(int(idx.sum())), eps, pw))
+    return p.burst_kappa * best
+
+
 def _profile(ev: Events, p: Params) -> DifficultyProfile:
     ones = np.ones(ev.n)
     eps_total = p.eps_rc + p.eps_total_ln_slope * ln_context(ev, p).mean()
@@ -87,6 +106,7 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
         if best is None or D < best[0]:
             best = (D, dem)
     D, dem = best
+    D = max(D, _burst(ev, dem, D, eps_total, p))
 
     w, a = memberships(ev, dem, p)
     attribution_error = float(np.abs(a.sum(1) - 1.0).max())

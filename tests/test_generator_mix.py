@@ -88,8 +88,8 @@ def test_lean_is_the_weighted_share_of_the_pools():
 @pytest.mark.parametrize("weight", [1.0, -1.0])
 def test_generation_keeps_the_run_that_fits_the_mix(song, weight):
     calls = []
-    # jacks 4.15★, stairs 2.78★: both within the tolerance, so the mix decides
-    options = GeneratorOptions(target_stars=3.5, tolerance=1.0, model_runs=4, model_runner=styled_runner(calls),
+    # jacks 6.1★, stairs 2.9★: both within the tolerance, so the mix decides
+    options = GeneratorOptions(target_stars=4.5, tolerance=1.7, model_runs=4, model_runner=styled_runner(calls),
                                model_reuse=False, pool_mix={"rc_jack": weight})
     result = generate_from_file(song, options)
     assert len(calls) == 4   # a mix runs every run, not just the first near enough
@@ -99,7 +99,7 @@ def test_generation_keeps_the_run_that_fits_the_mix(song, weight):
 
 def test_without_a_mix_the_first_run_near_enough_is_kept(song):
     calls = []
-    options = GeneratorOptions(target_stars=3.5, tolerance=1.0, model_runs=4, model_runner=styled_runner(calls),
+    options = GeneratorOptions(target_stars=4.5, tolerance=1.7, model_runs=4, model_runner=styled_runner(calls),
                                model_reuse=False)
     generate_from_file(song, options)
     assert len(calls) == 1
@@ -114,12 +114,12 @@ def test_a_rewrite_picks_the_candidate_that_fits_the_mix(song, tmp_path):
     assert P.Project.load(p.path).pool_mix == {"rc_jack": 1.0}
     s = p.sections[2]
     before = jackiness([o for o in p.chart().hit_objects if s.start_ms <= o.time < s.end_ms])
-    # stairs (2.2★ here) are nearer 2.6★ than jacks (3.3★); the mix tips it to the jacks
-    P.rewrite(p, [2], target_sr=2.6, candidates=2, seed=1, runner=styled_runner(calls))
+    # stairs (2.4★ here) are nearer 3.1★ than jacks (4.1★); the mix tips it to the jacks
+    P.rewrite(p, [2], target_sr=3.1, candidates=2, seed=1, runner=styled_runner(calls))
     after = jackiness([o for o in p.chart().hit_objects if s.start_ms <= o.time < s.end_ms])
     assert after > before   # seed 2 (jacks) beat seed 1 (stairs, as generated)
     # an empty mix turns it off: the stairs of seed 1 come back
-    P.rewrite(p, [2], target_sr=2.6, candidates=2, seed=1, pool_mix={}, runner=styled_runner(calls))
+    P.rewrite(p, [2], target_sr=3.1, candidates=2, seed=1, pool_mix={}, runner=styled_runner(calls))
     assert jackiness([o for o in p.chart().hit_objects if s.start_ms <= o.time < s.end_ms]) == pytest.approx(before)
 
 

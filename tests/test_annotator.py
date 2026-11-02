@@ -67,9 +67,9 @@ def test_format_injected_difficulty_name():
     assert format_injected_difficulty_name("Hard", 6.42, "Jack", version=VERSION) == f"Hard (6.42★ 7th Jack {VERSION})"
     assert format_injected_difficulty_name("Insane", 8.0, "ln_general", version=VERSION) == f"Insane (8.00★ 10th LN_General {VERSION})"
     assert format_injected_difficulty_name("Master", 9.156, "LN_Release", version=VERSION) == f"Master (9.16★ Azimuth LN_Release {VERSION})"
-    assert format_injected_difficulty_name("God", 10.8, "speed", version=VERSION) == f"God (10.80★ Stellium Speed {VERSION})"
+    assert format_injected_difficulty_name("God", 10.8, "speed", version=VERSION) == f"God (10.80★ Zenith Speed {VERSION})"
     assert format_injected_difficulty_name("Beginner", 2.0, "tech", version=VERSION) == f"Beginner (2.00★ 0th Tech {VERSION})"
-    assert format_injected_difficulty_name("", 5.0, "speed", version=VERSION) == f"(5.00★ 3rd Speed {VERSION})"
+    assert format_injected_difficulty_name("", 5.0, "speed", version=VERSION) == f"(5.00★ 4th Speed {VERSION})"
 
     # Explicit dan_tier override
     assert format_injected_difficulty_name("Hard", 6.42, "jack", dan_tier="6th", version=VERSION) == f"Hard (6.42★ 6th Jack {VERSION})"
@@ -152,10 +152,10 @@ def test_versioned_suffix_stripping_and_revert():
 def test_generate_binned_skill_tags():
     assert generate_binned_skill_tags("jack", 6.42) == ["dominant_jack", "jack_6★", "dan_7th"]
     assert generate_binned_skill_tags("LN_General", 7.8) == ["dominant_ln_general", "ln_general_7★", "dan_10th"]
-    assert generate_binned_skill_tags("Tech", 5.0) == ["dominant_tech", "tech_5★", "dan_3rd"]
+    assert generate_binned_skill_tags("Tech", 5.0) == ["dominant_tech", "tech_5★", "dan_4th"]
     assert generate_binned_skill_tags("speed", 0.8) == ["dominant_speed", "speed_0★", "dan_0th"]
     assert generate_binned_skill_tags("speed", 10.4) == ["dominant_speed", "speed_10★", "dan_zenith"]
-    assert generate_binned_skill_tags("stream", 11.2) == ["dominant_stream", "stream_11★", "dan_stellium"]
+    assert generate_binned_skill_tags("stream", 11.8) == ["dominant_stream", "stream_11★", "dan_stellium"]
 
 
 def test_inject_binned_skill_tags():

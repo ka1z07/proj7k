@@ -48,6 +48,10 @@ def test_t5_single_point_saturation(engine_charts, engine_profiles, chart_keys):
     §14 T5: one inserted event moves ln D by O(1/N). The spec gives no constant, so this pins the
     scale N * |d ln D| of v0.2 (random insertion max 10.0, a 20 ms jack insertion max 4.9 on the
     prototype's own draws) against the larger of the two v0.1 readings.
+
+    Relaxed by the owner's ruling for the speed terms (ADR-0052, 2026-11-02): a mixed-in minijack has to show in
+    the difficulty, so one fast note now weighs more (measured 24.6 random / 21.3 adversarial; was 12.3 / 8.7).
+    The bound is still finite: a repeat faster than j_clip counts as j_clip.
     """
     rnd = random.Random(0)
     worst = {"random": 0.0, "adversarial": 0.0}
@@ -63,8 +67,8 @@ def test_t5_single_point_saturation(engine_charts, engine_profiles, chart_keys):
         for kind, ins in picks.items():
             b = evaluate_notes(notes + [ins])
             worst[kind] = max(worst[kind], a.diagnostics.n_events * abs(np.log(b.total_D / a.total_D)))
-    assert worst["random"] <= 12.3
-    assert worst["adversarial"] <= 8.7
+    assert worst["random"] <= 27.0
+    assert worst["adversarial"] <= 23.5
 
 
 def test_t6_attribution_and_dominance_conserve(engine_profiles):

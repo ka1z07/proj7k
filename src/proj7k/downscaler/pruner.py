@@ -50,8 +50,10 @@ from proj7k.downscaler.validator import DualGateValidator
 PEAK_MARGIN = 0.10
 
 #: How much a note's score is damped by the share of it that the dominant skill carries (attribution `a_ik`).
-#: Thinning is steered toward what the dominant skill does not need, without making it untouchable.
-DOMINANCE_BIAS = 0.35
+#: Thinning is steered toward what the dominant skill does not need, without making it untouchable. 0.35 until
+#: ADR-0052: on the speed-aware engine thinning a jack chart slows its jacks and their share falls faster than the
+#: rest, so at 0.35 jack charts (Regular Jack 9th/10th) lost jack dominance and stopped near 4.8 stars.
+DOMINANCE_BIAS = 0.6
 
 #: How far a skill weight (`skill_weights`, -1 to 1) moves a note's score by the share of it each skill carries:
 #: a note all of one weighted-up skill scores this much lower (kept longer), one of a weighted-down skill this much
@@ -363,10 +365,19 @@ class ExcessLossPruner:
         stopped_by_validation = False
 
         bursts_stuck = False
-        for it in range(1, self.max_iterations + 1):
+        # Burst passes take only the few notes over a cap, so they get their own budget: on the speed-aware engine
+        # (ADR-0052) a fast chart spends a dozen of them before the star passes resume.
+        star_passes = burst_passes = it = 0
+        while star_passes < self.max_iterations:
+            it += 1
             cancel.checkpoint()
             star = field.profile.total_stars
-            bursting = not bursts_stuck and max(excess(burst, D_star).values()) > 1.0
+            bursting = (not bursts_stuck and burst_passes < self.max_iterations
+                        and max(excess(burst, D_star).values()) > 1.0)
+            if bursting:
+                burst_passes += 1
+            else:
+                star_passes += 1
             if star <= upper and not bursting:
                 converged = True
                 break
