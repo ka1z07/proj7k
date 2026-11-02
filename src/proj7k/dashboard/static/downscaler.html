@@ -75,6 +75,11 @@
           </select>
         </div>
       </div>
+      <div class="field">
+        <span class="label">技法范围（可选）</span>
+        <div class="hint" style="margin-bottom:6px">给想控制的技法拉一个星级范围，降阶会把每个技法各自降进自己的范围，同时总星级降到目标；不管的留空。只删不加：低于下限的技法补不上，结果里会写差多少。设了范围就不再要求保留主技法。</div>
+        <div id="ranges"></div>
+      </div>
       <div class="hint hidden" id="freeHint" style="margin-bottom:10px">只追难度：不再要求练习谱保留原谱的主技法，只把星级降到目标附近；仍然只删不改，保住强拍与和弦骨架、左右手平衡，也不会删出超过一小节的新空白。</div>
 
       <div class="field">
@@ -233,6 +238,8 @@
         (c.warnings || []).length ? el("div", { class: "warn", style: "margin-top:8px" }, c.warnings.join(tr("；"))) : null);
     }
 
+    const ranges = P7.mixControl();
+    $("#ranges").append(ranges.node);
     $("#runBtn").onclick = () => run();
     // The chart this run is on, for its queue entry.
     function sourceName() {
@@ -250,12 +257,14 @@
       return names.map((d) => ({ target_dan: d, target_sr: "", label: d }));
     }
     function run() {
+      try { ranges.value(); } catch (e) { alert(e.message); return; }
       const fromGame = source() === "game";
       const base = {
         // The game's chart goes by its MD5: osu!lazer finds it, with its audio and background for the .osz.
         input: fromGame ? gameChart.md5_hash : source() === "picked" ? picked.md5 : $("#input").value,
-        mode: keepMode(),
-        dominant_skill: keepMode() === "free" ? "" : $("#skill").value,
+        mode: ranges.value() ? "free" : keepMode(),
+        ranges: ranges.value(),
+        dominant_skill: keepMode() === "free" || ranges.value() ? "" : $("#skill").value,
         output_dir: $("#outDir").value,
         package: $("#pkg").checked,
         sync_lazer: $("#syncLazer").checked,
@@ -264,7 +273,7 @@
       const name = sourceName();
       targets().forEach((t) => submit({ ...base, target_dan: t.target_dan, target_sr: t.target_sr }, uploads,
         tr("{chart} → {target}", { chart: name || tr("（未命名）"), target: t.label })
-          + (keepMode() === "free" ? tr("（只追难度）") : "")));
+          + (keepMode() === "free" || ranges.value() ? tr("（只追难度）") : "")));
     }
     async function submit(params, uploads, label) {
       const entry = queue.add(label);

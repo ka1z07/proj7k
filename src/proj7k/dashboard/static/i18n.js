@@ -950,7 +950,11 @@ const P7I18N = (() => {
     "打开降阶练习，目标默认比这张谱低一档": "Open Downscale with the target one tier below this chart",
     "诊断这局回放": "Diagnose the replay",
     "对齐回放，看在哪里崩、哪项技法吃力": "Align the replay to see where it broke and which technique strained",
-    "看这局": "View play"
+    "看这局": "View play",
+    "技法范围（可选）": "Technique ranges (optional)",
+    "给想控制的技法拉一个星级范围，降阶会把每个技法各自降进自己的范围，同时总星级降到目标；不管的留空。只删不加：低于下限的技法补不上，结果里会写差多少。设了范围就不再要求保留主技法。": "Drag a star range for the techniques you want to control: each one is brought down into its own range while the total comes down to the target; leave the rest empty. Notes are only deleted, never added: a technique under its floor can't be raised, and the result says by how much. With ranges set, the dominant technique is no longer kept.",
+    "把正在看的这一版（.osz）导入 osu!lazer，是一张新谱，不覆盖原谱": "Import the version you are looking at (.osz) into osu!lazer, as a new chart that overwrites nothing",
+    "打开这个项目的文件夹": "Open this project's folder"
   }/* EN-END */;
 
   // The text in the page's language, with {name} filled from `vars`.

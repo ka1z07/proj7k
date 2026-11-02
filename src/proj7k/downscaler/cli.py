@@ -121,6 +121,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    req_group.add_argument(
+        "--ranges",
+        default=None,
+        help="Star range per technique pool, each brought into its own (ADR-0051), e.g. "
+             "'rc_jack=..4.5,rc_speed=3.5..5'. Deletion only: a pool can be lowered into its range, never raised. "
+             "Implies --mode free (a range may mean to change the dominant technique).",
+    )
+
     out_group = parser.add_argument_group("Output Options")
     out_group.add_argument(
         "-o",
@@ -797,6 +805,21 @@ def run_downscale(
     return DownscaleRun(results=results, failed_count=failed_count, osz_map=osz_map, sync_result=sync_result)
 
 
+def parse_ranges(text) -> Optional[Dict[str, Tuple[Optional[float], Optional[float]]]]:
+    """`rc_jack=..4.5,rc_speed=3.5..5` (or a dict / JSON, as the generator's technique mix) as pool ranges; the
+    mix's leanings (-1..1) are not ranges and are refused."""
+    if not text:
+        return None
+    from proj7k.downscaler.pools import ranges_of
+    from proj7k.generator import mix as mix_mod
+
+    mix = mix_mod.parse(text)
+    ranges = ranges_of(mix)
+    if mix and len(ranges) != len(mix):
+        raise ValueError("--ranges takes star ranges only (pool=low..high)")
+    return ranges or None
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -824,7 +847,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         max_iterations=args.max_iterations,
         tolerance=args.tolerance,
         min_cosine_similarity=args.min_cosine_similarity,
-        preserve_technique=args.mode == "technique",
+        preserve_technique=args.mode == "technique" and not args.ranges,
+        pool_ranges=parse_ranges(args.ranges),
     )
     run = run_downscale(
         args.input,

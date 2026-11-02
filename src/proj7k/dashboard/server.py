@@ -7,7 +7,8 @@ ADR-0024. One port serves every page and one WebSocket carries both the live rad
   `job_started {request_id, job}` and every client then gets `job_update {job}` and `job_log {id, line}` frames.
 - `job_cancel {id}`, `jobs_list` (answered with `jobs {jobs}`), `job_logs {id}` (answered with `job_logs {id, logs}`).
 - `open_artifact {id, index, reveal?}` hands a job's output to the desktop: an .osz opens in osu!lazer (its import),
-  `reveal` opens the folder holding it. Only registered outputs can be opened, by index.
+  `reveal` opens the folder holding it. Only registered outputs can be opened, by index. `editor_open_take {path, n?,
+  reveal?}` does the same for a chart editor project's take (default the current one).
 
 `game_chart {chart, unresolved}` goes to every client whenever the game selects another chart: `chart` is the 7K chart
 osu!lazer has selected (title, stars, dan, and where it is in the library), `unresolved` the selection the live index
@@ -621,6 +622,25 @@ class DashboardServer(LiveServer):
                 await asyncio.to_thread(self.opener, target)
             except Exception as e:
                 await connection.send(json.dumps({"type": "error", "message": tr(f"无法打开 {target}: {e}", f"Can't open {target}: {e}")}, ensure_ascii=False))
+
+        elif msg_type == "editor_open_take":
+            # The chart editor's take handed to the desktop (ADR-0050): its .osz opens in osu!lazer (an import, as a
+            # chart of its own), `reveal` opens the project folder. Only a project file's own takes open.
+            from proj7k.generator import project as P
+
+            try:
+                path = Path(str(data.get("path") or ""))
+                if not path.name.endswith(P.SUFFIX) or not path.is_file():
+                    raise FileNotFoundError(tr("找不到这个生成项目", "No such generated chart project"))
+                project = P.Project.load(path)
+                n = int(data.get("n") or project.current + 1) - 1
+                if not 0 <= n < len(project.takes):
+                    raise ValueError(tr("没有这一版", "No such take"))
+                take = project.takes[n]
+                file = project.folder / (take.osz or take.osu)
+                await asyncio.to_thread(self.opener, project.folder if data.get("reveal") else file)
+            except Exception as e:
+                await connection.send(json.dumps({"type": "error", "message": tr(f"无法打开：{e}", f"Can't open: {e}")}, ensure_ascii=False))
 
         elif msg_type == "editor_rate":
             # The chart editor's live reading of notes not saved yet (ADR-0050): stars, pools and what is unplayable.

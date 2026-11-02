@@ -213,3 +213,22 @@ def test_a_rewrite_keeps_the_candidate_inside_the_range(tmp_path, song):
     P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=8..")
     jacks = [c["pools"]["rc_jack"] for c in p.candidates]
     assert jacks[0] >= jacks[1] and p.candidates[0]["misses"]
+
+
+def test_ranges_aim_the_first_run_above_the_target_and_the_floors():
+    from proj7k.generator import mapperatorinator as mt
+
+    assert mt.aim_for(5.0) == pytest.approx(5.0 * mt.AIM)
+    assert mt.aim_for(5.0, {"rc_jack": (None, 4.0)}) == pytest.approx(5.0 * mt.AIM_RANGES)
+    assert mt.aim_for(5.0, {"rc_jack": (6.0, None)}) == pytest.approx(6.0 * mt.AIM_RANGES)
+
+
+def test_ranges_only_trim_each_pool_into_its_range_and_stop_there(song):
+    # ADR-0051: the run is written high and brought down pool by pool, so the first run that lands is final.
+    calls = []
+    options = GeneratorOptions(target_stars=3.0, tolerance=0.3, model_runs=4, model_runner=styled_runner(calls),
+                               model_reuse=False, pool_mix="rc_jack=..2.2")
+    result = generate_from_file(song, options)
+    jack = result.profile.skills["rc_jack"].stars
+    assert jack <= 2.2 + 0.02 and abs(result.profile.total_stars - 3.0) <= 0.3
+    assert len(calls) < 4

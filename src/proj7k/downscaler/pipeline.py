@@ -45,6 +45,9 @@ class DownscaleOptions:
     #: Engine skill -> -1..1: notes carrying a skill weighted up are kept longer, weighted down taken first
     #: (the generator's technique mix, ADR-0047).
     skill_weights: Optional[Dict[str, float]] = None
+    #: Engine skill -> (low, high) stars, either end None: each pool is brought into its own range
+    #: (`downscaler.pools`, ADR-0051), alongside the star target.
+    pool_ranges: Optional[Dict[str, Tuple[Optional[float], Optional[float]]]] = None
 
 
 @dataclass(frozen=True)
@@ -144,7 +147,16 @@ def downscale_beatmap(
         balancer=balancer,
         skill_weights=options.skill_weights,
     )
-    pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr, dominant_skill=dom_skill)
+    if options.pool_ranges:
+        from proj7k.downscaler.pools import PoolRangePruner
+
+        pruner = PoolRangePruner(
+            options.pool_ranges, prune_ratio=options.prune_ratio, max_iterations=options.max_iterations,
+            tolerance=options.tolerance, window_s=options.window_s, validator=validator, balancer=balancer,
+        )
+        pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr)
+    else:
+        pruning_res = pruner.prune(beatmap=beatmap, target_sr=target.target_sr, dominant_skill=dom_skill)
     warnings: List[str] = list(pruning_res.warnings)
     # Only when the technique gate is what stopped the loop: free mode lifts that gate and nothing else.
     suggest_free_mode = options.preserve_technique and pruning_res.stopped_by_validation and (
