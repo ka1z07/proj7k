@@ -56,7 +56,7 @@ EXPECTED_CHART_COUNT = len(EXPECTED_TECHNIQUES) * len(CANONICAL_DAN_TIERS)
 #:
 #: Re-baselined for the spec v0.2 engine (ADR-0017/0018): the engine was replaced, so every rating moved.
 #: Re-baselined for the same-finger weight (ADR-0044): `k_same` and the refitted star line move every rating.
-#: Re-baselined for the speed terms (ADR-0052): the engine and the refitted star line move every rating.
+#: Re-baselined for the speed terms (ADR-0054): the engine and the refitted star line move every rating.
 EXPECTED_STAR_RATING_CHECKSUM = "sha256:7e7a1438f458209a174cc43419906f8856a5553cdd10d1e87a4e62accf075e1d"
 
 #: The ladder-level acceptance bar itself lives in `guard`, next to the per-technique gates it
@@ -150,7 +150,7 @@ def test_anchor_tier_medians_land_in_their_bands(benchmark_report: BenchmarkBatc
 
 def test_star_ratings_are_positive_and_bounded(benchmark_report: BenchmarkBatchReport):
     """The new scale has no soft cap (stars are one power law of D); this only catches a blow-up. The speed terms
-    (ADR-0052) put the LN Stellium charts at 13.5-14.4."""
+    (ADR-0054) put the LN Stellium charts at 13.5-14.4."""
     for result in benchmark_report.results:
         assert 0.0 < result.star_rating <= 15.0
 

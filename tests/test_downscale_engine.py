@@ -200,7 +200,7 @@ def test_downbeat_and_chord_invariants_preserved():
 
 def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_mode_reaches_it(benchmark_manifest, benchmark_corpus):
     # A 10th stream chart taken to 0th: its stream gives way to other skills long before the target (the 7th chart
-    # used to stop too, until ADR-0052 strengthened DOMINANCE_BIAS and technique mode took it down).
+    # used to stop too, until ADR-0054 strengthened DOMINANCE_BIAS and technique mode took it down).
     bm = parse_osu_7k(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["10th"]["id"])])
     target = CANONICAL_DAN_SR["0th"]
 

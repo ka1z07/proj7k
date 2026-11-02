@@ -78,7 +78,7 @@ def evaluate_notes(notes: Notes, params: Params = DEFAULT) -> DifficultyProfile:
 
 def _burst(ev: Events, dem, D: float, eps: float, p: Params) -> float:
     """
-    ADR-0052: burst_kappa times the hardest window's difficulty. Each window of burst_window seconds is solved
+    ADR-0054: burst_kappa times the hardest window's difficulty. Each window of burst_window seconds is solved
     on its own, with the short-memory reading and pseudo-count burst_N0, so a dense section that is only a few
     percent of the chart is not forgiven by the whole chart's tolerance. A chart with nothing to solve stays 0.
     """

@@ -49,7 +49,7 @@ def test_t5_single_point_saturation(engine_charts, engine_profiles, chart_keys):
     scale N * |d ln D| of v0.2 (random insertion max 10.0, a 20 ms jack insertion max 4.9 on the
     prototype's own draws) against the larger of the two v0.1 readings.
 
-    Relaxed by the owner's ruling for the speed terms (ADR-0052, 2026-11-02): a mixed-in minijack has to show in
+    Relaxed by the owner's ruling for the speed terms (ADR-0054, 2026-11-02): a mixed-in minijack has to show in
     the difficulty, so one fast note now weighs more (measured 24.6 random / 21.3 adversarial; was 12.3 / 8.7).
     The bound is still finite: a repeat faster than j_clip counts as j_clip.
     """

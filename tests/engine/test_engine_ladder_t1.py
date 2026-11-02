@@ -3,7 +3,7 @@ T1 (spec §14): for every skill k, D_k over the benchmark pool of k rises strict
 smallest gap.
 
 Recorded rather than passed (ADR-0017 decision 3): five of the eight pools have adjacent-tier inversions, eight
-in all (twelve before the speed terms of ADR-0052 put Regular Jack in order and took one each off LN General and
+in all (twelve before the speed terms of ADR-0054 put Regular Jack in order and took one each off LN General and
 LN Inverse). Each such pool is an `xfail(strict=True)`, so the day one of them climbs cleanly the test goes red and
 the entry must be deleted; `test_the_known_inversions_do_not_grow` is the per-pool ratchet behind it. The same
 eight are what `guard.OWN_SKILL_RATCHET` holds the batch gate to.

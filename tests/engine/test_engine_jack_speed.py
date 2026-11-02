@@ -1,5 +1,5 @@
 """
-The engine's speed terms (ADR-0052): the three things the owner asked the engine to read, on synthetic charts.
+The engine's speed terms (ADR-0054): the three things the owner asked the engine to read, on synthetic charts.
 
 1. Fast minijacks mixed into a stream count: a quarter of the rows repeating one column of the row before adds
    clearly more at 210 BPM than at 150 BPM.

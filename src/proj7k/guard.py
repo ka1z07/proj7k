@@ -52,7 +52,7 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
 #: acceptance. A pool absent here is held to the plain `own_skill` gate.
 #: Measured on the spec v0.2 engine over the 120 charts (tau / rho / inversions), floored to three decimals;
 #: raised for LN Tech and LN Release by the same-finger weight (ADR-0044), which moved no pool down, and for
-#: Regular Jack, LN General and LN Inverse by the speed terms (ADR-0052), which also moved none down.
+#: Regular Jack, LN General and LN Inverse by the speed terms (ADR-0054), which also moved none down.
 #: Only LN Release is below the plain bar (its tail-isolation skill is the one T1 records inversions on:
 #: tau .867 / rho .961 / 4 inversions against .88 / .95 / 4); the other seven clear it, and their entries
 #: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one

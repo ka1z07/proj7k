@@ -51,7 +51,7 @@ PEAK_MARGIN = 0.10
 
 #: How much a note's score is damped by the share of it that the dominant skill carries (attribution `a_ik`).
 #: Thinning is steered toward what the dominant skill does not need, without making it untouchable. 0.35 until
-#: ADR-0052: on the speed-aware engine thinning a jack chart slows its jacks and their share falls faster than the
+#: ADR-0054: on the speed-aware engine thinning a jack chart slows its jacks and their share falls faster than the
 #: rest, so at 0.35 jack charts (Regular Jack 9th/10th) lost jack dominance and stopped near 4.8 stars.
 DOMINANCE_BIAS = 0.6
 
@@ -366,7 +366,7 @@ class ExcessLossPruner:
 
         bursts_stuck = False
         # Burst passes take only the few notes over a cap, so they get their own budget: on the speed-aware engine
-        # (ADR-0052) a fast chart spends a dozen of them before the star passes resume.
+        # (ADR-0054) a fast chart spends a dozen of them before the star passes resume.
         star_passes = burst_passes = it = 0
         while star_passes < self.max_iterations:
             it += 1

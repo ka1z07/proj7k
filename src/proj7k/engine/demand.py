@@ -21,7 +21,7 @@ class HandDemand:
     thumb: int
     v: np.ndarray   # instantaneous demand, Hz (§4.5)
     d: np.ndarray   # event difficulty reading (§7)
-    d_burst: np.ndarray  # the same reading with the burst window's short hand memory (ADR-0052)
+    d_burst: np.ndarray  # the same reading with the burst window's short hand memory (ADR-0054)
     r: np.ndarray   # same-finger share j / (j + x + o), the raw input of membership (§8.1)
 
 
@@ -33,7 +33,7 @@ def _psi(dt: np.ndarray, d0) -> np.ndarray:
 
 
 def _rise(x: np.ndarray, lim: float, power: float, gain: float) -> np.ndarray:
-    """ADR-0052: 1 well below `lim`, 1 + gain / 2 at it, towards 1 + gain above it."""
+    """ADR-0054: 1 well below `lim`, 1 + gain / 2 at it, towards 1 + gain above it."""
     with np.errstate(over="ignore"):
         z = (x / lim) ** power
     return 1.0 + gain * np.where(np.isfinite(z), z / (1.0 + z), 1.0)
@@ -57,13 +57,13 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     omega = np.where(rel, p.w_rel, 1.0)
     jxo = ev.j + x + o
     # a press's j is the finger repeating itself; a release's j is its LN's length and is not weighted
-    # ADR-0052: a press's repeat counts at most j_clip (a grace note or a flam is not a faster jack)
+    # ADR-0054: a press's repeat counts at most j_clip (a grace note or a flam is not a faster jack)
     k_j = np.where(rel, 1.0, p.k_same)
     jj = np.where(rel, ev.j, np.minimum(ev.j, p.j_clip))
     v = omega * (k_j * jj + x + o) * c
-    # ADR-0052: past an absolute speed the cost rises faster than the rate (a pure power would be refit away)
+    # ADR-0054: past an absolute speed the cost rises faster than the rate (a pure power would be refit away)
     v = np.minimum(v * _rise(v, p.v_lim, p.v_pow, p.v_gain), p.v_cap)
-    # ADR-0052: a minijack near the finger's limit costs extra, on top of (not through) the speed rise
+    # ADR-0054: a minijack near the finger's limit costs extra, on top of (not through) the speed rise
     v = v + np.where(rel, 0.0, p.k_same * jj * (_rise(jj, p.jack_hz, p.jack_pow, p.jack_gain) - 1.0) * c)
 
     # r stays the unweighted share: it is what membership's thresholds were set on (§8.1)
