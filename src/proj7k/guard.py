@@ -51,19 +51,20 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
 #: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an
 #: acceptance. A pool absent here is held to the plain `own_skill` gate.
 #: Measured on the spec v0.2 engine over the 120 charts (tau / rho / inversions), floored to three decimals;
-#: raised for LN Tech and LN Release by the same-finger weight (ADR-0044), which moved no pool down.
+#: raised for LN Tech and LN Release by the same-finger weight (ADR-0044), which moved no pool down, and for
+#: Regular Jack, LN General and LN Inverse by the speed terms (ADR-0054), which also moved none down.
 #: Only LN Release is below the plain bar (its tail-isolation skill is the one T1 records inversions on:
 #: tau .867 / rho .961 / 4 inversions against .88 / .95 / 4); the other seven clear it, and their entries
 #: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one
 #: needs a ruling.
 OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
-    "Regular Jack": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.992, max_violations=2),
+    "Regular Jack": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
     "Regular Tech": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
     "Regular Speed": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
     "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
-    "LN General": MetricGate(min_kendall_tau=0.923, min_spearman_rho=0.975, max_violations=2),
+    "LN General": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
     "LN Tech": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
-    "LN Inverse": MetricGate(min_kendall_tau=0.942, min_spearman_rho=0.985, max_violations=2),
+    "LN Inverse": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
     "LN Release": MetricGate(min_kendall_tau=0.866, min_spearman_rho=0.960, max_violations=4),
 }
 

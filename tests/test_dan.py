@@ -39,7 +39,7 @@ from proj7k.dan import CANONICAL_DAN_SR, estimate_canonical_dan  # noqa: E402
 
 def test_the_dan_table_is_the_engines_regular_tier_levels_and_strictly_increasing():
     assert [CANONICAL_DAN_SR[t] for t in CANONICAL_DAN_TIERS] == [
-        3.42, 3.89, 4.47, 5.02, 5.36, 5.75, 6.08, 6.52, 6.86, 7.32, 7.79, 8.61, 9.09, 10.00, 10.99,
+        3.46, 3.72, 4.40, 4.76, 5.25, 5.64, 5.99, 6.28, 6.87, 7.35, 7.76, 8.63, 9.64, 10.88, 12.28,
     ]
 
 
@@ -51,10 +51,10 @@ def test_every_tier_star_value_reads_as_its_own_tier():
 def test_a_rating_reads_as_the_nearest_tier_by_ratio_and_the_ends_are_floored():
     assert estimate_canonical_dan(0.5) == "0th"
     assert estimate_canonical_dan(3.0) == "0th"
-    assert estimate_canonical_dan(3.64) == "0th"   # between 3.42 and 3.89, nearer the first
-    assert estimate_canonical_dan(3.70) == "1st"
-    assert estimate_canonical_dan(6.2) == "6th"
+    assert estimate_canonical_dan(3.55) == "0th"   # between 3.46 and 3.72, nearer the first
+    assert estimate_canonical_dan(3.62) == "1st"
+    assert estimate_canonical_dan(6.1) == "6th"
     assert estimate_canonical_dan(6.4) == "7th"
-    assert estimate_canonical_dan(10.45) == "Zenith"  # between 10.00 and 10.99: the geometric midpoint is 10.48
-    assert estimate_canonical_dan(10.5) == "Stellium"
+    assert estimate_canonical_dan(11.5) == "Zenith"  # between 10.88 and 12.28: the geometric midpoint is 11.56
+    assert estimate_canonical_dan(11.6) == "Stellium"
     assert estimate_canonical_dan(30.0) == "Stellium"

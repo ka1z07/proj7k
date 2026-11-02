@@ -401,9 +401,9 @@ def test_cli_suggests_free_mode_when_keeping_the_technique_falls_short_and_free_
     import json
     from proj7k.dan import CANONICAL_DAN_SR
 
-    # A stream chart taken to 0th, which the technique-keeping loop cannot reach (see test_downscale_engine).
+    # A stream chart (10th) taken to 0th, which the technique-keeping loop cannot reach (see test_downscale_engine).
     osu_file = tmp_path / "stream.osu"
-    osu_file.write_text(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["7th"]["id"])], encoding="utf-8")
+    osu_file.write_text(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["10th"]["id"])], encoding="utf-8")
     target = CANONICAL_DAN_SR["0th"]
 
     assert main(["--input", str(osu_file), "--target-sr", f"{target:.3f}", "--dry-run"]) == 0

@@ -30,7 +30,9 @@ def test_pinned_constants_are_the_fit_of_the_anchor_file(anchors, engine_profile
     a, b, active = fit_star_scale(_tier_medians(engine_profiles, anchors["pools"]), anchors)
     assert a == pytest.approx(STAR_A, rel=1e-9)
     assert b == pytest.approx(STAR_B, rel=1e-9)
-    assert active == ["Zenith"]  # the owner's "Zenith above 10" is binding on the RC ladder
+    # since the speed terms (ADR-0054) the unconstrained line already reads Zenith above 10 (about 10.9), so the
+    # owner's inequality is met without binding
+    assert active == []
 
 
 def test_rc_anchors_are_met_within_a_quarter_star(anchors, engine_profiles):
