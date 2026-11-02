@@ -487,6 +487,15 @@ def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
                 assert take["n"] == 1 and take["notes"]
                 assert (await s.get(f"/api/editor/take?path={q}&n=99"))[0] >= 400
 
+                # A take handed to osu!lazer from the editor: its .osz, or the project folder; nothing else opens.
+                await ws.send(json.dumps({"type": "editor_open_take", "path": project, "n": 1}))
+                await ws.send(json.dumps({"type": "editor_open_take", "path": project, "reveal": True}))
+                await ws.send(json.dumps({"type": "editor_open_take", "path": "/etc/passwd"}))
+                while (msg := json.loads(await asyncio.wait_for(ws.recv(), timeout=30)))["type"] != "error":
+                    pass
+                assert [p.suffix for p in s.opened[-2:]] == [".osz", ""]
+                assert s.opened[-1] == Path(project).parent and len(s.opened) == 2
+
                 # Sections (phase 3): split at a measure, merged back, a boundary moved.
                 n = len(job["result"]["sections"])
                 job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "split", "section": "1", "bar": "3"})
