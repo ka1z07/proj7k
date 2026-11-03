@@ -36,7 +36,7 @@ def stars_of(D: float) -> float:
 #: (a_k, b_k) per skill (ADR-0056), the fit of `fit_skill_scale` on the 120 benchmark charts.
 SKILL_SCALE: Dict[str, Tuple[float, float]] = {
     "rc_jack": (0.4966972323519079, 0.8033975307437226),
-    "rc_tech": (0.8890830301040161, 0.5869046387952982),
+    "rc_tech": (0.7582764177294805, 0.5949991636969195),
     "rc_speed": (0.39654452985789646, 0.7933308739078072),
     "rc_stamina": (0.42091094417355535, 0.715984224994152),
     "ln_general": (0.30861008527796946, 0.8089341834249038),

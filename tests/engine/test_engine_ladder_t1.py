@@ -18,7 +18,7 @@ from engine_support import POOL_OF, TIERS
 #: Adjacent-tier inversions per pool of the pool's own skill, as measured on the 120 charts.
 KNOWN_INVERSIONS = {
     "Regular Jack": 4,
-    "Regular Tech": 6,
+    "Regular Tech": 4,
     "Regular Speed": 1,
     "Regular Stream": 1,
     "LN General": 3,
@@ -26,7 +26,7 @@ KNOWN_INVERSIONS = {
     "LN Inverse": 2,
     "LN Release": 3,
 }
-TOTAL_KNOWN_INVERSIONS = 24
+TOTAL_KNOWN_INVERSIONS = 22
 
 
 def _own_skill_D(engine_profiles, pool):

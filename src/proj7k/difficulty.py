@@ -19,6 +19,7 @@ from proj7k.engine import engine_version
 from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import extract_beatmap_features
 from proj7k.field import trace_osu
+from proj7k.patterns import pattern_tags_beatmap
 from proj7k.parser import parse_osu_7k
 
 #: The row each skill is printed on, left column then right.
@@ -55,6 +56,7 @@ def evaluate_chart(content: str) -> Dict[str, Any]:
         "dominant_technique": SKILL_TECH_KEY[profile.dominant_skill],
         "profile": profile.to_dict(),
         "hot_spots": [h.to_dict() for h in field.hot_spots(top=HOT_SPOTS)],
+        "patterns": pattern_tags_beatmap(beatmap).to_dict(),
     }
 
 
@@ -87,6 +89,11 @@ def format_cli_summary(report: Dict[str, Any]) -> str:
             f"   {_SKILL_LABEL[left]:<10} : {skills[left]['stars']:5.2f}★    "
             f"{_SKILL_LABEL[right]:<10} : {skills[right]['stars']:5.2f}★"
         )
+    patterns = report.get("patterns") or {}
+    if patterns.get("labels"):
+        lines.append("-" * 60)
+        shares = patterns.get("shares") or {}
+        lines.append(" Patterns    : " + ", ".join(f"{k} {shares.get(k, 0) * 100:.0f}%" for k in patterns["labels"]))
     if report["hot_spots"]:
         lines.append("-" * 60)
         lines.append(" Hardest stretches:")

@@ -53,12 +53,13 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
 #: Re-baselined for ADR-0056 (each skill its own cost): a pool's own skill is now that skill's own requirement
 #: ladder, not the total's reading under its membership, so the earlier values (which were the total ladder's,
 #: tau .961–1.0) no longer describe the quantity. Measured over the 120 charts (tau / rho / adjacent inversions),
-#: floored to three decimals. Regular Tech (only the rhythm discriminant) and LN Release (its low tiers are slow
-#: long-LN charts) are below the plain bar; the other six clear it, and their entries only stop them from
-#: loosening. Raising any of these is the point of a later engine change, lowering one needs a ruling.
+#: floored to three decimals. LN Release (its low tiers are slow long-LN charts) is below the plain bar; the
+#: other seven clear it (Regular Tech since the snap-diversity discriminant, tau .809 -> .904), and their entries
+#: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one needs
+#: a ruling.
 OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
     "Regular Jack": MetricGate(min_kendall_tau=0.904, min_spearman_rho=0.978, max_violations=4),
-    "Regular Tech": MetricGate(min_kendall_tau=0.809, min_spearman_rho=0.939, max_violations=6),
+    "Regular Tech": MetricGate(min_kendall_tau=0.904, min_spearman_rho=0.978, max_violations=4),
     "Regular Speed": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
     "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
     "LN General": MetricGate(min_kendall_tau=0.885, min_spearman_rho=0.960, max_violations=3),

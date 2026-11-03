@@ -333,7 +333,8 @@ v0.2.3 起，$w_{ik}$ 只用于覆盖 $C_k$，$a_{ik}$ 只用于主导度 $\pi_k
 |---|---|
 | $q^U_i$ | $\mathrm{ss}\big((U^{\text{rhy}}_i-u_{lo})/(u_{hi}-u_{lo})\big)$（即 8.1 的 $q^C$） |
 | $\iota_i$ 手内节奏失律 | 按下事件所在手的上一个按下行间隔 $g_1$ 与再上一个 $g_0$ 之比不在集合 $\{1,2,\tfrac12,3,\tfrac13,4,\tfrac14,\tfrac32,\tfrac23\}$ 的 $\pm\rho_{\text{tol}}$（相对）内取 1，否则 0；$g_1>T_{\text{gap}}$ 时该手从头计；松开取 0 |
-| $\chi_i$ 失律度 | $f_t+(1-f_t)\max(q^U_i,\;w_\iota\,\iota_i)$ |
+| $\delta_i$ 节拍分型多样性 | 以事件所在行前后各 $T_{\text{div}}$ 内的按下行间隔对其中位数之比归类（类集合 $\{1,2,\tfrac12,\tfrac32,\tfrac13,\tfrac23,\tfrac34,\tfrac43,4,\tfrac14\}$ 的 $\pm\rho_{\text{tol}}$ 内，其余归「脱格」一类），占比 $\ge s_{\text{div}}$ 的类数；单一节拍的流读 1，两秒内混用 1/4、1/6、1/8 读 3。$q^\delta_i=\mathrm{clip}((\delta_i-\delta_{lo})/\delta_{\text{span}},0,1)$ |
+| $\chi_i$ 失律度 | $f_t+(1-f_t)\max(q^U_i,\;w_\iota\,\iota_i,\;w_\delta\,q^\delta_i)$；LN-Tech 用不含 $\delta$ 的 $\chi^{\text{LN}}_i=f_t+(1-f_t)\max(q^U_i,\;w_\iota\,\iota_i)$（多样性在 LN 谱上数的多是错开长条的头，LN Tech 阶梯反而变差） |
 | $\sigma_i$ 持续度 | $\min(1,\;t^{\text{run}}_i/T_{\text{sus}})$，$t^{\text{run}}_i$ 为该手自上一次长于 $T_{\text{rest}}$ 的空档以来已连续演奏的秒数 |
 | $q^{\text{inv}\prime}_i$ 反键份额 | 按下事件 $\min(1,h_i/h^{\text{inv}}_{\text{ref}})^{p_{\text{inv}}}$，松开取 0（$h_i$ 为两手按住的其他列数，§2.6） |
 | $q^{\text{rel}\prime}_i$ 释放份额 | $q^{\text{rel}}_i\,\big(f_r+(1-f_r)\min(1,\ell_{\text{rel}}/\ell_i)\big)$，仅松开事件，$\ell_i$ 为该面条的长度；按下取 0 |
@@ -347,7 +348,7 @@ v0.2.3 起，$w_{ik}$ 只用于覆盖 $C_k$，$a_{ik}$ 只用于主导度 $\pi_k
 | RC-Speed | $(1-\lambda_i)\,v^{\text{rate}}_i$ |
 | RC-Stamina | $(1-\lambda_i)\,v_i\,\sigma_i$ |
 | LN-General | $\lambda_i\,v_i$ |
-| LN-Tech | $\lambda_i\,v_i\,\chi_i$ |
+| LN-Tech | $\lambda_i\,v_i\,\chi^{\text{LN}}_i$ |
 | LN-Inverse | $\lambda_i\,v_i\,q^{\text{inv}\prime}_i$ |
 | LN-Release | $\lambda_i\,v_i\,q^{\text{rel}\prime}_i$ |
 
@@ -520,6 +521,7 @@ function solve(w, ε):
 | $\tau_{\text{speed}}$ | RC-Speed 的手记忆 | 1.5 s | S | v0.2.3；速度是爆发量 |
 | $T_{\text{sus}},T_{\text{rest}}$ | 持续度饱和时长、休息阈值 | 20 s，0.6 s | S | v0.2.3 |
 | $f_t,w_\iota,\rho_{\text{tol}},T_{\text{gap}}$ | 失律度的底、手内失律权重、比值容差、重计间隔 | 0.25，0.7，0.12，1.0 s | X | v0.2.3；Tech 池 $U^{\text{rhy}}$ 1.51 对其余 RC 池 0.79–1.06 |
+| $T_{\text{div}},s_{\text{div}},\delta_{lo},\delta_{\text{span}},w_\delta$ | 节拍分型多样性的窗口半径、计入类的最小占比、起算类数、满值跨度、权重 | 1.0 s，0.1，1，2，1.0 | X | v0.2.3；社区对 tech 的定义是「不规则节拍分型与复节奏」：Tech 池窗口类数 2.32 对其余 RC 池 1.69–1.76，且随段位上升（τ +0.39），装饰音（grace）3.1× 但无阶梯贡献、未采用 |
 | $h^{\text{inv}}_{\text{ref}},p_{\text{inv}}$ | 反键份额的归一与陡度 | 2 列，2 | X | v0.2.3；Inverse 池 $h\ge2$ 的按下占 0.5–0.97，General 池 0.04–0.47 |
 | $f_r,\ell_{\text{rel}}$ | 释放份额的底、精确释放的面条长度 | 0.2，0.3 s | X | v0.2.3；Release 池 6th 起短面条占 0.54–0.83 |
 | $a_k,b_k$ | 逐技法星数标度 | 由本池阶梯定 | G | 第 10 节，v0.2.3 |

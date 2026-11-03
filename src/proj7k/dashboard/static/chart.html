@@ -78,7 +78,13 @@
     function skillCard(e) {
       if (!e) return null;
       return el("div", { class: "card" }, el("h2", { text: tr("八项技法") }), P7.skillBars(e.skills),
-        el("p", { class: "hint", style: "margin-top:6px", text: tr("每项是这张谱在该技法上的难度（引擎星级）；最高的一项是主技法。") }));
+        el("p", { class: "hint", style: "margin-top:6px", text: tr("每项是这张谱对该技法的要求有多高（引擎星级）；最高的一项是主技法。") }));
+    }
+
+    function tagsCard(e) {
+      if (!e || !e.patterns) return null;
+      return el("div", { class: "card" }, el("h2", { text: tr("特征标签") }), P7.tagChips(e.patterns),
+        el("p", { class: "hint", style: "margin-top:6px", text: tr("这张谱由哪些模式构成（ADR-0058）：每个标签后是它覆盖的节拍行占比；标签说的是谱面「是什么」，不是难度。") }));
     }
 
     // The difficulty over the song: one bar per second, as hard as the chart's own level at 1.0.
@@ -122,7 +128,7 @@
       document.title = `${c.title} [${c.version}]`;
       $("#page").replaceChildren(hero(c, e), actions(c, d),
         el("div", { class: "grid" }, facts(c, e), skillCard(e)),
-        timeline(e), plays(d),
+        tagsCard(e), timeline(e), plays(d),
         d.engine_error ? el("p", { class: "warn", text: tr("引擎读这张谱出错：{error}", { error: d.engine_error }) }) : null);
     }
     load();

@@ -15,7 +15,7 @@ import numpy as np
 
 from proj7k.dan import estimate_canonical_dan
 from proj7k.engine.params import DEFAULT, Params
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
 from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.field import TECH_KEYS, ChartField, level_for_loss, trace_beatmap
@@ -126,8 +126,11 @@ class SkillRadarReport:
 @dataclass(frozen=True)
 class StrainResponseOptions:
     num_bins: int = 8
-    #: A skill is tested only if this much membership weight was played; below it the level is the prior's, not the player's.
+    #: A skill is tested only if this many events under its demand were played; below it the level is the prior's.
     min_events: float = 8.0
+    #: A skill the chart requires at less than this share of its total stars is not tested by the play: the losses
+    #: would be read against a floor-level demand (a jack chart's tech, ADR-0056), not against the skill.
+    min_skill_share: float = 0.7
 
 
 @dataclass(frozen=True)
@@ -151,8 +154,8 @@ def play_outcome(field: ChartField, alignment: HitAlignmentResult, played_until_
         i = field.press_index(hit.column, hit.target_time / 1000.0)
         if i is None:
             continue
-        # the point-to-point reading: the demand this note came under, in each skill it belongs to
-        hit.strains = {KEY_OF[name]: float(field.d[i] * field.w[i, k]) for k, name in enumerate(SKILLS)}
+        # the point-to-point reading: each skill's own demand reading on this note (ADR-0056 `dk`)
+        hit.strains = {KEY_OF[name]: float(field.dk[i, k]) for k, name in enumerate(SKILLS)}
         lost[i] = JUDGMENT_LOSS[hit.judgment]
         played[i] = True
         r = field.release_index(i)
@@ -203,25 +206,34 @@ def analyze_strain_response(
     The player's level in each of the eight skills, read off the field of `beatmap` (in physical time,
     the same time the alignment's target times are in) by inverting the engine's loss equation.
     `played_until_s` is where the play ended, if it ended early.
+
+    Each skill is read on its own demand series (ADR-0056 `field.dk[:, k]`, the one the chart's `D_k` was
+    solved on, under unit weights over the played events), so a player who loses exactly the tolerance sits at
+    the chart's `D_k` and the level is on the skill's own scale (`skill_stars_of`): the player's "jack 7★" and
+    a chart's "jack 7★" are the same reading. A chart that requires none of a skill (`D_k = 0`) leaves it untested.
     """
     opts = options or StrainResponseOptions()
     if field is None:
         field = trace_beatmap(beatmap, params)
     outcome = play_outcome(field, alignment, played_until_s)
+    played = outcome.played.astype(float)
 
     results: Dict[str, DimensionCapacityResult] = {}
+    total_stars = field.profile.total_stars
     for k, name in enumerate(SKILLS):
         key = KEY_OF[name]
         D_k = field.profile.skills[name].D
-        w = field.w[:, k] * outcome.played
+        d_k = field.dk[:, k]
+        w = played * (d_k > 0)
         events = float(w.sum())
-        if D_k <= 0.0 or events < opts.min_events:
+        required = field.profile.skills[name].stars >= opts.min_skill_share * total_stars
+        if D_k <= 0.0 or not required or events < opts.min_events:
             results[key] = _untested(key, D_k, events)
             continue
         eps = params.eps_rc if name.startswith("rc") else params.eps_ln
         observed = float(np.dot(w, outcome.loss))
-        level = level_for_loss(field.d, w, observed, eps, params)
-        stars = stars_of(level)
+        level = level_for_loss(d_k, w, observed, eps, params)
+        stars = skill_stars_of(name, level)
         results[key] = DimensionCapacityResult(
             dimension=key,
             effective_capacity=level,
@@ -231,7 +243,7 @@ def analyze_strain_response(
             chart_level=D_k,
             tested=True,
             events=events,
-            bins=_bins(field.d, w, outcome.loss, loss(field.d, level, params), opts.num_bins),
+            bins=_bins(d_k, w, outcome.loss, loss(d_k, level, params), opts.num_bins),
             lost=observed,
         )
 
@@ -239,7 +251,6 @@ def analyze_strain_response(
     results = {k: results[k] for k in TECH_KEYS}
     # The overall level is the engine's total equation read the other way, as each skill's is (ADR-0028):
     # not a blend of the eight, which would read a chart's own skills well above its total.
-    played = outcome.played.astype(float)
     total_events = float(played.sum())
     overall = None
     if total_events >= opts.min_events and field.total_D > 0:

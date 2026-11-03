@@ -32,6 +32,8 @@ PYTHONPATH=src python3 -m proj7k.batch \
 - 技法星级是逐技法代价（ADR-0056）：每个技法有自己的代价序列、自己的星标尺（`engine/scale.py` 的 `SKILL_SCALE`）；`tests/engine/test_engine_skills.py` 钉住跨家族泄漏、特异性、本池技法最高张数三道棘轮与标尺拟合。
 - 测试套件在此之上钉死 120 首的全部星级指纹（`EXPECTED_STAR_RATING_CHECKSUM`），并钉死金标准（`tests/fixtures/engine_golden_v02.json`）、段位表与 19 张外部留出谱（`tests/engine/test_external_holdout.py`，只做检验、不参与拟合）。
 - 原始密度特征（`avg_nps`、`peak_4m_nps`）降级为诊断指标，需要时用 `--guard-metric` 显式请求。
+- 特征标签（`src/proj7k/patterns.py`，ADR-0058）在引擎包外：谱面「由什么构成」的份额与标签，对本地拍格读，不是难度、不进引擎版本号；`tests/test_patterns.py` 用合成谱钉每个标签。目录 `pattern_json`、看板谱面页、直播帧、`python3 -m proj7k.difficulty` 都带它。
+- 画像的逐技法水平（ADR-0057）在技法自己的序列上反解；改技法代价或标尺后 `SNAPSHOT_INGEST_VERSION` 要不要 +1 看读数语义是否变了。
 - 当前基线：测试全绿；任何失败都是回归。
 
 旧引擎（`radar`、`strain`、`rating`、`calibration`）已删除（ADR-0023）；`python3 -m proj7k.difficulty` 是新引擎的单曲命令行。

@@ -40,7 +40,7 @@ CROSS_FAMILY_CEILING = {"rc": 0.10, "ln": 0.80}
 #: The umbrella skills may read above 1 elsewhere in their family (an Inverse chart is a general LN chart).
 SPECIFICITY_CEILING = {
     "rc_jack": 0.92,
-    "rc_tech": 0.94,
+    "rc_tech": 0.91,
     "rc_speed": 0.91,
     "rc_stamina": 0.96,
     "ln_general": 1.05,
@@ -51,7 +51,7 @@ SPECIFICITY_CEILING = {
 
 #: Charts of the pool (of 15) on which the pool's own skill is the highest star of its family.
 OWN_TOP_FLOOR = {
-    "Regular Jack": 13,
+    "Regular Jack": 12,
     "Regular Tech": 10,
     "Regular Speed": 8,
     "Regular Stream": 11,

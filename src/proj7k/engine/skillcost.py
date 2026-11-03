@@ -25,6 +25,42 @@ from proj7k.engine.solver import solve
 
 #: The interval ratios a hand's consecutive press rows may keep without reading as irregular (§8.3).
 CARRIED_RATIOS = np.array([1.0, 2.0, 0.5, 3.0, 1.0 / 3.0, 4.0, 0.25, 1.5, 2.0 / 3.0])
+#: The gap classes of a window's press rows against the window's grid (§8.3 snap diversity): the dyadic snaps,
+#: then the triplet, dotted and other off-grid ratios a tech chart mixes in.
+GAP_CLASSES = np.array([1.0, 2.0, 0.5, 1.5, 1.0 / 3.0, 2.0 / 3.0, 0.75, 4.0 / 3.0, 4.0, 0.25])
+#: A gap class holding at least this share of a window's gaps counts towards the window's diversity.
+GAP_CLASS_SHARE = 0.1
+#: Snap diversity is read over the press rows within this many seconds either side of the row.
+DIVERSITY_WINDOW_S = 1.0
+
+
+def snap_diversity(ev: Events, p: Params) -> np.ndarray:
+    """
+    §8.3: per event, how many gap classes (of `GAP_CLASSES`, within `tech_ratio_tol`; one more for off-grid)
+    hold at least `GAP_CLASS_SHARE` of the press-row gaps within `DIVERSITY_WINDOW_S` of the event's row,
+    measured against the window's median gap. A stream on one snap reads 1; a chart that mixes 1/4, 1/6 and
+    1/8 within two seconds reads 3. The community's "irregular snapping and polyrhythm" is this number.
+    """
+    rows = np.unique(ev.row[~ev.rel])
+    out = np.zeros(ev.n)
+    if len(rows) < 3:
+        return out
+    t = ev.T[rows]
+    gaps = np.diff(t)
+    div = np.zeros(ev.n_rows)
+    for k, r in enumerate(rows):
+        lo = np.searchsorted(t, t[k] - DIVERSITY_WINDOW_S)
+        hi = np.searchsorted(t, t[k] + DIVERSITY_WINDOW_S, side="right")
+        g = gaps[max(lo, 0):max(hi - 1, 0)]
+        g = g[g > 0]
+        if len(g) < 4:
+            continue
+        ratio = g / np.median(g)
+        near = np.abs(ratio[:, None] - GAP_CLASSES[None, :]) <= p.tech_ratio_tol * GAP_CLASSES[None, :]
+        cls = np.where(near.any(1), near.argmax(1), -1)
+        _, counts = np.unique(cls, return_counts=True)
+        div[r] = np.sum(counts / len(cls) >= GAP_CLASS_SHARE)
+    return div[ev.row]
 
 
 def hand_irregular(ev: Events, hand: np.ndarray, p: Params) -> np.ndarray:
@@ -80,10 +116,16 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
     v = dem.v
     rel = ev.rel
 
-    # irregularity: the row's rhythm surprise, or the hand's own off-ratio interval, over a floor every event pays
+    # irregularity: the row's rhythm surprise, the hand's own off-ratio interval, or the window's snap diversity,
+    # over a floor every event pays
     q_u = smoothstep((ev.U_rhy[ev.row] - p.u_lo) / (p.u_hi - p.u_lo))
-    q_irr = np.maximum(q_u, p.tech_hand_irr * hand_irregular(ev, dem.hand, p))
-    irregular = p.tech_floor + (1.0 - p.tech_floor) * q_irr
+    q_hand = p.tech_hand_irr * hand_irregular(ev, dem.hand, p)
+    q_div = np.clip((snap_diversity(ev, p) - p.tech_div_lo) / p.tech_div_span, 0.0, 1.0)
+    # snap diversity reads the rice tech ladder (it is what separates a Tech chart from a Speed chart);
+    # on LN charts it mostly counts the heads of staggered holds, and the LN Tech ladder reads worse with
+    # it, so ln_tech keeps the rhythm-surprise + hand-interval reading
+    irregular = p.tech_floor + (1.0 - p.tech_floor) * np.maximum.reduce([q_u, q_hand, p.tech_div_w * q_div])
+    irregular_ln = p.tech_floor + (1.0 - p.tech_floor) * np.maximum(q_u, q_hand)
 
     sustain = np.minimum(1.0, run_since_rest(ev, dem.hand, p) / p.stamina_sustain)
 
@@ -107,7 +149,7 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
         "rc_speed": dem.v_rate * rc,
         "rc_stamina": v * sustain * rc,
         "ln_general": v * lam,
-        "ln_tech": v * irregular * lam,
+        "ln_tech": v * irregular_ln * lam,
         "ln_inverse": v * q_inv * lam,
         "ln_release": v * q_rel * lam,
     }

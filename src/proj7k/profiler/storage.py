@@ -34,7 +34,9 @@ SNAPSHOT_ENGINE = "spec-v0.2"
 #: 3: each skill also keeps the events played and the accuracy lost over them, and the summary keeps the play's
 #: overall reading, which the profile's fit across plays needs (ADR-0028). Importing re-reads older snapshots.
 #: 4: the summary also keeps the play's technique-habit statistics (`summary.habits`, ADR-0029).
-SNAPSHOT_INGEST_VERSION = 4
+#: 5: each skill's level, its chart level and its fatal peak are read on the skill's own demand series and
+#: star scale (ADR-0056/0057), no longer the total's reading under the skill's membership.
+SNAPSHOT_INGEST_VERSION = 5
 
 
 #: The first ingest version that honoured mods.

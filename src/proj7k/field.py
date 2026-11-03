@@ -147,15 +147,11 @@ class ChartField:
         return self._release_of.get(press)
 
     def skill_demand(self, t0_s: float, t1_s: float) -> Dict[str, float]:
-        """
-        The largest demand reading in [t0_s, t1_s], per skill, each event counting by its membership in the skill:
-        the total's reading where the skill is present (what the profiler's per-skill fit is on, ADR-0028), not
-        the skill's own reading `dk` (ADR-0056).
-        """
+        """The largest reading of each skill's own demand series (`dk`, ADR-0056) in [t0_s, t1_s]."""
         sel = (self.t >= t0_s) & (self.t <= t1_s)
         if not sel.any():
             return {k: 0.0 for k in SKILLS}
-        peak = (self.d[sel, None] * self.w[sel]).max(0)
+        peak = self.dk[sel].max(0)
         return {k: float(peak[n]) for n, k in enumerate(SKILLS)}
 
     def carrying_skill(self, t0_s: float, t1_s: float) -> Optional[str]:

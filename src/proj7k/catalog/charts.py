@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from proj7k.dan import estimate_canonical_dan
 from proj7k.engine import SKILLS, engine_version, evaluate_osu
+from proj7k.patterns import pattern_tags_beatmap
 from proj7k.parser import Beatmap7K, NoteType, dominant_bpm, parse_osu_7k
 
 #: Bins of the note-density outline drawn on a chart's page.
@@ -71,6 +72,7 @@ def pattern_features(beatmap: Beatmap7K) -> Dict[str, Any]:
     - `jack`: share of notes on a column that the previous row also hit
     - `nps`: notes per second between the first head and the last release
     - `columns`: share of notes on each of the seven columns (left to right)
+    - `tags`: the chart's pattern tags (`proj7k.patterns`, ADR-0058): `labels` and every tag's `shares`
     """
     rows: Dict[int, set] = {}
     for h in beatmap.hit_objects:
@@ -89,6 +91,7 @@ def pattern_features(beatmap: Beatmap7K) -> Dict[str, Any]:
         "jack": round(jacks / n, 4),
         "nps": round(n / max((last - first) / 1000.0, 1.0), 3),
         "columns": [round(c / n, 4) for c in columns],
+        "tags": pattern_tags_beatmap(beatmap).to_dict(),
     }
 
 

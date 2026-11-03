@@ -5,9 +5,9 @@ import pytest
 from proj7k.parser import Beatmap7K, HitObject, NoteType, parse_osu_7k
 from proj7k.profiler.matcher import AlignedHit, HitAlignmentResult, HitJudgment, align_replay_hits
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
 from proj7k.field import trace_beatmap
-from proj7k.profiler.response import analyze_strain_response
+from proj7k.profiler.response import StrainResponseOptions, analyze_strain_response
 from proj7k.field import TECH_KEYS
 
 
@@ -78,9 +78,7 @@ def test_every_hit_is_laid_on_the_fields_demand_readings(tmp_path: Path):
     for hit in alignment.aligned_hits:
         assert set(hit.strains) == set(TECH_KEYS)
     assert max(sum(h.strains.values()) for h in alignment.aligned_hits) > 0.0
-    assert max(h.strains["jack"] for h in alignment.aligned_hits) == pytest.approx(
-        max(field.d[i] * field.w[i, 0] for i in range(field.events.n))
-    )
+    assert max(h.strains["jack"] for h in alignment.aligned_hits) == pytest.approx(float(field.dk[:, 0].max()))
 
 
 def test_a_player_who_breaks_down_reads_lower_than_one_who_does_not(tmp_path: Path):
@@ -96,13 +94,20 @@ def test_a_player_who_breaks_down_reads_lower_than_one_who_does_not(tmp_path: Pa
     assert cj.tested and bj.tested
     assert cj.broke_down is False and bj.broke_down is True
     assert bj.effective_capacity < bj.chart_level < cj.effective_capacity
-    assert bj.star_rating == pytest.approx(stars_of(bj.effective_capacity))
+    assert bj.star_rating == pytest.approx(skill_stars_of("rc_jack", bj.effective_capacity))  # the skill's own scale (ADR-0056)
     assert bj.dan_tier != ""
     assert len(bj.bins) > 0
     # the rice chart has no LN to fail at
     ln = clean.dimensions["ln_general"]
     assert ln.tested is False and ln.effective_capacity == 0.0 and ln.dan_tier == "0th"
-    assert broke.dominant_technique == "jack" == broke.bottleneck_technique
+    # only the skills the chart requires are tested (ADR-0056/0057): a single-column jack chart requires jack and
+    # the stamina to keep it up, no speed, and tech only at the floor every event pays
+    assert broke.dimensions["speed"].tested is False
+    assert broke.dimensions["stream"].tested is True
+    share = field.profile.skills["rc_tech"].stars / field.profile.total_stars
+    assert broke.dimensions["tech"].tested is (share >= StrainResponseOptions().min_skill_share)
+    tested = {k for k, d in broke.dimensions.items() if d.tested}
+    assert broke.bottleneck_technique in tested and broke.dominant_technique in tested
 
 
 def test_losing_exactly_the_tolerance_reads_the_charts_own_difficulty(tmp_path: Path):
@@ -151,8 +156,10 @@ def test_ln_releases_are_what_the_ln_skills_are_read_from(tmp_path: Path):
 
     assert clean.dimensions["ln_release"].tested and dropped.dimensions["ln_release"].tested
     assert dropped.dimensions["ln_release"].effective_capacity < clean.dimensions["ln_release"].effective_capacity
-    # Inverse is read at the press (§8.1); the tails dropped here are not what it measures
-    assert dropped.dimensions["ln_inverse"].effective_capacity == clean.dimensions["ln_inverse"].effective_capacity
+    # Inverse's cost is paid at the press (§8.3); a dropped tail still counts a little against it, because the
+    # tail event lies under the hand's inverse reading (the chart's own D_k is solved over every event the same way)
+    assert dropped.dimensions["ln_inverse"].effective_capacity <= clean.dimensions["ln_inverse"].effective_capacity
+    assert dropped.dimensions["ln_release"].effective_capacity < dropped.dimensions["ln_inverse"].effective_capacity
     # an LN chart's rice skills are not what dropping tails shows
     assert not dropped.dimensions["jack"].tested
 

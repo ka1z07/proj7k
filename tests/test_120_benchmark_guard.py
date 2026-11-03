@@ -195,15 +195,16 @@ def test_guard_blocks_a_rating_regression_on_the_real_ladder(benchmark_report: B
     assert "star_rating" in result.error_message
 
 
-def test_only_regular_tech_and_ln_release_are_below_the_plain_own_skill_bar(
+def test_only_ln_release_is_below_the_plain_own_skill_bar(
     benchmark_report: BenchmarkBatchReport,
 ):
     """
     ADR-0018 decision 3: every pool's own skill climbs the ladder, held by a per-pool ratchet at the value the
     engine has now. Since ADR-0056 the own skill is the skill's own requirement ladder. Against the plain star bar
-    (tau .88 / rho .95 / 4 inversions) the two pools that do not clear are Regular Tech (tech has only the rhythm
-    discriminant, and the pool's high tiers are the more regular) and LN Release (its low tiers are slow long-LN
-    charts) — known defects, not acceptances. If either ever clears the plain bar, delete its ratchet entry.
+    (tau .88 / rho .95 / 4 inversions) the one pool that does not clear is LN Release (its low tiers are slow
+    long-LN charts) — a known defect, not an acceptance. Regular Tech cleared it once the snap-diversity
+    discriminant joined the tech cost (tau .809 -> .905). If LN Release ever clears the plain bar, delete its
+    ratchet entry.
     """
     plain = CALIBRATED_METRIC_GATES["own_skill"]
     own = {technique: reports["own_skill"] for technique, reports in benchmark_report.monotonicity.items()}
@@ -215,7 +216,7 @@ def test_only_regular_tech_and_ln_release_are_below_the_plain_own_skill_bar(
         or len(rep["violations"]) > plain.max_violations
     }
 
-    assert below_plain == {"Regular Tech", "LN Release"}
+    assert below_plain == {"LN Release"}
     assert set(OWN_SKILL_RATCHET) == set(EXPECTED_TECHNIQUES)
     assert evaluate_monotonicity_guard(benchmark_report).passed
 

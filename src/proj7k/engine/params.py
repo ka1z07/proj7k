@@ -86,6 +86,9 @@ class Params:
     tech_hand_irr: float = 0.7        # weight of a hand's own off-ratio interval against the row rhythm surprise
     tech_ratio_tol: float = 0.12      # a hand interval within this (relative) of a carried ratio is regular
     tech_max_gap: float = 1.0         # s; a hand interval longer than this starts the hand's rhythm afresh
+    tech_div_lo: float = 1.0          # gap classes (≥10% of a 2 s window) at which snap diversity starts to count
+    tech_div_span: float = 2.0        # classes above tech_div_lo at which snap diversity counts in full
+    tech_div_w: float = 1.0           # weight of snap diversity against the row rhythm surprise
     inverse_h_ref: float = 2.0        # held columns (both hands) at which a press fully costs ln_inverse
     inverse_pow: float = 2.0          # how sharply the inverse share rises towards inverse_h_ref
     release_floor: float = 0.2        # share an isolated release costs ln_release regardless of its LN's length
