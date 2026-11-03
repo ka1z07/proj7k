@@ -29,6 +29,7 @@ PYTHONPATH=src python3 -m proj7k.batch \
 两道闸门都断言引擎的实际产物——**星级**与各池自有技能的星级，而非它背后的原始特征。引擎是 `src/proj7k/engine/`（规格 v0.2，ADR-0017/0018）；`batch` 读它的 `evaluate_osu`。
 
 - 护栏查 15 级段位阶梯的单调性（Kendall τ / Spearman ρ / 倒挂数）：总星级按池 + 阶梯级门槛；八个池各自的「自有技能」阶梯（`own_skill`）按池棘轮（`guard.OWN_SKILL_RATCHET`），上限是当前实测值、记为已知缺陷而非验收。另查 0th、5th、10th、Stellium 四档的八池中位数区间（`dan.CANONICAL_DAN_SR_BANDS`）。
+- 技法星级是逐技法代价（ADR-0056）：每个技法有自己的代价序列、自己的星标尺（`engine/scale.py` 的 `SKILL_SCALE`）；`tests/engine/test_engine_skills.py` 钉住跨家族泄漏、特异性、本池技法最高张数三道棘轮与标尺拟合。
 - 测试套件在此之上钉死 120 首的全部星级指纹（`EXPECTED_STAR_RATING_CHECKSUM`），并钉死金标准（`tests/fixtures/engine_golden_v02.json`）、段位表与 19 张外部留出谱（`tests/engine/test_external_holdout.py`，只做检验、不参与拟合）。
 - 原始密度特征（`avg_nps`、`peak_4m_nps`）降级为诊断指标，需要时用 `--guard-metric` 显式请求。
 - 当前基线：测试全绿；任何失败都是回归。
@@ -39,6 +40,7 @@ PYTHONPATH=src python3 -m proj7k.batch \
 
 - 引擎常数（`engine/params.py`）：星级指纹、四档区间、棘轮上限、`dan_table.json`。
 - 星标尺：改 `engine/anchors.json`，重拟合后更新 `engine/scale.py` 里的 `STAR_A`/`STAR_B`，再同上。
+- 技法代价（`engine/skillcost.py`、技法参数）或总星标尺：`PYTHONPATH=src python3 tools/fit_skill_scale.py` 重拟合 `SKILL_SCALE`，再重基线化棘轮上限、`test_engine_ladder_t1.KNOWN_INVERSIONS`、`test_engine_skills` 的三道棘轮与 `tests/test_downscaler_pools.py` 的区间；总星级指纹不该动。
 
 120 张标杆谱面的原始 `.osu` 内容冻结在 `tests/fixtures/benchmark_corpus.json.gz`，端到端验证与 `tests/conftest.py` 的阶梯诊断夹具都不依赖本机 osu! 安装。只有在标杆清单（`docs/research/structured_index.json`）本身变更时才需要重新冻结：
 

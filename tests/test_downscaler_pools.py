@@ -11,10 +11,11 @@ from proj7k.field import trace_beatmap
 from proj7k.generator import mix as mix_mod
 from proj7k.parser import parse_osu_7k
 
-#: A Regular Stream chart (~9.9★) brought to another Stream chart's pools (8.91★); the lean on deletion order
-#: alone took rc_tech ~1★ under its floor here (2026-11-01, 48 benchmark pairs: all pools in 41 vs 48).
-SOURCE, TOTAL = 3865216, 8.91
-RANGES = {"rc_stamina": (8.44, 9.44), "rc_jack": (8.28, 9.28), "rc_tech": (8.16, 9.16)}
+#: Regular Stream Stellium (12.88★) brought to Regular Stream Gamma's pools (9.19★; ADR-0056 skill stars, ±0.5★).
+#: The lean on deletion order alone takes rc_stamina ~0.3★ under its floor here (before ADR-0056, when the pools
+#: read as the total, it took rc_tech ~1★ under; 2026-11-01, 48 benchmark pairs: all pools in 41 vs 48).
+SOURCE, TOTAL = 3865216, 9.19
+RANGES = {"rc_stamina": (8.35, 9.35), "rc_jack": (7.76, 8.76), "rc_tech": (6.44, 7.44)}
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +50,7 @@ def test_every_pool_lands_in_its_range_where_the_lean_misses_a_floor(chart):
     # what the generator did before: the total's pruner with the ranges as a deletion order
     lean = ExcessLossPruner(validator=validator, skill_weights=mix_mod.skill_weights(RANGES, trace_beatmap(chart).profile))
     old = trace_beatmap(lean.prune(chart, TOTAL).downscaled_beatmap)
-    assert misses(pool_stars(old), RANGES).get("rc_tech", 0.0) < -0.5
+    assert misses(pool_stars(old), RANGES).get("rc_stamina", 0.0) < -0.2
 
 
 def test_a_ceiling_alone_brings_that_pool_down_and_keeps_the_rest(chart):

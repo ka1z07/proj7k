@@ -50,22 +50,21 @@ CALIBRATED_METRIC_GATES: Dict[str, MetricGate] = {
 #: Per-pool ratchet for the `own_skill` ladder, keyed by the pool's manifest name: the thresholds are the
 #: measured value of the engine as it stands, recorded as the ceiling of a known defect rather than as an
 #: acceptance. A pool absent here is held to the plain `own_skill` gate.
-#: Measured on the spec v0.2 engine over the 120 charts (tau / rho / inversions), floored to three decimals;
-#: raised for LN Tech and LN Release by the same-finger weight (ADR-0044), which moved no pool down, and for
-#: Regular Jack, LN General and LN Inverse by the speed terms (ADR-0054), which also moved none down.
-#: Only LN Release is below the plain bar (its tail-isolation skill is the one T1 records inversions on:
-#: tau .867 / rho .961 / 4 inversions against .88 / .95 / 4); the other seven clear it, and their entries
-#: only stop them from loosening. Raising any of these is the point of a later engine change, lowering one
-#: needs a ruling.
+#: Re-baselined for ADR-0056 (each skill its own cost): a pool's own skill is now that skill's own requirement
+#: ladder, not the total's reading under its membership, so the earlier values (which were the total ladder's,
+#: tau .961–1.0) no longer describe the quantity. Measured over the 120 charts (tau / rho / adjacent inversions),
+#: floored to three decimals. Regular Tech (only the rhythm discriminant) and LN Release (its low tiers are slow
+#: long-LN charts) are below the plain bar; the other six clear it, and their entries only stop them from
+#: loosening. Raising any of these is the point of a later engine change, lowering one needs a ruling.
 OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
-    "Regular Jack": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
-    "Regular Tech": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
-    "Regular Speed": MetricGate(min_kendall_tau=1.0, min_spearman_rho=1.0, max_violations=0),
+    "Regular Jack": MetricGate(min_kendall_tau=0.904, min_spearman_rho=0.978, max_violations=4),
+    "Regular Tech": MetricGate(min_kendall_tau=0.809, min_spearman_rho=0.939, max_violations=6),
+    "Regular Speed": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
     "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
-    "LN General": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
-    "LN Tech": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
-    "LN Inverse": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.989, max_violations=1),
-    "LN Release": MetricGate(min_kendall_tau=0.866, min_spearman_rho=0.960, max_violations=4),
+    "LN General": MetricGate(min_kendall_tau=0.885, min_spearman_rho=0.960, max_violations=3),
+    "LN Tech": MetricGate(min_kendall_tau=0.885, min_spearman_rho=0.971, max_violations=4),
+    "LN Inverse": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.992, max_violations=2),
+    "LN Release": MetricGate(min_kendall_tau=0.771, min_spearman_rho=0.885, max_violations=3),
 }
 
 #: Applied to any metric without its own calibration entry.
