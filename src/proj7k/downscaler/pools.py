@@ -3,9 +3,10 @@ Downscaling to a range per skill pool (ADR-0051): the eight pools' own stars are
 
 `ExcessLossPruner` brings the total star down and leans on the technique mix only through the order it deletes
 in (`skill_weights`), so whether each pool lands in its range was left to chance: the generator made several
-charts and kept the closest. Each pool's star is the engine's own solve over the events it is a member of
-(`D_k = solve(d, w[:, k], eps_k)`), so the same closed-form removal benefit that reads the total
-(`downscaler.marginal`) reads one pool when the loss is weighted by that pool's membership. The loop:
+charts and kept the closest. Each pool's star is the engine's own solve of the skill's own demand reading
+(ADR-0056: `D_k = solve(d_k, 1, eps_k)`, `d_k` the skill's cost `c_k` on the hand accumulator with the skill's
+memory), so the same closed-form removal benefit that reads the total (`downscaler.marginal`) reads one pool
+on that pool's series (`field.dk`, `field.ck`), at the level its ceiling reads on the skill's own scale. The loop:
 
 1. Pools above their ceiling are *over*; pools at or near their floor are *held*.
 2. Every note scores the drop it brings to each over pool's loss at that pool's ceiling (as a share of the
@@ -26,6 +27,8 @@ from typing import Dict, List, Mapping, Optional, Tuple
 import numpy as np
 
 from proj7k import cancel
+from proj7k.engine.scale import skill_D_of_stars
+from proj7k.engine.skillcost import skill_eps, skill_tau
 from proj7k.engine.skills import SKILLS
 from proj7k.engine.solver import loss
 from proj7k.field import ChartField, d_of_stars, trace_beatmap
@@ -46,10 +49,6 @@ HOLD_MARGIN = 0.3
 HOLD_WEIGHT = 1.0
 #: A pool counts as over its ceiling from this many stars above it (the engine's reading moves by ~0.01 per note).
 OVER_SLACK = 0.02
-
-
-def _eps(k: str, field: ChartField) -> float:
-    return field.params.eps_rc if k.startswith("rc") else field.params.eps_ln
 
 
 def pool_stars(field: ChartField) -> Dict[str, float]:
@@ -100,39 +99,44 @@ class PoolRangePruner(ExcessLossPruner):
     ) -> Tuple[List[Tuple[float, HitObject]], List[HitObject]]:
         """(scored removable notes, the ones the skeleton refused) for one trace; see the module docstring."""
         stars = pool_stars(field)
-        terms: List[Tuple[np.ndarray, float, float, float]] = []   # (weights, level, eps, stars over)
-        for k, hi in self.over(stars).items():
+        p = field.params
+
+        def series(k: str):
+            """A pool's own (d, v, tau), the series its star is solved on."""
             n = SKILLS.index(k)
-            terms.append((field.w[:, n], d_of_stars(hi), _eps(k, field), stars[k] - hi))
+            return field.dk[:, n], field.ck[:, n], skill_tau(k, p)
+
+        # (d, v, tau, level, eps, stars over): the series the loss is read on, and the level it is read at
+        terms: List[Tuple[np.ndarray, np.ndarray, float, float, float, float]] = []
+        for k, hi in self.over(stars).items():
+            terms.append((*series(k), skill_D_of_stars(k, hi), skill_eps(k, p), stars[k] - hi))
         if target_sr is not None and field.profile.total_stars > target_sr * (1.0 + self.tolerance):
-            terms.append((np.ones(field.events.n), d_of_stars(target_sr), field.eps_total,
+            terms.append((field.d, field.v, p.tau_h, d_of_stars(target_sr), field.eps_total,
                           field.profile.total_stars - target_sr))
         if not terms:
             return [], []
 
         window_ms = max(100.0, self.window_s * 1000.0)
         win = (field.t * 1000.0 // window_ms).astype(int)
-        score = np.zeros(field.events.n)
+        n_ev = field.events.n
+        score = np.zeros(n_ev)
         peak: set = set()
-        for w, level, eps, by in terms:
-            b = removal_benefit(field, level, w)
+        for d, v, tau, level, eps, by in terms:
+            b = removal_benefit(field, level, d=d, v=v, tau=tau)
             top = float(b.max())
             if top > 0:
                 score += by * b / top
-            # this pool's peak windows: its weighted loss above the rate its own tolerance allows
-            pl = w * loss(field.d, level, field.params)
+            # this pool's peak windows: its loss above the rate its own tolerance allows
+            pl = loss(d, level, p)
             wl = np.bincount(win, weights=pl)
-            ww = np.bincount(win, weights=w)
-            total_w = float(w.sum())
-            if total_w <= 0:
-                continue
-            allowed = eps * (total_w + field.params.N0) / total_w
+            ww = np.bincount(win).astype(float)
+            allowed = eps * (n_ev + p.N0) / n_ev
             with np.errstate(divide="ignore", invalid="ignore"):
                 rate = np.where(ww > 0, wl / ww, 0.0)
             peak.update(int(x) for x in np.flatnonzero(rate > allowed * (1.0 - PEAK_MARGIN)))
         for k, lo in self.held(stars).items():
-            n = SKILLS.index(k)
-            b = removal_benefit(field, d_of_stars(lo), field.w[:, n])
+            d, v, tau = series(k)
+            b = removal_benefit(field, skill_D_of_stars(k, lo), d=d, v=v, tau=tau)
             top = float(b.max())
             if top > 0:
                 score -= HOLD_WEIGHT * b / top

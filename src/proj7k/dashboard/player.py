@@ -872,6 +872,7 @@ def chart_detail(snapshot: LibrarySnapshot, md5: str, player: Optional[str], fil
                 "duration_s": meta.get("duration_seconds"),
                 "avg_nps": meta.get("avg_nps"),
                 "timeline": frame.get("timeline"),
+                "patterns": frame.get("patterns"),
             }
         except Exception as e:
             out["engine_error"] = str(e)

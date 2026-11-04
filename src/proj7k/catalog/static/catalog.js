@@ -27,6 +27,8 @@ const Catalog = (() => {
     rc_jack: tr("叠键"), rc_tech: tr("技巧"), rc_speed: tr("速度"), rc_stamina: tr("耐力切"),
     ln_general: tr("LN 综合"), ln_tech: tr("LN 技巧"), ln_inverse: tr("反键"), ln_release: tr("放手"),
   };
+  const TAG_ZH = { jack: tr("叠键"), minijack: tr("小叠"), chordjack: tr("和弦叠"), longjack: tr("长叠"), stream: tr("单点流"), jumpstream: tr("双押流"), chordstream: tr("和弦流"), dense_chordstream: tr("密集和弦流"), trill: tr("交互"), jumptrill: tr("双押交互"), split_jumptrill: tr("分手交互"), bracket: tr("括号"), roll: tr("滚键"), stair: tr("楼梯"), anchor: tr("锚"), grace: tr("装饰音"), burst: tr("爆发"), polyrhythm: tr("复合节奏"), hybrid: tr("混合"), inverse: tr("反键"), release: tr("放手"), shield: tr("盾"), delay: tr("错位长条"), coordination: tr("协调") };
+  const TAG_WHY = { jack: tr("同一列连续三下以上，不慢于当前节拍格"), minijack: tr("同一列连续两下"), chordjack: tr("三音以上的和弦连续叠键"), longjack: tr("同一列连续六下以上"), stream: tr("连续四行以上单音、不重复列的节拍行"), jumpstream: tr("由双音和弦组成的流"), chordstream: tr("由三音以上和弦组成的流"), dense_chordstream: tr("两秒内平均每行三音以上的和弦流"), trill: tr("两列单音交替四行以上"), jumptrill: tr("两组双音和弦交替四行以上"), split_jumptrill: tr("每个和弦左右手各一音的双押交互"), bracket: tr("多组交互叠在一起：列交错的交替和弦"), roll: tr("单音朝一个方向走过五列以上"), stair: tr("单音朝一个方向走过三到四列"), anchor: tr("一只手一半以上的音落在同一列，而这只手还在动"), grace: tr("紧贴前一行（不到 0.4 拍格）、落在别的列、不在爆发里"), burst: tr("连续四行以上快于周围的节拍格（0.6 以下）"), polyrhythm: tr("两种节奏同时出现：非二分的间隔（相邻或隔一行）占两秒窗口的四分之一以上"), hybrid: tr("两秒内米和长条混在一起"), inverse: tr("按下时另外三列以上正被按住"), release: tr("长条尾落在没有按键的行"), shield: tr("长条所在列在其头之前或尾之后一拍格内有米"), delay: tr("长条头或尾跨列错开不到半拍格"), coordination: tr("一次按下与另一列的放开相距不到四分之一拍格") };
   const STATUS_ZH = { ranked: "Ranked", approved: "Approved", qualified: "Qualified", loved: "Loved", pending: "Pending", wip: "WIP", graveyard: "Graveyard", unknown: tr("未知") };
 
   const mapperHref = (id, name) => `/mappers/${id ? id : encodeURIComponent("@" + name)}`;
@@ -248,6 +250,10 @@ const Catalog = (() => {
       <span class="n${k === cur.dominant_skill ? " dom" : ""}" title="${esc(SKILL_ZH[k])}">${esc(SKILL_LABELS[k])}</span>
       <div class="track"><div class="fill" style="width:${(100 * s.stars) / top}%;background:${k === cur.dominant_skill ? "var(--accent)" : "var(--engine)"}"></div></div>
       <span class="v">${fmt(s.stars)}</span><span class="p" title="${tr("主导度")}">${fmt(100 * s.dominance, 0)}%</span>`).join("");
+    const pt = (cur.patterns && cur.patterns.tags) || null;
+    document.getElementById("tags").innerHTML = pt && pt.labels && pt.labels.length
+      ? pt.labels.map((k) => `<span class="tag" title="${esc(TAG_WHY[k] || k)}">${esc(TAG_ZH[k] || k)} ${Math.round(100 * ((pt.shares || {})[k] || 0))}%</span>`).join("")
+      : `<span class="note">${pt ? tr("没有占到 8% 以上的模式") : tr("还没分析")}</span>`;
     document.getElementById("density").innerHTML = densitySvg(cur.density, "var(--engine)");
 
     const table = document.getElementById("all");

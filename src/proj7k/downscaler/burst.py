@@ -24,13 +24,12 @@ target level (`pruner`), or says it could not.
 `fit_envelopes` refits the constants from charts; `tests/test_downscaler_burst.py` holds them to the corpus.
 """
 
-import dataclasses
 from dataclasses import dataclass
 from typing import Dict, Iterable, Tuple
 
 import numpy as np
 
-from proj7k.engine.demand import _accumulate
+from proj7k.engine.demand import accumulate
 from proj7k.engine.skills import hand_of
 from proj7k.field import ChartField
 
@@ -58,7 +57,7 @@ class BurstReading:
 
 def burst_reading(field: ChartField) -> BurstReading:
     ev, p = field.events, field.params
-    hand = _accumulate(ev, hand_of(field.thumb), field.v, dataclasses.replace(p, tau_h=HAND_TAU)) ** (1.0 / p.gamma)
+    hand = accumulate(ev, hand_of(field.thumb), field.v, p, HAND_TAU) ** (1.0 / p.gamma)
 
     column = np.zeros(ev.n)
     jg = ev.j ** p.gamma

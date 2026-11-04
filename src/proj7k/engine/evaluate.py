@@ -4,6 +4,10 @@ The engine's public entry (spec §9.6, §11): a chart in, a difficulty profile o
     total difficulty D and stars; for each of the eight skills D_k, stars, coverage and dominance;
     the dominant skill with the full ranking and the margin; and the hand the thumb plays on.
 
+Since ADR-0056 a skill's D_k and stars say how much the chart requires that skill (its own cost,
+`skillcost`, on its own scale); coverage and dominance still say how much of the chart, and of the
+total's difficulty, the skill's events carry (`attribution`).
+
 The thumb goes to whichever hand gives the lower total difficulty (ties: the left).
 """
 
@@ -16,7 +20,8 @@ from proj7k.engine.attribution import dominance, ln_context, memberships
 from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
+from proj7k.engine.skillcost import skill_demands
 from proj7k.engine.skills import SKILLS
 from proj7k.engine.solver import solve
 
@@ -113,7 +118,15 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
     if attribution_error >= _TOLERANCE:
         raise ArithmeticError(f"attribution must sum to 1 per event (§8.2); off by {attribution_error}")
 
-    D_k = [solve(dem.d, w[:, n], p.eps_rc if k.startswith("rc") else p.eps_ln, p) for n, k in enumerate(SKILLS)]
+    if p.skill_model == "cost":
+        # ADR-0056: each skill's own cost on the hand accumulator, on its own star scale
+        demands = skill_demands(ev, dem, p)
+        D_k = [demands[k] for k in SKILLS]
+        stars_k = [skill_stars_of(k, demands[k]) for k in SKILLS]
+    else:
+        # v0.2: the total's reading under the skill's membership weights (kept for the golden test)
+        D_k = [solve(dem.d, w[:, n], p.eps_rc if k.startswith("rc") else p.eps_ln, p) for n, k in enumerate(SKILLS)]
+        stars_k = [stars_of(x) for x in D_k]
     coverage = w.sum(0) / ev.n
     pi = dominance(a, dem.d, D, p)
     dominance_error = float(abs(pi.sum() - 1.0))
@@ -127,7 +140,7 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
         total_D=D,
         total_stars=stars_of(D),
         skills={
-            k: SkillReading(D=D_k[n], stars=stars_of(D_k[n]), coverage=float(coverage[n]), dominance=float(pi[n]))
+            k: SkillReading(D=D_k[n], stars=stars_k[n], coverage=float(coverage[n]), dominance=float(pi[n]))
             for n, k in enumerate(SKILLS)
         },
         dominant_skill=SKILLS[int(np.argmax(pi))],

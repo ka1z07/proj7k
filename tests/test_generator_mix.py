@@ -207,9 +207,11 @@ def test_a_rewrite_keeps_the_candidate_inside_the_range(tmp_path, song):
                                model_reuse=False, title="T", artist="A")
     run = run_generate(options, tmp_path / "out", audio=song)
     p = run.project
-    P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=..0.5")
-    jacks = [c["pools"]["rc_jack"] for c in p.candidates]
-    assert jacks[0] <= jacks[1]
+    # the jack-style candidate (rc_jack ~6★ as written; ADR-0056 skill stars) is trimmed into the range, the
+    # stairs one (~1.4★) needs no trim: both end inside it, and ranking by closeness to target says nothing more
+    P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=..2.0")
+    assert all(c["pools"]["rc_jack"] <= 2.05 and not c["misses"] for c in p.candidates)
+    assert min(c["notes"] for c in p.candidates) < max(c["notes"] for c in p.candidates)
     P.rewrite(p, [1], candidates=2, runner=styled_runner(calls), audition=True, pool_mix="rc_jack=8..")
     jacks = [c["pools"]["rc_jack"] for c in p.candidates]
     assert jacks[0] >= jacks[1] and p.candidates[0]["misses"]

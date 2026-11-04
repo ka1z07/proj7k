@@ -20,7 +20,7 @@ from scipy.special import expit
 
 from proj7k.dan import CANONICAL_DAN_TIERS, estimate_canonical_dan
 from proj7k.engine.params import DEFAULT
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
 from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.profiler.storage import SNAPSHOT_ENGINE, MatchSnapshot, ProfilerStorage, snapshot_is_current
 from proj7k.field import TECH_KEYS
@@ -33,6 +33,13 @@ MIN_FIT_PLAYS: int = 5
 _EPS_OF_KEY: Dict[str, float] = {
     SKILL_TECH_KEY[name]: (DEFAULT.eps_rc if name.startswith("rc") else DEFAULT.eps_ln) for name in SKILLS
 }
+_SKILL_OF_KEY: Dict[str, str] = {key: name for name, key in SKILL_TECH_KEY.items()}
+
+
+def _stars_of_key(dim: str, level: float) -> float:
+    """A level in skill `dim` on that skill's own star scale (ADR-0056); an unknown dimension reads the total's."""
+    name = _SKILL_OF_KEY.get(dim)
+    return skill_stars_of(name, level) if name is not None else stars_of(level)
 
 
 def level_across_plays(points: Sequence[Tuple[float, float, float]], eps: float) -> Optional[float]:
@@ -258,15 +265,15 @@ def aggregate_macro_profile(
 
         level = level_across_plays(fit_points, _EPS_OF_KEY.get(dim, DEFAULT.eps_rc))
         if level is not None:
-            cap, sr, method = level, stars_of(level), "fit"
+            cap, sr, method = level, _stars_of_key(dim, level), "fit"
         elif per_play_stars or per_play_caps:
             cap = statistics.median(per_play_caps) if per_play_caps else 0.0
-            sr = statistics.median(per_play_stars) if per_play_stars else stars_of(cap)
+            sr = statistics.median(per_play_stars) if per_play_stars else _stars_of_key(dim, cap)
             method = "median"
         else:
             cap, sr, method = 0.0, 0.0, "none"
-        if fatal_floor > 0 and stars_of(fatal_floor) > sr:
-            cap, sr = fatal_floor, stars_of(fatal_floor)
+        if fatal_floor > 0 and _stars_of_key(dim, fatal_floor) > sr:
+            cap, sr = fatal_floor, _stars_of_key(dim, fatal_floor)
             method = method if method != "none" else "fatal"
 
         dimensions[dim] = DimensionMacroMetric(

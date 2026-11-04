@@ -200,9 +200,11 @@ def test_only_ln_release_is_below_the_plain_own_skill_bar(
 ):
     """
     ADR-0018 decision 3: every pool's own skill climbs the ladder, held by a per-pool ratchet at the value the
-    engine has now. Against the plain star bar (tau .88 / rho .95 / 4 inversions) the one pool that does not
-    clear is LN Release, whose tail-isolation skill T1 records inversions on — a known defect, not an
-    acceptance. If it ever clears the plain bar, delete its ratchet entry.
+    engine has now. Since ADR-0056 the own skill is the skill's own requirement ladder. Against the plain star bar
+    (tau .88 / rho .95 / 4 inversions) the one pool that does not clear is LN Release (its low tiers are slow
+    long-LN charts) — a known defect, not an acceptance. Regular Tech cleared it once the snap-diversity
+    discriminant joined the tech cost (tau .809 -> .905). If LN Release ever clears the plain bar, delete its
+    ratchet entry.
     """
     plain = CALIBRATED_METRIC_GATES["own_skill"]
     own = {technique: reports["own_skill"] for technique, reports in benchmark_report.monotonicity.items()}

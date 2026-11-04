@@ -31,7 +31,7 @@ def test_arrays_line_up_with_events(traced):
     n = f.events.n
     for arr in (f.t, f.col, f.release, f.d, f.v, f.p, f.share):
         assert len(arr) == n
-    assert f.w.shape == f.a.shape == (n, len(SKILLS))
+    assert f.w.shape == f.a.shape == f.ck.shape == f.dk.shape == (n, len(SKILLS))
     assert np.all(np.diff(f.t) >= 0)
     assert abs(f.share.sum() - 1.0) < 1e-9
     assert np.allclose(f.a.sum(1), 1.0)
@@ -45,14 +45,17 @@ def test_expected_loss_at_the_charts_level_is_its_tolerance(traced):
 
 
 def test_level_for_loss_inverts_the_engines_equation(traced):
-    """A player who loses exactly the tolerance sits at the skill's D_k; the same call, the engine's own number."""
+    """
+    A player who loses exactly the tolerance on a skill's own series sits at the skill's D_k (ADR-0056: `dk`
+    under unit weights is what the engine solved): the same call, the engine's own number.
+    """
     _, f = traced
+    ones = np.ones(f.events.n)
     for k, name in enumerate(SKILLS):
-        wk = f.w[:, k]
-        if wk.sum() < 5 or f.profile.skills[name].D <= 0:
+        if f.profile.skills[name].D <= 0:
             continue
         eps = DEFAULT.eps_rc if name.startswith("rc") else DEFAULT.eps_ln
-        level = level_for_loss(f.d, wk, eps * wk.sum(), eps)
+        level = level_for_loss(f.dk[:, k], ones, eps * f.events.n, eps)
         assert level == pytest.approx(f.profile.skills[name].D, rel=1e-6), name
 
 

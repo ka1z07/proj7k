@@ -2,11 +2,13 @@
 T1 (spec §14): for every skill k, D_k over the benchmark pool of k rises strictly with the tier; report the
 smallest gap.
 
-Recorded rather than passed (ADR-0017 decision 3): five of the eight pools have adjacent-tier inversions, eight
-in all (twelve before the speed terms of ADR-0054 put Regular Jack in order and took one each off LN General and
-LN Inverse). Each such pool is an `xfail(strict=True)`, so the day one of them climbs cleanly the test goes red and
-the entry must be deleted; `test_the_known_inversions_do_not_grow` is the per-pool ratchet behind it. The same
-eight are what `guard.OWN_SKILL_RATCHET` holds the batch gate to.
+Recorded rather than passed (ADR-0017 decision 3): every pool has adjacent-tier inversions, 24 in all. Since
+ADR-0056 a pool's own skill is that skill's own requirement (its own cost on its own scale), no longer the total's
+reading under the skill's membership, so this is a different ladder from the one the eight inversions of v0.2.2
+were counted on: a tier can require less of its own skill than the tier below while reading harder in total.
+Each such pool is an `xfail(strict=True)`, so the day one of them climbs cleanly the test goes red and the entry
+must be deleted; `test_the_known_inversions_do_not_grow` is the per-pool ratchet behind it. The same counts are
+what `guard.OWN_SKILL_RATCHET` holds the batch gate to.
 """
 
 import pytest
@@ -15,13 +17,16 @@ from engine_support import POOL_OF, TIERS
 
 #: Adjacent-tier inversions per pool of the pool's own skill, as measured on the 120 charts.
 KNOWN_INVERSIONS = {
+    "Regular Jack": 4,
+    "Regular Tech": 4,
+    "Regular Speed": 1,
     "Regular Stream": 1,
-    "LN General": 1,
-    "LN Tech": 1,
-    "LN Inverse": 1,
-    "LN Release": 4,
+    "LN General": 3,
+    "LN Tech": 4,
+    "LN Inverse": 2,
+    "LN Release": 3,
 }
-TOTAL_KNOWN_INVERSIONS = 8
+TOTAL_KNOWN_INVERSIONS = 22
 
 
 def _own_skill_D(engine_profiles, pool):
