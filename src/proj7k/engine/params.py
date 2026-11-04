@@ -82,6 +82,9 @@ class Params:
     speed_tau: float = 1.5            # s; rc_speed's hand memory (a burst of hand rate), in place of tau_h
     stamina_sustain: float = 20.0     # s; rc_stamina's cost is full once a hand has played this long without rest
     stamina_rest: float = 0.6         # s; a hand gap longer than this is a rest
+    stamina_chord_floor: float = 0.6  # rc_stamina's weight for a single-note row; a chord row reads up to 1
+    stamina_chord_span: float = 1.5   # chord size above 1 at which the chord weight reaches 1
+    stamina_chord_scope: str = "row"  # "row": the whole row's presses (chordstream); "hand": the hand's presses only
     tech_floor: float = 0.25          # share of v every event costs rc_tech/ln_tech before any irregularity
     tech_hand_irr: float = 0.7        # weight of a hand's own off-ratio interval against the row rhythm surprise
     tech_ratio_tol: float = 0.12      # a hand interval within this (relative) of a carried ratio is regular

@@ -42,7 +42,7 @@ SPECIFICITY_CEILING = {
     "rc_jack": 0.92,
     "rc_tech": 0.91,
     "rc_speed": 0.91,
-    "rc_stamina": 0.96,
+    "rc_stamina": 0.93,
     "ln_general": 1.05,
     "ln_tech": 1.04,
     "ln_inverse": 0.81,
@@ -51,9 +51,9 @@ SPECIFICITY_CEILING = {
 
 #: Charts of the pool (of 15) on which the pool's own skill is the highest star of its family.
 OWN_TOP_FLOOR = {
-    "Regular Jack": 12,
-    "Regular Tech": 10,
-    "Regular Speed": 8,
+    "Regular Jack": 11,
+    "Regular Tech": 11,
+    "Regular Speed": 10,
     "Regular Stream": 11,
     "LN General": 7,
     "LN Tech": 13,

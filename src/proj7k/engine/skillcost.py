@@ -128,6 +128,14 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
     irregular_ln = p.tech_floor + (1.0 - p.tech_floor) * np.maximum(q_u, q_hand)
 
     sustain = np.minimum(1.0, run_since_rest(ev, dem.hand, p) / p.stamina_sustain)
+    # the hand's chord size on the row: a chordstream asks more stamina than a single-note stream of the same
+    # rate (Kai's ruling 2026-11-03, ADR-0056), floored so single-note streams still read
+    if p.stamina_chord_scope == "row":
+        chord_size = np.bincount(ev.row[~rel], minlength=ev.n_rows)[ev.row].astype(float)
+    else:
+        key = ev.row * 2 + dem.hand[ev.col]
+        chord_size = np.bincount(key[~rel], minlength=2 * ev.n_rows)[key].astype(float)
+    chord = p.stamina_chord_floor + (1.0 - p.stamina_chord_floor) * np.minimum(1.0, (chord_size - 1.0) / p.stamina_chord_span)
 
     # inverse: a press while columns are held (both hands; §2.6 h), rising to full at inverse_h_ref
     q_inv = np.where(rel, 0.0, np.minimum(1.0, ev.h / p.inverse_h_ref) ** p.inverse_pow)
@@ -147,7 +155,7 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
         "rc_jack": dem.v_same * rc,
         "rc_tech": v * irregular * rc,
         "rc_speed": dem.v_rate * rc,
-        "rc_stamina": v * sustain * rc,
+        "rc_stamina": v * sustain * chord * rc,
         "ln_general": v * lam,
         "ln_tech": v * irregular_ln * lam,
         "ln_inverse": v * q_inv * lam,
