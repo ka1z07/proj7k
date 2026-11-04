@@ -100,10 +100,11 @@ def test_a_player_who_breaks_down_reads_lower_than_one_who_does_not(tmp_path: Pa
     # the rice chart has no LN to fail at
     ln = clean.dimensions["ln_general"]
     assert ln.tested is False and ln.effective_capacity == 0.0 and ln.dan_tier == "0th"
-    # only the skills the chart requires are tested (ADR-0056/0057): a single-column jack chart requires jack and
-    # the stamina to keep it up, no speed, and tech only at the floor every event pays
+    # only the skills the chart requires are tested (ADR-0056/0057): a single-column jack chart requires jack,
+    # no speed, no stamina (stamina is the sustained *moving* load, and a jack never moves), and tech only at
+    # the floor every event pays
     assert broke.dimensions["speed"].tested is False
-    assert broke.dimensions["stream"].tested is True
+    assert broke.dimensions["stream"].tested is False
     share = field.profile.skills["rc_tech"].stars / field.profile.total_stars
     assert broke.dimensions["tech"].tested is (share >= StrainResponseOptions().min_skill_share)
     tested = {k for k, d in broke.dimensions.items() if d.tested}

@@ -347,7 +347,7 @@ v0.2.3 起，$w_{ik}$ 只用于覆盖 $C_k$，$a_{ik}$ 只用于主导度 $\pi_k
 | RC-Jack | $(1-\lambda_i)\,v^{\text{same}}_i$ |
 | RC-Tech | $(1-\lambda_i)\,v_i\,\chi_i$ |
 | RC-Speed | $(1-\lambda_i)\,v^{\text{rate}}_i$ |
-| RC-Stamina | $(1-\lambda_i)\,v_i\,\sigma_i\,\kappa_i$ |
+| RC-Stamina | $(1-\lambda_i)\,v^{\text{rate}}_i\,\sigma_i\,\kappa_i$（$v^{\text{rate}}_i$ 是 $v_i$ 的邻指 + 跨手部分，即 RC-Speed 的代价：叠键不算耐力，和弦叠才不会读成耐力） |
 | LN-General | $\lambda_i\,v_i$ |
 | LN-Tech | $\lambda_i\,v_i\,\chi^{\text{LN}}_i$ |
 | LN-Inverse | $\lambda_i\,v_i\,q^{\text{inv}\prime}_i$ |
@@ -521,7 +521,7 @@ function solve(w, ε):
 | $a,b$ | 星数标度 | 由锚点定 | G | 第 10 节 |
 | $\tau_{\text{speed}}$ | RC-Speed 的手记忆 | 1.5 s | S | v0.2.3；速度是爆发量 |
 | $T_{\text{sus}},T_{\text{rest}}$ | 持续度饱和时长、休息阈值 | 20 s，0.6 s | S | v0.2.3 |
-| $f_\kappa,s_\kappa$ | 和弦度的单音地板、饱和跨度 | 0.6，1.5 | X | v0.2.3；按整行计 $n_i$；段位切段里四个 Regular 池的休息/低谷/连续时长几乎相同（ADR-0056 的表），只有和弦密度分得开 Stream 池；地板 0.6 是 Stream 池特异性与单音流留出谱（低约 1 档）之间的折中，0.4 让单音流低 2–3 档 |
+| $f_\kappa,s_\kappa$ | 和弦度的单音地板、饱和跨度 | 0.4，1.5 | X | v0.2.3；按整行计 $n_i$；段位切段里四个 Regular 池的休息/低谷/连续时长几乎相同（ADR-0056 的表），只有和弦密度分得开 Stream 池。项目方 2026-11-04 把留出谱的单音流改标 speed 后，地板 0.4 配移动部分 $v^{\text{rate}}$：rc_stamina 在其他 RC 池的最高相对读数 .954→.863（0.6 为 .910）；留出的两首和弦流歌读低 1/3 档 |
 | $f_t,w_\iota,\rho_{\text{tol}},T_{\text{gap}}$ | 失律度的底、手内失律权重、比值容差、重计间隔 | 0.25，0.7，0.12，1.0 s | X | v0.2.3；Tech 池 $U^{\text{rhy}}$ 1.51 对其余 RC 池 0.79–1.06 |
 | $T_{\text{div}},s_{\text{div}},\delta_{lo},\delta_{\text{span}},w_\delta$ | 节拍分型多样性的窗口半径、计入类的最小占比、起算类数、满值跨度、权重 | 1.0 s，0.1，1，2，1.0 | X | v0.2.3；社区对 tech 的定义是「不规则节拍分型与复节奏」：Tech 池窗口类数 2.32 对其余 RC 池 1.69–1.76，且随段位上升（τ +0.39），装饰音（grace）3.1× 但无阶梯贡献、未采用 |
 | $h^{\text{inv}}_{\text{ref}},p_{\text{inv}}$ | 反键份额的归一与陡度 | 2 列，2 | X | v0.2.3；Inverse 池 $h\ge2$ 的按下占 0.5–0.97，General 池 0.04–0.47 |

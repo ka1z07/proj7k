@@ -132,6 +132,15 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
     # rate (Kai's ruling 2026-11-03, ADR-0056), floored so single-note streams still read
     if p.stamina_chord_scope == "row":
         chord_size = np.bincount(ev.row[~rel], minlength=ev.n_rows)[ev.row].astype(float)
+    elif p.stamina_chord_scope == "window":
+        # the mean press-row size within +-1 s of the event's row (a chordstream's density, not one row's)
+        row_size = np.bincount(ev.row[~rel], minlength=ev.n_rows).astype(float)
+        press_rows = np.flatnonzero(row_size > 0)
+        rt = ev.T[press_rows]
+        cum = np.concatenate([[0.0], np.cumsum(row_size[press_rows])])
+        lo = np.searchsorted(rt, ev.T[ev.row] - 1.0)
+        hi = np.searchsorted(rt, ev.T[ev.row] + 1.0, side="right")
+        chord_size = (cum[hi] - cum[lo]) / np.maximum(hi - lo, 1)
     else:
         key = ev.row * 2 + dem.hand[ev.col]
         chord_size = np.bincount(key[~rel], minlength=2 * ev.n_rows)[key].astype(float)
@@ -155,7 +164,7 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
         "rc_jack": dem.v_same * rc,
         "rc_tech": v * irregular * rc,
         "rc_speed": dem.v_rate * rc,
-        "rc_stamina": v * sustain * chord * rc,
+        "rc_stamina": (dem.v_rate if p.stamina_src == "rate" else v) * sustain * chord * rc,
         "ln_general": v * lam,
         "ln_tech": v * irregular_ln * lam,
         "ln_inverse": v * q_inv * lam,
