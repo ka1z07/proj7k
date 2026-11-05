@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
 from proj7k.profiler.aggregate import aggregate_macro_profile
 from proj7k.profiler.cli import run_ingestion
 from proj7k.profiler.osr import OSRReplay, ReplayFrame, serialize_osr
@@ -44,7 +44,7 @@ def test_a_failed_run_contributes_the_stars_of_the_demand_it_broke_under(tmp_pat
 
     profile = aggregate_macro_profile(storage, "P", horizon_days=None)
 
-    assert profile.dimensions["jack"].star_rating == pytest.approx(max(4.0, stars_of(14.0)))
+    assert profile.dimensions["jack"].star_rating == pytest.approx(max(4.0, skill_stars_of("rc_jack", 14.0)))
 
 
 def test_a_snapshot_of_a_new_play_is_stamped_and_carries_the_fatal_demand(tmp_path: Path):

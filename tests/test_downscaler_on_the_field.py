@@ -75,13 +75,12 @@ def test_a_dominance_tie_is_not_a_change_of_technique(benchmark_manifest, benchm
     other = next(k for k in skills if k != top and k.startswith("rc"))
 
     def with_top(name, tie_gap):
-        shares = {k: 0.0 for k in skills}
-        shares[name] = 0.5
-        shares[top if name != top else other] = 0.5 - tie_gap
-        return dataclasses.replace(
-            original, dominant_skill=name,
-            skills={k: dataclasses.replace(v, dominance=shares[k]) for k, v in skills.items()},
-        )
+        # the §9.4 ranking numbers (the skills' levels since ADR-0059): `name` on top, the other a gap below it
+        # and the same gap under where the original ranked it
+        keys = {k: 0.0 for k in skills}
+        keys[name] = original.dominance_key(top)
+        keys[top if name != top else other] = original.dominance_key(top) - tie_gap
+        return dataclasses.replace(original, dominant_skill=name, dominance_keys=tuple(keys[k] for k in skills))
 
     class Fake(DualGateValidator):
         def __init__(self, replacement):

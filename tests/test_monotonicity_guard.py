@@ -186,7 +186,9 @@ def test_default_gate_validates_only_the_engine_artifact():
     default_res = evaluate_monotonicity_guard(report)
 
     assert default_res.passed is True, default_res.error_message
-    assert set(default_res.metrics_summary["Regular Stream"]) == {"star_rating"}
+    # the engine's own artifacts: the star rating and the pool's own skill (rc_stamina reads on these single-note
+    # charts since ADR-0056; under the chord membership of v0.2 it read 0 and was skipped as inactive)
+    assert set(default_res.metrics_summary["Regular Stream"]) == {"star_rating", "own_skill"}
 
     requested_res = evaluate_monotonicity_guard(
         report, config=MonotonicityGuardConfig(metrics=["avg_nps"])

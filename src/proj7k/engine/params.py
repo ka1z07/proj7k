@@ -77,6 +77,32 @@ class Params:
     burst_tau: float = 1.0            # s; the hand memory of the window reading (tau_h is 4 s)
     burst_N0: float = 60.0            # the window solve's pseudo-count, in place of N0
 
+    # §8 (v0.2.3, ADR-0056) skill costs: each skill's own demand series, read on the same hand accumulator
+    skill_model: str = "cost"         # "cost" (ADR-0056) or "membership" (v0.2: D_k is the total's d under w_k)
+    speed_tau: float = 1.5            # s; rc_speed's hand memory (a burst of hand rate), in place of tau_h
+    stamina_sustain: float = 20.0     # s; rc_stamina's cost is full once a hand has played this long without rest
+    stamina_rest: float = 0.6         # s; a hand gap longer than this is a rest
+
+    # §9.4 (ADR-0059) the dominant skill: the skill whose stars stand furthest above what a chart of this total
+    # usually requires of it ("level"), or the largest share of the total's difficulty ("pi", v0.2)
+    dominance_model: str = "level"
+    umbrella_level: float = 1.05      # ln_general holds an LN chart unless a specialty's level reaches this
+    stamina_chord_floor: float = 0.4  # rc_stamina's weight for a single-note row; a chord row reads up to 1
+    stamina_chord_span: float = 1.5   # chord size above 1 at which the chord weight reaches 1
+    stamina_chord_scope: str = "row"  # "row": the whole row's presses (chordstream); "hand": the hand's presses only
+    stamina_src: str = "rate"         # "rate": only the moving (other-finger) part, so chordjacks do not read as stamina; "v": the whole load
+    tech_floor: float = 0.25          # share of v every event costs rc_tech/ln_tech before any irregularity
+    tech_hand_irr: float = 0.7        # weight of a hand's own off-ratio interval against the row rhythm surprise
+    tech_ratio_tol: float = 0.12      # a hand interval within this (relative) of a carried ratio is regular
+    tech_max_gap: float = 1.0         # s; a hand interval longer than this starts the hand's rhythm afresh
+    tech_div_lo: float = 1.0          # gap classes (≥10% of a 2 s window) at which snap diversity starts to count
+    tech_div_span: float = 2.0        # classes above tech_div_lo at which snap diversity counts in full
+    tech_div_w: float = 1.0           # weight of snap diversity against the row rhythm surprise
+    inverse_h_ref: float = 2.0        # held columns (both hands) at which a press fully costs ln_inverse
+    inverse_pow: float = 2.0          # how sharply the inverse share rises towards inverse_h_ref
+    release_floor: float = 0.2        # share an isolated release costs ln_release regardless of its LN's length
+    release_ell: float = 0.3          # s; an LN this short or shorter has a fully precise release
+
     # §8 membership and attribution
     r_lo: float = 0.26
     r_hi: float = 0.42
@@ -88,8 +114,9 @@ class Params:
 
 DEFAULT = Params()
 
-#: The constants of the frozen spec-v0.2 prototype, before ADR-0044 weighted the same-finger rate and
-#: ADR-0054 added the speed terms. `tests/engine/test_engine_golden.py` checks the port under these.
+#: The constants of the frozen spec-v0.2 prototype, before ADR-0044 weighted the same-finger rate,
+#: ADR-0054 added the speed terms and ADR-0056 gave each skill its own cost. `tests/engine/test_engine_golden.py` checks the port under these.
 V02 = Params(
     k_same=1.0, v_lim=float("inf"), jack_gain=0.0, j_clip=float("inf"), v_cap=40.0, burst_kappa=0.0,
+    skill_model="membership", dominance_model="pi",
 )

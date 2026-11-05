@@ -23,6 +23,9 @@ class HandDemand:
     d: np.ndarray   # event difficulty reading (§7)
     d_burst: np.ndarray  # the same reading with the burst window's short hand memory (ADR-0054)
     r: np.ndarray   # same-finger share j / (j + x + o), the raw input of membership (§8.1)
+    v_same: np.ndarray   # the part of v the finger's own repeat carries (ADR-0056: rc_jack's cost)
+    v_rate: np.ndarray   # the part of v the hand's other fingers and the other hand carry (rc_speed's cost)
+    hand: np.ndarray     # [7] the hand of each column under this thumb
 
 
 def _psi(dt: np.ndarray, d0) -> np.ndarray:
@@ -60,22 +63,28 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     # ADR-0054: a press's repeat counts at most j_clip (a grace note or a flam is not a faster jack)
     k_j = np.where(rel, 1.0, p.k_same)
     jj = np.where(rel, ev.j, np.minimum(ev.j, p.j_clip))
-    v = omega * (k_j * jj + x + o) * c
+    v0 = omega * (k_j * jj + x + o) * c
     # ADR-0054: past an absolute speed the cost rises faster than the rate (a pure power would be refit away)
-    v = np.minimum(v * _rise(v, p.v_lim, p.v_pow, p.v_gain), p.v_cap)
+    rise = _rise(v0, p.v_lim, p.v_pow, p.v_gain)
+    v = np.minimum(v0 * rise, p.v_cap)
     # ADR-0054: a minijack near the finger's limit costs extra, on top of (not through) the speed rise
-    v = v + np.where(rel, 0.0, p.k_same * jj * (_rise(jj, p.jack_hz, p.jack_pow, p.jack_gain) - 1.0) * c)
+    mini = np.where(rel, 0.0, p.k_same * jj * (_rise(jj, p.jack_hz, p.jack_pow, p.jack_gain) - 1.0) * c)
+    v = v + mini
+    # ADR-0056: v split into what the finger's own repeat costs and what the rest of the hand's motion costs;
+    # each part carries the speed rise, the minijack surcharge is the repeat's (v_same + v_rate = v below v_cap)
+    v_same = omega * k_j * jj * c * rise + mini
+    v_rate = omega * (x + o) * c * rise
 
     # r stays the unweighted share: it is what membership's thresholds were set on (§8.1)
     with np.errstate(invalid="ignore", divide="ignore"):
         r = np.where(jxo > 0, ev.j / jxo, 0.0)
 
-    d = _accumulate(ev, hand, v, p) ** (1.0 / p.gamma)
-    d_burst = _accumulate(ev, hand, v, p, p.burst_tau) ** (1.0 / p.gamma) if p.burst_kappa > 0 else d
-    return HandDemand(thumb=thumb, v=v, d=d, d_burst=d_burst, r=r)
+    d = accumulate(ev, hand, v, p) ** (1.0 / p.gamma)
+    d_burst = accumulate(ev, hand, v, p, p.burst_tau) ** (1.0 / p.gamma) if p.burst_kappa > 0 else d
+    return HandDemand(thumb=thumb, v=v, d=d, d_burst=d_burst, r=r, v_same=v_same, v_rate=v_rate, hand=hand)
 
 
-def _accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: float = None) -> np.ndarray:
+def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: float = None) -> np.ndarray:
     """§6.1: per event, its hand's accumulator E^h after the event's row, in the units of v ** gamma."""
     tau = p.tau_h if tau is None else tau
     vg = v ** p.gamma

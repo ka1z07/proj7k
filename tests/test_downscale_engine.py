@@ -199,13 +199,14 @@ def test_downbeat_and_chord_invariants_preserved():
 
 
 def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_mode_reaches_it(benchmark_manifest, benchmark_corpus):
-    # A 10th stream chart taken to 0th: its stream gives way to other skills long before the target (the 7th chart
-    # used to stop too, until ADR-0054 strengthened DOMINANCE_BIAS and technique mode took it down).
-    bm = parse_osu_7k(benchmark_corpus[int(benchmark_manifest["Regular Stream"]["10th"]["id"])])
+    # A 10th jack chart taken to 0th: thinning its jacks takes the jack reading down faster than the total, so the
+    # chart stops asking for jack the way the original did long before the target (ADR-0059's gate; the 10th
+    # stream chart used to be the example, until that gate let its stream through as well).
+    bm = parse_osu_7k(benchmark_corpus[int(benchmark_manifest["Regular Jack"]["10th"]["id"])])
     target = CANONICAL_DAN_SR["0th"]
 
     kept = downscale_beatmap(bm, DownscaleOptions(target_sr=target, target_dan=None))
-    # Keeping the chordjack, the loop runs out of deletions the dual gate allows well above the target...
+    # Keeping the jack, the loop runs out of deletions the dual gate allows well above the target...
     assert kept.mode == "technique" and kept.pruning_result.stopped_by_validation
     assert kept.downscaled_stars > target * 1.05
     assert kept.suggest_free_mode is True and kept.to_dict()["suggest_free_mode"] is True
@@ -217,7 +218,7 @@ def test_technique_mode_that_stops_above_the_target_suggests_free_mode_and_free_
     assert free.suggest_free_mode is False
     assert free.validation.passed is True and free.validation.details["preserve_technique"] is False
     # Free mode keeps no dominant skill, so the practice chart is not labelled with one.
-    assert free.downscaled_beatmap.version.startswith("[P-") and "stream" not in free.downscaled_beatmap.version
+    assert free.downscaled_beatmap.version.startswith("[P-") and "jack" not in free.downscaled_beatmap.version
     assert not any(t.startswith("dominant_") for t in free.downscaled_beatmap.tags.split())
 
 

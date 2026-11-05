@@ -14,6 +14,7 @@ from proj7k.engine.skills import SKILL_TECH_KEY
 from proj7k.features import extract_beatmap_features
 from proj7k.field import TECH_KEYS, trace_osu
 from proj7k.parser import parse_osu_7k
+from proj7k.patterns import pattern_tags_beatmap
 
 
 from proj7k.dan import estimate_canonical_dan
@@ -103,6 +104,7 @@ class LiveEngine:
             "radar": radar,
             "profile": profile.to_dict(),
             "timeline": {**curve.to_dict(), "skills": list(TECH_KEYS)},
+            "patterns": pattern_tags_beatmap(beatmap).to_dict(),
             "metadata": metadata,
         }
 

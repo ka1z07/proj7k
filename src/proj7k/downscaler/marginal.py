@@ -28,19 +28,27 @@ from proj7k.engine.solver import loss
 from proj7k.field import ChartField
 
 
-def removal_benefit(field: ChartField, theta: float, weights: Optional[np.ndarray] = None) -> np.ndarray:
+def removal_benefit(
+    field: ChartField, theta: float, weights: Optional[np.ndarray] = None, *,
+    d: Optional[np.ndarray] = None, v: Optional[np.ndarray] = None, tau: Optional[float] = None,
+) -> np.ndarray:
     """
     Per event: the first-order drop in the chart's expected loss at level `theta` if the event's own
-    demand were taken out of its hand's accumulator. With `weights` (per event, e.g. one skill's membership
-    `field.w[:, k]`) the loss is that weighted sum, the one the skill's own `D_k` is solved on.
+    demand were taken out of its hand's accumulator. With `weights` (per event) the loss is that weighted sum.
+    By default the series is the total's (`field.d` read off `field.v` with memory `tau_h`); a skill's own
+    series (ADR-0056: `field.dk[:, k]` read off `field.ck[:, k]` with `skill_tau`) is passed as `d`, `v`, `tau`,
+    and its loss is the unit-weight sum its `D_k` is solved on.
     """
     ev, p = field.events, field.params
-    pl = loss(field.d, theta, p)
+    d = field.d if d is None else d
+    v = field.v if v is None else v
+    tau = p.tau_h if tau is None else tau
+    pl = loss(d, theta, p)
     with np.errstate(divide="ignore", invalid="ignore"):
-        c = np.where(field.d > 0, p.beta * pl * (1.0 - pl) / (p.gamma * field.d ** p.gamma), 0.0)
+        c = np.where(d > 0, p.beta * pl * (1.0 - pl) / (p.gamma * d ** p.gamma), 0.0)
     if weights is not None:
         c = c * weights
-    vg = field.v ** p.gamma
+    vg = v ** p.gamma
     hand = hand_of(field.thumb)[ev.col]
     benefit = np.zeros(ev.n)
     for h in (0, 1):
@@ -51,7 +59,7 @@ def removal_benefit(field: ChartField, theta: float, weights: Optional[np.ndarra
         c_row = np.bincount(pos, weights=c[members], minlength=len(rows))
         T = ev.T[rows]
         phi = np.zeros(len(rows))                                      # a hand's first update has phi = 0 (R10)
-        phi[1:] = np.exp(-np.diff(T) / p.tau_h)
+        phi[1:] = np.exp(-np.diff(T) / tau)
         G = np.zeros(len(rows))
         run = 0.0
         for k in range(len(rows) - 1, -1, -1):

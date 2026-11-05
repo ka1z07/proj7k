@@ -31,6 +31,7 @@ from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_beatmap, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
 from proj7k.engine.scale import STAR_A, STAR_B, stars_of
+from proj7k.engine.skillcost import skill_readings
 from proj7k.engine.skills import SKILL_TECH_KEY, SKILLS
 from proj7k.engine.solver import loss
 from proj7k.parser import Beatmap7K
@@ -101,6 +102,8 @@ class ChartField:
     share: np.ndarray    # [n] the event's share of the chart's loss slope (§9.4), sums to 1
     w: np.ndarray        # [n, 8] membership (overlapping)
     a: np.ndarray        # [n, 8] attribution (a partition per family)
+    ck: np.ndarray       # [n, 8] each skill's own cost of the event (§8.3, ADR-0056)
+    dk: np.ndarray       # [n, 8] each skill's own demand reading, the series its D_k is solved on (unit weights)
 
     @property
     def total_D(self) -> float:
@@ -144,11 +147,11 @@ class ChartField:
         return self._release_of.get(press)
 
     def skill_demand(self, t0_s: float, t1_s: float) -> Dict[str, float]:
-        """The largest demand reading in [t0_s, t1_s], per skill, each event counting by its membership in the skill."""
+        """The largest reading of each skill's own demand series (`dk`, ADR-0056) in [t0_s, t1_s]."""
         sel = (self.t >= t0_s) & (self.t <= t1_s)
         if not sel.any():
             return {k: 0.0 for k in SKILLS}
-        peak = (self.d[sel, None] * self.w[sel]).max(0)
+        peak = self.dk[sel].max(0)
         return {k: float(peak[n]) for n, k in enumerate(SKILLS)}
 
     def carrying_skill(self, t0_s: float, t1_s: float) -> Optional[str]:
@@ -211,13 +214,16 @@ def trace_notes(notes: Notes, params: Params = DEFAULT) -> ChartField:
     thumb = 0 if profile.thumb_hand == "L" else 1
     dem = hand_demand(ev, thumb, params)
     w, a = memberships(ev, dem, params)
+    costs, readings = skill_readings(ev, dem, params)
+    ck = np.stack([costs[k] for k in SKILLS], axis=1)
+    dk = np.stack([readings[k] for k in SKILLS], axis=1)
     p = loss(dem.d, profile.total_D, params)
     s = p * (1 - p)
     total = s.sum()
     share = s / total if total > 0 else np.full_like(s, 1.0 / ev.n)
     return ChartField(
         profile=profile, params=params, events=ev, thumb=thumb,
-        t=ev.T[ev.row], col=ev.col, release=ev.rel, d=dem.d, v=dem.v, p=p, share=share, w=w, a=a,
+        t=ev.T[ev.row], col=ev.col, release=ev.rel, d=dem.d, v=dem.v, p=p, share=share, w=w, a=a, ck=ck, dk=dk,
     )
 
 

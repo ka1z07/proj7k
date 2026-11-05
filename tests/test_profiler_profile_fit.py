@@ -7,7 +7,7 @@ import pytest
 
 from proj7k.dan import estimate_canonical_dan
 from proj7k.engine.params import DEFAULT
-from proj7k.engine.scale import stars_of
+from proj7k.engine.scale import skill_stars_of, stars_of
 from proj7k.field import trace_beatmap
 from proj7k.parser import parse_osu_7k
 from proj7k.profiler.aggregate import MIN_FIT_PLAYS, aggregate_macro_profile, level_across_plays
@@ -69,9 +69,11 @@ def test_one_lucky_play_does_not_set_the_profile(tmp_path: Path):
 
     jack = profile.dimensions["jack"]
     assert jack.method == "fit"
-    assert jack.star_rating < stars_of(40.0) - 1.0
-    assert jack.star_rating == pytest.approx(stars_of(level), abs=0.6)
-    assert profile.overall_star_rating == pytest.approx(jack.star_rating, abs=0.05)  # same points, same fit
+    assert jack.star_rating < skill_stars_of("rc_jack", 40.0) - 1.0
+    assert jack.star_rating == pytest.approx(skill_stars_of("rc_jack", level), abs=0.6)
+    # same points, same fit: the overall reads on the total's scale, the skill on its own (ADR-0056)
+    assert profile.overall_star_rating == pytest.approx(stars_of(level), abs=0.6)
+    assert profile.overall_star_rating == pytest.approx(stars_of(jack.effective_capacity), abs=0.05)
 
 
 def test_the_overall_never_reads_above_every_skill_without_an_overall_reading(tmp_path: Path):
