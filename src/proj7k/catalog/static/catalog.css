@@ -143,7 +143,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .stats div { background: var(--bg-2); border-radius: 6px; padding: 6px 10px; }
 .stats span { display: block; color: var(--text-3); font-size: 11px; }
 .stats b { font-size: 15px; font-variant-numeric: tabular-nums; }
-.bars { display: grid; grid-template-columns: 70px 1fr 44px 40px; gap: 6px 8px; align-items: center; font-size: 12px; }
+.bars { display: grid; grid-template-columns: 70px 1fr 44px 40px 44px; gap: 6px 8px; align-items: center; font-size: 12px; }
 .bars .n { color: var(--text-2); }
 .bars .n.dom { color: var(--accent); font-weight: 800; }
 .bars .track { height: 8px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }

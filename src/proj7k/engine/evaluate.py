@@ -1,12 +1,17 @@
 """
 The engine's public entry (spec §9.6, §11): a chart in, a difficulty profile out.
 
-    total difficulty D and stars; for each of the eight skills D_k, stars, coverage and dominance;
+    total difficulty D and stars; for each of the eight skills D_k, stars, level, coverage and dominance;
     the dominant skill with the full ranking and the margin; and the hand the thumb plays on.
 
 Since ADR-0056 a skill's D_k and stars say how much the chart requires that skill (its own cost,
 `skillcost`, on its own scale); coverage and dominance still say how much of the chart, and of the
-total's difficulty, the skill's events carry (`attribution`).
+total's difficulty, the skill's events carry (`attribution`). A skill's level (ADR-0059) is its stars
+over what a chart of this total usually requires of it (`scale.skill_level`), and the dominant skill
+is the family's skill with the highest level: the chart is an LN chart when its mean LN context
+(§8.1's lambda) is at least one half, a rice chart otherwise, and within the LN family `ln_general`
+is the umbrella, held unless a specialty's level reaches `umbrella_level`. Under `dominance_model = "pi"` (v0.2) the
+dominant skill is the largest share instead.
 
 The thumb goes to whichever hand gives the lower total difficulty (ties: the left).
 """
@@ -20,7 +25,7 @@ from proj7k.engine.attribution import dominance, ln_context, memberships
 from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
-from proj7k.engine.scale import skill_stars_of, stars_of
+from proj7k.engine.scale import skill_level, skill_stars_of, stars_of
 from proj7k.engine.skillcost import skill_demands
 from proj7k.engine.skills import SKILLS
 from proj7k.engine.solver import solve
@@ -32,6 +37,7 @@ _TOLERANCE = 1e-9
 class SkillReading:
     D: float
     stars: float
+    level: float
     coverage: float
     dominance: float
 
@@ -53,6 +59,11 @@ class DifficultyProfile:
     dominance_rank: Tuple[str, ...]       # most to least dominant
     dominance_margin: float               # pi of the first minus pi of the second
     diagnostics: Diagnostics
+    dominance_keys: Tuple[float, ...] = ()   # the §9.4 number each skill is ranked by, in SKILLS order
+
+    def dominance_key(self, skill: str) -> float:
+        """The number `skill` is ranked by in `dominance_rank` (its level, the umbrella level, or its share)."""
+        return self.dominance_keys[SKILLS.index(skill)]
 
     def to_dict(self) -> dict:
         """The §9.6 structure."""
@@ -60,7 +71,7 @@ class DifficultyProfile:
             "thumb_hand": self.thumb_hand,
             "total": {"D": self.total_D, "stars": self.total_stars},
             "skills": {
-                k: {"D": s.D, "stars": s.stars, "coverage": s.coverage, "dominance": s.dominance}
+                k: {"D": s.D, "stars": s.stars, "level": s.level, "coverage": s.coverage, "dominance": s.dominance}
                 for k, s in self.skills.items()
             },
             "dominant_skill": self.dominant_skill,
@@ -100,9 +111,31 @@ def _burst(ev: Events, dem, D: float, eps: float, p: Params) -> float:
     return p.burst_kappa * best
 
 
+def dominance_keys(levels, pi, lam_mean: float, p: Params) -> np.ndarray:
+    """
+    §9.4: the number each skill is ranked by. Under "level" (ADR-0059) it is the skill's level, with the
+    chart's family first: an LN chart (mean LN context `lam_mean` >= 1/2) ranks its four LN skills above the
+    rice skills and a rice chart the reverse, and `ln_general`, the LN umbrella, ranks at `umbrella_level`, so
+    that it holds an LN chart unless a specialty stands at least that far above what the total usually
+    requires. Under "pi" (v0.2) it is the share itself.
+    """
+    if p.dominance_model == "pi":
+        return np.asarray(pi, dtype=float)
+    key = np.asarray(levels, dtype=float).copy()
+    key[SKILLS.index("ln_general")] = p.umbrella_level
+    rc = np.array([k.startswith("rc") for k in SKILLS])
+    ln_chart = lam_mean >= 0.5
+    # the other family sits below the chart's family whatever its levels
+    return np.where(rc != ln_chart, key, key - _OTHER_FAMILY)
+
+
+_OTHER_FAMILY = 1e3
+
+
 def _profile(ev: Events, p: Params) -> DifficultyProfile:
     ones = np.ones(ev.n)
-    eps_total = p.eps_rc + p.eps_total_ln_slope * ln_context(ev, p).mean()
+    lam_mean = float(ln_context(ev, p).mean())
+    eps_total = p.eps_rc + p.eps_total_ln_slope * lam_mean
 
     best = None
     for thumb in (0, 1):
@@ -133,18 +166,21 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
     if dominance_error >= _TOLERANCE:
         raise ArithmeticError(f"dominance must sum to 1 (§9.4); off by {dominance_error}")
 
-    order = np.argsort(-pi, kind="stable")
-    ranked = np.sort(pi)
+    total_stars = stars_of(D)
+    levels = [skill_level(k, stars_k[n], total_stars) for n, k in enumerate(SKILLS)]
+    key = dominance_keys(levels, pi, lam_mean, p)
+    order = sorted(range(len(SKILLS)), key=lambda n: (-key[n], n))
     return DifficultyProfile(
         thumb_hand="LR"[dem.thumb],
         total_D=D,
-        total_stars=stars_of(D),
+        total_stars=total_stars,
         skills={
-            k: SkillReading(D=D_k[n], stars=stars_k[n], coverage=float(coverage[n]), dominance=float(pi[n]))
+            k: SkillReading(D=D_k[n], stars=stars_k[n], level=float(levels[n]), coverage=float(coverage[n]), dominance=float(pi[n]))
             for n, k in enumerate(SKILLS)
         },
-        dominant_skill=SKILLS[int(np.argmax(pi))],
-        dominance_rank=tuple(SKILLS[int(k)] for k in order),
-        dominance_margin=float(ranked[-1] - ranked[-2]),
+        dominant_skill=SKILLS[order[0]],
+        dominance_rank=tuple(SKILLS[n] for n in order),
+        dominance_margin=float(key[order[0]] - key[order[1]]),
         diagnostics=Diagnostics(n_events=ev.n, attribution_max_error=attribution_error, dominance_sum_error=dominance_error),
+        dominance_keys=tuple(float(x) for x in key),
     )

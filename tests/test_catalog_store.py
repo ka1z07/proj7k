@@ -126,7 +126,7 @@ def test_the_same_chart_under_a_new_id_replaces_the_old_row(store, rows):
 def test_beatmapset_page_data_is_full(store, rows):
     s = store.beatmapset(rows[0].beatmapset_id)
     b = s["beatmaps"][0]
-    assert len(b["density"]) == 100 and set(b["skills"][b["dominant_skill"]]) == {"stars", "dominance", "coverage"}
+    assert len(b["density"]) == 100 and set(b["skills"][b["dominant_skill"]]) == {"stars", "level", "dominance", "coverage"}
     assert b["engine_version"] and b["checksum"]
     assert store.beatmapset(123456789) is None
 

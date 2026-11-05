@@ -35,9 +35,10 @@ def compute_skill_cosine_similarity(profile1: DifficultyProfile, profile2: Diffi
     return _cosine([r.stars for r in profile1.skills.values()], [r.stars for r in profile2.skills.values()])
 
 
-#: Dominance shares closer than this are a tie: a chart whose top two skills are that close has no single dominant
-#: skill to conserve, and a swap between them is not a change of technique (ADR-0021).
-DOMINANCE_TIE = 0.03
+#: Ranking numbers (spec §9.4; the skills' levels since ADR-0059) closer than this are a tie: a chart whose top two
+#: skills are that close has no single dominant skill to conserve, and a swap between them is not a change of
+#: technique (ADR-0021). 0.05 of the expectation is also what a specialty needs over the LN umbrella (`umbrella_level`).
+DOMINANCE_TIE = 0.05
 
 
 def _cosine(v1: Any, v2: Any) -> float:
@@ -187,10 +188,15 @@ class DualGateValidator:
         dominant_orig = profile_orig.dominant_skill
         dominant_downscaled = profile_downscaled.dominant_skill
 
-        # Conserved: still the dominant skill, or within a tie of whatever is (spec §9.4's shares, not a bare argmax)
-        top_share = profile_downscaled.skills[dominant_downscaled].dominance
+        # Conserved: still the dominant skill; or within a tie of whatever is (spec §9.4's ranking number: the
+        # skill's level since ADR-0059, not a bare argmax); or the original's dominant skill still stands, relative
+        # to the practice chart's total, where it stood in the original (deleting notes leaves rc_tech's reading
+        # almost untouched while the total falls, so its level climbs on every downscale; the practice chart still
+        # asks for the skill it was made to train)
         dominant_conserved = (dominant_orig == dominant_downscaled) or (
-            top_share - profile_downscaled.skills[dominant_orig].dominance <= DOMINANCE_TIE
+            profile_downscaled.dominance_key(dominant_downscaled) - profile_downscaled.dominance_key(dominant_orig) <= DOMINANCE_TIE
+        ) or (
+            profile_orig.dominance_key(dominant_orig) - profile_downscaled.dominance_key(dominant_orig) <= DOMINANCE_TIE
         )
         gate1_passed = (cosine_sim >= self.min_cosine_similarity) and dominant_conserved
 

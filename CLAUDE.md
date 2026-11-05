@@ -30,6 +30,7 @@ PYTHONPATH=src python3 -m proj7k.batch \
 
 - 护栏查 15 级段位阶梯的单调性（Kendall τ / Spearman ρ / 倒挂数）：总星级按池 + 阶梯级门槛；八个池各自的「自有技能」阶梯（`own_skill`）按池棘轮（`guard.OWN_SKILL_RATCHET`），上限是当前实测值、记为已知缺陷而非验收。另查 0th、5th、10th、Stellium 四档的八池中位数区间（`dan.CANONICAL_DAN_SR_BANDS`）。
 - 技法星级是逐技法代价（ADR-0056）：每个技法有自己的代价序列、自己的星标尺（`engine/scale.py` 的 `SKILL_SCALE`）；`tests/engine/test_engine_skills.py` 钉住跨家族泄漏、特异性、本池技法最高张数三道棘轮与标尺拟合。
+- 主导技法是相对量（ADR-0059）：技法水平 = 技法星 / 同总星的家族期望（`engine/scale.py` 的 `SKILL_EXPECT`，与 `SKILL_SCALE` 同一个工具重拟合），家族由 $\bar\lambda$ 定、LN 伞型按 `umbrella_level` 参与；`test_engine_skills.py` 的 `DOMINANT_FLOOR` 按池钉住本池技法为主导技法的张数。π 仍输出，只是诊断。
 - 测试套件在此之上钉死 120 首的全部星级指纹（`EXPECTED_STAR_RATING_CHECKSUM`），并钉死金标准（`tests/fixtures/engine_golden_v02.json`）、段位表与 19 张外部留出谱（`tests/engine/test_external_holdout.py`，只做检验、不参与拟合）。
 - 原始密度特征（`avg_nps`、`peak_4m_nps`）降级为诊断指标，需要时用 `--guard-metric` 显式请求。
 - 特征标签（`src/proj7k/patterns.py`，ADR-0058）在引擎包外：谱面「由什么构成」的份额与标签，对本地拍格读，不是难度、不进引擎版本号；`tests/test_patterns.py` 用合成谱钉每个标签。目录 `pattern_json`、看板谱面页、直播帧、`python3 -m proj7k.difficulty` 都带它。
@@ -42,7 +43,7 @@ PYTHONPATH=src python3 -m proj7k.batch \
 
 - 引擎常数（`engine/params.py`）：星级指纹、四档区间、棘轮上限、`dan_table.json`。
 - 星标尺：改 `engine/anchors.json`，重拟合后更新 `engine/scale.py` 里的 `STAR_A`/`STAR_B`，再同上。
-- 技法代价（`engine/skillcost.py`、技法参数）或总星标尺：`PYTHONPATH=src python3 tools/fit_skill_scale.py` 重拟合 `SKILL_SCALE`，再重基线化棘轮上限、`test_engine_ladder_t1.KNOWN_INVERSIONS`、`test_engine_skills` 的三道棘轮与 `tests/test_downscaler_pools.py` 的区间；总星级指纹不该动。
+- 技法代价（`engine/skillcost.py`、技法参数）或总星标尺：`PYTHONPATH=src python3 tools/fit_skill_scale.py` 重拟合 `SKILL_SCALE` 与 `SKILL_EXPECT`，再重基线化棘轮上限、`test_engine_ladder_t1.KNOWN_INVERSIONS`、`test_engine_skills` 的三道棘轮、`DOMINANT_FLOOR` 与 `tests/test_downscaler_pools.py` 的区间；总星级指纹不该动。
 
 120 张标杆谱面的原始 `.osu` 内容冻结在 `tests/fixtures/benchmark_corpus.json.gz`，端到端验证与 `tests/conftest.py` 的阶梯诊断夹具都不依赖本机 osu! 安装。只有在标杆清单（`docs/research/structured_index.json`）本身变更时才需要重新冻结：
 

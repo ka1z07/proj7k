@@ -23,7 +23,7 @@ import pytest
 
 from engine_support import POOL_OF, TIERS
 from proj7k.engine import evaluate_notes
-from proj7k.engine.scale import SKILL_SCALE
+from proj7k.engine.scale import SKILL_EXPECT, SKILL_SCALE
 from proj7k.engine.skills import SKILLS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -103,6 +103,46 @@ def test_the_skill_scales_are_the_fit_of_the_benchmark_charts(engine_profiles):
     for skill in SKILLS:
         assert fit[skill][0] == pytest.approx(SKILL_SCALE[skill][0], rel=1e-9), skill
         assert fit[skill][1] == pytest.approx(SKILL_SCALE[skill][1], rel=1e-9), skill
+
+
+def test_the_skill_expectations_are_the_fit_of_the_benchmark_charts(engine_profiles):
+    """ADR-0059: `SKILL_EXPECT` is the family line of each skill's stars against total stars."""
+    path = REPO_ROOT / "tools" / "fit_skill_scale.py"
+    spec = importlib.util.spec_from_file_location("fit_skill_scale", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    fit = module.fit_expect_all(engine_profiles)
+    for skill in SKILLS:
+        assert fit[skill][0] == pytest.approx(SKILL_EXPECT[skill][0], abs=1e-9), skill
+        assert fit[skill][1] == pytest.approx(SKILL_EXPECT[skill][1], rel=1e-9), skill
+
+
+#: ADR-0059 ratchet: charts of each pool whose dominant skill (the family's highest level) is the pool's own
+#: skill, as measured; a drop is a regression. The v0.2 share rule (pi) read 14, 5, 15, 7, 12, 4, 3, 6.
+DOMINANT_FLOOR = {
+    "Regular Jack": 14,
+    "Regular Tech": 11,
+    "Regular Speed": 13,
+    "Regular Stream": 15,
+    "LN General": 9,
+    "LN Tech": 5,
+    "LN Inverse": 12,
+    "LN Release": 12,
+}
+
+
+def test_the_dominant_skill_is_the_pools_own_on_most_of_its_charts(engine_profiles):
+    for pool, own in POOL_OF.items():
+        hits = sum(engine_profiles[(pool, t)].dominant_skill == own for t in TIERS)
+        assert hits >= DOMINANT_FLOOR[pool], (pool, hits, [t for t in TIERS if engine_profiles[(pool, t)].dominant_skill != own])
+
+
+def test_a_charts_family_leads_its_dominance_rank(engine_profiles):
+    """The family holding the larger share of the total ranks whole above the other; the chart's pool's family wins."""
+    for (pool, tier), p in engine_profiles.items():
+        family = POOL_OF[pool][:2]
+        assert p.dominant_skill.startswith(family), (pool, tier, p.dominant_skill)
+        assert [k[:2] for k in p.dominance_rank] == [family] * 4 + [{"rc": "ln", "ln": "rc"}[family]] * 4, (pool, tier)
 
 
 def _rice(n: int, period: float = 0.1):

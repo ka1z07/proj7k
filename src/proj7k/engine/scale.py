@@ -14,6 +14,12 @@ four RC pools' tier median, the four LN pools' tier geometric mean): "rc_tech 7 
 7th-tier tech". `SKILL_SCALE` pins the eight pairs; `fit_skill_scale` is their fit and
 `tests/engine/test_engine_skills.py` re-runs it. The total's scale is the authority; the skill
 scales follow it and are refit whenever it, or a skill's cost, moves.
+
+A skill's level (ADR-0059) is its stars over what a chart of this total usually requires of it:
+`SKILL_EXPECT` pins, per skill, the ln-ln line of the skill's stars against total stars over its
+family's 60 benchmark charts, and `skill_level` reads the ratio. The dominant skill is the one whose
+level stands highest (§9.4): a 220 BPM stream at 5 stars is a speed chart because 5-star charts do
+not usually ask for that rate, while the same rate at 10 stars is what any 10-star chart asks.
 """
 
 import json
@@ -49,6 +55,42 @@ SKILL_SCALE: Dict[str, Tuple[float, float]] = {
 def skill_stars_of(skill: str, D: float) -> float:
     a, b = SKILL_SCALE[skill]
     return a * D ** b if D > 0.0 else 0.0
+
+
+#: (ln a_k, b_k) per skill (ADR-0059): ln(stars_k) = ln a_k + b_k ln(total stars), the least-squares line over
+#: the skill's family's 60 benchmark charts (the four Regular pools for rc_*, the four LN pools for ln_*);
+#: the fit of `fit_skill_expect`, re-run by `tests/engine/test_engine_skills.py`.
+SKILL_EXPECT: Dict[str, Tuple[float, float]] = {
+    "rc_jack": (-0.13263861254207368, 1.010469691127703),
+    "rc_tech": (0.31230412834018784, 0.7619881572052272),
+    "rc_speed": (-0.23491667482045256, 1.0534694661923347),
+    "rc_stamina": (-0.17196096898845814, 1.0250211109356844),
+    "ln_general": (-0.1632286412979236, 1.0647392277607566),
+    "ln_tech": (0.031199583234101574, 0.9715814009191315),
+    "ln_inverse": (-0.23790125524209876, 0.9983487819102551),
+    "ln_release": (0.28313587947298663, 0.729949832564748),
+}
+
+
+def expected_skill_stars(skill: str, total_stars: float) -> float:
+    """What a chart of `total_stars` usually requires of `skill` (its family's benchmark line)."""
+    la, b = SKILL_EXPECT[skill]
+    return float(np.exp(la + b * np.log(total_stars))) if total_stars > 0.0 else 0.0
+
+
+def skill_level(skill: str, stars: float, total_stars: float) -> float:
+    """The skill's stars over the expectation at this total: 1 is usual, 1.2 is a fifth above usual."""
+    e = expected_skill_stars(skill, total_stars)
+    return stars / e if e > 0.0 else 0.0
+
+
+def fit_skill_expect(points: List[Tuple[float, float]]) -> Tuple[float, float]:
+    """(ln a_k, b_k): the least-squares line in ln-ln through (total stars, skill stars) over the family's charts;
+    charts where the skill reads 0 carry no point."""
+    pts = [(t, s) for t, s in points if t > 0.0 and s > 0.0]
+    X = np.log([t for t, _ in pts]); Y = np.log([s for _, s in pts])
+    b, la = np.polyfit(X, Y, 1)
+    return float(la), float(b)
 
 
 def skill_D_of_stars(skill: str, stars: float) -> float:

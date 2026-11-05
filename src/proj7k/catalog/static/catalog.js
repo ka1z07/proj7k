@@ -249,7 +249,7 @@ const Catalog = (() => {
     document.getElementById("skills").innerHTML = skills.map(([k, s]) => `
       <span class="n${k === cur.dominant_skill ? " dom" : ""}" title="${esc(SKILL_ZH[k])}">${esc(SKILL_LABELS[k])}</span>
       <div class="track"><div class="fill" style="width:${(100 * s.stars) / top}%;background:${k === cur.dominant_skill ? "var(--accent)" : "var(--engine)"}"></div></div>
-      <span class="v">${fmt(s.stars)}</span><span class="p" title="${tr("主导度")}">${fmt(100 * s.dominance, 0)}%</span>`).join("");
+      <span class="v">${fmt(s.stars)}</span><span class="p" title="${tr("主导度")}">${fmt(100 * s.dominance, 0)}%</span><span class="p" title="${tr("相对水平：技法星 / 同总星的谱通常要求的")}">${s.level == null ? "" : "×" + fmt(s.level)}</span>`).join("");
     const pt = (cur.patterns && cur.patterns.tags) || null;
     document.getElementById("tags").innerHTML = pt && pt.labels && pt.labels.length
       ? pt.labels.map((k) => `<span class="tag" title="${esc(TAG_WHY[k] || k)}">${esc(TAG_ZH[k] || k)} ${Math.round(100 * ((pt.shares || {})[k] || 0))}%</span>`).join("")
