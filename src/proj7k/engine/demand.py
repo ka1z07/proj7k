@@ -79,13 +79,14 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
     with np.errstate(invalid="ignore", divide="ignore"):
         r = np.where(jxo > 0, ev.j / jxo, 0.0)
 
-    d = accumulate(ev, hand, v, p) ** (1.0 / p.gamma)
-    d_burst = accumulate(ev, hand, v, p, p.burst_tau) ** (1.0 / p.gamma) if p.burst_kappa > 0 else d
+    d = accumulate(ev, hand, v, p, row=p.chord_row) ** (1.0 / p.gamma)
+    d_burst = accumulate(ev, hand, v, p, p.burst_tau, row=p.chord_row) ** (1.0 / p.gamma) if p.burst_kappa > 0 else d
     return HandDemand(thumb=thumb, v=v, d=d, d_burst=d_burst, r=r, v_same=v_same, v_rate=v_rate, hand=hand)
 
 
-def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: float = None) -> np.ndarray:
-    """§6.1: per event, its hand's accumulator E^h after the event's row, in the units of v ** gamma."""
+def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: float = None, row: str = "sum") -> np.ndarray:
+    """§6.1: per event, its hand's accumulator E^h after the event's row, in the units of v ** gamma.
+    `row` is how a hand's notes in one row combine: "sum" per note, "max" once for the chord (ADR-0060)."""
     tau = p.tau_h if tau is None else tau
     vg = v ** p.gamma
     Eh, th = np.zeros(2), np.full(2, np.nan)
@@ -98,7 +99,7 @@ def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: floa
         hand_in, hit = [0.0, 0.0], [False, False]
         for i in evs:
             hh = hand[ev.col[i]]
-            hand_in[hh] += vg[i]
+            hand_in[hh] = max(hand_in[hh], vg[i]) if row == "max" else hand_in[hh] + vg[i]
             hit[hh] = True
         for hh in (0, 1):
             if hit[hh]:

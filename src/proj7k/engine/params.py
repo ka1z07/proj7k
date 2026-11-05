@@ -76,6 +76,11 @@ class Params:
     burst_window: float = 8.0         # s; windows step by a quarter of this
     burst_tau: float = 1.0            # s; the hand memory of the window reading (tau_h is 4 s)
     burst_N0: float = 60.0            # the window solve's pseudo-count, in place of N0
+    # ADR-0060 total only: a chord costs its hand once (the row's largest v ** gamma), not once per note
+    chord_row: str = "max"            # "max", or "sum" for the per-note cost of v0.2
+    # ADR-0060: stars + share * max(0, a - b * stars), where share is the chart's LN share. Fit on player scores
+    ln_lift_a: float = 2.535          # stars added to a full LN chart at 0 stars; 75% of the score fit, so LN Release keeps its gate
+    ln_lift_b: float = 0.354          # how fast that closes; none left from a / b, about 7.2 stars
 
     # §8 (v0.2.3, ADR-0056) skill costs: each skill's own demand series, read on the same hand accumulator
     skill_model: str = "cost"         # "cost" (ADR-0056) or "membership" (v0.2: D_k is the total's d under w_k)
@@ -118,5 +123,5 @@ DEFAULT = Params()
 #: ADR-0054 added the speed terms and ADR-0056 gave each skill its own cost. `tests/engine/test_engine_golden.py` checks the port under these.
 V02 = Params(
     k_same=1.0, v_lim=float("inf"), jack_gain=0.0, j_clip=float("inf"), v_cap=40.0, burst_kappa=0.0,
-    skill_model="membership", dominance_model="pi",
+    skill_model="membership", dominance_model="pi", chord_row="sum", ln_lift_a=0.0,
 )
