@@ -1004,7 +1004,28 @@ const P7I18N = (() => {
     "技法范围（可选）": "Technique ranges (optional)",
     "给想控制的技法拉一个星级范围，降阶会把每个技法各自降进自己的范围，同时总星级降到目标；不管的留空。只删不加：低于下限的技法补不上，结果里会写差多少。设了范围就不再要求保留主技法。": "Drag a star range for the techniques you want to control: each one is brought down into its own range while the total comes down to the target; leave the rest empty. Notes are only deleted, never added: a technique under its floor can't be raised, and the result says by how much. With ranges set, the dominant technique is no longer kept.",
     "把正在看的这一版（.osz）导入 osu!lazer，是一张新谱，不覆盖原谱": "Import the version you are looking at (.osz) into osu!lazer, as a new chart that overwrites nothing",
-    "打开这个项目的文件夹": "Open this project's folder"
+    "打开这个项目的文件夹": "Open this project's folder",
+    " · 像动机 {like}": " · like the motif {like}",
+    "保留选区里模型跟着音乐写的节奏（什么时候打），把动机的排键套路（打哪几列：叠键、楼梯、交互、和弦形状）一行一行接上去。强度是改写的行数比例。": "Keeps the rhythm the model wrote to the music in the selection (when to hit) and puts the motif's way of laying out keys (which columns: jacks, stairs, trills, chord shapes) onto it row by row. Strength is the share of rows rewritten.",
+    "先在谱面上选几小节写得好的，点「设为动机」": "First select a few well-written measures on the chart and click \"Set as motif\"",
+    "再选要改的小节": "Now select the measures to change",
+    "动机模仿": "Motif imitation",
+    "动机：第 {a}–{b} 小节（橙色虚框）": "Motif: measures {a}–{b} (orange dashed box)",
+    "把选区当作要模仿的动机": "Use the selection as the motif to imitate",
+    "把选区碰到的段绑定到动机": "Tie the selection's sections to the motif",
+    "按动机改写选区（不跑模型）": "Restyle selection after motif (no model)",
+    "模仿强度": "Strength",
+    "每个候选都按动机改排键，再按像不像排序": "Each candidate's key layout is restyled after the motif, and candidates are ranked by likeness",
+    "清除动机": "Clear motif",
+    "照搬和弦": "Copy chords",
+    "第 {n} 段模仿第 {a}–{b} 小节": "Section {n} imitates measures {a}–{b}",
+    "解开动机绑定": "Untie motif",
+    "设为动机": "Set as motif",
+    "还没有动机。": "No motif yet.",
+    "这些段马上按动机改写；之后重写它们时也自动模仿": "These sections are restyled after the motif now, and later rewrites of them imitate it too",
+    "连每行几个键也照动机（音符数会变）": "Take each row's number of keys from the motif too (the note count changes)",
+    "选区和动机重叠了": "The selection overlaps the motif",
+    "重写时模仿动机": "Imitate the motif when rewriting"
   }/* EN-END */;
 
   // The text in the page's language, with {name} filled from `vars`.

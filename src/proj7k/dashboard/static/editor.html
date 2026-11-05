@@ -137,6 +137,7 @@
     let maxLN = 0;
     let preview = null;        // the candidate being played, or null
     let sel = null;            // {first, last}: measures, from 0
+    let motifSel = null;       // {first, last}: the measures picked as a motif to imitate (ADR-0055)
     let selInfo = null;
     let picked = new Set();    // notes selected by hand (objects of `notes`)
     let history = [], future = [];
@@ -567,6 +568,11 @@
       const X = (t) => (t / duration()) * W;
       const span = selSpan();
       if (span) { tctx.fillStyle = "rgba(255,102,171,0.25)"; tctx.fillRect(X(span[0]), 0, X(span[1]) - X(span[0]), H); }
+      if (motifSel) {
+        const a = X(barStart(motifSel.first)), b = X(barStart(motifSel.last + 1));
+        tctx.strokeStyle = "#ffb347"; tctx.lineWidth = 2; tctx.setLineDash([4, 3]);
+        tctx.strokeRect(a + 1, 1, b - a - 2, H - 2); tctx.setLineDash([]);
+      }
       const cand = preview !== null ? data.candidates[preview] : null;
       if (cand) { tctx.strokeStyle = "#aa88ff"; tctx.lineWidth = 1.5; tctx.strokeRect(X(cand.start_ms), 1, X(cand.end_ms) - X(cand.start_ms), H - 2); }
       if (tdrag && tdrag.kind === "edge") { tctx.fillStyle = "#ff66ab"; tctx.fillRect(X(barStart(tdrag.bar)) - 1.5, H - STRIP - 6, 3, STRIP + 6); }
@@ -581,7 +587,7 @@
     function setSel(a, b) {
       const first = Math.min(a, b), last = Math.max(a, b);
       if (sel && sel.first === first && sel.last === last) return;
-      sel = { first, last }; needDraw = true; renderSel(); renderSections();
+      sel = { first, last }; needDraw = true; renderSel(); renderSections(); renderMotif();
     }
     function finishSel() { refreshSel(); }
     function edgeNear(x, W) {
@@ -792,6 +798,40 @@
     }
 
     const jobLine = el("div", { class: "job-line" });
+    const motifBox = el("div");
+    const motifStrength = el("input", { type: "range", min: "0", max: "1", step: "0.05", value: "1", id: "motifStrength" });
+    const motifStrengthVal = el("span", { class: "hint", text: "1.00" });
+    motifStrength.addEventListener("input", () => { motifStrengthVal.textContent = Number(motifStrength.value).toFixed(2); });
+    const motifChords = el("input", { type: "checkbox", id: "motifChords" });
+    const motifInRewrite = el("input", { type: "checkbox", id: "motifInRewrite" });
+    function motifSpan() { return motifSel ? `${motifSel.first + 1}-${motifSel.last + 1}` : ""; }
+    function overlapsMotif() { return !!(motifSel && sel && sel.first <= motifSel.last && motifSel.first <= sel.last); }
+    function renderMotif() {
+      if (!data) return;
+      const off = busy || !!dirty;
+      const secs = sectionsIn(selSpan());
+      const list = secs.map((i) => i + 1).join(",");
+      const why = !motifSel ? tr("先在谱面上选几小节写得好的，点「设为动机」") : !sel ? tr("再选要改的小节") : overlapsMotif() ? tr("选区和动机重叠了") : "";
+      fill(motifBox,
+        el("div", { class: "hint", text: motifSel ? tr("动机：第 {a}–{b} 小节（橙色虚框）", { a: motifSel.first + 1, b: motifSel.last + 1 }) : tr("还没有动机。") }),
+        el("div", { class: "controls" },
+          el("button", { class: "small", text: tr("设为动机"), disabled: !sel, title: tr("把选区当作要模仿的动机"),
+            onclick: () => { motifSel = { ...sel }; sel = null; selInfo = null; render(); } }),
+          motifSel ? el("button", { class: "small", text: tr("清除动机"), onclick: () => { motifSel = null; render(); } }) : null),
+        el("div", { class: "controls" },
+          el("label", { class: "check" }, tr("模仿强度"), motifStrength, motifStrengthVal),
+          el("label", { class: "check", title: tr("连每行几个键也照动机（音符数会变）") }, motifChords, tr("照搬和弦"))),
+        el("div", { class: "controls" },
+          el("button", { class: "small primary", text: tr("按动机改写选区（不跑模型）"), disabled: off || !!why,
+            onclick: () => op("imitate", { bars: `${sel.first + 1}-${sel.last + 1}`, motif: motifSpan(), strength: motifStrength.value, chords: motifChords.checked }) }),
+          el("button", { class: "small", text: tr("把选区碰到的段绑定到动机"), disabled: off || !!why || !secs.length,
+            title: tr("这些段马上按动机改写；之后重写它们时也自动模仿"),
+            onclick: () => op("motif", { sections: list, motif: motifSpan(), strength: motifStrength.value, chords: motifChords.checked }) }),
+          el("button", { class: "small", text: tr("解开动机绑定"), disabled: off || !secs.length || !secs.some((i) => data.sections[i].motif),
+            onclick: () => op("unmotif", { sections: list }) })),
+        why ? el("div", { class: "hint", text: why }) : null,
+        el("div", { class: "hint", style: "margin-top:6px", text: tr("保留选区里模型跟着音乐写的节奏（什么时候打），把动机的排键套路（打哪几列：叠键、楼梯、交互、和弦形状）一行一行接上去。强度是改写的行数比例。") }));
+    }
     const candBox = el("div");
     const secBox = el("div");
     const lazerBox = el("div");
@@ -823,7 +863,7 @@
       busy = false;
       if (done.status !== "done") { line.className = "job-line err"; line.textContent = done.error || P7.statusText(done); updateButtons(); return; }
       line.textContent = "";
-      path = done.result.project_file; data = null; sel = null; preview = null; compare = null;
+      path = done.result.project_file; data = null; sel = null; motifSel = null; preview = null; compare = null;
       await loadList(); await load();
     }
 
@@ -843,11 +883,13 @@
               el("label", { class: "check" }, tr("长条比例"), el("input", { type: "number", id: "lnRatio", step: "0.05", min: "0", max: "1", placeholder: tr("照生成时") }))),
             el("div", { class: "hint", style: "margin:8px 0 4px", text: tr("技法难度范围（这段自己的引擎星级；金线是选区现在的值）") }),
             mix.node,
+            el("label", { class: "check", style: "margin:6px 0", title: tr("每个候选都按动机改排键，再按像不像排序") }, motifInRewrite, tr("重写时模仿动机")),
             el("div", { class: "controls" },
               el("button", { class: "primary", id: "rewriteBtn", text: tr("重写所选（出候选试听）"), onclick: rewrite }), cancel.node),
             jobLine,
             el("div", { class: "hint", style: "margin-top:6px", text: tr("每个候选在 meow 的显卡上约 1–4 分钟。候选按「星级贴近目标 + 接缝顺 + 技法在范围内」排好，点一个就能在谱面上看、从选区前一小节开始听，满意再采用。模型不听技法指令，范围只能靠挑：达不到的会标红。手改过的小节（绿色）不会被重写。") })),
           el("div", { class: "card hidden", id: "candCard" }, el("h2", { text: tr("候选") }), candBox),
+          el("div", { class: "card" }, el("h2", { text: tr("动机模仿") }), motifBox),
           el("div", { class: "card" }, el("h2", { text: tr("段落") }), secBox),
           el("div", { class: "card" }, el("h2", { text: tr("osu!lazer 编辑器") }), lazerBox),
           el("div", { class: "card" }, el("h2", { text: tr("手改") }),
@@ -859,7 +901,7 @@
               el("span", {}, el("i", { style: "background:#ff6680" }), tr("对照时少了的")),
               el("span", {}, el("i", { style: "background:#ff4d6d" }), tr("不能玩")))));
       }
-      renderSel(); renderCands(); renderSections(); renderLazer(); updateButtons(); paintEditBar();
+      renderSel(); renderCands(); renderSections(); renderMotif(); renderLazer(); updateButtons(); paintEditBar();
     }
     function renderCands() {
       if (!data || !$("#candCard")) return;
@@ -872,7 +914,8 @@
         return el("div", { class: `cand${preview === k ? " on" : ""}`, onclick: () => setPreview(k, true) },
           el("span", { class: "letter", text: LETTERS[k] }),
           el("div", {},
-            el("div", { text: tr("{stars}★（目标 {target}★）· 接缝 {seam} · {n} 个音符", { stars: c.stars.toFixed(2), target: c.target.toFixed(2), seam: c.seam.toFixed(2), n: c.notes }) }),
+            el("div", { text: tr("{stars}★（目标 {target}★）· 接缝 {seam} · {n} 个音符", { stars: c.stars.toFixed(2), target: c.target.toFixed(2), seam: c.seam.toFixed(2), n: c.notes })
+              + (c.like !== null && c.like !== undefined ? tr(" · 像动机 {like}", { like: c.like.toFixed(2) }) : "") }),
             misses.length ? el("div", { class: "miss", text: misses.join(tr("；")) }) : null),
           el("button", { class: "small primary", text: tr("采用"), disabled: busy || !!dirty, onclick: (e) => { e.stopPropagation(); op("adopt", { candidate: k + 1 }); } }));
       };
@@ -904,11 +947,12 @@
       const source = el("select", { id: "anchorSrc" }, ...data.sections.map((s) => el("option", { value: String(s.index + 1), text: tr("第 {n} 段", { n: s.index + 1 }) })));
       const mirror = el("input", { type: "checkbox" });
       const list = secs.map((i) => i + 1).join(",");
-      const states = data.sections.filter((s) => s.locked || s.anchor !== null || s.hand).map((s) => {
+      const states = data.sections.filter((s) => s.locked || s.anchor !== null || s.hand || s.motif).map((s) => {
         const parts = [];
         if (s.locked) parts.push(tr("第 {n} 段锁定", { n: s.index + 1 }));
         if (s.anchor !== null) parts.push(s.mirror ? tr("第 {n} 段镜像第 {m} 段", { n: s.index + 1, m: s.anchor + 1 }) : tr("第 {n} 段同第 {m} 段", { n: s.index + 1, m: s.anchor + 1 }));
         if (s.hand) parts.push(tr("第 {n} 段有 {k} 个手改小节", { n: s.index + 1, k: s.hand }));
+        if (s.motif) parts.push(tr("第 {n} 段模仿第 {a}–{b} 小节", { n: s.index + 1, a: s.motif[0], b: s.motif[1] }));
         return parts.join(tr("，"));
       });
       // the section holding the selection's first measure: where a split or a boundary move lands
@@ -972,7 +1016,7 @@
     async function op(name, extra, editing) {
       if (busy || !data) return;
       if (dirty && !editing) { jobLine.className = "job-line err"; jobLine.textContent = tr("有手改没保存：先保存或放弃"); return; }
-      busy = true; updateButtons(); renderCands(); renderSections(); paintEditBar();
+      busy = true; updateButtons(); renderCands(); renderSections(); renderMotif(); paintEditBar();
       jobLine.className = "job-line"; jobLine.textContent = tr("提交中");
       job = null; cancel.update(null);
       const done = await P7.startJob("generator_project", { project: data.project_file, op: name, ...extra }, {
@@ -999,8 +1043,10 @@
       if (!sel) return;
       let m;
       try { m = mix.value(); } catch (e) { jobLine.className = "job-line err"; jobLine.textContent = e.message; return; }
+      if (motifInRewrite.checked && overlapsMotif()) { jobLine.className = "job-line err"; jobLine.textContent = tr("选区和动机重叠了"); return; }
+      const imitate = motifInRewrite.checked && motifSel ? { motif: motifSpan(), strength: motifStrength.value, chords: motifChords.checked } : {};
       op("rewrite", { bars: `${sel.first + 1}-${sel.last + 1}`, audition: true, target_sr: $("#target").value,
-        candidates: $("#cands").value, ln_ratio: $("#lnRatio").value, mix: m });
+        candidates: $("#cands").value, ln_ratio: $("#lnRatio").value, mix: m, ...imitate });
     }
     $("#importBtn").onclick = () => { if (data) P7.send({ type: "editor_open_take", path: data.project_file, n: data.take.n }); };
     $("#folderBtn").onclick = () => { if (data) P7.send({ type: "editor_open_take", path: data.project_file, reveal: true }); };
@@ -1008,7 +1054,7 @@
     $("#redoBtn").onclick = () => op("redo", {});
     function switchTo(p) {
       if (dirty && !confirm(tr("有手改没保存，换项目会丢掉它们。继续吗？"))) { $("#projSel").value = path; return; }
-      path = p; preview = null; sel = null; data = null; compare = null; dirty = 0; load();
+      path = p; preview = null; sel = null; motifSel = null; data = null; compare = null; dirty = 0; load();
     }
     $("#projSel").onchange = () => switchTo($("#projSel").value);
     P7.onNav((params) => { if (params.project && params.project !== path) loadList().then(() => switchTo(params.project)); });

@@ -359,24 +359,45 @@ def generator_project(config: DashboardConfig, params: Dict[str, Any], ctx: JobC
     `ln_ratio`, `seed`, `candidates`, `mix` (the technique mix; absent: the project's, empty: none) and `audition`
     (keep every candidate for adopt, by its number `candidate` from 1, or discard). `edit` saves `notes` ([column,
     ms, end ms or null] rows) edited by hand as a new take; `readback` reads chart `md5` back from osu!lazer;
-    `split` / `boundary` take `section` and `bar` (from 1), `merge` joins `section` with the next.
+    `split` / `boundary` take `section` and `bar` (from 1), `merge` joins `section` with the next. A motif
+    (ADR-0055) is `motif` measures "first-last" (from 1) with `strength` (0..1) and `chords`: `imitate` restyles
+    `sections` or `bars` after it at once, `motif` ties `sections` to it (and restyles them), `unmotif` frees them;
+    `rewrite` takes it too (absent: the motif a section in the stretch is tied to).
     """
     from proj7k.generator import project as P
 
     project = P.Project.load(_path(params, "project", tr("工程文件", "project file")))
     op = _text(params, "op") or "show"
     sections = [int(x) - 1 for x in _text(params, "sections").replace("，", ",").split(",") if x.strip()]
+
+    def span(key):
+        text = _text(params, key).replace("–", "-").replace("—", "-")
+        if not text:
+            return None
+        first, _, last = text.partition("-")
+        return (int(first) - 1, int(last or first) - 1)
+
+    bars, motif = span("bars"), span("motif")
+    strength = _float(params, "strength")
+    chords = _flag(params, "chords") if "chords" in params else None
     if op == "rewrite":
-        bars = None
-        span = _text(params, "bars").replace("–", "-").replace("—", "-")
-        if span:
-            first, _, last = span.partition("-")
-            bars = (int(first) - 1, int(last or first) - 1)
         P.rewrite(project, sections, bars=bars, target_sr=_float(params, "target_sr"),
                   ln_ratio=_float(params, "ln_ratio"), seed=_int(params, "seed"),
                   candidates=_int(params, "candidates") or P.DEFAULT_CANDIDATES,
                   pool_mix=(params.get("mix") or {}) if "mix" in params else None,
-                  audition=_flag(params, "audition"), log=logger.info)
+                  audition=_flag(params, "audition"), motif=motif, motif_strength=strength, motif_chords=chords,
+                  log=logger.info)
+    elif op in ("imitate", "motif"):
+        if motif is None:
+            raise ValueError(tr("要先选一段动机（小节范围）", "Pick a motif first (a measure range)"))
+        strength = 1.0 if strength is None else strength
+        if op == "imitate":
+            P.imitate(project, sections or None, bars=bars, motif=motif, strength=strength, chords=bool(chords),
+                      seed=_int(params, "seed") or 0, log=logger.info)
+        else:
+            P.set_motif(project, sections, motif, strength, bool(chords), log=logger.info)
+    elif op == "unmotif":
+        P.set_motif(project, sections, None)
     elif op == "adopt":
         k = _int(params, "candidate")
         if k is None:

@@ -62,6 +62,8 @@ DEFAULT_CANDIDATES = 3
 SEAM_BEATS = 2
 #: How much a seam's jump (|log2| of the density ratio, averaged over the edges) weighs against a star of error.
 SEAM_WEIGHT = 0.5
+#: How much a candidate's unlikeness to the motif (1 - `motif.similarity`) weighs against a star of error (ADR-0055).
+MOTIF_WEIGHT = 2.0
 VERSION = 1
 
 
@@ -74,6 +76,11 @@ class Section:
     locked: bool = False
     anchor: Optional[int] = None      # the index of the section it is charted as
     mirror: bool = False              # ...mirrored (column c -> 6 - c)
+    # The measures (first, last; from 0) whose way of writing it imitates (ADR-0055), how much, and whether it takes
+    # the motif's chord sizes too.
+    motif: Optional[List[int]] = None
+    motif_strength: float = 1.0
+    motif_chords: bool = False
 
 
 @dataclass
@@ -255,6 +262,8 @@ def describe(project: Project) -> List[Dict]:
             "ln_share": round(sum(o.note_type == NoteType.LN for o in objs) / max(1, len(objs)), 2),
             "locked": s.locked, "anchor": s.anchor, "mirror": s.mirror, "pools": pools,
             "hand": sum(s.first_bar <= b <= s.last_bar for b in project.hand_bars),
+            "motif": [s.motif[0] + 1, s.motif[1] + 1] if s.motif else None,
+            "motif_strength": s.motif_strength, "motif_chords": s.motif_chords,
         })
     return out
 
@@ -396,6 +405,85 @@ def anchor(project: Project, targets: Sequence[int], source: Optional[int], mirr
     return new_take(project, project.chart().hit_objects, note)
 
 
+def motif_notes(project: Project, bars: Tuple[int, int], chart: Optional[Beatmap7K] = None) -> List[HitObject]:
+    """The current take's notes in measures `bars` (first, last; from 0): a motif to imitate."""
+    start, end = bar_span(project, int(bars[0]), int(bars[1]))
+    notes = [o for o in (chart or project.chart()).hit_objects if _inside(o, start, end)]
+    if len(notes) < 2:
+        raise ValueError(tr("动机里音符太少（至少两个）", "The motif has too few notes (two at least)"))
+    return notes
+
+
+def _motif_args(bars, strength, chords) -> Tuple[Tuple[int, int], float, bool]:
+    first, last = int(bars[0]), int(bars[1])
+    if last < first or first < 0:
+        raise ValueError(tr("动机的小节范围不对", "The motif's measure range is wrong"))
+    return (first, last), min(max(float(strength), 0.0), 1.0), bool(chords)
+
+
+def imitate(project: Project, indices: Optional[Sequence[int]] = None, *, bars: Optional[Tuple[int, int]] = None,
+            motif: Tuple[int, int], strength: float = 1.0, chords: bool = False, seed: int = 0,
+            log: Callable[[str], None] = logger.info) -> Project:
+    """The stretch (sections `indices`, or measures `bars`) written again in the motif's way, without the model: its
+    rows stay where they are and take the motif's columns (`motif.restyle`, ADR-0055). A new take."""
+    from proj7k.generator import motif as M
+
+    (first, last), strength, chords = _motif_args(motif, strength, chords)
+    start, end, names = _stretch(project, indices, bars)
+    m_start, m_end = bar_span(project, first, last)
+    if m_start < end and start < m_end:
+        raise ValueError(tr("动机和要改的段重叠了", "The motif overlaps the stretch it is put on"))
+    chart = project.chart()
+    beats = Beats(chart.timing_points)
+    source = motif_notes(project, (first, last), chart)
+    outside = [o for o in chart.hit_objects if not _inside(o, start, end)]
+    inside = [o for o in chart.hit_objects if _inside(o, start, end)]
+    if not inside:
+        raise ValueError(tr(f"{names}没有音符可改", f"{names} has no notes to restyle"))
+    styled = M.restyle(inside, source, beats.beat, strength, seed=seed, timing=chart.timing_points, chords=chords)
+    sim = M.similarity(M.features(styled, beats.beat), M.features(source, beats.beat))
+    log(tr(f"{names}照第 {first + 1}–{last + 1} 小节的写法改了配键，像不像 {sim:.2f}",
+           f"{names} restyled after measures {first + 1}–{last + 1}; likeness {sim:.2f}"))
+    merged = legal.sanitize(sorted(outside + styled, key=lambda o: (o.time, o.column)), chart.timing_points)[0]
+    note = tr(f"{names}模仿第 {first + 1}–{last + 1} 小节", f"{names} after measures {first + 1}–{last + 1}")
+    return new_take(project, merged, note)
+
+
+def set_motif(project: Project, targets: Sequence[int], motif: Optional[Tuple[int, int]], strength: float = 1.0,
+              chords: bool = False, log: Callable[[str], None] = logger.info) -> Project:
+    """Tie sections `targets` to a motif (measures; None frees them) and, with one, write them in its way now: later
+    rewrites of these sections restyle the model's notes the same way."""
+    targets = _check(project, targets)
+    if motif is None:
+        for i in targets:
+            project.sections[i].motif = None
+        project.save()
+        return project
+    (first, last), strength, chords = _motif_args(motif, strength, chords)
+    for i in targets:
+        s = project.sections[i]
+        if first <= s.last_bar and s.first_bar <= last:
+            raise ValueError(tr(f"第 {i + 1} 段和动机重叠了", f"Section {i + 1} overlaps the motif"))
+    for i in targets:
+        s = project.sections[i]
+        s.motif, s.motif_strength, s.motif_chords = [first, last], strength, chords
+    project.save()
+    for run in _runs(targets):
+        project = imitate(project, run, motif=(first, last), strength=strength, chords=chords, log=log)
+    return project
+
+
+def _runs(idx: Sequence[int]) -> List[List[int]]:
+    """Sorted section indices as runs of neighbours."""
+    out: List[List[int]] = []
+    for i in sorted(idx):
+        if out and i == out[-1][-1] + 1:
+            out[-1].append(i)
+        else:
+            out.append([i])
+    return out
+
+
 def move(project: Project, step: int) -> Project:
     project.current = min(max(project.current + step, 0), len(project.takes) - 1)
     _drop_candidates(project)
@@ -480,11 +568,14 @@ def _drop_candidates(project: Project) -> None:
 def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: Optional[Tuple[int, int]] = None,
             target_sr: Optional[float] = None, ln_ratio: Optional[float] = None, seed: Optional[int] = None,
             candidates: int = DEFAULT_CANDIDATES, model_args: Sequence[str] = (), pool_mix=None, runner=None,
-            audition: bool = False, log: Callable[[str], None] = logger.info) -> Project:
+            audition: bool = False, motif: Optional[Tuple[int, int]] = None, motif_strength: Optional[float] = None,
+            motif_chords: Optional[bool] = None, log: Callable[[str], None] = logger.info) -> Project:
     """Write sections `indices` (one stretch, first to last), or the measures `bars` = (first, last), again from
     `candidates` model runs. Without `audition` the best becomes the new take; with it every candidate is kept on the
     project, best first, for `adopt` or `discard`. `pool_mix` (default: the project's) leans the pick toward the
-    pools it weights up, or the ranges it names, as at generation."""
+    pools it weights up, or the ranges it names, as at generation. `motif` (measures; default the motif a section in
+    the stretch is tied to) restyles each run's notes in its way and ranks the runs by likeness too (ADR-0055)."""
+    from proj7k.generator import motif as M
     from proj7k.downscaler import pools as pools_mod
     from proj7k.generator import mapperatorinator as m
     from proj7k.generator import mix as mix_mod
@@ -514,6 +605,22 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
     difficulty = min(max(aim, m.MIN_DIFFICULTY), m.MAX_DIFFICULTY)
     if mix:
         log(tr(f"技法配比：{mix_mod.describe(mix)}", f"Technique mix: {mix_mod.describe(mix)}"))
+    tied = next((s_ for s_ in project.sections if s_.motif and s_.start_ms < end and start < s_.end_ms), None)
+    if motif is None and tied is not None:
+        motif = tuple(tied.motif)
+        motif_strength = tied.motif_strength if motif_strength is None else motif_strength
+        motif_chords = tied.motif_chords if motif_chords is None else motif_chords
+    source = feats = None
+    if motif is not None:
+        motif, motif_strength, motif_chords = _motif_args(motif, 1.0 if motif_strength is None else motif_strength,
+                                                          bool(motif_chords))
+        m_start, m_end = bar_span(project, *motif)
+        if m_start < end and start < m_end:
+            raise ValueError(tr("动机和要重写的段重叠了", "The motif overlaps the stretch being rewritten"))
+        source = motif_notes(project, motif, chart)
+        feats = M.features(source, beats.beat)
+        log(tr(f"模仿第 {motif[0] + 1}–{motif[1] + 1} 小节的写法（强度 {motif_strength:.2f}）",
+               f"Imitating measures {motif[0] + 1}–{motif[1] + 1} (strength {motif_strength:.2f})"))
     runs = []
     for k in range(max(1, int(candidates))):
         cancel.checkpoint()  # a stop leaves the project as it was: nothing is kept before the last candidate
@@ -524,6 +631,9 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
                f"Rewriting {names}: candidate {k + 1}/{candidates}, difficulty {difficulty:.2f}★, seed {seed0 + k}…"))
         written = m._read(runner(audio, work, difficulty, seed0 + k, extra), log)
         inside = [o for o in written.hit_objects if _inside(o, start, end)]
+        if source is not None and inside:
+            inside = M.restyle(inside, source, beats.beat, motif_strength, seed=seed0 + k, timing=chart.timing_points,
+                               chords=motif_chords)
         merged = legal.sanitize(sorted(outside + inside, key=lambda o: (o.time, o.column)), chart.timing_points)[0]
         stretch = [o for o in merged if _inside(o, start, end)]
         profile = _profile(stretch) if stretch else None
@@ -539,11 +649,15 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
                 stars = float(profile.total_stars)
         jump = seam(merged, start, end, beats)
         score = abs(stars - target) + SEAM_WEIGHT * jump + mix_mod.penalty(profile, mix)
+        like = M.similarity(M.features(stretch, beats.beat), feats) if feats is not None and stretch else None
+        if like is not None:
+            score += MOTIF_WEIGHT * (1.0 - like)
         log(tr(f"  → 这段 {stars:.2f}★（目标 {target:.2f}★），边缘突变 {jump:.2f}",
                f"  → {stars:.2f}★ for the stretch (target {target:.2f}★), edge jump {jump:.2f}")
-            + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else ""))
+            + (f"；{mix_mod.pools(profile, mix)}" if mix and profile else "")
+            + (tr(f"；像动机 {like:.2f}", f"; like the motif {like:.2f}") if like is not None else ""))
         runs.append({"merged": merged, "stars": stars, "seam": jump, "score": score, "profile": profile,
-                     "seed": seed0 + k, "notes": len(stretch)})
+                     "seed": seed0 + k, "notes": len(stretch), "like": like})
         difficulty = min(m.next_difficulty(difficulty, written, aim if ranges else target), m.MAX_DIFFICULTY)
     runs.sort(key=lambda r: r["score"])
     if not audition:
@@ -564,6 +678,7 @@ def rewrite(project: Project, indices: Optional[Sequence[int]] = None, *, bars: 
             "osu": path.relative_to(project.folder).as_posix(), "base": project.current,
             "start_ms": start, "end_ms": end, "target": round(target, 2), "stars": round(r["stars"], 2),
             "seam": round(r["seam"], 2), "score": round(r["score"], 3), "seed": r["seed"], "notes": r["notes"],
+            "like": round(r["like"], 3) if r["like"] is not None else None,
             "pools": _pools(r["profile"]) if r["profile"] else {},
             "misses": mix_mod.misses(r["profile"], mix),
             "note": tr(f"重写{names}（{r['stars']:.2f}★）", f"rewrite {names} ({r['stars']:.2f}★)"),
@@ -807,6 +922,12 @@ def set_boundaries(project: Project, firsts: Sequence[int]) -> Project:
         if (b, e) in span_of:
             keep[span_of[(b, e)]] = len(new)
             s.anchor, s.mirror = old[span_of[(b, e)]].anchor, old[span_of[(b, e)]].mirror
+        # a motif is measures, not a section: it stays where every section the new one covers had the same one
+        motifs = {(tuple(c.motif) if c.motif else None, c.motif_strength, c.motif_chords) for c in covered}
+        if len(motifs) == 1:
+            m, strength, chords = motifs.pop()
+            if m is not None and not (m[0] <= e and b <= m[1]):
+                s.motif, s.motif_strength, s.motif_chords = list(m), strength, chords
         new.append(s)
     for s in new:
         if s.anchor is not None:
@@ -912,6 +1033,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     ad.add_argument("candidate", type=int)
     sub.add_parser("discard", help="放弃 rewrite --audition 留下的候选")
     r.add_argument("--model-arg", action="append", default=[], metavar="KEY=VALUE", help="传给模型的额外条件，可重复")
+    r.add_argument("--motif", help="模仿这些小节的排键（从 1 数），如 17-20；默认用段落绑定的动机")
+    im = sub.add_parser("imitate", help="不跑模型，按动机的排键改写几段或 --bars 指定的小节")
+    im.add_argument("sections", type=int, nargs="*")
+    im.add_argument("--bars")
+    mo = sub.add_parser("motif", help="把几段绑定到一段动机（并马上按它改写）")
+    mo.add_argument("sections", type=int, nargs="+")
+    um = sub.add_parser("unmotif", help="解开动机绑定")
+    um.add_argument("sections", type=int, nargs="+")
+    for q in (r, im, mo):
+        q.add_argument("--strength", type=float, default=None, help="模仿强度 0–1（默认 1）")
+        q.add_argument("--chords", action="store_true", help="连和弦大小也照动机（音符数会变）")
+    for q in (im, mo):
+        q.add_argument("--motif", required=True, help="动机的小节（从 1 数），如 17-20")
     for name, text in (("lock", "锁定"), ("unlock", "解锁")):
         q = sub.add_parser(name, help=text)
         q.add_argument("sections", type=int, nargs="+")
@@ -950,17 +1084,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         project = Project.load(args.project)
         sections = [i - 1 for i in getattr(args, "sections", [])]
+        def span(text):
+            if not text:
+                return None
+            first, _, last = text.replace("–", "-").partition("-")
+            return (int(first) - 1, int(last or first) - 1)
+
+        say = lambda msg: print(msg, file=sys.stderr, flush=True)  # noqa: E731
         if args.op == "rewrite":
-            bars = None
-            if args.bars:
-                first, _, last = args.bars.partition("-")
-                bars = (int(first) - 1, int(last or first) - 1)
-            elif not sections:
+            bars = span(args.bars)
+            if bars is None and not sections:
                 raise ValueError(tr("给出段落编号或 --bars", "Give section numbers or --bars"))
             rewrite(project, sections, bars=bars, audition=args.audition, target_sr=args.target_sr, ln_ratio=args.ln, seed=args.seed,
                     candidates=args.candidates, model_args=args.model_arg,
                     pool_mix=None if args.mix is None else ({} if args.mix.strip().lower() == "none" else args.mix),
-                    log=lambda msg: print(msg, file=sys.stderr, flush=True))
+                    motif=span(args.motif), motif_strength=args.strength, motif_chords=args.chords or None, log=say)
+        elif args.op == "imitate":
+            imitate(project, sections or None, bars=span(args.bars), motif=span(args.motif),
+                    strength=1.0 if args.strength is None else args.strength, chords=args.chords, log=say)
+        elif args.op == "motif":
+            set_motif(project, sections, span(args.motif), 1.0 if args.strength is None else args.strength,
+                      args.chords, log=say)
+        elif args.op == "unmotif":
+            set_motif(project, sections, None)
         elif args.op == "adopt":
             adopt(project, args.candidate - 1)
         elif args.op == "split":

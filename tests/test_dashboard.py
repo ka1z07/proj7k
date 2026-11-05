@@ -509,6 +509,18 @@ def test_generate_action_on_an_uploaded_song(tmp_path, monkeypatch):
                 assert job["status"] == "done", job["error"]
                 assert job["result"]["sections"][1]["bars"][0] == first2 + 1
 
+                # A motif (ADR-0055): measures restyled after it without the model, then a section tied to it.
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "imitate", "bars": "9-10",
+                                                                  "motif": "1-4", "strength": "1"})
+                assert job["status"] == "done", job["error"]
+                assert "9" in job["result"]["take"]["note"]
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "imitate", "bars": "9-10"})
+                assert job["status"] == "failed"   # no motif given
+                job, _ = await _run_job(ws, "generator_project", {"project": project, "op": "motif",
+                                                                  "sections": "2", "motif": "1-4", "chords": True})
+                assert job["status"] == "done", job["error"]
+                assert job["result"]["sections"][1]["motif"] == [1, 4]
+
                 # No osu!lazer here: the read-back list is empty and says why, it never fails the page.
                 status, _, body = await s.get(f"/api/editor/lazer?path={q}")
                 assert status == 200 and json.loads(body)["charts"] == []
