@@ -25,7 +25,7 @@ from proj7k.engine.attribution import dominance, ln_context, memberships
 from proj7k.engine.demand import hand_demand
 from proj7k.engine.events import Events, Notes, notes_from_osu, preprocess
 from proj7k.engine.params import DEFAULT, Params
-from proj7k.engine.scale import STAR_A, STAR_B, skill_level, skill_stars_of, stars_of
+from proj7k.engine.scale import skill_level, skill_stars_of, stars_of
 from proj7k.engine.skillcost import skill_demands
 from proj7k.engine.skills import SKILLS
 from proj7k.engine.solver import solve
@@ -111,16 +111,6 @@ def _burst(ev: Events, dem, D: float, eps: float, p: Params) -> float:
     return p.burst_kappa * best
 
 
-def _lifted(ev: Events, D: float, p: Params) -> Tuple[float, float]:
-    """ADR-0060: stars and their D after the LN scale; low LN charts read what players score on them."""
-    stars = stars_of(D)
-    if p.ln_lift_a <= 0.0 or stars <= 0.0:
-        return stars, D
-    share = float(ev.rel.sum()) / max(int((~ev.rel).sum()), 1)
-    lifted = stars + share * max(0.0, p.ln_lift_a - p.ln_lift_b * stars)
-    return lifted, (lifted / STAR_A) ** (1.0 / STAR_B)
-
-
 def dominance_keys(levels, pi, lam_mean: float, p: Params) -> np.ndarray:
     """
     §9.4: the number each skill is ranked by. Under "level" (ADR-0059) it is the skill's level, with the
@@ -155,7 +145,6 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
             best = (D, dem)
     D, dem = best
     D = max(D, _burst(ev, dem, D, eps_total, p))
-    total_stars, total_D = _lifted(ev, D, p)
 
     w, a = memberships(ev, dem, p)
     attribution_error = float(np.abs(a.sum(1) - 1.0).max())
@@ -177,12 +166,13 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
     if dominance_error >= _TOLERANCE:
         raise ArithmeticError(f"dominance must sum to 1 (§9.4); off by {dominance_error}")
 
+    total_stars = stars_of(D)
     levels = [skill_level(k, stars_k[n], total_stars) for n, k in enumerate(SKILLS)]
     key = dominance_keys(levels, pi, lam_mean, p)
     order = sorted(range(len(SKILLS)), key=lambda n: (-key[n], n))
     return DifficultyProfile(
         thumb_hand="LR"[dem.thumb],
-        total_D=total_D,
+        total_D=D,
         total_stars=total_stars,
         skills={
             k: SkillReading(D=D_k[n], stars=stars_k[n], level=float(levels[n]), coverage=float(coverage[n]), dominance=float(pi[n]))
