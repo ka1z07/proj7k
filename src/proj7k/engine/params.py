@@ -82,6 +82,11 @@ class Params:
     speed_tau: float = 1.5            # s; rc_speed's hand memory (a burst of hand rate), in place of tau_h
     stamina_sustain: float = 20.0     # s; rc_stamina's cost is full once a hand has played this long without rest
     stamina_rest: float = 0.6         # s; a hand gap longer than this is a rest
+
+    # §9.4 (ADR-0059) the dominant skill: the skill whose stars stand furthest above what a chart of this total
+    # usually requires of it ("level"), or the largest share of the total's difficulty ("pi", v0.2)
+    dominance_model: str = "level"
+    umbrella_level: float = 1.05      # ln_general holds an LN chart unless a specialty's level reaches this
     stamina_chord_floor: float = 0.4  # rc_stamina's weight for a single-note row; a chord row reads up to 1
     stamina_chord_span: float = 1.5   # chord size above 1 at which the chord weight reaches 1
     stamina_chord_scope: str = "row"  # "row": the whole row's presses (chordstream); "hand": the hand's presses only
@@ -113,5 +118,5 @@ DEFAULT = Params()
 #: ADR-0054 added the speed terms and ADR-0056 gave each skill its own cost. `tests/engine/test_engine_golden.py` checks the port under these.
 V02 = Params(
     k_same=1.0, v_lim=float("inf"), jack_gain=0.0, j_clip=float("inf"), v_cap=40.0, burst_kappa=0.0,
-    skill_model="membership",
+    skill_model="membership", dominance_model="pi",
 )

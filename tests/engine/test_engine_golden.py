@@ -65,7 +65,7 @@ def test_output_has_the_spec_9_6_shape(engine_profiles):
     assert set(out) == {"thumb_hand", "total", "skills", "dominant_skill", "dominance_rank", "dominance_margin"}
     assert set(out["total"]) == {"D", "stars"}
     assert list(out["skills"]) == list(SKILLS)
-    assert set(out["skills"]["rc_jack"]) == {"D", "stars", "coverage", "dominance"}
+    assert set(out["skills"]["rc_jack"]) == {"D", "stars", "level", "coverage", "dominance"}
     assert out["thumb_hand"] in ("L", "R")
     assert sorted(out["dominance_rank"]) == sorted(SKILLS)
 

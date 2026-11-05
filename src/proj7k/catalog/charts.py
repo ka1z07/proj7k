@@ -167,6 +167,7 @@ def chart_row(
         skills={
             k: {
                 "stars": profile.skills[k].stars,
+                "level": profile.skills[k].level,
                 "dominance": profile.skills[k].dominance,
                 "coverage": profile.skills[k].coverage,
             }
