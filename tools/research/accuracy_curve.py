@@ -66,11 +66,12 @@ def demands(a):
         d = best[1]
         ld = np.log(d[d > 0])
         if len(ld) < 50:
-            return bid, None, None
+            return bid, None, None, None
         # zero-demand events are never lost: they count in the denominator only
-        return bid, np.quantile(ld, (np.arange(Q) + 0.5) / Q).tolist(), float((d > 0).mean())
+        from proj7k.engine.scale import stars_of
+        return bid, np.quantile(ld, (np.arange(Q) + 0.5) / Q).tolist(), float((d > 0).mean()), float(stars_of(best[0]))
     except Exception:
-        return bid, None, None
+        return bid, None, None, None
 
 
 def load(db):
@@ -139,6 +140,21 @@ def rel(a, b, ids):
     return round(float(spearmanr([a[i] for i in ids], [b[i] for i in ids]).statistic), 3), len(ids)
 
 
+def partial(a, b, ctrl, ids):
+    """Spearman of a and b after removing a quadratic in the rank of ctrl from both ranks."""
+    ids = [i for i in ids if i in a and i in b and i in ctrl]
+    if len(ids) < 10:
+        return None, len(ids)
+    from scipy.stats import rankdata
+    c = rankdata([ctrl[i] for i in ids]) / len(ids)
+    A = np.column_stack([np.ones(len(ids)), c, c * c])
+    res = []
+    for x in (a, b):
+        r = rankdata([x[i] for i in ids])
+        res.append(r - A @ np.linalg.lstsq(A, r, rcond=None)[0])
+    return round(float(np.corrcoef(*res)[0, 1]), 3), len(ids)
+
+
 def main():
     db, cat, out = sys.argv[1:4]
     workers = int(sys.argv[4]) if len(sys.argv) > 4 else 4
@@ -188,7 +204,7 @@ def main():
         ch = charts[i:i + 500]
         blobs += c.execute(f"select id,osu_blob from beatmaps where id in ({','.join('?' * len(ch))})", ch).fetchall()
     with Pool(workers) as p:
-        dm = {b: (np.array(q), f) for b, q, f in p.imap_unordered(demands, blobs, chunksize=8) if q is not None}
+        dm = {b: (np.array(q), f, st) for b, q, f, st in p.imap_unordered(demands, blobs, chunksize=8) if q is not None}
     rows = [r for r in rows if r[1] in dm]
     cb = sorted(dm)
     ci = {b: i for i, b in enumerate(cb)}
@@ -201,12 +217,48 @@ def main():
     Y = np.array([y for _, _, y in rows])
     H = np.array([held(sets.get(b, b)) for _, b, _ in rows])
     R["engine_rows"] = int(len(rows))
+    # data levels in engine stars: a linear map from the additive 96% level to the chart's engine stars
+    both = [b for b in sl if b in dm]
+    x96 = np.array([lv["96"][b] for b in both]); st = np.array([dm[b][2] for b in both])
+    m, c0 = np.polyfit(x96, st, 1)
+    R["data_in_stars"] = {"map_stars_per_unit": float(m), "rho_level96_vs_engine_stars": rel(lv["96"], {b: dm[b][2] for b in both}, both)}
+    pairs = []
+    o = np.argsort(x96)
+    for i in range(len(o) - 1):
+        a_, b_ = both[o[i]], both[o[i + 1]]
+        if abs(m * (lv["96"][a_] - lv["96"][b_])) < 0.1:
+            pairs.append((abs(m * (lv["92"][a_] - lv["92"][b_])), abs(m * (lv["99"][a_] - lv["99"][b_]))))
+    if pairs:
+        P_ = np.array(pairs)
+        R["data_in_stars"]["same96_within_0.1star"] = {"pairs": len(P_), "diff92_median": float(np.median(P_[:, 0])),
+            "diff92_p90": float(np.percentile(P_[:, 0], 90)), "diff99_median": float(np.median(P_[:, 1])),
+            "diff99_p90": float(np.percentile(P_[:, 1], 90))}
+    gd = {b: m * (lv["99"][b] - lv["92"][b]) for b in both}
+    R["data_in_stars"]["gap99_92_stars"] = {"median": float(np.median(list(gd.values()))),
+        "p10_p90": np.percentile(list(gd.values()), [10, 90]).round(3).tolist()}
+    gh = [{b: gap(v[0]) for b, v in hh.items()} for hh in halves]
+    R["data_in_stars"]["gap_split_half_partial_on_level96"] = partial(gh[0], gh[1], lv["96"], both)
+    print("data_in_stars", R["data_in_stars"], flush=True)
     R["engine"] = {}
     for beta in BETAS:
         # ln F_b on the grid: charts x grid
         lF = np.empty((len(cb), len(GRID)))
         for j, lt in enumerate(GRID):
             lF[:, j] = np.log(np.maximum(FR * (1 / (1 + np.exp(-beta * (LQ - lt)))).mean(1), 1e-12))
+        # the engine's own 92-to-99 gap per chart, in ln theta, read off F_b (no player fit involved)
+        eg = {}
+        for b in both:
+            f = lF[ci[b]]
+            l = {}
+            for t, e in TARGETS.items():
+                j = np.argmax(f <= np.log(e))
+                l[t] = GRID[j] if f[j] <= np.log(e) else np.nan
+            if np.isfinite(l["99"]) and np.isfinite(l["92"]):
+                eg[b] = l["99"] - l["92"]
+        egv = np.array(list(eg.values()))
+        own = {"gap_rho_engine_vs_data": rel(eg, gd, both), "gap_partial_on_level96": partial(eg, gd, lv["96"], both),
+               "engine_gap_cv": float(egv.std() / egv.mean()) if len(egv) else None,
+               "ratio_D99_over_D92_p10_p90": np.exp(np.percentile(egv, [10, 90])).round(3).tolist() if len(egv) else None}
         la = 0.0
         dev = ~H
         for _ in range(4):
@@ -241,12 +293,12 @@ def main():
             x = lt_u[U[ii]]
             if x.std() < 1e-6:
                 continue
-            dat_gap[b] = np.polyfit(x, Y[ii], 1)[0]
-            eng_gap[b] = np.polyfit(x, pred[ii], 1)[0]
+            dat_gap[cb[b]] = np.polyfit(x, Y[ii], 1)[0]
+            eng_gap[cb[b]] = np.polyfit(x, pred[ii], 1)[0]
             for h in (0, 1):
                 m = np.array([half(us[U[i]]) == h for i in ii])
                 if m.sum() >= MIN_SLOPE // 2 and x[m].std() > 1e-6:
-                    hk[h][b] = np.polyfit(x[m], Y[ii][m], 1)[0]
+                    hk[h][cb[b]] = np.polyfit(x[m], Y[ii][m], 1)[0]
         ok = [b for b in dat_gap if np.isfinite(eng_gap.get(b, np.nan))]
         R["engine"][beta] = {
             "dev_rmse": float(np.sqrt(np.mean(resid[~H] ** 2))),
@@ -257,6 +309,10 @@ def main():
             "engine_slope_sd": float(np.std([eng_gap[b] for b in ok])) if ok else None,
             "data_slope_sd": float(np.std([dat_gap[b] for b in ok])) if ok else None,
             "offset": la,
+            "players_at_grid_edge": int(((th == 0) | (th == len(GRID) - 1)).sum()),
+            "slope_partial_on_level96": partial(eng_gap, dat_gap, lv["96"], ok),
+            "slope_split_half_partial_on_level96": partial(hk[0], hk[1], lv["96"], ok),
+            "own_curve": own,
         }
         print("beta", beta, R["engine"][beta], flush=True)
     json.dump(R, open(out, "w"), indent=1)
