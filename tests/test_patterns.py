@@ -28,6 +28,10 @@ def test_an_empty_chart_has_no_tags():
     assert report.labels == [] and report.press_rows == 0
 
 
+def test_a_single_row_chart_has_no_lag_two_gap():
+    assert pattern_tags([(3, 1.0, None)]).press_rows == 1
+
+
 def test_streams_rolls_and_stairs():
     walk = pattern_tags(_rice([k % 7 for k in range(200)]))
     assert walk.shares["stream"] > 0.95 and walk.shares["roll"] > 0.95

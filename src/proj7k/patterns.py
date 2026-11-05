@@ -276,7 +276,8 @@ def pattern_tags(notes: Notes, p: Params = DEFAULT, thumb: int = 0) -> PatternRe
     # two rhythms interleaved (3 against 2, 4 against 3) show up as non-dyadic gaps either between
     # neighbouring rows or between a row and the one before that (a 1/6 row between 1/4 rows reads
     # 1/2 + 1/2 at lag one but 3/2 at lag two), so both lags are classed against the local unit
-    gap2 = np.concatenate([[np.inf, np.inf], t[2:] - t[:-2]])
+    gap2 = np.full(R, np.inf)
+    gap2[2:] = t[2:] - t[:-2]
     classes = np.array([[_gap_class(r) if np.isfinite(r) else np.nan for r in ratio],
                         [_gap_class(r) if np.isfinite(r) else np.nan for r in gap2 / unit]], dtype=float)
     for k in range(R):
