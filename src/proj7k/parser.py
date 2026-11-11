@@ -176,7 +176,12 @@ def _format_num(val: float) -> str:
 
 
 
-def parse_osu_7k(content_or_path: str) -> Beatmap7K:
+def parse_osu_7k(content_or_path: str, *, any_mode: bool = False) -> Beatmap7K:
+    """
+    A 7K osu!mania .osu (its text or path). `any_mode` also reads a chart of another mode or key count, as the chart
+    generator does for a song's audio, timing and metadata: `mode` and `circle_size` then say what it was, and its hit
+    objects are read with 7K columns (only their times mean anything).
+    """
     if os.path.exists(content_or_path):
         with open(content_or_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
@@ -288,11 +293,11 @@ def parse_osu_7k(content_or_path: str) -> Beatmap7K:
                 )
 
     mode_val = int(general.get("Mode", "0"))
-    if mode_val != 3:
+    if mode_val != 3 and not any_mode:
         raise ValueError(f"Expected Mode 3 (osu!mania), but found Mode {mode_val}")
 
     cs_val = int(float(difficulty.get("CircleSize", "0")))
-    if cs_val != 7:
+    if cs_val != 7 and not any_mode:
         raise ValueError(f"Expected 7K (CircleSize 7), but found {cs_val}K")
 
     timing_points.sort(key=lambda tp: tp.time)

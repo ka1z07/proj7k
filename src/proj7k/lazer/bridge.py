@@ -339,9 +339,13 @@ class RealmBridgeClient:
         set_id: Optional[int] = None,
         realm_path: Optional[Path] = None,
         auto_setup: bool = True,
+        title: Optional[str] = None,
+        artist: Optional[str] = None,
+        difficulty: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Locates a beatmap in osu!lazer Realm database by online ID, MD5/SHA256 hash, or set ID.
+        Locates a beatmap in osu!lazer Realm database by online ID, MD5/SHA256 hash, set ID, or title and
+        difficulty name (artist optional; any mode).
         """
         if auto_setup:
             self.ensure_installed()
@@ -360,6 +364,12 @@ class RealmBridgeClient:
             cmd.extend(["--hash", str(file_hash)])
         if set_id is not None:
             cmd.extend(["--set-id", str(set_id)])
+        if title is not None:
+            cmd.extend(["--title", title])
+        if artist is not None:
+            cmd.extend(["--artist", artist])
+        if difficulty is not None:
+            cmd.extend(["--difficulty", difficulty])
 
         res = self._run_command(cmd)
         if not res.get("success", False):

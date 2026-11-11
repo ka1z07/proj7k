@@ -23,6 +23,9 @@ function parseArgs() {
     let fileHash = null;
     let setId = null;
     let userName = null;
+    let title = null;
+    let artist = null;
+    let difficulty = null;
 
     for (let i = 1; i < args.length; i++) {
         if (args[i] === '--realm' && i + 1 < args.length) {
@@ -39,6 +42,15 @@ function parseArgs() {
             i++;
         } else if (args[i] === '--user' && i + 1 < args.length) {
             userName = args[i + 1];
+            i++;
+        } else if (args[i] === '--title' && i + 1 < args.length) {
+            title = args[i + 1];
+            i++;
+        } else if (args[i] === '--artist' && i + 1 < args.length) {
+            artist = args[i + 1];
+            i++;
+        } else if (args[i] === '--difficulty' && i + 1 < args.length) {
+            difficulty = args[i + 1];
             i++;
         }
     }
@@ -58,7 +70,7 @@ function parseArgs() {
         realmPath = path.join(lazerDir, 'client.realm');
     }
 
-    return { command, realmPath, onlineId, fileHash, setId, userName };
+    return { command, realmPath, onlineId, fileHash, setId, userName, title, artist, difficulty };
 }
 
 function outputJsonAndExit(obj, exitCode = 0) {
@@ -430,7 +442,7 @@ async function handleRevertBatch(realmPath) {
     outputJsonAndExit(result);
 }
 
-async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId) {
+async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId, byName = {}) {
     let realm;
     let result;
     try {
@@ -467,6 +479,17 @@ async function handleLocateBeatmap(realmPath, onlineId, fileHash, setId) {
             matches = realm.objects('Beatmap').filtered('MD5Hash == $0 || Hash == $0', fileHash);
         } else if (setId) {
             matches = realm.objects('Beatmap').filtered('BeatmapSet.OnlineID == $0', Number(setId));
+        } else if (byName.title && byName.difficulty) {
+            // The game's selection as its log names it, any mode (the live index holds 7K charts only). Charts
+            // whose artist matches come first, then sets not pending deletion.
+            const found = Array.from(realm.objects('Beatmap').filtered(
+                '(Metadata.Title == $0 OR Metadata.TitleUnicode == $0) AND DifficultyName == $1',
+                byName.title, byName.difficulty));
+            const artistOf = (b) => [prop(b.Metadata, 'Artist', ''), prop(b.Metadata, 'ArtistUnicode', '')];
+            const score = (b) => (byName.artist && artistOf(b).includes(byName.artist) ? 0 : 2)
+                + (prop(b.BeatmapSet, 'DeletePending', false) ? 1 : 0);
+            found.sort((a, b) => score(a) - score(b));
+            matches = found;
         }
 
         if (matches.length === 0) {
@@ -645,7 +668,7 @@ async function handleDumpPlayerData(realmPath) {
 }
 
 async function main() {
-    const { command, realmPath, onlineId, fileHash, setId, userName } = parseArgs();
+    const { command, realmPath, onlineId, fileHash, setId, userName, title, artist, difficulty } = parseArgs();
 
     // Unified realm path existence guard
     if (!fs.existsSync(realmPath)) {
@@ -670,7 +693,7 @@ async function main() {
             await handleDumpCollections(realmPath);
             break;
         case 'locate-beatmap':
-            await handleLocateBeatmap(realmPath, onlineId, fileHash, setId);
+            await handleLocateBeatmap(realmPath, onlineId, fileHash, setId, { title, artist, difficulty });
             break;
         case 'update-batch':
             await handleUpdateBatch(realmPath);
