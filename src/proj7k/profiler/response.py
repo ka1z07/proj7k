@@ -216,7 +216,8 @@ def analyze_strain_response(
     if field is None:
         field = trace_beatmap(beatmap, params)
     outcome = play_outcome(field, alignment, played_until_s)
-    played = outcome.played.astype(float)
+    # ADR-0062: an event counts as the engine counted it (a partial LN's release in proportion to its LN-ness)
+    played = outcome.played.astype(float) * field.wt
 
     results: Dict[str, DimensionCapacityResult] = {}
     total_stars = field.profile.total_stars

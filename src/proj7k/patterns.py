@@ -301,7 +301,8 @@ def pattern_tags(notes: Notes, p: Params = DEFAULT, thumb: int = 0) -> PatternRe
             tag["hybrid"][k] = True
     held_other = np.zeros(R)
     for k, r in enumerate(rows):
-        held_other[k] = ev.held[r].sum() - sum(ev.held[r, c] for c in cols[k])
+        held_r = ev.held[r] > 0  # any LN at all holds the column here (ADR-0062's partial LN-ness is the engine's)
+        held_other[k] = held_r.sum() - sum(held_r[c] for c in cols[k])
     tag["inverse"] = held_other >= 3
 
     # releases, shields, delays and coordination read the LN objects

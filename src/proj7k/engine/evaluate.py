@@ -107,7 +107,7 @@ def _burst(ev: Events, dem, D: float, eps: float, p: Params) -> float:
     for t0 in starts:
         idx = (t_ev >= t0) & (t_ev < t0 + p.burst_window)
         if idx.any():
-            best = max(best, solve(dem.d_burst[idx], np.ones(int(idx.sum())), eps, pw))
+            best = max(best, solve(dem.d_burst[idx], ev.wt[idx], eps, pw))
     return p.burst_kappa * best
 
 
@@ -133,8 +133,8 @@ _OTHER_FAMILY = 1e3
 
 
 def _profile(ev: Events, p: Params) -> DifficultyProfile:
-    ones = np.ones(ev.n)
-    lam_mean = float(ln_context(ev, p).mean())
+    ones = ev.wt  # ADR-0062: a partial LN's release counts in proportion to its LN-ness
+    lam_mean = float(np.average(ln_context(ev, p), weights=ev.wt))
     eps_total = p.eps_rc + p.eps_total_ln_slope * lam_mean
 
     best = None
@@ -158,10 +158,10 @@ def _profile(ev: Events, p: Params) -> DifficultyProfile:
         stars_k = [skill_stars_of(k, demands[k]) for k in SKILLS]
     else:
         # v0.2: the total's reading under the skill's membership weights (kept for the golden test)
-        D_k = [solve(dem.d, w[:, n], p.eps_rc if k.startswith("rc") else p.eps_ln, p) for n, k in enumerate(SKILLS)]
+        D_k = [solve(dem.d, w[:, n] * ev.wt, p.eps_rc if k.startswith("rc") else p.eps_ln, p) for n, k in enumerate(SKILLS)]
         stars_k = [stars_of(x) for x in D_k]
-    coverage = w.sum(0) / ev.n
-    pi = dominance(a, dem.d, D, p)
+    coverage = (w * ev.wt[:, None]).sum(0) / ev.wt.sum()
+    pi = dominance(a, dem.d, D, p, ev.wt)
     dominance_error = float(abs(pi.sum() - 1.0))
     if dominance_error >= _TOLERANCE:
         raise ArithmeticError(f"dominance must sum to 1 (§9.4); off by {dominance_error}")

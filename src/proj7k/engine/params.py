@@ -30,7 +30,10 @@ class Params:
     theta_tol: float = 1e-9           # bisection width in ln(theta); the spec's 1e-4 is a floor (R7)
 
     # §2 preprocessing
-    l_min: float = 0.100              # an LN shorter than this is a rice (§2.2)
+    # ADR-0062: an LN's LN-ness g rises smoothly with its length, 0 (a rice) at l_min to 1 (a full LN) at l_full,
+    # so a rate that moves LN lengths across the old 100 ms cut moves the reading continuously, not in a step
+    l_min: float = 0.080              # an LN this short or shorter is a rice (§2.2)
+    l_full: float = 0.120             # an LN this long or longer is fully an LN; l_min = l_full is the old hard cut
     row_tol: float = 0.001            # events within this of a row's first event join the row (§2.4, R1)
     ln_context_holds: float = 2.0     # held columns at which an event is fully in LN context (§8.1 lambda)
 
@@ -118,5 +121,5 @@ DEFAULT = Params()
 #: ADR-0054 added the speed terms and ADR-0056 gave each skill its own cost. `tests/engine/test_engine_golden.py` checks the port under these.
 V02 = Params(
     k_same=1.0, v_lim=float("inf"), jack_gain=0.0, j_clip=float("inf"), v_cap=40.0, burst_kappa=0.0,
-    skill_model="membership", dominance_model="pi",
+    skill_model="membership", dominance_model="pi", l_min=0.100, l_full=0.100,
 )

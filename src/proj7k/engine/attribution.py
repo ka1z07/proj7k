@@ -25,7 +25,7 @@ def smoothstep(z: np.ndarray) -> np.ndarray:
 
 def ln_context(ev: Events, p: Params) -> np.ndarray:
     """§8.1 lambda: 1 on an LN, and rising to 1 as the event's hand has more columns held."""
-    return np.maximum(ev.is_ln.astype(float), np.minimum(1.0, ev.h / p.ln_context_holds))
+    return np.maximum(ev.lnw, np.minimum(1.0, ev.h / p.ln_context_holds))
 
 
 def memberships(ev: Events, dem: HandDemand, p: Params) -> Tuple[np.ndarray, np.ndarray]:
@@ -47,7 +47,7 @@ def memberships(ev: Events, dem: HandDemand, p: Params) -> Tuple[np.ndarray, np.
     press_row = np.bincount(ev.row[~ev.rel], minlength=ev.n_rows) > 0
     tr = ev.tail_row[ev.obj]
     has_tail = ev.is_ln & (tr >= 0)
-    q_release = (has_tail & ~press_row[np.where(has_tail, tr, 0)]).astype(float)
+    q_release = (has_tail & ~press_row[np.where(has_tail, tr, 0)]) * ev.lnw
 
     rc, ln = 1 - lam, lam
     unit = np.stack([
@@ -61,10 +61,10 @@ def memberships(ev: Events, dem: HandDemand, p: Params) -> Tuple[np.ndarray, np.
     return w, a
 
 
-def dominance(a: np.ndarray, d: np.ndarray, D: float, p: Params) -> np.ndarray:
+def dominance(a: np.ndarray, d: np.ndarray, D: float, p: Params, ev_wt: np.ndarray = None) -> np.ndarray:
     """§9.4: pi_k = sum_i a_ik s_i, with s_i the event's normalised share of p_i (1 - p_i) at theta = D."""
     pl = loss(d, D, p)
-    s = pl * (1 - pl)
+    s = pl * (1 - pl) * ev_wt if ev_wt is not None else pl * (1 - pl)
     total = s.sum()
     # D = 0 (nothing to solve) leaves no event with a share; they then count equally, so pi still sums to 1.
     s = s / total if total > 0.0 else np.full_like(s, 1.0 / len(s))

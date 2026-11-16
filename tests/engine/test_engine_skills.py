@@ -55,8 +55,8 @@ OWN_TOP_FLOOR = {
     "Regular Tech": 11,
     "Regular Speed": 10,
     "Regular Stream": 11,
-    "LN General": 7,
-    "LN Tech": 13,
+    "LN General": 8,  # ADR-0062: 7 -> 8
+    "LN Tech": 10,  # ADR-0062: 13 -> 10 (lowered on the owner's ruling)
     "LN Inverse": 3,
     "LN Release": 6,
 }
@@ -124,10 +124,11 @@ DOMINANT_FLOOR = {
     "Regular Tech": 11,
     "Regular Speed": 13,
     "Regular Stream": 15,
-    "LN General": 9,
-    "LN Tech": 5,
-    "LN Inverse": 12,
-    "LN Release": 12,
+    # ADR-0062: LN General 9 -> 10, LN Inverse 12 -> 13; LN Tech 5 -> 4, LN Release 12 -> 10 (lowered on the owner's ruling)
+    "LN General": 10,
+    "LN Tech": 4,
+    "LN Inverse": 13,
+    "LN Release": 10,
 }
 
 

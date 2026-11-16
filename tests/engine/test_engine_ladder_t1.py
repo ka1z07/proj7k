@@ -22,11 +22,11 @@ KNOWN_INVERSIONS = {
     "Regular Speed": 1,
     "Regular Stream": 1,
     "LN General": 3,
-    "LN Tech": 4,
+    "LN Tech": 3,
     "LN Inverse": 2,
     "LN Release": 3,
 }
-TOTAL_KNOWN_INVERSIONS = 22
+TOTAL_KNOWN_INVERSIONS = 21  # ADR-0062: LN Tech 4 -> 3
 
 
 def _own_skill_D(engine_profiles, pool):

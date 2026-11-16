@@ -153,7 +153,7 @@ def skill_costs(ev: Events, dem: HandDemand, p: Params) -> Dict[str, np.ndarray]
     press_row = np.bincount(ev.row[~rel], minlength=ev.n_rows) > 0
     tr = ev.tail_row[ev.obj]
     has_tail = ev.is_ln & (tr >= 0)
-    isolated = (has_tail & ~press_row[np.where(has_tail, tr, 0)]).astype(float)
+    isolated = (has_tail & ~press_row[np.where(has_tail, tr, 0)]) * ev.lnw
     head_row = np.full(len(ev.tail_row), -1)
     head_row[ev.obj[~rel]] = ev.row[~rel]
     ell = np.where(has_tail, ev.T[np.where(tr >= 0, tr, 0)] - ev.T[np.where(head_row[ev.obj] >= 0, head_row[ev.obj], 0)], np.inf)
@@ -191,5 +191,4 @@ def skill_readings(ev: Events, dem: HandDemand, p: Params) -> Tuple[Dict[str, np
 def skill_demands(ev: Events, dem: HandDemand, p: Params) -> Dict[str, float]:
     """§9.2 (v0.2.3): D_k, each skill's cost on the hand accumulator with its memory, solved under unit weights."""
     _, d = skill_readings(ev, dem, p)
-    ones = np.ones(ev.n)
-    return {k: solve(d[k], ones, skill_eps(k, p), p) for k in SKILLS}
+    return {k: solve(d[k], ev.wt, skill_eps(k, p), p) for k in SKILLS}

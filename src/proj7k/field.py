@@ -103,7 +103,12 @@ class ChartField:
     w: np.ndarray        # [n, 8] membership (overlapping)
     a: np.ndarray        # [n, 8] attribution (a partition per family)
     ck: np.ndarray       # [n, 8] each skill's own cost of the event (§8.3, ADR-0056)
-    dk: np.ndarray       # [n, 8] each skill's own demand reading, the series its D_k is solved on (unit weights)
+    dk: np.ndarray       # [n, 8] each skill's own demand reading, the series its D_k is solved on (weights `wt`)
+
+    @property
+    def wt(self) -> np.ndarray:
+        """[n] each event's weight in the engine's solves (ADR-0062): 1, or a partial LN's LN-ness on its release."""
+        return self.events.wt
 
     @property
     def total_D(self) -> float:
@@ -112,7 +117,7 @@ class ChartField:
     @property
     def eps_total(self) -> float:
         """The tolerance the total difficulty was solved at (§3.3)."""
-        return self.params.eps_rc + self.params.eps_total_ln_slope * ln_context(self.events, self.params).mean()
+        return self.params.eps_rc + self.params.eps_total_ln_slope * float(np.average(ln_context(self.events, self.params), weights=self.events.wt))
 
     @property
     def duration_s(self) -> float:
@@ -218,7 +223,7 @@ def trace_notes(notes: Notes, params: Params = DEFAULT) -> ChartField:
     ck = np.stack([costs[k] for k in SKILLS], axis=1)
     dk = np.stack([readings[k] for k in SKILLS], axis=1)
     p = loss(dem.d, profile.total_D, params)
-    s = p * (1 - p)
+    s = p * (1 - p) * ev.wt
     total = s.sum()
     share = s / total if total > 0 else np.full_like(s, 1.0 / ev.n)
     return ChartField(

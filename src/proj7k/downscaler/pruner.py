@@ -226,7 +226,7 @@ class ExcessLossPruner:
         win_of_event = (field.t * 1000.0 // window_ms).astype(int)
         win_loss = np.bincount(win_of_event, weights=pl)
         win_count = np.bincount(win_of_event)
-        allowed_rate = (field.eps_total * (field.events.n + field.params.N0)) / field.events.n
+        allowed_rate = (field.eps_total * (field.wt.sum() + field.params.N0)) / field.wt.sum()
         peak_windows: Set[int] = {
             int(w) for w in np.flatnonzero(win_count) if win_loss[w] / win_count[w] > allowed_rate * (1.0 - PEAK_MARGIN)
         }
@@ -473,4 +473,4 @@ class ExcessLossPruner:
 def _excess_loss(field: ChartField, level: float) -> float:
     """Expected events lost at `level` beyond what the total's tolerance allows (what pruning has to remove)."""
     p = field.params
-    return float(loss(field.d, level, p).sum() - field.eps_total * (field.events.n + p.N0))
+    return float(np.dot(field.wt, loss(field.d, level, p)) - field.eps_total * (field.wt.sum() + p.N0))

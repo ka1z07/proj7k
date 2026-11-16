@@ -39,8 +39,8 @@ COLUMN_TAU = 1.0
 #: (a, b, margin) of each envelope: cap(D) = exp(a + b ln D + margin). Fitted by `fit_envelopes` on the 120
 #: benchmark charts (`docs/research/structured_index.json`); margin is the residuals' 90th percentile.
 ENVELOPES: Dict[str, Tuple[float, float, float]] = {
-    "hand": (0.6311, 0.8731, 0.1718),
-    "column": (0.6626, 0.3267, 0.2348),
+    "hand": (0.6344, 0.8711, 0.1597),
+    "column": (0.6616, 0.3269, 0.2312),
 }
 
 
