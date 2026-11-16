@@ -416,7 +416,8 @@ def test_the_game_is_closed_and_started_only_under_a_claim():
 
 def test_no_action_starts_threads_of_its_own():
     # A write claim lives on the job's thread; the actions' code never hands work to another thread.
-    allowed = {SRC / "dashboard" / "jobs.py", SRC / "dashboard" / "player.py", SRC / "batch.py"}
+    # The player pages' background readers (engine stars, engine pp) are not actions and hold no claim.
+    allowed = {SRC / "dashboard" / "jobs.py", SRC / "dashboard" / "player.py", SRC / "dashboard" / "topplays.py", SRC / "batch.py"}
     for path in SRC.rglob("*.py"):
         if path in allowed or "catalog" in path.parts:
             continue
