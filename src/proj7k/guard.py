@@ -62,10 +62,12 @@ OWN_SKILL_RATCHET: Dict[str, MetricGate] = {
     "Regular Tech": MetricGate(min_kendall_tau=0.904, min_spearman_rho=0.978, max_violations=4),
     "Regular Speed": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
     "Regular Stream": MetricGate(min_kendall_tau=0.981, min_spearman_rho=0.996, max_violations=1),
-    "LN General": MetricGate(min_kendall_tau=0.885, min_spearman_rho=0.960, max_violations=3),
-    "LN Tech": MetricGate(min_kendall_tau=0.885, min_spearman_rho=0.971, max_violations=4),
+    # ADR-0062 (an LN's LN-ness rises smoothly over 80-120 ms): LN General .885 -> .942, LN Tech .885 -> .923 (4 -> 3),
+    # LN Release .771 -> .752 (lowered on the owner's ruling)
+    "LN General": MetricGate(min_kendall_tau=0.942, min_spearman_rho=0.989, max_violations=3),
+    "LN Tech": MetricGate(min_kendall_tau=0.923, min_spearman_rho=0.982, max_violations=3),
     "LN Inverse": MetricGate(min_kendall_tau=0.961, min_spearman_rho=0.992, max_violations=2),
-    "LN Release": MetricGate(min_kendall_tau=0.771, min_spearman_rho=0.885, max_violations=3),
+    "LN Release": MetricGate(min_kendall_tau=0.752, min_spearman_rho=0.867, max_violations=3),
 }
 
 #: Applied to any metric without its own calibration entry.

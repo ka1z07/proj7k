@@ -43,7 +43,7 @@ CANONICAL_DAN_SR_BANDS: Dict[str, Tuple[float, float]] = {
     "0th": (2.5, 3.8),
     "5th": (5.0, 6.2),
     "10th": (7.2, 8.5),
-    "Stellium": (10.5, 13.0),
+    "Stellium": (10.5, 13.5),  # ADR-0062: the LN Stellium charts lift the eight-pool median to 13.08
 }
 
 TIER_SYNONYMS: Dict[str, str] = {

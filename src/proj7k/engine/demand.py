@@ -57,7 +57,8 @@ def hand_demand(ev: Events, thumb: int, p: Params) -> HandDemand:
 
     # §4.4–4.5
     c = 1.0 + p.chi_0 * (K[col] * ev.held[row]).sum(1)
-    omega = np.where(rel, p.w_rel, 1.0)
+    # ADR-0062: a partial LN's release moves the finger in proportion to its LN-ness
+    omega = np.where(rel, p.w_rel * ev.wt, 1.0)
     jxo = ev.j + x + o
     # a press's j is the finger repeating itself; a release's j is its LN's length and is not weighted
     # ADR-0054: a press's repeat counts at most j_clip (a grace note or a flam is not a faster jack)
@@ -88,6 +89,7 @@ def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: floa
     """§6.1: per event, its hand's accumulator E^h after the event's row, in the units of v ** gamma."""
     tau = p.tau_h if tau is None else tau
     vg = v ** p.gamma
+    wt = ev.wt
     Eh, th = np.zeros(2), np.full(2, np.nan)
     E_h = np.zeros(ev.n)
     order = np.argsort(ev.row, kind="stable")
@@ -95,17 +97,24 @@ def accumulate(ev: Events, hand: np.ndarray, v: np.ndarray, p: Params, tau: floa
     for r in range(ev.n_rows):
         evs = order[bounds[r]:bounds[r + 1]]
         Tr = ev.T[r]
-        hand_in, hit = [0.0, 0.0], [False, False]
+        hand_in, hit = [0.0, 0.0], [0.0, 0.0]
         for i in evs:
             hh = hand[ev.col[i]]
             hand_in[hh] += vg[i]
-            hit[hh] = True
+            hit[hh] = max(hit[hh], wt[i])
         for hh in (0, 1):
-            if hit[hh]:
+            W = hit[hh]
+            if W > 0.0:
                 # R10: a hand's first update has dt = inf (phi = 0); the chart's time origin is arbitrary
                 phi = 0.0 if np.isnan(th[hh]) else np.exp(-(Tr - th[hh]) / tau)
-                Eh[hh] = Eh[hh] * phi + (1 - phi) * hand_in[hh]
-                th[hh] = Tr
+                E_new = Eh[hh] * phi + (1 - phi) * hand_in[hh]
+                if W >= 1.0 or np.isnan(th[hh]):
+                    Eh[hh], th[hh] = E_new, Tr
+                else:
+                    # ADR-0062: a row holding only partial-LN releases updates the hand in proportion to their
+                    # LN-ness, so the hand's memory is the rice's as g goes to 0 and the LN's at 1
+                    Eh[hh] += W * (E_new - Eh[hh])
+                    th[hh] += W * (Tr - th[hh])
         for i in evs:
             E_h[i] = Eh[hand[ev.col[i]]]
     return E_h

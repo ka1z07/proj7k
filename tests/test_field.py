@@ -38,24 +38,24 @@ def test_arrays_line_up_with_events(traced):
 
 
 def test_expected_loss_at_the_charts_level_is_its_tolerance(traced):
-    """Solving the total at D means the unit-weight expected loss is eps (W + N0), by definition (§3.2)."""
+    """Solving the total at D means the weighted expected loss is eps (W + N0), by definition (§3.2; ADR-0062 weights)."""
     _, f = traced
-    eps = DEFAULT.eps_rc + DEFAULT.eps_total_ln_slope * ln_context(f.events, DEFAULT).mean()
-    assert f.p.sum() == pytest.approx(eps * (f.events.n + DEFAULT.N0), rel=1e-6)
+    eps = DEFAULT.eps_rc + DEFAULT.eps_total_ln_slope * np.average(ln_context(f.events, DEFAULT), weights=f.wt)
+    assert np.dot(f.wt, f.p) == pytest.approx(eps * (f.wt.sum() + DEFAULT.N0), rel=1e-6)
 
 
 def test_level_for_loss_inverts_the_engines_equation(traced):
     """
     A player who loses exactly the tolerance on a skill's own series sits at the skill's D_k (ADR-0056: `dk`
-    under unit weights is what the engine solved): the same call, the engine's own number.
+    under the event weights is what the engine solved): the same call, the engine's own number.
     """
     _, f = traced
-    ones = np.ones(f.events.n)
+    ones = f.wt
     for k, name in enumerate(SKILLS):
         if f.profile.skills[name].D <= 0:
             continue
         eps = DEFAULT.eps_rc if name.startswith("rc") else DEFAULT.eps_ln
-        level = level_for_loss(f.dk[:, k], ones, eps * f.events.n, eps)
+        level = level_for_loss(f.dk[:, k], ones, eps * ones.sum(), eps)
         assert level == pytest.approx(f.profile.skills[name].D, rel=1e-6), name
 
 
