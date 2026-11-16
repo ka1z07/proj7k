@@ -277,19 +277,34 @@ def downscale(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) 
 def generate_chart(config: DashboardConfig, params: Dict[str, Any], ctx: JobContext) -> Dict[str, Any]:
     """
     A new chart from a song, written by Mapperatorinator (ADR-0046). The song is the game's current chart (`reference` =
-    its MD5: its audio, and its timing unless `auto_timing`), an .osu of the same song, or an audio file alone (timed by
-    the model, or by the BPM and offset given).
+    its MD5: its audio, and its timing unless `auto_timing`), an .osu or .osz of the same song, or an audio file alone
+    (timed by the model, or by the BPM and offset given). The chart can be of any mode or key count: a 4K or osu!
+    chart gives its song (audio, timing, title, background), not its notes. The game's selection when it is not a 7K
+    chart (the live index knows none other) comes as `game_title`, `game_artist` and `game_difficulty`, and an .osu or
+    .osz given as `audio` is a reference too.
     """
-    from proj7k.generator.cli import resolve_reference, resolve_target, run_generate
+    from proj7k.downscaler.locator import BeatmapUrlInfo
+    from proj7k.generator.cli import CHART_SUFFIXES, resolve_reference, resolve_target, run_generate
     from proj7k.generator import mix as pool_mix
     from proj7k.generator.generate import GeneratorOptions
 
     stars, label = resolve_target(_text(params, "target_dan") or None, _float(params, "target_sr"))
+    lazer = {"realm_path": config.realm_path, "files_dir": config.lazer_files_dir}
     reference = None
     ref_spec = _text(params, "reference").strip('"')
-    if ref_spec:
-        reference = resolve_reference(ref_spec, realm_path=config.realm_path, files_dir=config.lazer_files_dir)
     audio = _path(params, "audio", tr("音频文件", "audio file")) if _text(params, "audio") else None
+    if ref_spec:
+        reference = resolve_reference(ref_spec, any_mode=True, **lazer)
+    elif _text(params, "game_title") and _text(params, "game_difficulty"):
+        name = f"{_text(params, 'game_title')} [{_text(params, 'game_difficulty')}]"
+        reference = resolve_reference(
+            BeatmapUrlInfo(original_input=name, title=_text(params, "game_title"),
+                           artist=_text(params, "game_artist") or None, difficulty=_text(params, "game_difficulty")),
+            any_mode=True, **lazer)
+    if audio is not None and audio.suffix.lower() in CHART_SUFFIXES:
+        if reference is None:
+            reference = resolve_reference(str(audio), any_mode=True)
+        audio = None
     if reference is None and audio is None:
         raise ValueError(tr("请选择游戏当前谱面、一张参考谱面，或一个音频文件",
                             "Choose the game's current chart, a reference chart, or an audio file"))

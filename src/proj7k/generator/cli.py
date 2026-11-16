@@ -10,6 +10,9 @@
     # the same, from osu!lazer's library: an .osu MD5, beatmap id or osu! link
     python3 -m proj7k.generator --timing-from https://osu.ppy.sh/b/5271675 --target-dan 3rd
 
+    # a chart of any mode or key count (4K, osu!, an .osz) gives its song: audio, timing, title, background
+    python3 -m proj7k.generator --timing-from "Some Song (Mapper).osz" --target-dan 5th
+
 The notes are written by Mapperatorinator (ADR-0040, ADR-0046), which installs itself on first use (several GB).
 
 The chart is written as an .osu and, unless --no-package, an .osz with the audio (and the reference
@@ -43,6 +46,9 @@ class Reference:
     audio_path: Optional[Path]
     bg_path: Optional[Path]
     bg_filename: Optional[str]
+    #: What the chart was: "7K", another key count ("4K"), or another mode ("osu!", "taiko", "catch"). Only a 7K
+    #: chart's notes are kept; another's give the song alone.
+    source: str = "7K"
 
 
 @dataclass
@@ -73,6 +79,7 @@ class GenerateRun:
             "warnings": list(r.warnings),
             "audio": str(self.audio_path),
             "reference": str(self.reference.osu_path) if self.reference and self.reference.osu_path else None,
+            "reference_source": self.reference.source if self.reference else None,
             "output_file": str(self.osu_path),
             "osz_file": str(self.osz_path) if self.osz_path else None,
             "ln_share": round(sum(o.note_type.value == "ln" for o in r.beatmap.hit_objects) / max(r.n_notes, 1), 3),
@@ -92,16 +99,75 @@ def resolve_target(target_dan: Optional[str], target_sr: Optional[float]) -> tup
     raise ValueError(tr("请指定 --target-dan 或 --target-sr", "Give --target-dan or --target-sr"))
 
 
-def resolve_reference(spec: str, realm_path: Optional[Path] = None, files_dir: Optional[Path] = None) -> Reference:
-    """An .osu path, or anything osu!lazer's library can be searched by (MD5, beatmap id, osu! link)."""
-    path = Path(spec.strip('"')).expanduser()
-    if path.is_file():
+#: osu!'s modes other than mania, as the generator names a chart of one.
+MODE_NAMES = {0: "osu!", 1: "taiko", 2: "catch"}
+
+#: Files a reference can be dropped as instead of an audio file.
+CHART_SUFFIXES = (".osu", ".osz")
+
+
+def source_label(bm: Beatmap7K) -> str:
+    """"7K", "4K", ... for a mania chart, else the mode's name."""
+    if bm.mode == 3:
+        return f"{bm.circle_size}K"
+    return MODE_NAMES.get(bm.mode, f"mode {bm.mode}")
+
+
+def _read_reference(text: str, any_mode: bool) -> tuple:
+    """(the chart as the generator borrows it, what it was). Another mode's or key count's notes are dropped: it is
+    a song with its timing, made a 7K chart of no notes, so the model and the .osu written see 7K mania."""
+    bm = parse_osu_7k(text, any_mode=any_mode)
+    source = source_label(bm)
+    if source != "7K":
+        bm.mode, bm.circle_size, bm.hit_objects = 3, 7, []
+    return bm, source
+
+
+def _osu_in_osz(osz: Path) -> Path:
+    """An .osz unpacked beside nothing it came from (a folder of its own under the temp dir): the .osu to read, a 7K
+    chart when it has one, else another mania chart, else any."""
+    import tempfile
+    import zipfile
+
+    folder = Path(tempfile.mkdtemp(prefix="proj7k-osz-"))
+    with zipfile.ZipFile(osz) as z:
+        for info in z.infolist():
+            target = (folder / info.filename).resolve()
+            if info.is_dir() or folder.resolve() not in target.parents:
+                continue  # a folder entry, or a name that would land outside the folder
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(z.read(info))
+    charts = sorted(folder.rglob("*.osu"))
+    if not charts:
+        raise FileNotFoundError(tr(f".osz 里没有 .osu：{osz}", f"No .osu inside the .osz: {osz}"))
+
+    def rank(path: Path) -> int:
+        try:
+            bm = parse_osu_7k(path.read_text(encoding="utf-8", errors="replace"), any_mode=True)
+        except (ValueError, IndexError):
+            return 3
+        return 0 if (bm.mode, bm.circle_size) == (3, 7) else 1 if bm.mode == 3 else 2
+
+    return min(charts, key=lambda p: (rank(p), p.name))
+
+
+def resolve_reference(spec: Any, realm_path: Optional[Path] = None, files_dir: Optional[Path] = None,
+                      any_mode: bool = False) -> Reference:
+    """
+    An .osu or .osz path, or anything osu!lazer's library can be searched by (MD5, beatmap id, osu! link, or a
+    `BeatmapUrlInfo`, the game's selection by its title and difficulty among them). `any_mode`: a chart of any mode or
+    key count, whose song (audio, timing, metadata, background) the generator takes; without it, 7K only.
+    """
+    path = Path(spec.strip('"')).expanduser() if isinstance(spec, str) else None
+    if path is not None and path.is_file():
         from proj7k.profiler.replay_view import find_audio
 
-        bm = parse_osu_7k(path.read_text(encoding="utf-8", errors="replace"))
+        if path.suffix.lower() == ".osz":
+            path = _osu_in_osz(path)
+        bm, source = _read_reference(path.read_text(encoding="utf-8", errors="replace"), any_mode)
         bg_name = _background_name(bm)
         bg = path.parent / bg_name if bg_name and (path.parent / bg_name).is_file() else None
-        return Reference(bm, path, find_audio(path, bm.audio_filename), bg, bg_name if bg else None)
+        return Reference(bm, path, find_audio(path, bm.audio_filename), bg, bg_name if bg else None, source)
 
     from proj7k.downscaler.locator import locate_beatmap_in_lazer
 
@@ -114,10 +180,11 @@ def resolve_reference(spec: str, realm_path: Optional[Path] = None, files_dir: O
     if asset is None:
         raise FileNotFoundError(tr(f"找不到参考谱面：{spec}（既不是 .osu 文件，也不在 osu!lazer 曲库里）",
                                    f"Reference chart not found: {spec} (neither an .osu file nor in the osu!lazer library)"))
-    bm = parse_osu_7k(Path(asset.osu_path).read_text(encoding="utf-8", errors="replace"))
+    bm, source = _read_reference(Path(asset.osu_path).read_text(encoding="utf-8", errors="replace"), any_mode)
     if asset.audio_filename:
         bm.audio_filename = asset.audio_filename
-    return Reference(bm, Path(asset.osu_path), asset.audio_path, asset.bg_path, asset.bg_filename if asset.bg_path else None)
+    return Reference(bm, Path(asset.osu_path), asset.audio_path, asset.bg_path,
+                     asset.bg_filename if asset.bg_path else None, source)
 
 
 def _background_name(bm: Beatmap7K) -> Optional[str]:
@@ -154,6 +221,10 @@ def run_generate(
 
     logger.info(f"Generating from {audio_path.name} toward {options.target_stars:.2f} stars...")
     result = generate_from_file(audio_path, options)
+    if reference is not None and reference.source != "7K":
+        result.warnings.insert(0, tr(f"参考谱面是 {reference.source} 谱：只取了它的音频、timing、标题与背景，音符全部重新生成",
+                                     f"The reference is a {reference.source} chart: only its audio, timing, title and "
+                                     "background were taken; every note is new"))
     bm = result.beatmap
     audio_name = bm.audio_filename or audio_path.name
     if not Path(audio_name).suffix and audio_path.suffix:
@@ -220,7 +291,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python3 -m proj7k.generator", description="从音频生成 osu!mania 7K 谱面：Mapperatorinator 落键，引擎定星（ADR-0046）")
     p.add_argument("--audio", help="歌曲音频（mp3/ogg/wav/flac）。不给时用 --timing-from 谱面的音频")
     p.add_argument("--timing-from", dest="timing_from",
-                   help="参考谱面：.osu 路径，或 osu!lazer 里的 MD5 / 谱面 ID / 链接。借用它的 timing、标题、背景与音频")
+                   help="参考谱面：.osu / .osz 路径，或 osu!lazer 里的 MD5 / 谱面 ID / 链接；任何模式与键数都行（非 7K 谱只取歌）。"
+                        "借用它的 timing、标题、背景与音频")
     p.add_argument("--auto-timing", action="store_true", help="有参考谱面时也让模型自己测 timing（只借用音频与元数据）")
     target = p.add_mutually_exclusive_group(required=True)
     target.add_argument("--target-dan", help="目标段位：0th … 10th、Gamma、Azimuth、Zenith、Stellium")
@@ -280,7 +352,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         reference = None
         if args.timing_from:
             realm = Path(args.realm).expanduser() if args.realm else None
-            reference = resolve_reference(args.timing_from, realm_path=realm)
+            reference = resolve_reference(args.timing_from, realm_path=realm, any_mode=True)
+        elif args.audio and Path(args.audio).suffix.lower() in CHART_SUFFIXES:
+            # A chart given as the song: its audio (and timing, title, background), whatever its mode.
+            reference = resolve_reference(args.audio, any_mode=True)
+            args.audio = None
         options = GeneratorOptions(
             target_stars=stars, target_label=label, bpm=args.bpm, offset_ms=args.offset, seed=args.seed,
             tolerance=args.tolerance, title=args.title, artist=args.artist, creator=args.creator,

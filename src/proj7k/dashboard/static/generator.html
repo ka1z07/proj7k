@@ -36,7 +36,7 @@
       </div>
       <div id="gameSrc" class="field">
         <div id="gameLine"></div>
-        <span class="hint">用这张谱的音频、标题与背景；默认也借用它的 timing（BPM 与 offset），节奏最准。</span>
+        <span class="hint">用这张谱的音频、标题与背景；默认也借用它的 timing（BPM 与 offset），节奏最准。任何模式与键数都行：4K、osu! 等谱只取歌，音符全部重新生成。</span>
       </div>
       <div id="manualSrc" class="hidden">
         <div class="field">
@@ -44,10 +44,10 @@
           <input type="text" id="audio" placeholder="例如 C:\Music\song.mp3">
         </div>
         <div class="field">
-          <div class="drop" id="drop">或把音频文件拖到这里 / 点击选择</div>
+          <div class="drop" id="drop">或把音频文件（或任何模式的 .osu / .osz）拖到这里 / 点击选择</div>
         </div>
         <div class="field">
-          <label for="reference">参考谱面（可选）：同一首歌的 .osu 路径、谱面 ID 或链接，借用它的 timing 与背景</label>
+          <label for="reference">参考谱面（可选）：同一首歌的 .osu / .osz 路径、谱面 ID 或链接，借用它的 timing 与背景；不必是 7K</label>
           <input type="text" id="reference" placeholder="留空则由模型测 timing">
         </div>
         <div class="row">
@@ -148,16 +148,20 @@
     const panel = P7.jobPanel($("#job"));   // the sections card's own operations, one at a time
     const queue = P7.jobQueue($("#queue"), tr("生成队列"));
     const form = P7.rememberForm("generator", ["@mode", "dan", "sr", "@timing", "ln", "count", "modelFast", "modelReuse", "lnLora"]);
-    const drop = P7.dropZone($("#drop"), ".mp3,.ogg,.wav,.flac,audio/*", (f) => { $("#audio").disabled = !!f; });
+    const drop = P7.dropZone($("#drop"), ".mp3,.ogg,.wav,.flac,.osu,.osz,audio/*", (f) => { $("#audio").disabled = !!f; refresh(); });
     const source = () => document.querySelector("input[name=src]:checked").value;
     const timingMode = () => document.querySelector("input[name=timing]:checked").value;
     const targetMode = () => document.querySelector("input[name=mode]:checked").value;
     let gameChart = null;
+    // The game's selection when it is not a 7K chart (another mode or key count): its song is still taken.
+    let gameOther = null;
     let running = false;
     let sourceTouched = false;
 
+    const isChartFile = (name) => /\.(osu|osz)$/i.test(String(name || "").trim().replace(/"/g, ""));
     function hasReference() {
-      return source() === "game" ? !!gameChart : !!$("#reference").value.trim();
+      if (source() === "game") return !!(gameChart || gameOther);
+      return !!$("#reference").value.trim() || isChartFile(drop.file ? drop.file.name : $("#audio").value);
     }
     function refresh() {
       const game = source() === "game";
@@ -174,7 +178,7 @@
       }[timingMode()];
       $("#srField").classList.toggle("hidden", targetMode() !== "sr");
       $("#danField").classList.toggle("hidden", targetMode() === "sr");
-      $("#runBtn").disabled = game && !gameChart;
+      $("#runBtn").disabled = game && !gameChart && !gameOther;
       $("#runBtn").textContent = queue.active() ? tr("加入队列") : tr("生成");
     }
     function setSource(value) {
@@ -184,6 +188,7 @@
     document.querySelectorAll("input[name=src]").forEach((r) => r.addEventListener("change", () => { sourceTouched = true; refresh(); }));
     document.querySelectorAll("input[name=timing], input[name=mode]").forEach((r) => r.addEventListener("change", refresh));
     $("#reference").addEventListener("input", refresh);
+    $("#audio").addEventListener("input", refresh);
     document.addEventListener("dragover", (e) => e.preventDefault());
     document.addEventListener("drop", (e) => {
       if (e.target.closest && e.target.closest("#drop")) return;
@@ -214,7 +219,13 @@
 
     P7.onGameChart((state) => {
       gameChart = state.chart;
-      $("#gameLine").replaceChildren(P7.gameChartLine(state));
+      gameOther = !state.chart && state.unresolved && state.unresolved.title ? state.unresolved : null;
+      $("#gameLine").replaceChildren(gameOther
+        ? el("div", { class: "now-playing" },
+          el("span", { class: "badge done", text: tr("游戏当前谱面") }),
+          el("span", { class: "np-title", text: `${gameOther.artist} - ${gameOther.title} [${gameOther.difficulty}]` }),
+          el("span", { class: "np-meta", text: tr("不是 7K 谱：只取它的歌（音频、timing、标题与背景）") }))
+        : P7.gameChartLine(state));
       if (!sourceTouched) setSource(gameChart ? "game" : "manual");
       refresh();
     });
@@ -268,6 +279,9 @@
       const timing = timingMode();
       const params = {
         reference: fromGame ? (gameChart ? gameChart.md5_hash : "") : $("#reference").value,
+        game_title: fromGame && !gameChart && gameOther ? gameOther.title : "",
+        game_artist: fromGame && !gameChart && gameOther ? gameOther.artist : "",
+        game_difficulty: fromGame && !gameChart && gameOther ? gameOther.difficulty : "",
         audio: fromGame ? "" : $("#audio").value,
         auto_timing: timing !== "borrow",
         bpm: timing === "manual" ? $("#bpm").value : "",
@@ -286,7 +300,7 @@
         mix: mixText,
       };
       const uploads = !fromGame && drop.file ? { audio: drop.file } : {};
-      const song = fromGame ? (gameChart ? gameChart.title : "") : $("#title").value || (drop.file ? drop.file.name : String($("#audio").value).split(/[\\/]/).pop());
+      const song = fromGame ? (gameChart ? gameChart.title : gameOther ? gameOther.title : "") : $("#title").value || (drop.file ? drop.file.name : String($("#audio").value).split(/[\\/]/).pop());
       const target = params.target_dan || `${params.target_sr}★`;
       const seed0 = Number($("#seed").value) || 0;
       const n = count || Math.max(1, Number($("#count").value) || 1);

@@ -30,10 +30,16 @@ class BeatmapUrlInfo:
     ruleset_mode: Optional[str] = None
     #: The .osu file's MD5, as osu!lazer keys a difficulty (the dashboard hands over the game's current chart this way).
     md5_hash: Optional[str] = None
+    #: A difficulty by its title and name (artist optional), as the game names its selection: the live index knows
+    #: 7K charts only, so a chart of another mode or key count is found this way.
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    difficulty: Optional[str] = None
 
     @property
     def is_valid(self) -> bool:
-        return self.beatmap_id is not None or self.beatmapset_id is not None or self.md5_hash is not None
+        return (self.beatmap_id is not None or self.beatmapset_id is not None or self.md5_hash is not None
+                or bool(self.title and self.difficulty))
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,14 @@ def locate_beatmap_in_lazer(
                 record = res_bm
         except Exception as e:
             logger.debug(f"locate_beatmap by set_id failed: {e}")
+
+    # Try 3: by title and difficulty name
+    if not record and info.title and info.difficulty:
+        try:
+            record = client.locate_beatmap(title=info.title, artist=info.artist or None,
+                                           difficulty=info.difficulty, realm_path=target_realm)
+        except Exception as e:
+            logger.debug(f"locate_beatmap by metadata failed: {e}")
 
     if not record:
         return None
