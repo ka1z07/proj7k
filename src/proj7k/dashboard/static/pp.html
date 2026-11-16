@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>proj7k 引擎 pp</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .total { font-size: 2.2rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .pp-row .idx { width: 34px; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .pp-row .pp { min-width: 168px; }
+    .pp-row .pp b { font-size: 1.05rem; }
+    .pp-row .src { font-size: 0.7rem; padding: 0 6px; border-radius: 4px; background: var(--bg-raised); margin-left: 4px; }
+    .notes { margin: 8px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 0.85rem; }
+    .notes li { margin: 3px 0; }
+    .bar { height: 4px; border-radius: 2px; background: var(--bg-raised); overflow: hidden; margin-top: 8px; }
+    .bar > div { height: 100%; background: var(--accent); width: 0; transition: width 0.3s; }
+    @media (max-width: 640px) { .pp-row .when, .pp-row .official { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <div class="page-title">引擎 pp</div>
+        <div class="page-sub">把 osu!mania 的 pp 公式里的官方星级换成本工具引擎的星级，重算你的成绩：前 100 局与 7K 总 pp。</div>
+      </div>
+      <a class="standalone-only" href="/#pp">← 返回控制台</a>
+    </div>
+    <div id="page"><div class="empty">正在读取…</div></div>
+  </div>
+
+  <script src="/static/i18n.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    "use strict";
+    const { el, $ } = P7;
+    let data = null;
+    let timer = null;
+    let shown = 50;
+    const scope = () => (P7.settings.get("pp_scope") === "all" ? "all" : "ranked");
+    const pp = (x) => (x === null || x === undefined ? "—" : `${P7.num(Math.round(x))}pp`);
+    const pp2 = (x) => (x === null || x === undefined ? "—" : `${Number(x).toFixed(1)}pp`);
+
+    function signIn(d) {
+      return el("div", { class: "card" },
+        el("p", { text: tr("引擎 pp 要知道你是谁、在 osu! 上打过哪些成绩，所以要先用 osu! 登录。") }),
+        el("a", { href: d.login_url, target: "_blank", rel: "noopener" }, el("button", { class: "primary", text: tr("用 osu! 登录") })),
+        el("p", { class: "hint", text: tr("登录在系统浏览器里完成，回到这里刷新即可。") }));
+    }
+
+    function summary(d) {
+      const n = d.notes || {}, src = d.sources || {};
+      const notes = [];
+      if (n.online_error) notes.push(tr("连不上 osu!，这次只算了本机 osu!lazer 里的成绩（{error}）。", { error: n.online_error }));
+      else notes.push(tr("osu! 只给出你 mania 的前 {n} 个最佳成绩（按官方 pp 排），其中 {k} 个是 7K。官方 pp 低、引擎星级高的谱可能不在里面。", { n: n.online_scores || 0, k: n.online_7k || 0 }));
+      notes.push(tr("本机 osu!lazer 里补进 {n} 局通关成绩（没进 osu! 前 200 的、或从没上传的）。", { n: n.local_plays || 0 }));
+      if (n.online_unread) notes.push(tr("{n} 个线上成绩的谱面读不到（下载失败），没算进去。", { n: n.online_unread }));
+      if (n.skipped_mods) notes.push(tr("{n} 局开了改变谱面的 Mod（Random、换键数等），引擎没法按原谱算，没算进去。", { n: n.skipped_mods }));
+      if (d.excluded_unranked) notes.push(tr("{n} 局在非 ranked 谱面上（loved、未上架、自制），按 osu! 的规矩不算；可以在右边切换。", { n: d.excluded_unranked }));
+      notes.push(tr("引擎星级和官方星级不是一把尺子（高段位引擎更高），引擎 pp 只和引擎 pp 比，不等于 osu! 会给的 pp。"));
+      const toggle = el("label", { class: "check" }, el("input", { type: "checkbox", checked: scope() === "all", onchange: (e) => { P7.settings.set("pp_scope", e.target.checked ? "all" : "ranked"); load(); } }),
+        " ", tr("也算非 ranked 谱面"));
+      return el("div", { class: "card" },
+        el("div", { class: "goal-head", style: "display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end" },
+          el("div", {}, el("div", { class: "hint", text: tr("引擎 7K 总 pp") }), el("div", { class: "total" }, P7.counter(d.total_pp || 0, (x) => `${P7.num(Math.round(x))}pp`))),
+          el("div", {}, el("div", { class: "hint", text: tr("官方 7K pp") }), el("div", { class: "total", style: "font-size:1.4rem", text: pp(d.official_7k_pp) })),
+          el("div", { class: "stats", style: "flex:1" },
+            P7.stat(tr("计入的谱"), Math.min(d.charts || 0, 100)),
+            P7.stat(tr("来自 osu!"), (src.online || 0) + (src.both || 0)),
+            P7.stat(tr("只在本机"), src.local || 0)),
+          el("div", { style: "display:flex;gap:8px;align-items:center" }, toggle,
+            el("button", { class: "small", text: tr("再算一次"), disabled: d.running, onclick: () => load(true) }))),
+        d.running ? progress(d.progress) : null,
+        d.computed_at ? el("div", { class: "hint", style: "margin-top:6px", text: tr("{when}算好 · {user}", { when: P7.ago(new Date(d.computed_at * 1000).toISOString()), user: (d.user && d.user.username) || "" }) }) : null,
+        el("ul", { class: "notes" }, ...notes.map((t) => el("li", { text: t }))));
+    }
+
+    function progress(p) {
+      const frac = p && p.total ? p.done / p.total : 0;
+      return el("div", {}, el("div", { class: "bar" }, el("div", { style: `width:${(frac * 100).toFixed(1)}%` })),
+        el("div", { class: "hint", text: p && p.total ? tr("正在计算：{done}/{total}（第一次要下载谱面、逐张读引擎星级）", { done: p.done, total: p.total }) : tr("正在向 osu! 取成绩…") }));
+    }
+
+    function row(p, i) {
+      const open = () => (p.play_id ? P7.openPlay(p.play_id) : p.in_library ? P7.openChart(p.md5) : p.url && window.open(p.url, "_blank", "noopener"));
+      const source = p.source === "local" ? tr("本机") : p.source === "both" ? tr("osu! + 本机") : "osu!";
+      return el("div", { class: "list-row pp-row", onclick: open, title: p.play_id ? tr("查看这局") : p.in_library ? tr("查看谱面") : tr("在 osu! 官网打开") },
+        el("div", { class: "idx", text: `#${i + 1}` }),
+        P7.cover(p.md5, p.has_cover, 160, "thumb"),
+        el("div", { class: "grow" },
+          el("div", { class: "ellipsis" }, P7.chartTitle(p), el("span", { class: "muted", text: ` [${p.version}]` })),
+          el("div", { class: "hint ellipsis" }, P7.modBadges(p.mods), `${P7.stars(p.stars)} ${p.dan || ""}`, el("span", { class: "src", text: source }))),
+        el("div", { class: "side" }, P7.rankBadge(p)),
+        el("div", { class: "side" }, el("div", { text: P7.acc(p.accuracy) }), el("div", { class: "hint when", text: P7.ago(p.date) })),
+        el("div", { class: "side official" }, el("div", { class: "hint", text: tr("官方") }), el("div", { class: "hint", text: pp2(p.official_pp) })),
+        el("div", { class: "side pp" }, el("b", { text: pp2(p.pp) }),
+          el("div", { class: "hint", title: tr("按 0.95^名次 加权后计入总 pp 的部分"), text: tr("计入 {pp}（{w}%）", { pp: pp2(p.weighted_pp), w: Math.round(p.weight * 100) }) })));
+    }
+
+    function render() {
+      const d = data;
+      if (!d) return;
+      if (!d.signed_in) { $("#page").replaceChildren(signIn(d)); return; }
+      const parts = [summary(d)];
+      if (d.error) parts.push(el("div", { class: "card" }, el("div", { class: "hint", text: tr("没算完：{error}", { error: d.error }) })));
+      const plays = d.plays || [];
+      if (plays.length || !d.running) {
+        parts.push(el("div", { class: "card", style: "padding:6px 10px" },
+          ...(plays.length ? plays.slice(0, shown).map(row) : [el("div", { class: "empty", text: tr("还没有能算 pp 的 7K 成绩。") })]),
+          plays.length > shown ? el("div", { style: "text-align:center;margin:10px 0" }, el("button", { text: tr("显示全部 {n} 局", { n: plays.length }), onclick: () => { shown = 100; render(); } })) : null));
+      }
+      $("#page").replaceChildren(...parts);
+    }
+
+    async function load(refresh) {
+      clearTimeout(timer);
+      try {
+        data = await P7.getJSON(`/api/me/enginepp${refresh ? "/refresh" : ""}?scope=${scope()}`);
+      } catch (e) {
+        $("#page").replaceChildren(el("div", { class: "card" }, el("div", { class: "hint", text: tr("读不到：{error}", { error: e.message || e }) })));
+        return;
+      }
+      render();
+      if (data.signed_in && data.running) timer = setTimeout(() => load(false), 1500);
+    }
+    P7.onShown(() => load(false));
+    load(false);
+  </script>
+</body>
+</html>
