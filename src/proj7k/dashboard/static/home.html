@@ -114,6 +114,7 @@
           chip(tr("mania 全球"), rank(m.global_rank)),
           chip("mania", pp(m.pp)),
           el("span", { class: "hint", title: tr("osu! 官网数据，每 10 分钟更新"), text: who }),
+          el("button", { class: "small", text: tr("引擎 pp"), title: tr("按引擎星级重算 pp：前 100 局与 7K 总 pp"), onclick: () => P7.navigate("pp") }),
           logout);
       };
       fill(online);

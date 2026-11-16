@@ -52,6 +52,8 @@ JUDGEMENTS: Tuple[Tuple[str, str], ...] = (
 OSU_WEB = "https://osu.ppy.sh"
 CATALOG_WEB = "https://7k.kaiz.dev"
 AVATAR_WEB = "https://a.ppy.sh"
+#: The osu! API response version asked for: scores in lazer's format (judgements by name, mods as objects).
+OSU_API_VERSION = "20240529"
 
 
 def _num(value: Any) -> Optional[float]:
@@ -217,6 +219,36 @@ class OsuAccount:
         if token is None:
             raise PermissionError("not signed in")
         return json.loads(self.http(f"{self.api}/api/v2/me/mania", {"Authorization": f"Bearer {token}"}, None))
+
+    def user(self) -> Dict[str, Any]:
+        """The signed-in account's `{id, username}` as saved at sign-in; empty when signed out."""
+        return dict((self._tokens() or {}).get("user") or {})
+
+    def best_scores(self, mode: str = "mania", limit: int = 200) -> List[Dict[str, Any]]:
+        """
+        The account's best scores in `mode` as osu! ranks them by its own pp, best first: what the profile's "best
+        performance" lists, at most 200 (osu! pages them 100 at a time). Lazer's score format (`x-api-version`).
+        """
+        token = self._access_token()
+        user_id = self.user().get("id")
+        if token is None or not user_id:
+            raise PermissionError("not signed in")
+        out: List[Dict[str, Any]] = []
+        for offset in range(0, limit, 100):
+            n = min(100, limit - offset)
+            page = json.loads(self.http(
+                f"{self.api}/api/v2/users/{int(user_id)}/scores/best?mode={mode}&limit={n}&offset={offset}",
+                {"Authorization": f"Bearer {token}", "x-api-version": OSU_API_VERSION}, None))
+            if not isinstance(page, list):
+                break
+            out.extend(s for s in page if isinstance(s, dict))
+            if len(page) < n:
+                break
+        return out
+
+    def beatmap_file(self, beatmap_id: int) -> bytes:
+        """A ranked chart's .osu as osu! serves it (public, no sign-in needed)."""
+        return self.http(f"{self.api}/osu/{int(beatmap_id)}", {}, None)
 
     def status(self) -> Dict[str, Any]:
         """`{"signed_in": False, "login_url"}`, or `{"signed_in": True, "user", "profile"}` (profile None offline)."""

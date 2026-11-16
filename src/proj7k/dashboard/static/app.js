@@ -47,6 +47,7 @@ const P7 = (() => {
     package: true,         // pack an .osz by default
     sync_lazer: false,     // add practice charts to osu!lazer's collection by default
     goal_dan: "",          // the progress page's target tier ("" = none)
+    pp_scope: "ranked",    // the engine pp page: "ranked" (what osu! pays pp for) or "all" charts
     fail_hint: true,       // after a failed or D-rank play, a note offering a practice chart and a replay diagnosis
   };
   const settings = (() => {

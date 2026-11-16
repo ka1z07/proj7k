@@ -23,7 +23,8 @@ job's registered outputs.
 
 The player pages read `/api/me/*` (`proj7k.dashboard.player`): `players`, `overview`, `history`, `library`,
 `chart/<md5>`, `play/<id>`, and from osu!lazer's file store a chart's `cover/<md5>` and `audio/<md5>` and a play's
-`replay/<id>` (.osr), and `online` (`online/logout`): the signed-in osu! account's rank and pp (ADR-0041); osu!
+`replay/<id>` (.osr), and `online` (`online/logout`): the signed-in osu! account's rank and pp (ADR-0041), and `enginepp`
+(`enginepp/refresh`, `?scope=all`): that account's top plays and 7K total in engine pp (ADR-0061, page `/pp`); osu!
 sends a sign-in back to `/oauth/done`. They are answered off the event loop: the first one reads the library through the Node bridge.
 `open_replay {play}` hands a play's replay to osu!lazer, which shows it.
 """
@@ -50,6 +51,7 @@ from websockets.http11 import Request, Response
 from proj7k.dashboard.actions import DashboardConfig, build_actions, job_resources
 from proj7k.dashboard import player as player_api
 from proj7k.dashboard.jobs import JobManager
+from proj7k.dashboard.topplays import TopPlays
 from proj7k.i18n import current as current_language, from_cookie, set_language, tr
 from proj7k.live.engine import LiveEngine
 from proj7k.live.server import LiveServer
@@ -75,6 +77,7 @@ PAGES = {
     "/editor": "editor.html",
     "/settings": "settings.html",
     "/progress": "progress.html",
+    "/pp": "pp.html",
     "/overlay": "overlay.html",
 }
 
@@ -91,7 +94,7 @@ MAX_MESSAGE_BYTES = 256 * 2**20
 PLAYER_API_TIMEOUT_S = 120.0
 
 _FILES_PATH = re.compile(r"^/files/([\w.-]+)/(\d+)/([^/]+)$")
-_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar|online|progress|latest)(?:/([\w.-]+))?$")
+_PLAYER_API = re.compile(r"^/api/me/(players|overview|history|library|refresh|chart|play|cover|audio|replay|avatar|online|enginepp|progress|latest)(?:/([\w.-]+))?$")
 _RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -148,6 +151,7 @@ class DashboardServer(LiveServer):
         # The chart pages' own engine: the live radar's is used from the event loop, these from worker threads.
         self._chart_engine = LiveEngine(max_mem_entries=64)
         self.osu_account = player_api.OsuAccount(port=port)
+        self.top_plays = TopPlays(self.osu_account, self.library, cache_dir=self.config.output_dir)
         self._profiles: Dict[Tuple[str, float], Dict[str, Any]] = {}
         self._progress: Dict[Tuple[str, float], List[Dict[str, Any]]] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -376,6 +380,9 @@ class DashboardServer(LiveServer):
                 if arg == "logout":
                     self.osu_account.logout()
                 return self._json_response(self.osu_account.status())
+            if what == "enginepp":   # top plays and 7K total in engine pp (ADR-0061); works itself out in the background
+                return self._json_response(self.top_plays.status(scope="all" if params.get("scope") == "all" else "ranked",
+                                                                 refresh=arg == "refresh"))
             snapshot = self.library.snapshot(force=what == "refresh")
             player = params.get("player") or snapshot.default_player() or ""
             not_found = self._json_response({"error": tr("没有找到", "Not found")}, 404, "Not Found")
